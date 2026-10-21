@@ -184,6 +184,7 @@ commands and any Spectrum-X-specific profile in the Cumulus Linux documentation 
 
 ```bash
 # Illustrative NVUE commands; verify against your Cumulus Linux release notes
+# (AR lines use 5.14-and-earlier syntax; from 5.15 'enable on' became 'state enabled')
 nv set qos roce mode lossless          # RoCE QoS profile: PFC + ECN on the RoCE class
 nv set router adaptive-routing enable on
 nv set interface swp1-64 router adaptive-routing enable on

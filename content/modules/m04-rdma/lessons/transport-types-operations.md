@@ -156,8 +156,8 @@ NCCL uses RC QPs because ring and tree collectives keep the number of peers per 
 $ ibv_devinfo -v -d mlx5_0 | grep -E "max_qp:|max_qp_wr|max_msg_sz|max_qp_rd_atom|max_srq:|atomic_cap"
         max_qp:                 131072
         max_qp_wr:              32768
-        atomic_cap:             ATOMIC_HCA (1)
         max_qp_rd_atom:         16
+        atomic_cap:             ATOMIC_HCA (1)
         max_srq:                8388608
                 max_msg_sz:     0x40000000
 ```

@@ -41,7 +41,7 @@ commands:
   - cmd: nvidia-smi -q
     platform: nvidia
     summary: Dump the full per-GPU query report (clocks, power, ECC, retired/remapped pages, PCIe link generation and width, and more).
-    notes: "Narrow it with -d, for example nvidia-smi -q -d ECC or -d PCIE (check nvidia-smi -h for the display types your driver supports). The PCIe section shows current versus maximum link generation and width: a GPU that trained at a lower width or generation than its maximum under load will starve GPUDirect traffic."
+    notes: "Narrow it with -d, for example nvidia-smi -q -d ECC or -d MEMORY (check nvidia-smi -h for the display types your driver supports; PCIe is not a -d type, so use nvidia-smi -q | grep -A 12 'PCI' or a --query-gpu field such as pcie.link.gen.current,pcie.link.width.current). The PCIe section shows current versus maximum link generation and width: a GPU that trained at a lower width or generation than its maximum under load will starve GPUDirect traffic."
     tags: [gpu, ecc, pcie, inventory]
 
   - cmd: nvidia-smi --query-gpu=index,name,pci.bus_id,temperature.gpu,power.draw --format=csv

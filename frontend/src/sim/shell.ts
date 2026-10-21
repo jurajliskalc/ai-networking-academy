@@ -410,7 +410,7 @@ function ethtool(s: FabricState, h: Host, a: string[]): ExecResult {
 \tLanes: 4
 \tDuplex: ${up ? 'Full' : 'Unknown! (255)'}
 \tAuto-negotiation: on
-\tPort: Direct Attach Copper
+\tPort: FIBRE
 \tLink detected: ${up ? 'yes' : 'no'}
 ` };
   }
@@ -433,7 +433,7 @@ function ethtool(s: FabricState, h: Host, a: string[]): ExecResult {
 \tLow RX power warning threshold            : 0.1122 mW / -9.50 dBm
 ` };
   }
-  if (flag === '-a' || flag === '--show-pause') return { out: `Pause parameters for ${nic.netdev}:\nAutonegotiate:\toff\nRX:\t\toff\nTX:\t\toff\n(global 802.3x pause is off; PFC is configured per priority, see mlnx_qos)\n` };
+  if (flag === '-a' || flag === '--show-pause') return { out: `Pause parameters for ${nic.netdev}:\nAutonegotiate:\toff\nRX:\t\toff\nTX:\t\toff\n(simulator note: global 802.3x pause is off; PFC is configured per priority, see mlnx_qos)\n` };
   return { out: `ethtool: the simulator supports ethtool <if>, -S, -m, -a\n` };
 }
 
@@ -521,13 +521,14 @@ function mlxlink(s: FabricState, h: Host, a: string[]): ExecResult {
   const port = s.switches[LEAVES[nic.rail]].ports[leafPortFor(h.name)];
   const up = operUp(s, h.name, nic);
   const bad = port.ber > 1e-8;
-  const rawBer = bad ? '3E-05' : '2E-08';
+  // A bad link sits above the ~2.4E-4 pre-FEC limit of RS(544,514), so FEC no longer corrects everything.
+  const rawBer = bad ? '3E-04' : '2E-08';
   const effBer = bad ? '1E-09' : '15E-255';
   return { out: `
 Operational Info
 ----------------
-State                           : ${up ? 'Active' : 'Disabled'}
-Physical state                  : ${up ? 'LinkUp' : 'Disabled'}
+State                           : ${up ? 'Active' : 'Polling'}
+Physical state                  : ${up ? 'LinkUp' : 'ETH_AN_FSM_ENABLE'}
 Speed                           : ${up ? '400G' : 'N/A'}
 Width                           : 4x
 FEC                             : Standard_RS-FEC - (544,514)
@@ -536,7 +537,7 @@ Auto Negotiation                : ON
 
 Supported Info
 --------------
-Enabled Link Speed (Ext.)       : 0x00002000 (400G_4X)
+Enabled Link Speed (Ext.)       : 0x00010000 (400G_4X)
 
 Troubleshooting Info
 --------------------
@@ -546,11 +547,12 @@ Recommendation                  : No issue was observed
 ${a.includes('-c') ? `Physical Counters and BER Info
 ------------------------------
 Time Since Last Clear [Min]     : 1440.0
-Effective Physical Errors       : ${bad ? 1873 : 0}
+Effective Physical Errors       : ${bad ? 34560112 : 0}
 Effective Physical BER          : ${effBer}
-Raw Physical Errors Per Lane    : ${bad ? '91822340,1204,988,1311' : '13,9,11,8'}
+Raw Physical Errors Per Lane    : ${bad ? '10365419021170,12884100220,10938714550,13120937610' : '173211552,169872310,174930118,172201845'}
 Raw Physical BER                : ${rawBer}
 Link Down Counter               : ${nic.counters.link_down_events_phy}
+Link Error Recovery Counter     : ${bad ? 41 : 0}
 ` : '(add -c for BER counters)\n'}` };
 }
 
@@ -608,7 +610,7 @@ function ibWriteBw(s: FabricState, h: Host, a: string[]): ExecResult {
     else if (!a[i].startsWith('-')) peer = a[i];
   }
   const nic = findNic(h, dev);
-  if (!nic) return { out: ` Couldn't get context for ${dev}\n Unable to open device: ${dev}\n` };
+  if (!nic) return { out: `IB device ${dev} not found\n Unable to find the Infiniband/RoCE device\n` };
   if (!peer) return { out: `\n************************************\n* Waiting for client to connect... *\n************************************\n(simulator: run the client side instead, e.g. ib_write_bw -d mlx5_0 -x 3 --report_gbits node02)\n` };
   let [peerHost, peerDev] = peer.split(':');
   const ipm = peerHost.match(/^10\.(\d)\.(\d)\.1$/);
@@ -618,7 +620,7 @@ function ibWriteBw(s: FabricState, h: Host, a: string[]): ExecResult {
     peerHost = NODES[Number(ipm[2]) - 1];
   }
   if (peerDev) peerRail = Number(peerDev.replace('mlx5_', ''));
-  if (!NODES.includes(peerHost as never)) return { out: `Couldn't connect to ${peer}:18515\nUnable to init the socket connection\n` };
+  if (!NODES.includes(peerHost as never)) return { out: `Couldn't connect to ${peer}:18515\n Unable to init the socket connection\n` };
   if (peerHost === h.name && peerRail === nic.rail) return { out: 'Use a different host or device as the server.\n' };
   const g = gid ?? 3;
   const r = evaluatePair(s, h.name, nic.rail, peerHost, peerRail, g);
@@ -638,16 +640,16 @@ function ibWriteBw(s: FabricState, h: Host, a: string[]): ExecResult {
  Data ex. method : Ethernet
 ---------------------------------------------------------------------------------------
  local address: LID 0000 QPN 0x0127 PSN 0x3a1f2c RKey 0x1fd8bc VAddr 0x007f3a5c400000
- GID: 00:00:00:00:00:00:00:00:00:00:255:255:${hostIp(h.name, nic.rail).split('.').join(':')}
+ GID: 00:00:00:00:00:00:00:00:00:00:255:255:${hostIp(h.name, nic.rail).split('.').map((o) => o.padStart(2, '0')).join(':')}
  remote address: LID 0000 QPN 0x0129 PSN 0x7c02d1 RKey 0x1fe0a4 VAddr 0x007f91b8600000
- GID: 00:00:00:00:00:00:00:00:00:00:255:255:${hostIp(peerHost, peerRail).split('.').join(':')}
+ GID: 00:00:00:00:00:00:00:00:00:00:255:255:${hostIp(peerHost, peerRail).split('.').map((o) => o.padStart(2, '0')).join(':')}
 ---------------------------------------------------------------------------------------
 `;
   if (!r.ok) {
     if (r.error === 'no route to host' || (r.error && r.error !== 'mtu' && r.error !== 'gid'))
-      return { out: `Couldn't connect to ${peerHost}:18515 (${r.error})\nUnable to init the socket connection\n` };
+      return { out: `Couldn't connect to ${peerHost}:18515\n Unable to init the socket connection\n(simulator: the RDMA path is down - ${r.error})\n` };
     nic.hw.local_ack_timeout_err += 7;
-    return { out: head + ` #bytes     #iterations    BW peak[${gbits ? 'Gb/sec' : 'MiB/sec'}]    BW average[${gbits ? 'Gb/sec' : 'MiB/sec'}]   MsgRate[Mpps]\nCompletion with error at client\nFailed status 12: wr_id 0 syndrom 0x81\nscnt=128, ccnt=0\n Failed to complete run_iter_bw function successfully\n`, changed: true };
+    return { out: head + ` #bytes     #iterations    BW peak[${gbits ? 'Gb/sec' : 'MiB/sec'}]    BW average[${gbits ? 'Gb/sec' : 'MiB/sec'}]   MsgRate[Mpps]\n Completion with error at client\n Failed status-transport retry counter exceeded (12): wr_id 0 syndrom 0x81\n scnt=128, ccnt=0\n Failed to complete run_iter_bw function successfully\n`, changed: true };
   }
   accrueTraffic(s, 'pair', { nodes: [h.name, peerHost], rails: [...new Set([nic.rail, peerRail])] });
   const bw = r.gbps * (qps > 1 ? 1.002 : 1);
@@ -681,15 +683,15 @@ function allReducePerf(s: FabricState, a: string[]): ExecResult {
     else if (r === 2) out += '#  ... (ranks 2-30 trimmed)\n';
   if (debug) {
     out += `node01:41200:41200 [0] NCCL INFO Bootstrap : Using eno1:172.20.0.11<0>\n`;
-    if (res.transport === 'Socket') out += `node01:41200:41200 [0] NCCL INFO NET/IB : Disabled\nnode01:41200:41200 [0] NCCL INFO NET/Socket : Using [0]eno1:172.20.0.11<0>\nnode01:41200:41200 [0] NCCL INFO Using network Socket\n`;
+    if (res.transport === 'Socket') out += res.warnings.map((w) => `node01:41200:41200 [0] NCCL INFO ${w}\n`).join('') + `node01:41200:41200 [0] NCCL INFO NET/Socket : Using [0]eno1:172.20.0.11<0>\nnode01:41200:41200 [0] NCCL INFO Using network Socket\n`;
     else if (res.ok || res.rails.length) out += `node01:41200:41200 [0] NCCL INFO NET/IB : Using ${res.rails.map((r) => `[${r}]mlx5_${r}:1/RoCE`).join(' ')} [RO]; OOB eno1:172.20.0.11<0>\nnode01:41200:41200 [0] NCCL INFO Using network IB\n`;
     out += `node01:41200:41207 [0] NCCL INFO Channel 00/${lpad(res.rails.length * 2 || 2, 2)} : 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31\n`;
-    for (const w of res.warnings) out += `node01:41200:41207 [0] NCCL INFO ${w}\n`;
   }
   if (!res.ok) {
     accrueTraffic(s, 'collective', undefined, res);
-    const who = res.error?.match(/node0\d/)?.[0] ?? 'node01';
-    out += `\n${who}:41${who.slice(-1)}00:41${who.slice(-1)}12 [0] transport/net_ib.cc:1696 NCCL WARN ${res.error}\n${who}:41${who.slice(-1)}00:41${who.slice(-1)}12 [0] NCCL INFO transport/net.cc:1134 -> 6\n${who}: Test NCCL failure common.cu:1005 'remote process exited or there was a network error / '\n .. ${who} pid 41${who.slice(-1)}00: Test failure common.cu:891\n--------------------------------------------------------------------------\nPrimary job  terminated normally, but 1 process returned\na non-zero exit code.\n--------------------------------------------------------------------------\n`;
+    const who = res.errorNode ?? 'node01';
+    const src = res.errorSrc === 'transport/net_ib.cc' ? 'transport/net_ib.cc:1696 ' : '';
+    out += `\n${who}:41${who.slice(-1)}00:41${who.slice(-1)}12 [0] ${src}NCCL WARN ${res.error}\n${who}:41${who.slice(-1)}00:41${who.slice(-1)}12 [0] NCCL INFO transport/net.cc:1134 -> 6\n${who}: Test NCCL failure common.cu:1005 'remote process exited or there was a network error / '\n .. ${who} pid 41${who.slice(-1)}00: Test failure common.cu:891\n--------------------------------------------------------------------------\nPrimary job  terminated normally, but 1 process returned\na non-zero exit code.\n--------------------------------------------------------------------------\n`;
     return { out, changed: true };
   }
   accrueTraffic(s, 'collective', undefined, res);
@@ -816,7 +818,7 @@ RoCE SP->TC mapping and ETS configurations
     if (rest[0] === 'diff') {
       if (!sw.pending) return { out: '' };
       const lines: string[] = [];
-      if (sw.pending.roce !== sw.cfg.roce) lines.push(`- set: qos: roce: ${sw.pending.roce === 'off' ? '(removed)' : `mode: ${sw.pending.roce}`}`);
+      if (sw.pending.roce !== sw.cfg.roce) lines.push(sw.pending.roce === 'off' ? `- unset:\n    qos:\n      roce: null` : `- set:\n    qos:\n      roce:\n        mode: ${sw.pending.roce}`);
       for (const [n, p] of Object.entries(sw.pending.ports)) {
         const o = sw.cfg.ports[n];
         if (p.mtu !== o.mtu) lines.push(`- set:\n    interface:\n      ${n}:\n        link:\n          mtu: ${p.mtu}`);

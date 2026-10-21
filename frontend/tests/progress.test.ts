@@ -34,3 +34,15 @@ describe('progress', () => {
     expect(sanitize({ lessons: [], settings: { theme: 'neon' } }).settings.theme).toBe('system');
   });
 });
+
+describe('option shuffle', () => {
+  it('is deterministic per seed, a permutation, and does not keep "a" first', async () => {
+    const { shuffleOptions } = await import('../src/components/QuestionCard');
+    const opts = ['a', 'b', 'c', 'd'].map((id) => ({ id, text: id, explanation: id, correct: id === 'a' }));
+    expect(shuffleOptions(opts, 's1').map((o) => o.id)).toEqual(shuffleOptions(opts, 's1').map((o) => o.id));
+    expect(shuffleOptions(opts, 's1').map((o) => o.id).sort()).toEqual(['a', 'b', 'c', 'd']);
+    const firstIsA = Array.from({ length: 400 }, (_, i) => shuffleOptions(opts, `q${i}`)[0].id === 'a').filter(Boolean).length;
+    expect(firstIsA).toBeGreaterThan(60);
+    expect(firstIsA).toBeLessThan(140);
+  });
+});

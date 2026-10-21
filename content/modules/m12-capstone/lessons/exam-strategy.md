@@ -56,7 +56,7 @@ relevant to this course:
 | Level | Examples of tracks offered (names as published at the time of writing; confirm) | Relevance to this academy |
 |---|---|---|
 | NVIDIA-Certified **Associate** | AI Infrastructure and Operations | Broad entry-level coverage of GPUs, AI workloads, data centre infrastructure and operations; maps to modules m00-m02 plus parts of m09-m10. |
-| NVIDIA-Certified **Professional** | AI Infrastructure; AI Operations; AI Networking; InfiniBand | Practitioner-level, deeper and more hands-on. The networking and InfiniBand tracks map most directly to m03-m11. |
+| NVIDIA-Certified **Professional** | AI Infrastructure; AI Operations; AI Networking; AI Rack and Interconnect | Practitioner-level, deeper and more hands-on. The AI Networking track (which covers InfiniBand and Spectrum-X Ethernet) maps most directly to m03-m11. An earlier standalone InfiniBand professional exam has been retired, with NVIDIA pointing candidates to AI Networking instead. |
 
 What you can generally expect from vendor professional exams of this kind (confirm for your exam):
 an online, remotely proctored or test-centre delivery; multiple-choice and multiple-select questions,

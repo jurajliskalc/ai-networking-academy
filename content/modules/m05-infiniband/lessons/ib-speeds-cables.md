@@ -142,13 +142,13 @@ $ ibstat mlx5_0 1 | grep -E "State|Rate|Physical"
 *(Illustrative.)* `Rate` is the data rate in Gb/s. For the full picture of every link in the fabric:
 
 ```text
-$ iblinkinfo | grep -v "106.25 Gbps"
+$ iblinkinfo | grep -vE "4X +106.25 Gbps"
 Switch: 0xfc6a1c0300e4f100 leaf01:
           2    17[  ] ==( 4X      53.125 Gbps Active/  LinkUp)==>      57    1[  ] "node09 HCA-1" ( Could be 106.25 Gbps)
           2    18[  ] ==( 2X     106.25 Gbps Active/  LinkUp)==>      58    1[  ] "node09 HCA-2" ( Could be 4X)
 ```
 
-*(Illustrative; exact formatting depends on the infiniband-diags version.)* Filtering out the expected NDR lane rate leaves only the anomalies. Here port 17 trained at HDR lane speed (perhaps an HDR cable or an adapter set to a lower speed), and port 18 trained at NDR speed but only 2x width (a failed lane, a damaged cable or a dirty connector). Recent iblinkinfo versions annotate links that "could be" faster or wider; check your version's options.
+*(Illustrative; exact formatting depends on the infiniband-diags version.)* Filtering out links at the expected 4X width and NDR lane rate leaves only the anomalies (a plain `grep -v "106.25 Gbps"` would also hide port 17, because its "Could be" annotation contains that string). Here port 17 trained at HDR lane speed (perhaps an HDR cable or an adapter set to a lower speed), and port 18 trained at NDR speed but only 2x width (a failed lane, a damaged cable or a dirty connector). Recent iblinkinfo versions annotate links that "could be" faster or wider; check your version's options.
 
 `ibportstate <lid> <port>` queries a port's speed and width settings (enabled, supported and active) and can also enable, disable or reset a port, which is useful to retrain a link after reseating a cable.
 

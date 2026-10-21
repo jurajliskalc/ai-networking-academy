@@ -39,7 +39,7 @@ hands-on curriculum. It starts at "what is an Ethernet frame" and ends at design
 | **7 hands-on Linux labs** | Real work on your own VM: Soft-RoCE and perftest, RoCEv2 packet captures, a containerlab BGP-unnumbered Clos, ECMP entropy, ECN/DCTCP congestion, EVPN-VXLAN. Each lab has a `check.sh`. |
 | **9 interactive visualizations** | RoCEv2 packet anatomy, ring vs tree all-reduce, PFC/ECN/DCQCN queue dynamics, ECMP collisions vs adaptive routing, fabric sizer, QP state machine, PCIe topology explorer, parallelism-to-network map, IB credits vs PFC. |
 | **3 timed mock exams** (140 questions) | Fundamentals, engineer and master level, scored by domain. Original practice material, not real certification questions. |
-| **Reference** | 155 annotated commands (Linux, rdma-core, perftest, InfiniBand, NVIDIA tools, NCCL, Cumulus NVUE, SONiC) and a 207-term glossary that also drives **SM-2 spaced-repetition flashcards**. |
+| **Reference** | 155 annotated commands (Linux, rdma-core, perftest, InfiniBand, NVIDIA tools, NCCL, Cumulus NVUE, SONiC) and a 213-term glossary that also drives **SM-2 spaced-repetition flashcards**. |
 | **Progress tracking** | A lesson counts as mastered only when it is read *and* its quiz is passed. Streaks, an activity heatmap, weak-spot review, and exam domain profiles. Everything stays in your browser, with export and import. |
 
 ### The curriculum
@@ -130,7 +130,7 @@ Content is written for engineers who will act on it, so accuracy comes first:
 * No invented CLI flags, counters, environment variables or APIs.
 * Vendor- and generation-specific facts are hedged and point to the authoritative documentation.
 * Sample command output is labelled illustrative unless it is a real capture.
-* Every lesson, quiz and exam was technically reviewed after it was written. The hands-on labs are
+* Every lesson, quiz and exam was reviewed twice after it was written: once by expert read-through and once by a source-based fact-check of about 2,400 claims, plus a blind re-answering of all 674 questions with shuffled options. The hands-on labs are
   syntax-checked (`bash -n`, ShellCheck) but are marked `verified: false` until they have been run end to
   end on a reference VM.
 

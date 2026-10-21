@@ -155,7 +155,8 @@ sequenceDiagram
 2. **Propagation of the PFC frame** across the cable: about 5 ns per metre in fibre, and the
    same order in copper.
 3. **Response delay** in the upstream device: PHY, FEC and MAC latency plus the time for the
-   upstream scheduler to stop the queue. 802.1Qbb bounds the MAC-level response. Real
+   upstream scheduler to stop the queue. IEEE 802.3 specifies maximum delays for the MAC and PHY
+   sublayers, and the PFC headroom model in IEEE 802.1Q (Annex N, from 802.1Qbb) builds on them. Real
    implementations, especially at 400G/800G with heavier FEC, add PHY and FEC latency on top. This
    component is device-specific.
 4. **Upstream in-progress frame.** The upstream device cannot abort a frame it has started, so up

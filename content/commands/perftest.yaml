@@ -5,7 +5,7 @@ commands:
   - cmd: ib_write_bw -d mlx5_0 -x 3 -F --report_gbits
     platform: rdma
     summary: Start the server side of an RDMA WRITE bandwidth test on device mlx5_0 using GID index 3, reporting in Gb/s.
-    notes: "Every perftest test is a server/client pair: run without a host argument on the server, then run the same flags plus the server's address on the client. -d device, -x GID index (needed on RoCE; ignored on IB), -F suppresses the CPU-frequency warning, --report_gbits prints Gb/s instead of MB/s. Flags must match on both sides."
+    notes: "Every perftest test is a server/client pair: run without a host argument on the server, then run the same flags plus the server's address on the client. -d device, -x GID index (needed on RoCE; normally not needed on IB, where LID addressing is used), -F suppresses the CPU-frequency warning, --report_gbits prints Gb/s instead of MB/s. Flags must match on both sides."
     tags: [perftest, bandwidth, server]
 
   - cmd: ib_write_bw -d mlx5_0 -x 3 -F --report_gbits 10.0.0.11
@@ -64,10 +64,10 @@ commands:
     notes: With -R the GID is chosen by RDMA CM from the IP address and route, so it tests the same path an RDMA CM application would. If a test works without -R but fails with it, look at routing, ARP and the RDMA CM RoCE mode.
     tags: [perftest, rdma-cm]
 
-  - cmd: ib_write_bw -d mlx5_0 -x 3 -T 106 -F --report_gbits 10.0.0.11
+  - cmd: ib_write_bw -d mlx5_0 -x 3 --tclass=106 -F --report_gbits 10.0.0.11
     platform: rdma
-    summary: Set the IP ToS / traffic class (-T) on the test traffic, here 106 (DSCP 26 with ECT).
-    notes: Use to verify that test traffic lands in the switch's lossless RoCE queue. Confirm with switch queue/PFC counters while the test runs.
+    summary: Set the GRH traffic class (--tclass) on the test traffic, here 106 (DSCP 26 with ECT(0)).
+    notes: "-T/--tos also exists but perftest accepts it only for RDMA CM connections (with -R) or raw Ethernet QPs; without -R it exits with 'TOS only valid for rdma_cm based QP'. --tclass is available on recent perftest releases; check ib_write_bw --help on your build. Use to verify that test traffic lands in the switch's lossless RoCE queue. Confirm with switch queue/PFC counters while the test runs."
     tags: [perftest, qos, dscp, roce]
 
   - cmd: ib_write_bw -d mlx5_0 -x 3 -m 4096 -F --report_gbits 10.0.0.11

@@ -41,6 +41,10 @@ terms:
   - term: "Atomic operations"
     definition: "RDMA operations (Compare-and-Swap and Fetch-and-Add on 64-bit values) that a remote NIC executes atomically on remote memory. They are available on Reliable Connected transport and are used for locks and counters rather than bulk transfer."
     lesson: transport-types-operations
+  - term: "ATS"
+    expansion: "Address Translation Services"
+    definition: "A PCIe capability that lets a device request and cache IOMMU address translations, so peer-to-peer DMA (for example NIC to GPU) can be routed directly through a PCIe switch even when ACS and the IOMMU are enabled. Whether GPUDirect RDMA can use it depends on the platform, driver and virtualization setup."
+    lesson: gpudirect-rdma-storage
   - term: "Back-end network"
     definition: "The dedicated GPU-to-GPU compute fabric (InfiniBand or RoCE) that carries collective traffic between servers. It is usually physically separate from the front-end, storage and management networks and is designed for high bandwidth and minimal loss."
     lesson: four-networks-of-an-ai-cluster
@@ -185,6 +189,9 @@ terms:
     expansion: "Ethernet VPN"
     definition: "A BGP address family that distributes MAC and IP reachability for overlay networks. With VXLAN it builds multi-tenant L2/L3 front-end fabrics without flooding-based learning."
     lesson: evpn-vxlan-frontend
+  - term: "EVPN route types"
+    definition: "The BGP EVPN NLRI types used in data-center fabrics: Type 1 Ethernet auto-discovery and Type 4 Ethernet segment (multihoming, RFC 7432), Type 2 MAC/IP advertisement (host MAC and IP reachability), Type 3 inclusive multicast Ethernet tag (BUM flooding lists per VNI), and Type 5 IP prefix (routed prefixes, RFC 9136)."
+    lesson: evpn-vxlan-frontend
   - term: "Expert parallelism"
     expansion: "EP"
     definition: "A parallelism strategy for Mixture-of-Experts models in which different experts live on different GPUs and tokens are routed to them with all-to-all communication."
@@ -210,7 +217,7 @@ terms:
     definition: "The general-purpose Ethernet network connecting servers to users, orchestration, the internet and often to storage. It is usually a conventional leaf-spine with EVPN/VXLAN, separate from the GPU back-end."
     lesson: storage-and-frontend-networks
   - term: "ftree routing"
-    definition: "The OpenSM routing engine optimized for fat-tree topologies, which balances destination LIDs across up-links to avoid hotspots. Other engines include minhop, updn, dor and ar_updn (availability depends on SM version)."
+    definition: "The OpenSM routing engine optimized for fat-tree topologies, which balances destination LIDs across up-links to avoid hotspots. Other open-source OpenSM engines include minhop (the default), updn, dnup, lash and dor; NVIDIA's subnet manager (MLNXSM/UFM) adds adaptive-routing engines such as ar_updn (availability depends on SM version)."
     lesson: subnet-manager-routing
   - term: "GDS"
     expansion: "GPUDirect Storage"
@@ -261,6 +268,10 @@ terms:
   - term: "HGX"
     definition: "NVIDIA's GPU baseboard platform (for example eight GPUs connected by NVSwitch) that server vendors build systems around. DGX systems use the same baseboard design."
     lesson: nvlink-nvswitch
+  - term: "ICRC"
+    expansion: "Invariant CRC"
+    definition: "A 4-byte end-to-end CRC at the end of every InfiniBand and RoCE packet. It covers only fields that do not change in transit; in RoCEv2 the fields routers may rewrite (such as TTL, DSCP/ECN and the UDP checksum) are masked before computing it. The Ethernet FCS still protects each hop separately."
+    lesson: rocev2-encapsulation
   - term: "Incast"
     definition: "A many-to-one traffic pattern in which many senders transmit to one receiver at the same time, overflowing the egress queue toward that receiver. It is common in all-to-all phases, parameter aggregation and storage reads."
     lesson: incast-and-congestion-hotspots
@@ -307,6 +318,10 @@ terms:
     expansion: "Link Layer Discovery Protocol"
     definition: "A protocol (IEEE 802.1AB) in which devices advertise their identity and port to neighbors. Comparing LLDP neighbors with the intended cabling plan is the standard way to find miswired fabric links."
     lesson: fabric-validation-burn-in
+  - term: "LLR"
+    expansion: "Link Level Retry"
+    definition: "Retransmission of corrupted frames across a single link instead of end to end, so a bit error costs one link round trip rather than a transport timeout or go-back-N. Supported on some InfiniBand generations and defined as an optional link-layer feature in the Ultra Ethernet specification; availability depends on the hardware."
+    lesson: link-layer-ber-fec
   - term: "LMC"
     expansion: "LID Mask Control"
     definition: "A subnet manager setting that assigns 2^LMC consecutive LIDs to each port (LMC 0-7). Different LIDs can map to different paths, enabling multipathing in InfiniBand."
@@ -425,7 +440,7 @@ terms:
     definition: "A vendor-neutral set of YANG data models for network configuration and operational state. gNMI telemetry commonly uses OpenConfig paths such as interface counters."
     lesson: streaming-telemetry-gnmi
   - term: "OpenSM"
-    definition: "The open-source InfiniBand subnet manager distributed with rdma-core/OFED. It discovers the fabric, assigns LIDs and computes forwarding tables; UFM embeds an enhanced subnet manager for large fabrics."
+    definition: "The open-source InfiniBand subnet manager, shipped as its own package (linux-rdma/opensm) and with vendor driver stacks. It discovers the fabric, assigns LIDs and computes forwarding tables; UFM embeds an enhanced subnet manager for large fabrics."
     lesson: subnet-manager-routing
   - term: "OSFP"
     expansion: "Octal Small Form-factor Pluggable"
@@ -449,7 +464,7 @@ terms:
     lesson: mtu-jumbo-frames
   - term: "PCIe"
     expansion: "Peripheral Component Interconnect Express"
-    definition: "The serial bus connecting GPUs, NICs and NVMe to the CPU. A Gen5 x16 link carries roughly 64 GB/s per direction before protocol overhead, so a 400 Gb/s NIC needs Gen5 x16 (or Gen4 x32 via multi-host/socket-direct) to run at line rate."
+    definition: "The serial bus connecting GPUs, NICs and NVMe to the CPU. A Gen5 x16 link carries roughly 64 GB/s per direction before protocol overhead, so a 400 Gb/s NIC needs Gen5 x16 (or two Gen4 x16 links via Socket Direct) to run at line rate."
     lesson: pcie-numa-topology
   - term: "PCIe switch"
     definition: "A device that fans one PCIe upstream port out to several downstream devices. In AI servers a GPU and its paired NIC usually sit under the same PCIe switch so GPUDirect RDMA traffic does not cross the CPU."
@@ -487,7 +502,7 @@ terms:
     lesson: parallelism-strategies
   - term: "PKey"
     expansion: "Partition Key"
-    definition: "An InfiniBand 16-bit key carried in every packet that defines which partition the packet belongs to. Ports can only communicate when they share a partition, which is how IB isolates tenants."
+    definition: "An InfiniBand 16-bit key carried in every packet that defines which partition the packet belongs to. Ports can only communicate when they share a partition and at least one of them is a full member, which is how IB isolates tenants."
     lesson: multi-tenancy-isolation
   - term: "PortXmitWait"
     definition: "An InfiniBand port counter of time ticks during which the port had data to send but no flow-control credits. Rising values indicate congestion downstream of that port."
@@ -509,6 +524,10 @@ terms:
   - term: "PSN"
     expansion: "Packet Sequence Number"
     definition: "The 24-bit sequence number in the BTH used by reliable RDMA transports to detect lost or duplicated packets and to trigger NAKs and retransmission."
+    lesson: transport-types-operations
+  - term: "Q_Key"
+    expansion: "Queue Key"
+    definition: "A 32-bit key carried in the DETH of datagram (UD) traffic. A receiving UD QP accepts a datagram only if its Q_Key matches the QP's configured Q_Key, a lightweight authorization check since UD has no connection setup."
     lesson: transport-types-operations
   - term: "QP"
     expansion: "Queue Pair"
@@ -549,11 +568,15 @@ terms:
     definition: "A one-sided RDMA operation that places data directly into a remote memory region identified by address and rkey, without consuming a receive buffer on the remote side (unless sent with immediate data)."
     lesson: transport-types-operations
   - term: "rdma-core"
-    definition: "The upstream Linux userspace RDMA package providing libibverbs, librdmacm, provider drivers and utilities such as ibv_devinfo and the rdma tool's companions."
+    definition: "The upstream Linux userspace RDMA package providing libibverbs, librdmacm, provider drivers and utilities such as ibv_devinfo and rping (the rdma tool itself ships with iproute2)."
     lesson: rdma-on-linux
   - term: "Reduce-scatter"
     definition: "A collective that reduces buffers across ranks and leaves each rank with a different slice of the result. A ring all-reduce is a reduce-scatter followed by an all-gather."
     lesson: collective-operations
+  - term: "RETH"
+    expansion: "RDMA Extended Transport Header"
+    definition: "A 16-byte header after the BTH that carries the remote virtual address (64 bits), the R_Key (32 bits) and the DMA length (32 bits). It appears in the first (or only) packet of an RDMA Write and in an RDMA Read request; middle and last packets of a Write carry only the BTH."
+    lesson: rocev2-encapsulation
   - term: "Ring all-reduce"
     definition: "An all-reduce algorithm that arranges ranks in a ring and passes chunks around in 2(n-1) steps. Each rank sends and receives about 2(n-1)/n times the buffer size, which makes it bandwidth-optimal but latency grows with n."
     lesson: collective-algorithms
@@ -716,7 +739,7 @@ terms:
     lesson: pfc-priority-flow-control
   - term: "XRC"
     expansion: "eXtended Reliable Connected"
-    definition: "An RDMA transport that lets one process receive on a shared receive queue for many senders, reducing the number of QPs required in large all-to-all communication."
+    definition: "An RDMA transport in which one sending QP can deliver to any XRC shared receive queue on a remote node, so a process needs about one QP per remote node instead of one per remote process. It reduces QP count in large all-to-all communication."
     lesson: transport-types-operations
   - term: "Zero-touch provisioning"
     expansion: "ZTP"

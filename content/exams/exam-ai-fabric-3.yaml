@@ -310,7 +310,7 @@ questions:
       servers reach line rate. Illustrative lspci -vv excerpt for the NIC:
 
         LnkCap: Port #0, Speed 32GT/s, Width x16, ASPM not supported
-        LnkSta: Speed 16GT/s (downgraded), Width x16 (ok)
+        LnkSta: Speed 16GT/s (downgraded), Width x16
 
       What is the cause?
     options:
@@ -320,7 +320,7 @@ questions:
         explanation: "16 GT/s x 16 lanes x 128/130 = about 252 Gb/s before TLP overhead. Check seating, risers, retimers and BIOS PCIe settings; Gen5 x16 gives about 504 Gb/s raw."
       - id: b
         text: "The link width is wrong; it should be x32."
-        explanation: "LnkSta shows Width x16 (ok), matching LnkCap. Speed is what is downgraded."
+        explanation: "LnkSta shows Width x16 with no (downgraded) note, so the width matches LnkCap. Speed is what is downgraded."
       - id: c
         text: "The NIC's Ethernet port negotiated 200 Gb/s."
         explanation: "Possible in general, but the evidence shown points at PCIe; confirm the port speed separately with ethtool or ibstat."

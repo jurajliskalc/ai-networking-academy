@@ -183,9 +183,9 @@ PortRcvErrors:...................211
 
 ```text
 $ ibqueryerrors
-Errors for "leaf03"
+Errors for 0xfc6a1c0300e4f300 "leaf03"
    GUID 0xfc6a1c0300e4f300 port 7: [SymbolErrorCounter == 52113] [PortRcvErrors == 409]
-Errors for "spine02"
+Errors for 0xfc6a1c0300e50b00 "spine02"
    GUID 0xfc6a1c0300e50b00 port 3: [PortRcvRemotePhysicalErrors == 409]
 ```
 

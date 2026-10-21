@@ -106,11 +106,11 @@ needs per operation type:
 |---|---|---|---|---|
 | ROD | Reliable, Ordered Delivery | Yes | Yes | Semantics that require ordering; behaves like a traditional connection, limits spraying |
 | RUD | Reliable, Unordered Delivery | Yes | No | Bulk RMA and most collective payloads: spray freely, receiver places data, completion when all arrived |
-| RUDI | Reliable, Unordered Delivery for Idempotent operations | Yes | No | Operations that can safely be applied twice (e.g. some RMA writes), so less duplicate-tracking state is needed |
+| RUDI | Reliable, Unordered Delivery for Idempotent operations | Yes | No | Operations that can safely be applied twice (e.g. some RMA writes), so less duplicate-tracking state is needed; per UEC's design paper, limited to the HPC profile |
 | UUD | Unreliable, Unordered Delivery | No | No | Traffic that tolerates loss or has its own recovery |
 
 The key insight: **most AI payload traffic does not need packet ordering**, only message
-completion. Picking RUD or RUDI for that traffic is what makes packet spraying safe by design
+completion. Picking RUD (or RUDI, where the profile offers it) for that traffic is what makes packet spraying safe by design
 rather than by NIC-specific tricks.
 
 ### Packet delivery contexts
@@ -235,7 +235,7 @@ answers to all four will behave well on AI traffic, whatever brand it is.
   without checking switch support. Cause: overlooking profiles and optional features. Fix: map
   each dependency to a specific spec feature and verified product support.
 - **Using ordered delivery everywhere.** Symptom: poor multipath gains. Cause: selecting ROD for
-  bulk traffic that only needs message completion. Fix: use RUD/RUDI for bulk payloads, ROD only
+  bulk traffic that only needs message completion. Fix: use RUD (or RUDI where the profile offers it) for bulk payloads, ROD only
   where semantics require ordering.
 - **Over-trusting summaries.** Symptom: a design document quotes UEC behaviour that the spec does
   not say. Cause: relying on blog posts. Fix: cite the specification sections directly.

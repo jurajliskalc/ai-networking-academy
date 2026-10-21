@@ -17,6 +17,8 @@ export const LINE_RATE_GBPS = 400;
 const IB_MTUS = [256, 512, 1024, 2048, 4096];
 const ROCE_IP_OVERHEAD = 60; // IPv4 20 + UDP 8 + BTH 12 + RETH 16 + ICRC 4 bytes on top of the RoCE payload
 export const PER_RAIL_BUSBW = 46.5; // GB/s nominal all-reduce bus bandwidth contributed by one healthy 400G rail
+// NET/Socket over the 25GbE management NIC (eno1): a few GB/s of bus bandwidth at best.
+export const SOCKET_BUSBW = 2.6;
 
 export type Trust = 'dscp' | 'pcp';
 export type RoceMode = 'lossless' | 'lossy' | 'off';
@@ -203,7 +205,7 @@ export function parseConf(conf: string): Record<string, string> {
 
 export const roceMtu = (netdevMtu: number) => [...IB_MTUS].reverse().find((m) => netdevMtu >= m + 100) ?? 256;
 export const pcieGbps = (n: Nic) => {
-  const perLane: Record<number, number> = { 8: 7.877, 16: 15.754, 32: 31.507, 64: 63.015 };
+  const perLane: Record<number, number> = { 8: 7.877, 16: 15.753, 32: 31.508, 64: 63.015 };
   return (perLane[n.pcieSpeed] ?? 31.507) * n.pcieWidth;
 };
 
@@ -262,6 +264,9 @@ export interface CollectiveResult {
   ok: boolean;
   busbw: number;
   error?: string;
+  /** Node that logs the WARN line, and the NCCL source location printed with it. */
+  errorNode?: string;
+  errorSrc?: string;
   transport: 'IB' | 'Socket';
   rails: number[];
   warnings: string[];
@@ -289,14 +294,18 @@ export function evaluateAllReduce(s: FabricState): CollectiveResult {
   for (const [i, c] of confs.entries()) {
     const ifn = c.NCCL_SOCKET_IFNAME;
     if (ifn && !['eno1', 'eno', '=eno1', '^lo,docker'].includes(ifn) && !NETDEVS.some((d) => d.startsWith(ifn.replace(/^=/, ''))))
-      return { ...base, ok: false, busbw: 0, error: `${NODES[i]}: Bootstrap : no socket interface found` };
+      return { ...base, ok: false, busbw: 0, error: 'Bootstrap : no socket interface found', errorNode: NODES[i], errorSrc: 'misc/socket.cc' };
   }
   if (confs.some((c) => c.NCCL_IB_DISABLE === '1')) {
-    warnings.push('NET/IB disabled (NCCL_IB_DISABLE=1); using NET/Socket');
-    return { ...base, ok: true, busbw: 9.6, transport: 'Socket' };
+    warnings.push('NCCL_IB_DISABLE set by environment to 1.');
+    return { ...base, ok: true, busbw: SOCKET_BUSBW, transport: 'Socket' };
   }
   const rails = Array.from({ length: RAILS }, (_, r) => r).filter((r) => confs.every((c) => hcaSelected(c.NCCL_IB_HCA, `mlx5_${r}`)));
-  if (!rails.length) return { ...base, ok: false, busbw: 0, error: 'NET/IB : No device found.' };
+  // No HCA matches NCCL_IB_HCA: real NCCL logs this at INFO level and silently falls back to sockets.
+  if (!rails.length) {
+    warnings.push('NET/IB : No device found.');
+    return { ...base, ok: true, busbw: SOCKET_BUSBW, transport: 'Socket' };
+  }
   const gids = confs.map((c) => Number(c.NCCL_IB_GID_INDEX ?? 3));
   const tcs = confs.map((c) => Number(c.NCCL_IB_TC ?? 0));
   let minFactor = 1;
@@ -307,10 +316,10 @@ export function evaluateAllReduce(s: FabricState): CollectiveResult {
       const pair = evaluatePair(s, a, r, b, r, gids[i]);
       if (!pair.ok) {
         const reason = pair.error === 'gid'
-          ? `NET/IB : ${a} mlx5_${r}:1 ibv_modify_qp failed with 110 Connection timed out (GID index ${gids[i]})`
+          ? `NET/IB : Call to ibv_modify_qp failed with 110 Connection timed out, on dev mlx5_${r}:1, curr state INIT, next state RTR, local GID index ${gids[i]}`
           // A dead link and an MTU black hole look the same to NCCL: the sender retries until the QP errors.
-          : `NET/IB : Got completion from peer ${hostIp(b, r)}<${b}> with status=12 opcode=0 len=0 vendor err 129 (Recv) localGid ::ffff:${hostIp(a, r)} remoteGid ::ffff:${hostIp(b, r)} hca mlx5_${r}`;
-        return { ...base, rails, ok: false, busbw: 0, error: reason };
+          : `NET/IB : Got completion from peer ${hostIp(b, r)}<${45000 + r * 7 + i}> with status=12 opcode=0 len=0 vendor err 129 (Send) localGid ::ffff:${hostIp(a, r)} remoteGid ::ffff:${hostIp(b, r)} hca mlx5_${r}`;
+        return { ...base, rails, ok: false, busbw: 0, error: reason, errorNode: a, errorSrc: 'transport/net_ib.cc' };
       }
       for (const iss of pair.issues) if (iss.factor < minFactor) { minFactor = iss.factor; limiting = iss; }
       const pf = pair.gbps / 391.8;
@@ -322,7 +331,6 @@ export function evaluateAllReduce(s: FabricState): CollectiveResult {
     const f = 0.35;
     if (f < minFactor) { minFactor = f; limiting = { fatal: false, underLoadOnly: true, factor: f, kind: 'tc', detail: `NCCL_IB_TC=${tcs.find((t) => t >> 2 !== 26)} (DSCP ${tcs.find((t) => t >> 2 !== 26)! >> 2}) is not the lossless RoCE class` }; }
   }
-  if (rails.length < RAILS) warnings.push(`NCCL_IB_HCA selects ${rails.length} of ${RAILS} HCAs`);
   return { ...base, ok: true, rails, busbw: Math.round(PER_RAIL_BUSBW * rails.length * minFactor * 100) / 100, limiting };
 }
 

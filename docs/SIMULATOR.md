@@ -35,7 +35,7 @@ The DSCP/priority choices follow a common NVIDIA convention; they are not a stan
   `NCCL_IB_TC` (×0.35). The slowest rail paces the ring, as in reality.
 * **Fatal conditions** fail the job with a realistic NCCL WARN: a dead link or a path MTU smaller than the
   RoCE packet (retry exceeded, `status=12`), a non-routable GID index (`ibv_modify_qp` timeout), a bad
-  `NCCL_SOCKET_IFNAME` (bootstrap failure). `NCCL_IB_DISABLE=1` falls back to sockets (~10 GB/s).
+  `NCCL_SOCKET_IFNAME` (bootstrap failure). `NCCL_IB_DISABLE=1`, or an `NCCL_IB_HCA` that matches no device, falls back to sockets over the 25GbE management NIC (~2.6 GB/s), as real NCCL does.
 * **Counters** advance deterministically every time a test runs, according to the active faults: drops,
   `out_of_sequence`, `packet_seq_err`, pause frames, ECN marks and CNPs, symbol and CRC errors.
 

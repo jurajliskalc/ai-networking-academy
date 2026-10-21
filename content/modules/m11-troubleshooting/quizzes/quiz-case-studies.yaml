@@ -47,7 +47,10 @@ questions:
     tags: [pfc, change-correlation]
   - id: q3
     type: single
-    prompt: In Case 2, why did dense-model jobs suffer much less than MoE jobs?
+    prompt: >
+      In Case 2, a configuration push left PFC enabled on the wrong priority, so RoCE traffic ran without PFC
+      while ECN/DCQCN stayed on. Mixture-of-experts jobs (heavy all-to-all) slowed badly; dense-model jobs
+      barely changed. Why did the dense-model jobs suffer much less?
     options:
       - id: a
         text: Their traffic created less incast, so ECN/DCQCN rate control usually kept queues short enough to avoid overflow even without PFC.
@@ -83,7 +86,10 @@ questions:
     tags: [ecmp, polarization]
   - id: q5
     type: multi
-    prompt: Which actions address the root cause of the ECMP problem in Case 3? (Select all that apply.)
+    prompt: >
+      In Case 3, a RoCE fabric showed a few spine uplinks saturated while others sat idle: each NIC pair used a
+      single QP, so the 5-tuples had little entropy, and every switch tier used the same hash function
+      (polarization). Which actions address the root cause? (Select all that apply.)
     options:
       - id: a
         text: Use a different hash seed (or function) per switching tier.

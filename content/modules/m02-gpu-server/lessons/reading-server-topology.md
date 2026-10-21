@@ -63,8 +63,9 @@ Read the PCIe codes as a **distance scale**, from closest to farthest:
 PIX  <  PXB  <  PHB  <  NODE  <  SYS
 ```
 
-This ordering is exactly the one used by NCCL's distance thresholds such as `NCCL_NET_GDR_LEVEL` and
-`NCCL_P2P_LEVEL`, which is why it is worth memorizing.
+NCCL's distance thresholds such as `NCCL_NET_GDR_LEVEL` and `NCCL_P2P_LEVEL` use the same names and
+ordering, which is why it is worth memorizing, with one wrinkle: NCCL has no separate `NODE` value, and
+its `PHB` means "same NUMA node, through the CPU", so it covers both nvidia-smi's `PHB` and `NODE`.
 
 ```widget
 pcie-topo

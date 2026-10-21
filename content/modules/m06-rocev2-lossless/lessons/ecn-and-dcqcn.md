@@ -22,7 +22,7 @@ further_reading:
     url: https://dl.acm.org/doi/10.1145/2785956.2787484
   - title: "Alizadeh et al., Data Center TCP (DCTCP, SIGCOMM 2010)"
     url: https://dl.acm.org/doi/10.1145/1851182.1851192
-  - title: "Linux kernel documentation: mlx5 counters (including RoCE congestion counters)"
+  - title: "Linux kernel documentation: mlx5 ethtool counters"
     url: https://docs.kernel.org/networking/device_drivers/ethernet/mellanox/mlx5/counters.html
 ---
 
@@ -167,7 +167,7 @@ event, and both counters reset when a CNP arrives.
 |---|---|---|
 | **Fast recovery** | First F events after a cut (F = 5 in the paper) | R_C ← (R_T + R_C) / 2. R_T unchanged: binary search back towards the rate before the cut. |
 | **Additive increase** | After F events on the timer *or* the byte counter | R_T ← R_T + R_AI, then R_C ← (R_T + R_C) / 2 |
-| **Hyper increase** | After F events on *both* the timer and the byte counter | R_T ← R_T + i × R_HAI (growing with the number of rounds *i*), then R_C ← (R_T + R_C) / 2 |
+| **Hyper increase** | After F events on *both* the timer and the byte counter | R_T ← R_T + i × R_HAI (growing with the number of rounds *i*, as in QCN; the DCQCN paper defers the details to the QCN standard), then R_C ← (R_T + R_C) / 2 |
 
 The byte counter makes fast flows recover quickly (they send B bytes sooner), and the timer makes
 sure slow flows also recover. Hyper increase lets a flow grab freed bandwidth quickly once

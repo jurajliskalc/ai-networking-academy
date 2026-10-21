@@ -141,7 +141,7 @@ questions:
     tags: [bom, validation]
   - id: q8
     type: single
-    prompt: What is the bisection bandwidth of a full non-blocking two-tier fat tree with 8,192 endpoints at 400G?
+    prompt: What is the bisection bandwidth of a full non-blocking two-tier fat tree with 8,192 endpoints at 400G, counted in one direction (the usual convention)?
     options:
       - id: a
         text: 1,638.4 Tb/s.

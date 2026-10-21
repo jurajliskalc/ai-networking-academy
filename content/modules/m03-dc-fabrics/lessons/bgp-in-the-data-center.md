@@ -149,7 +149,7 @@ Internet BGP is tuned for stability, and data center BGP for speed:
 | Link down | Immediate local detection on physical failure | The primary trigger; sessions on the failed link drop at once |
 | Keepalive / hold timers | Detect a dead peer when the link stays up | Short values (for example 3 s / 9 s, the FRR data center profile) instead of internet-style 60 s / 180 s |
 | BFD | Sub-second detection of forwarding failures with the link still up | Commonly enabled on fabric links |
-| Advertisement interval | Batching of updates | Set to 0 in data center profiles, so withdrawals propagate immediately |
+| Advertisement interval (MRAI) | Batching of updates | 0 on fabric sessions, so new paths are not held back (RFC 4271 suggests 30 s for eBGP; current FRR documents 0 as its default) |
 
 FRR ships a `datacenter` defaults profile that sets low timers and related options; check the FRR
 documentation for exactly what it changes in your version.

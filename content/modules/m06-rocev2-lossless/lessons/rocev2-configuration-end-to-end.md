@@ -245,7 +245,7 @@ Typical SONiC operations:
 ```bash
 config interface mtu Ethernet0 9100       # check the maximum your platform supports
 config qos reload                          # regenerate buffer/QoS config from templates
-sudo pfcwd start --action drop ports all detection-time 400 --restoration-time 400
+sudo config pfcwd start --action drop all 400 --restoration-time 400
 show pfc counters
 show queue counters
 show priority-group watermark headroom

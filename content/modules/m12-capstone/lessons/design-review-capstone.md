@@ -190,8 +190,8 @@ single-mode optics. Lengths drive the choice; measure them from the floor plan r
 The growth plan has two options:
 
 1. **Build 16 spines now** (above) with 2 links per leaf-spine pair; when SUs 5-8 arrive, add 16 spines
-   and re-cable so each leaf has 1 link to each of 32 spines. Cheapest now, but re-cabling 1,024 links
-   on a live cluster is a multi-day maintenance window.
+   and re-cable so each leaf has 1 link to each of 32 spines. Cheapest now, but moving half of the 1,024
+   existing leaf-spine links (512) on a live cluster is a multi-day maintenance window.
 2. **Build 32 spines now**, half-populated (32 ports used of 64), 1 link per leaf-spine pair. SUs 5-8
    then plug into empty spine ports with no re-cabling. Costs 16 extra spines up front.
 

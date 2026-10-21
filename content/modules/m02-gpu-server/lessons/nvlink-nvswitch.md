@@ -34,8 +34,8 @@ models does heavy all-to-all exchanges. If that traffic went over PCIe and the s
 GPUs would spend most of their time waiting.
 
 NVLink is NVIDIA's answer: a GPU-to-GPU interconnect with roughly an order of magnitude more bandwidth
-per GPU than PCIe or the scale-out NIC. NVSwitch turns NVLink into a switched fabric, first inside an
-8-GPU server and now across a whole rack. For a network engineer, NVLink matters for two reasons: it
+per GPU than PCIe or the scale-out NIC. NVSwitch turns NVLink into a switched fabric, first inside a
+server (the 16-GPU DGX-2, then 8-GPU HGX boards) and now across a whole rack. For a network engineer, NVLink matters for two reasons: it
 defines which traffic never reaches your fabric, and the size of the NVLink domain shapes the design
 of the scale-out network around it.
 

@@ -24,7 +24,7 @@ questions:
     tags: [pcie, bandwidth]
   - id: q2
     type: scenario
-    prompt: "One node in a 64-node job shows about half the all-reduce bus bandwidth of every other node. Switch port counters are clean. On that node, lspci reports the compute NIC as 'LnkCap: Speed 32GT/s, Width x16' and 'LnkSta: Speed 32GT/s (ok), Width x8 (downgraded)'. What is the most likely explanation?"
+    prompt: "One node in a 64-node job shows about half the all-reduce bus bandwidth of every other node. Switch port counters are clean. On that node, lspci reports the compute NIC as 'LnkCap: Speed 32GT/s, Width x16' and 'LnkSta: Speed 32GT/s, Width x8 (downgraded)'. What is the most likely explanation?"
     options:
       - id: a
         text: The NIC's PCIe link trained at half width, halving the bandwidth available to every transfer.

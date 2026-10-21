@@ -42,6 +42,8 @@ checks:
 solution: |
   1. `all_reduce_perf` fails with `status=12` (retry exceeded) between node01 and node02 on `mlx5_2`.
   2. `ping -M do -s 8972 10.2.2.1` from node01 gets no reply, while `-s 1400` works: a path MTU problem.
+     (Depending on the switch, a real router may answer with an ICMP "Frag needed" message instead of
+     dropping silently; RoCE does not act on ICMP either way.)
   3. On leaf03, `nv show interface` shows `swp2` at MTU 1500 while every other port is at 9216.
   4. Fix: `nv set interface swp2 link mtu 9216` then `nv config apply`. Re-run the test.
 

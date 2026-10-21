@@ -41,7 +41,7 @@ checks:
 solution: |
   After one `all_reduce_perf` run, `ethtool -S enp170s0np0 | grep prio3_pause` on node03 shows hundreds
   of thousands of received pause frames. `rdma statistic show link mlx5_5/1` shows `out_of_sequence` and
-  `packet_seq_err` climbing, and on leaf06 `nv show interface swp3 counters` shows TX drops. `mlnx_qos -i
+  `packet_seq_err` climbing, and on leaf06 `nv show interface swp3 counters` shows drops. `mlnx_qos -i
   enp170s0np0` reveals PFC enabled on priority 4. Fix: `mlnx_qos -i enp170s0np0 --pfc 0,0,0,1,0,0,0,0`.
 
   Lesson: point-to-point tests at low fan-in prove the data path, not the lossless configuration. Add a

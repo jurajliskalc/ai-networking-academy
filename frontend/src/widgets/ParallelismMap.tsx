@@ -187,7 +187,7 @@ export default function ParallelismMap() {
       <div className="space-y-2 text-sm text-muted">
         {tpCross && <p className="text-danger">TP spans servers here: its per-layer collectives would run over the scale-out NICs, often several times slower than NVLink, and sit on the critical path of every layer.</p>}
         <p><span className="font-semibold text-fg">Why TP stays inside the NVLink domain:</span> tensor parallelism splits every matrix multiply, so each layer
-          blocks on an all-reduce of activation-sized tensors, several times per layer, forward and backward. Nothing can overlap it, so it needs the
+          blocks on an all-reduce of activation-sized tensors, several times per layer, forward and backward. It is hard to hide behind compute (overlap schemes exist but are partial), so it needs the
           highest bandwidth and lowest latency available: NVLink at roughly an order of magnitude more bandwidth per GPU than a scale-out NIC. DP and PP
           communicate less often or can be overlapped with compute, so they tolerate the scale-out network. EP all-to-all is the hardest scale-out
           pattern: every GPU sends to every other in its group, sizes are uneven, and the result sits on the critical path.</p>

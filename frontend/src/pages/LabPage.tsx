@@ -91,7 +91,7 @@ function SimLabView({ lab }: { lab: SimLab }) {
         )}
         <Card className="p-5">
           <div className="mb-3 font-mono text-[11px] uppercase tracking-[0.14em] text-accent">1 · Diagnosis</div>
-          <QuestionCard q={{ id: 'diagnosis', type: 'single', prompt: lab.diagnosis.prompt, options: lab.diagnosis.options }} index={0} total={1} chosen={answer} onChange={setAnswer} revealed={answered} />
+          <QuestionCard q={{ id: 'diagnosis', type: 'single', prompt: lab.diagnosis.prompt, options: lab.diagnosis.options }} index={0} total={1} chosen={answer} onChange={setAnswer} revealed={answered} seed={lab.id} />
           {!answered && <Button className="mt-4" onClick={() => setAnswered(true)} disabled={!answer.length}>Commit diagnosis</Button>}
         </Card>
         <Card className="p-5">

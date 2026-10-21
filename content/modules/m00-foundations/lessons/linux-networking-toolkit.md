@@ -170,11 +170,11 @@ This is the fastest way to catch **miscabling**: in a rail-optimized cluster NIC
 $ ss -tin dst 10.4.7.25
 State  Recv-Q Send-Q   Local Address:Port    Peer Address:Port
 ESTAB  0      0           10.0.0.11:51544      10.4.7.25:5201
-	 cubic wscale:7,7 rto:201 rtt:0.052/0.011 mss:8948 cwnd:412 ... retrans:0/0 ...
+	 cubic wscale:7,7 rto:201 rtt:0.052/0.011 mss:8948 cwnd:412 ...
 ```
 *(illustrative output, trimmed)*
 
-`mss:8948` confirms jumbo frames are in use on this connection (9000 minus IP, TCP and TCP-option headers); `retrans:0/0` means no retransmissions.
+`mss:8948` confirms jumbo frames are in use on this connection (9000 minus IP, TCP and TCP-option headers); no `retrans:` field appears, which means no retransmissions (ss prints `retrans:<current>/<total>` only once a connection has retransmitted).
 
 ### Throughput: `iperf3`
 

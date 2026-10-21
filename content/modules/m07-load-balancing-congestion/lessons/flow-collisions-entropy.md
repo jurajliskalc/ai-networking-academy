@@ -239,7 +239,7 @@ and release, so consult your NOS guide. Verify:
 With NCCL over RoCE or InfiniBand you can ask for more QPs per connection:
 
 ```bash
-# Spread each NCCL connection over 4 QPs (default is lower; check your NCCL version's docs)
+# Spread each NCCL connection over 4 QPs (documented default is 1; check your NCCL version's docs)
 export NCCL_IB_QPS_PER_CONNECTION=4
 ```
 

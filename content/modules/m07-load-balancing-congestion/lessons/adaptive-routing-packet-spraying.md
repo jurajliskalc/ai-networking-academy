@@ -196,8 +196,8 @@ routing reacts to the collision you just saw, and how spraying turns the per-lin
 
 ### Configuring adaptive routing on Cumulus Linux (illustrative)
 
-Cumulus Linux NVUE exposes adaptive routing on Spectrum switches. The commands look like the
-following in recent releases; verify the exact syntax and prerequisites (for example RoCE QoS mode)
+Cumulus Linux NVUE exposes adaptive routing on Spectrum switches. The commands below use the
+syntax of Cumulus Linux 5.14 and earlier (from 5.15 the `enable on` keyword became `state enabled`); verify the exact syntax and prerequisites (for example RoCE QoS mode)
 for your Cumulus version before applying:
 
 ```bash

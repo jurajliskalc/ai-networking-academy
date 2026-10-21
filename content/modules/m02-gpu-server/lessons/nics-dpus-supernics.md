@@ -85,7 +85,7 @@ and features depend on the SKU and firmware.
 |---|---|---|---|
 | ConnectX-6 / 6 Dx | Up to 200G | PCIe Gen4 | A100-era; still common in front-end and storage |
 | ConnectX-7 | Up to 400G (InfiniBand NDR or 400GbE) | PCIe Gen5 x16 | H100/H200/B200-era compute NIC |
-| ConnectX-8 SuperNIC | Up to 800G (InfiniBand XDR or 800GbE) | PCIe Gen6, with an integrated PCIe switch | Blackwell Ultra-era (for example HGX B300, GB300 NVL72), check platform docs |
+| ConnectX-8 SuperNIC | Up to 800G (InfiniBand XDR; NVIDIA's card documentation lists Ethernet at up to 400GbE per port) | PCIe Gen6, with an integrated PCIe switch | Blackwell Ultra-era (for example HGX B300, GB300 NVL72), check platform docs |
 | BlueField-3 DPU | Up to 400G, 16 Arm cores, on-card DDR | PCIe Gen5 | Front-end/storage DPU; a SuperNIC variant is used in Spectrum-X designs |
 | Next generations | ConnectX-9 class (1.6T) and BlueField-4 have been announced for the Rubin generation | | Hedge: check current NVIDIA announcements for availability and specs |
 
@@ -232,7 +232,7 @@ setting anything:
 
 ```bash
 sudo mst start
-sudo mlxconfig -d <device> query      # shows current and next-boot values of all parameters
+sudo mlxconfig -d <device> query      # next-boot value of each parameter; add --enable_verbosity for default and current
 ```
 
 ### Look at hardware counters

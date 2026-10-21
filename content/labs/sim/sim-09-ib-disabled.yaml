@@ -6,7 +6,7 @@ lessons: [nccl-architecture, nccl-debugging, slow-collectives-stragglers]
 summary: A debugging variable forces NCCL onto the management network.
 start: node01
 ticket: |
-  **INC-4630 · Sev2 · Jobs 40x slower, no errors**
+  **INC-4630 · Sev2 · Jobs 100x slower, no errors**
 
   > All jobs complete, but at a fraction of their normal speed, and nothing shows up in the logs. The
   > fabric team says the RoCE links are idle. - ML platform team
@@ -33,7 +33,8 @@ diagnosis:
 checks:
   - { description: "all_reduce runs on NET/IB above 360 GB/s", check: allreduce_min_busbw, args: { value: 360 } }
 solution: |
-  With `NCCL_DEBUG=INFO` the log shows `NET/IB : Disabled` and `Using network Socket`. node04's
+  With `NCCL_DEBUG=INFO` the log shows `NCCL_IB_DISABLE set by environment to 1.` and
+  `Using network Socket`. node04's
   nccl.conf contains `NCCL_IB_DISABLE=1`. Remove it with `sed -i '/NCCL_IB_DISABLE/d' /etc/nccl.conf`.
 fix:
   - "node04: sed -i '/NCCL_IB_DISABLE/d' /etc/nccl.conf"

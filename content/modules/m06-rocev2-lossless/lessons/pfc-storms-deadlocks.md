@@ -32,7 +32,7 @@ hold up traffic that has nothing to do with it, and with the right (wrong) topol
 part of the network permanently. Microsoft's account of running RDMA at scale (Guo et al., SIGCOMM
 2016) describes both failure classes in production: **PFC storms**, where a malfunctioning NIC
 paused the network continuously, and **PFC deadlocks**, where a cycle of paused links stopped
-traffic even though nobody was sending. Neither shows up as a link going down. Your monitoring
+traffic and did not clear even after all the servers were restarted. Neither shows up as a link going down. Your monitoring
 reports every port up, every BGP session established, and an entire training cluster at zero
 throughput.
 
@@ -219,8 +219,9 @@ but does not receive them**.
 ```bash
 pfcwd show config
 pfcwd show stats
-# example: enable on all ports with drop action (check 'pfcwd start --help' for your release)
-sudo pfcwd start --action drop ports all detection-time 400 --restoration-time 400
+# example: enable on all ports with drop action, detection time 400 ms
+# (syntax: [PORTS]... DETECTION_TIME; check 'config pfcwd start --help' for your release)
+sudo config pfcwd start --action drop all 400 --restoration-time 400
 ```
 
 ```text

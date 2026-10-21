@@ -66,7 +66,7 @@ questions:
         explanation: ftree understands fat-tree levels and spreads destinations evenly across uplinks.
       - id: b
         text: dor
-        explanation: Dimension-order routing targets meshes and tori.
+        explanation: Dimension-order routing targets meshes and hypercubes (tori use torus-2QoS).
       - id: c
         text: torus-2QoS
         explanation: This engine is for torus topologies.

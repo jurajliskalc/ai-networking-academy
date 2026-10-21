@@ -8,17 +8,17 @@ questions:
     prompt: A leaf has 48 x 100G server ports and 6 x 400G uplinks. What is its oversubscription ratio?
     options:
       - id: a
-        text: 2:1
+        text: "2:1"
         correct: true
         explanation: 4,800G down divided by 2,400G up.
       - id: b
-        text: 8:1
+        text: "8:1"
         explanation: That compares port counts (48 vs 6) and ignores the uplinks' higher speed.
       - id: c
-        text: 1:1
+        text: "1:1"
         explanation: Uplink bandwidth is only half the downlink bandwidth.
       - id: d
-        text: 4:1
+        text: "4:1"
         explanation: Recompute with bandwidth; 4,800 over 2,400 is 2.
     tags: [oversubscription, math]
   - id: q2
@@ -26,17 +26,17 @@ questions:
     prompt: A path crosses a leaf at 3:1 and a pod spine tier at 2:1 before reaching the super-spine. What is the end-to-end oversubscription for traffic between pods?
     options:
       - id: a
-        text: 6:1
+        text: "6:1"
         correct: true
         explanation: Ratios multiply along the path.
       - id: b
-        text: 5:1
+        text: "5:1"
         explanation: Ratios multiply, they do not add.
       - id: c
-        text: 3:1
+        text: "3:1"
         explanation: That takes only the worst tier, ignoring the compounding effect.
       - id: d
-        text: 1.5:1
+        text: "1.5:1"
         explanation: Dividing the ratios has no physical meaning here.
     tags: [oversubscription]
   - id: q3
@@ -112,7 +112,7 @@ questions:
     tags: [operations, oversubscription]
   - id: q7
     type: single
-    prompt: What is the bisection bandwidth of a non-blocking fabric with 1,024 endpoints at 400 Gb/s?
+    prompt: What is the bisection bandwidth of a non-blocking fabric with 1,024 endpoints at 400 Gb/s, counted in one direction (the usual convention)?
     options:
       - id: a
         text: About 204.8 Tb/s

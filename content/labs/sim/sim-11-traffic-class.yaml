@@ -21,7 +21,7 @@ diagnosis:
     - id: a
       text: The new image's /etc/nccl.conf lacks NCCL_IB_TC=106, so RoCE traffic leaves with DSCP 0, lands in the lossy default priority on every switch, and is dropped under load.
       correct: true
-      explanation: The switches and NICs map DSCP 26 to the lossless priority 3, and traffic class 106 is DSCP 26 shifted left by two bits with the ECT bit set. Without it, RoCE uses priority 0, which has neither PFC nor the RoCE ECN profile.
+      explanation: The switches and NICs map DSCP 26 to the lossless priority 3, and traffic class 106 is DSCP 26 shifted left by two bits with the ECT bit set. Without it, RoCE uses priority 0, which has no PFC, so congestion causes drops instead of pauses.
     - id: b
       text: PFC is disabled on priority 0.
       explanation: PFC should not be enabled on the default class; the fix is to put RoCE into the lossless class.
@@ -35,8 +35,8 @@ checks:
   - { description: "Every node sets NCCL_IB_TC=106", check: nccl_conf, args: { node: all, key: NCCL_IB_TC, value: "106" } }
   - { description: "all_reduce bus bandwidth is above 360 GB/s", check: allreduce_min_busbw, args: { value: 360 } }
 solution: |
-  After a run, `ethtool -S` shows almost all packets in `tx_prio0_packets`, and the leaves show drops
-  but no ECN marks. `/etc/nccl.conf` lacks `NCCL_IB_TC`. Add it on every node (`echo "NCCL_IB_TC=106"
+  After a run, `ethtool -S` shows almost all packets in `tx_prio0_packets`, and the leaves show drops: priority 0
+  has no PFC. `/etc/nccl.conf` lacks `NCCL_IB_TC`. Add it on every node (`echo "NCCL_IB_TC=106"
   >> /etc/nccl.conf`), ideally through configuration management.
 
   Note: 106 is a common convention (DSCP 26 with ECT), not a standard. The value must match the fabric's

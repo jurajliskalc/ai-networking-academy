@@ -98,7 +98,7 @@ commands:
     example: |
       # illustrative output
       RoCE v2
-    notes: This is what show_gids reads under the hood. Reading an unpopulated index returns an error, which is normal.
+    notes: This is what show_gids reads under the hood. Reading an unpopulated index typically returns an error (behaviour can vary by kernel), which is normal.
     tags: [sysfs, gid, roce]
 
   - cmd: show_gids

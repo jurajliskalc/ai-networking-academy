@@ -185,7 +185,7 @@ export default function PfcEcnSim() {
         ))}
       </div>
       <p className="text-xs text-muted">
-        {K_TEXT(k)} Pause frames are counted per ingress port (XOFF refreshed every {PAUSE_REFRESH} µs). Senders stop {PFC_DELAY} µs after XOFF, so every port needs headroom ≥ 400 Gb/s × that delay ≈ {(BPUS * PFC_DELAY / 1024).toFixed(0)} KB plus a maximum frame: set headroom below that and lossless Ethernet drops, which RoCE punishes with go-back-N. With ECN off, PFC alone keeps it lossless but the queue sits at XOFF and pauses spread upstream. Simplified DCQCN model after Zhu et al., SIGCOMM 2015 (g = 1/256, CNP every ≥ {CNP_GAP} µs per flow, {INC_T} µs increase timer, {F_FAST} fast-recovery steps then +{R_AI} Gb/s additive increase); one flow per sender, deterministic seeded marking.
+        {K_TEXT(k)} Pause frames are counted per ingress port (XOFF refreshed every {PAUSE_REFRESH} µs). Senders stop {PFC_DELAY} µs after XOFF, so every port needs headroom ≥ 400 Gb/s × that delay ≈ {(BPUS * PFC_DELAY / 1024).toFixed(0)} KB plus a maximum frame: set headroom below that and lossless Ethernet drops, which RoCE punishes with go-back-N. With ECN off, PFC alone keeps it lossless but the queue sits at XOFF and pauses spread upstream. Simplified DCQCN model after Zhu et al., SIGCOMM 2015 (g = 1/256, CNP every ≥ {CNP_GAP} µs per flow, {INC_T} µs increase timer, {F_FAST} fast-recovery steps then +{R_AI} Gb/s additive increase, a step scaled up for this short window; NIC defaults are in the Mb/s range); one flow per sender, deterministic seeded marking.
       </p>
     </div>
   );

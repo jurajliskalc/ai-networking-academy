@@ -176,7 +176,7 @@ dist.init_process_group(backend="nccl")        # one process per GPU, launched w
 rank = dist.get_rank()
 torch.cuda.set_device(rank % torch.cuda.device_count())
 
-grad = torch.ones(64 * 1024 * 1024, device="cuda") * rank   # 64 Mi floats = 256 MB
+grad = torch.ones(64 * 1024 * 1024, device="cuda") * rank   # 64 Mi floats = 256 MiB
 dist.all_reduce(grad, op=dist.ReduceOp.SUM)                  # every rank now holds the sum
 ```
 

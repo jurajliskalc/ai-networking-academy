@@ -29,7 +29,7 @@ further_reading:
 
 ## Why this matters
 
-When an RDMA connection fails, the error usually surfaces far from its cause. NCCL prints `NET/IB : Got completion from peer ... with error 12` and the job dies after a long pause; an MPI job hangs during `MPI_Init`; a storage client reports "transport retry counter exceeded". None of these messages says "your GID index points at an IPv6 link-local address" or "the spine MTU is 1500". A TCP application that hits an MTU black hole often limps along thanks to PMTUD and retransmissions; an RDMA reliable connection gives up after a handful of hardware retries and moves the queue pair into the error state, and in a collective that kills the whole job.
+When an RDMA connection fails, the error usually surfaces far from its cause. NCCL prints `NET/IB : Got completion from peer ... with error 12` (the wording varies by release; newer versions print `status=12` or the status name) and the job dies after a long pause; an MPI job hangs during `MPI_Init`; a storage client reports "transport retry counter exceeded". None of these messages says "your GID index points at an IPv6 link-local address" or "the spine MTU is 1500". A TCP application that hits an MTU black hole often limps along thanks to PMTUD and retransmissions; an RDMA reliable connection gives up after a handful of hardware retries and moves the queue pair into the error state, and in a collective that kills the whole job.
 
 At Level 4 you need a mental model that maps the *stage* of failure to a short list of causes, plus the exact host evidence that confirms each one. Most RDMA connection problems are configuration problems that a well-built admission check would catch: a GID table that changed after a network reconfiguration, a P_Key with limited membership, a firewall that blocks the TCP side channel used to exchange QP numbers. This lesson builds that model.
 
@@ -124,7 +124,7 @@ On mlx5 NICs, RDMA transport counters are exposed under `/sys/class/infiniband/<
 | `packet_seq_err` | A NAK for a sequence error was received (counted at the sender) | Drops in the fabric with a live peer |
 | `out_of_sequence` | The responder received packets out of order, i.e. after a gap (counted at the receiver) | Drops in the fabric towards this receiver |
 | `implied_nak_seq_err` | A read response or ACK implies missing earlier responses | Drops on the response path |
-| `rnr_nak_retry_err` | RNR NAK retries exhausted | Receiver not posting buffers |
+| `rnr_nak_retry_err` | An RNR NAK was received (counted while the QP's RNR retry limit is not yet exceeded) | Receiver not posting buffers |
 | `req_cqe_error` / `resp_cqe_error` | Completions with error on requester / responder side | Correlate with the application's error log |
 
 A useful pattern: if `local_ack_timeout_err` climbs on the sender but `out_of_sequence` is zero on the receiver, the packets are not reaching the receiver at all (addressing, routing, ACL, MTU). If `out_of_sequence` climbs on the receiver, packets arrive with gaps: the path works but drops some (congestion drops, link errors, lossless misconfiguration).

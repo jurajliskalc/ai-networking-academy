@@ -21,7 +21,7 @@ diagnosis:
   prompt: Which evidence best identifies the root cause?
   options:
     - id: a
-      text: node03 enp154s0np0 shows rx_symbol_err_phy and rx_crc_errors_phy rising, a raw BER around 3E-05 with post-FEC errors, low RX power on one lane and link flaps in dmesg. The leaf05 swp3 cable or optic is bad.
+      text: node03 enp154s0np0 shows rx_symbol_err_phy and rx_crc_errors_phy rising, a raw BER around 3E-04 (above what RS-FEC can correct) with post-FEC errors, low RX power on one lane and link flaps in dmesg. The leaf05 swp3 cable or optic is bad.
       correct: true
       explanation: Symbol errors and a pre-FEC BER far above normal, uncorrectable (post-FEC) errors, one weak lane and flaps all point at the physical link. Corrupted packets are dropped and RDMA retransmits them, so that rail paces the collective.
     - id: b
@@ -38,7 +38,7 @@ checks:
   - { description: "all_reduce bus bandwidth is above 360 GB/s", check: allreduce_min_busbw, args: { value: 360 } }
 solution: |
   `ib_write_bw` from node03 on `mlx5_4` reaches only ~215 Gb/s. `ethtool -S enp154s0np0` shows symbol
-  and CRC errors, `mlxlink -d mlx5_4 -c` reports a raw BER of 3E-05 with non-zero effective errors,
+  and CRC errors, `mlxlink -d mlx5_4 -c` reports a raw BER of 3E-04, above the roughly 2.4E-4 that RS(544,514) FEC can correct, so effective (post-FEC) errors are non-zero,
   `ethtool -m` shows one lane at -10.9 dBm, and `dmesg` shows repeated link down/up. Have the optic or
   cable replaced: `replace-cable leaf05 swp3`.
 

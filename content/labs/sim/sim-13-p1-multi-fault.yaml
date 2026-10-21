@@ -31,7 +31,7 @@ diagnosis:
       explanation: Rail-local traffic never crosses the spines here. The alarm is real but it is not the cause.
     - id: c
       text: Only the PFC issue matters; the leaf02 swp4 errors are within normal range.
-      explanation: A raw BER of 3E-05 with post-FEC errors and flaps is far outside the normal range, and that rail would still cap the job after the PFC fix.
+      explanation: A raw BER of 3E-04 (beyond RS-FEC's correction limit) with post-FEC errors and flaps is far outside the normal range, and that rail would still cap the job after the PFC fix.
     - id: d
       text: The NCCL configuration drifted on node02.
       explanation: /etc/nccl.conf is identical on all nodes.
@@ -43,7 +43,7 @@ solution: |
   1. Scope: `all_reduce_perf` runs, but slowly, and all nodes are involved, so look for the slowest rail.
   2. Counters after a run: node02 `mlx5_6` shows `out_of_sequence` growth and leaf07 swp2 shows TX
      drops. On node02, `mlnx_qos -i enp204s0np0` shows PFC disabled on all priorities.
-  3. node04 `enp41s0np0` shows symbol and CRC errors, and `mlxlink -d mlx5_1 -c` shows a raw BER of 3E-05.
+  3. node04 `enp41s0np0` shows symbol and CRC errors, and `mlxlink -d mlx5_1 -c` shows a raw BER of 3E-04 with non-zero effective errors.
   4. spine02 swp3 is down, but rail-local collectives stay on the leaves. Ticket it for the morning.
   5. Fix: run `mlnx_qos -i enp204s0np0 --pfc 0,0,0,1,0,0,0,0` on node02 and `replace-cable leaf02 swp4`.
      Verify with all_reduce_perf. Fixing only one of the two still leaves the job slow.

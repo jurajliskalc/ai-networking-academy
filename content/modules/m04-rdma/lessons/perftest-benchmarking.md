@@ -65,7 +65,7 @@ Every test has a **server** (started without a peer address) and a **client** (g
 | `-c <type>` | Connection (transport) type such as `RC`, `UC`, `UD`, where the operation supports it |
 | `-m <mtu>` | Path MTU to use (256-4096) |
 | `--report_gbits` | Report bandwidth in Gb/s instead of the default MB/s |
-| `-F` | Do not fail when CPU frequency scaling makes the cycle counter unreliable (results print a warning) |
+| `-F` | Suppress the CPU-frequency-scaling check (current perftest only prints a "Conflicting CPU frequency values" warning without it; some older releases refused to produce a report) |
 | `-R` | Connect using rdma_cm |
 | `-p <port>` | TCP port for the out-of-band exchange (run several tests in parallel) |
 | `--use_cuda=<gpu>` | Use GPU memory for buffers, in builds compiled with CUDA support (check `--help` on your build; newer versions add further GPU options) |
@@ -216,9 +216,9 @@ Record results per NIC and per pair in a table and compare against peers. Outlie
 
 ## Common pitfalls
 
-- **Misreading units.** Symptom: "only 48,000 — something is badly wrong". Cause: default output is MB/s (megabytes). Fix: use `--report_gbits`.
+- **Misreading units.** Symptom: "only 46,000 — something is badly wrong". Cause: default output is MB/s (perftest uses 2^20-byte megabytes, so 46,000 is about 386 Gb/s). Fix: use `--report_gbits`.
 - **Wrong or missing GID index on RoCE.** Symptom: the client hangs or the test fails with a completion error. Cause: default GID index is not RoCEv2 with the fabric IP. Fix: pass `-x` with the right index or use `-R`.
-- **CPU frequency warnings.** Symptom: perftest exits complaining about conflicting CPU frequency values. Cause: frequency scaling makes the cycle-counter conversion unreliable. Fix: use `-F` to proceed (and consider setting a performance governor for repeatable latency).
+- **CPU frequency warnings.** Symptom: perftest prints "Conflicting CPU frequency values detected" (older releases could also abort without a report). Cause: frequency scaling makes the cycle-counter conversion unreliable. Fix: use `-F` to suppress the check (and consider setting a performance governor for repeatable latency).
 - **Testing the wrong path.** Symptom: excellent results that do not match production. Cause: both NICs on the same leaf switch, or the test used the management network's IP for the out-of-band exchange and an unexpected device. Fix: name the device with `-d`, check address lines, and test across the spine as well.
 - **Small messages or short runs.** Symptom: low and noisy bandwidth. Cause: message-rate limited sizes or too few iterations. Fix: use 64 KiB or larger and `-D 10` or more for bandwidth checks.
 - **TCP exchange blocked.** Symptom: the client reports that it could not connect to the server. Cause: host firewall or wrong IP for the exchange port. Fix: open the perftest TCP port or choose another with `-p`.

@@ -155,9 +155,11 @@ Suppose you deploy 2 SUs now and 2 more next year. Two choices:
 | B: size spines for the end state | 16 | 32 / 16 = 2 | Add 16 new leaves and plug them into the free spine ports; existing cables untouched |
 
 In plan B each spine uses 16 leaves x 2 = 32 of its 64 ports on day one, and the remaining 32 ports
-are reserved for the second phase. You pay for 8 extra spines up front, but you avoid touching
-roughly a thousand live cables on a production fabric. Most architects choose B, and the RA's
-fixed spine-group structure encourages it.
+are reserved for the second phase. You pay for 8 extra spines up front, but you avoid moving
+256 of the 512 live leaf uplinks (16 per leaf) on a production fabric. Many architects choose B
+when the second phase is funded. Note that NVIDIA's published DGX H100 and B200 RA tables size the
+spine per configuration (4 spines for 1 SU, 8 for 2 SUs, 16 for 3 or 4 SUs), so a phased build has
+to make this choice explicitly rather than inherit it from the RA.
 
 ```widget
 fabric-sizer
@@ -203,7 +205,8 @@ the design unit:
 - NVIDIA's announced SuperPOD configuration groups **8 NVL72 racks (576 GPUs)** as a building
   block; check the current RA for the exact SU definition and how it scales.
 - There are now **five** networks to plan: the NVLink fabric inside the rack, plus the compute,
-  storage, in-band and OOB networks between racks.
+  storage, in-band and OOB networks between racks. (In NVIDIA's DGX GB200 RA, storage and in-band
+  share one physical Ethernet fabric, so five logical networks run on four physical fabrics.)
 - The scale-out compute fabric is still one NIC per GPU, rail-aligned, on Quantum InfiniBand or
   Spectrum-X Ethernet, with per-GPU speed depending on generation (400G-class ConnectX-7 in early
   GB200 designs, 800G-class ConnectX-8 in GB300-generation designs; confirm in the RA).

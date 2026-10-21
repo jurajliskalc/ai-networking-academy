@@ -55,7 +55,8 @@ By the end you can:
 - Lab files in `labs/hol-ecn-congestion/`:
   - `setup.sh`: builds the namespaces, disables TSO/GSO/GRO on all veths (so the queue holds
     MTU-sized packets), sets every namespace to CUBIC and starts three iperf3 servers on the
-    receiver (ports 5201-5203, one per sender).
+    receiver (ports 5201-5203, one per sender). `setup.sh --restart-servers` only restarts those
+    servers (needed in Task 5).
   - `bottleneck.sh MODE`: `fifo`, `red-ecn`, `fq_codel`, `off` or `show`.
   - `incast.sh`: synchronized burst from all three senders.
   - `cleanup.sh`, `check.sh`.
@@ -177,7 +178,14 @@ DCTCP estimates the fraction of marked packets per window (its `alpha`) and cuts
 sudo ip netns exec ecn-s2  sysctl -w net.ipv4.tcp_congestion_control=dctcp
 sudo ip netns exec ecn-s2  sysctl -w net.ipv4.tcp_ecn=1
 sudo ip netns exec ecn-rcv sysctl -w net.ipv4.tcp_congestion_control=dctcp
+sudo ./setup.sh --restart-servers
 ```
+
+**Why restart the servers:** a DCTCP sender marks even its SYN as ECN-capable (ECT), which classic
+RFC 3168 TCP does not do. Linux accepts ECN on such a SYN only if the *listening* socket itself
+uses DCTCP, and a listening socket keeps the congestion control that was the default when it was
+created (the servers were started under CUBIC). Without the restart, ECN is not negotiated and the
+DCTCP sender silently falls back to Reno-style behavior without ECN, so RED drops instead of marks.
 
 Run a 15-second DCTCP flow and, in a second terminal, sample the queue and the socket state:
 
@@ -284,7 +292,8 @@ sudo ./check.sh
 
 The script checks the namespaces, reachability, the three iperf3 servers, DCTCP availability and the
 HTB+RED/ECN configuration, then runs a 3-second DCTCP flow (temporarily setting DCTCP on s2 and the
-receiver and restoring the previous values) and verifies that RED marked packets and that the
+receiver and restoring the previous values, against a one-off iperf3 server on port 5299 that it
+starts after switching the receiver to DCTCP) and verifies that RED marked packets and that the
 receiver counted CE-marked packets.
 
 ## Clean up

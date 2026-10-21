@@ -263,12 +263,17 @@ sudo lspci -s 19:00.0 -vvv | grep -E 'LnkCap:|LnkSta:'
 
 ```text
 LnkCap: Port #0, Speed 32GT/s, Width x16, ASPM not supported
-LnkSta: Speed 32GT/s (ok), Width x16 (ok)
+LnkSta: Speed 32GT/s, Width x16
 ```
 
 - `LnkCap` is what the device can do; `LnkSta` is what it negotiated.
-- Recent `lspci` versions annotate `(ok)` or `(downgraded)`. A NIC showing `Speed 16GT/s (downgraded)`
-  or `Width x8 (downgraded)` is a hardware or BIOS problem, not a network problem.
+- `lspci` annotates mismatches: pciutils 3.8 and later append `(downgraded)` when the negotiated value is
+  below the capability and print nothing extra when they match (pciutils 3.6-3.7 printed `(ok)` instead).
+  The annotation is suppressed on root ports and switch downstream ports, so read it on the endpoint.
+  A NIC showing `Speed 16GT/s (downgraded)` or `Width x8 (downgraded)` is usually a hardware or BIOS
+  problem, not a network problem. Two caveats: GPUs commonly lower their link speed when idle to save
+  power (check under load), and some platforms downgrade certain functions by design, so compare against
+  a known-good node of the same model before opening a ticket.
 - Run it for every GPU and every NIC during node acceptance (see `fabric-validation-burn-in`).
 
 ### Find the NUMA node of a device

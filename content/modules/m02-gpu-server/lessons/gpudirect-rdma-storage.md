@@ -130,9 +130,10 @@ GPU-to-NIC traffic is not symmetric on PCIe:
   are round trips, so they are more sensitive to path length, PCIe switch behaviour and the number of
   outstanding requests.
 
-This is why NCCL has separate knobs for using GDR on the send path (`NCCL_NET_GDR_READ`) and why some
-platforms historically used GDR for receives but staged sends through host memory. On modern
-platforms with a GPU and NIC under the same PCIe switch, NCCL normally uses GDR in both directions.
+This is why NCCL has a separate knob for using GDR on the send path (`NCCL_NET_GDR_READ`). NCCL's
+documented default (since 2.4.2) enables it on NVLink-based platforms and disables it otherwise, so
+on some platforms GDR is used for receives while sends are staged through host memory. On NVLink-based
+HGX-class servers with a GPU and NIC under the same PCIe switch, NCCL normally uses GDR in both directions.
 
 ### How NCCL decides whether to use GDR
 
@@ -146,7 +147,7 @@ topology legend:
 | `LOC` | Never (GDR disabled) |
 | `PIX` | Behind at most one PCIe bridge (same switch) |
 | `PXB` | Behind multiple PCIe bridges, without crossing the CPU host bridge |
-| `PHB` | On the same CPU, crossing the PCIe host bridge |
+| `PHB` | On the same NUMA node, with traffic going through the CPU (this covers nvidia-smi's `PHB` and `NODE` cases) |
 | `SYS` | Anywhere, even across the socket interconnect |
 
 The default is chosen by NCCL for the platform; you should rarely need to override it. Forcing `SYS`

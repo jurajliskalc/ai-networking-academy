@@ -98,9 +98,9 @@ OpenSM includes several engines, selected with the `routing_engine` option (seve
 |---|---|---|---|
 | `minhop` | Shortest paths, balancing port usage | Not guaranteed in general | Default; small or simple fabrics |
 | `updn` (Up/Down) | Rank switches from root(s); a path may go up then down but never down then up | Yes, by construction | General topologies with clear roots |
-| `dnup` | Variant of updn with the opposite direction rule | Yes | Special cases |
+| `dnup` | Variant of updn for fabrics where some CAs attach closer to the roots than some switches | Yes, by construction (ranking rules like updn) | Special cases |
 | `ftree` | Fat-tree aware; spreads destinations evenly across uplinks so shift-style traffic is non-blocking | Yes on proper fat trees | Fat-tree / Clos AI and HPC fabrics |
-| `dor` | Dimension-order routing for meshes and tori | With VL usage / on meshes | Mesh and torus topologies |
+| `dor` | Dimension-order routing (shortest paths taken in a fixed dimension order) | Yes for hypercubes and meshes cabled as such; not for tori (use torus-2QoS) | Mesh and hypercube topologies |
 | `torus-2QoS` | Torus routing with VLs for deadlock freedom and QoS | Yes, uses VLs | 2D/3D tori |
 | `lash` | Layered shortest path; assigns paths to layers (VLs) to break cycles | Yes, uses VLs | Irregular topologies |
 | `dfsssp` / `sssp` | (Deadlock-free) single-source shortest path, globally balanced | dfsssp: yes, uses VLs | Irregular topologies, good balance |

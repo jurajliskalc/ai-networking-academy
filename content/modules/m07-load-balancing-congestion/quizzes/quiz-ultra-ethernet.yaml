@@ -108,7 +108,7 @@ questions:
         explanation: "The UEC specification defines a new transport, not a RoCE-compatible extension."
       - id: c
         text: "Correct, because both use UDP port 4791."
-        explanation: "Port 4791 is RoCEv2's port; UET is a separate protocol."
+        explanation: "Port 4791 is RoCEv2's port; UET is a separate protocol (IANA assigned it UDP port 4793, per UEC's design paper)."
       - id: d
         text: "Irrelevant, because NCCL does not use the network."
         explanation: "NCCL uses the network for inter-node collectives through its NET transport and plugins."

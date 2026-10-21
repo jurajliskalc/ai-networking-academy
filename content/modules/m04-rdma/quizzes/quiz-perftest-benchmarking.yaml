@@ -23,14 +23,14 @@ questions:
     tags: [perftest, roce]
   - id: q2
     type: single
-    prompt: A colleague reports ib_write_bw shows "about 48000" on a 400 Gb/s link and is alarmed. What is the likely explanation?
+    prompt: A colleague reports ib_write_bw shows "about 46000" on a 400 Gb/s link and is alarmed. What is the likely explanation?
     options:
       - id: a
-        text: The default unit is MB/s; 48,000 MB/s is about 384 Gb/s, which is healthy.
+        text: "The default unit is MB/s (perftest uses 2^20-byte megabytes): 46,000 x 1,048,576 x 8 bits is about 386 Gb/s, which is healthy."
         correct: true
         explanation: Use --report_gbits to report in Gb/s and avoid this confusion.
       - id: b
-        text: The link negotiated 48 Gb/s.
+        text: The link negotiated 46 Gb/s.
         explanation: No IB or Ethernet speed corresponds to that; it is a unit misreading.
       - id: c
         text: perftest reports kilobits per second.
@@ -140,6 +140,6 @@ questions:
         text: About 7.5 Mpps
         explanation: That would require ten times the bandwidth at this message size.
       - id: c
-        text: About 48 Mpps
+        text: About 47 Mpps
         explanation: That confuses MB/s with messages per second.
     tags: [perftest, message-rate]

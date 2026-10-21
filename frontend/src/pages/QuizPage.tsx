@@ -63,7 +63,7 @@ export default function QuizPage() {
             <h2 className="text-lg font-bold">Review what you missed</h2>
             {wrong.map((x) => (
               <Card key={x.id} className="p-5">
-                <QuestionCard q={x} index={quiz.questions.indexOf(x)} total={quiz.questions.length} chosen={answers[x.id] ?? []} onChange={() => {}} revealed />
+                <QuestionCard q={x} index={quiz.questions.indexOf(x)} total={quiz.questions.length} chosen={answers[x.id] ?? []} onChange={() => {}} revealed seed={`${quiz.id}-${attempt}`} />
               </Card>
             ))}
           </div>
@@ -80,7 +80,7 @@ export default function QuizPage() {
       </PageHeader>
       <Bar value={(100 * Object.keys(checked).length) / quiz.questions.length} className="mb-6" />
       <Card className="p-6">
-        <QuestionCard q={q} index={i} total={quiz.questions.length} chosen={chosen} onChange={(ids) => setAnswers((a) => ({ ...a, [q.id]: ids }))} revealed={revealed} />
+        <QuestionCard q={q} index={i} total={quiz.questions.length} chosen={chosen} onChange={(ids) => setAnswers((a) => ({ ...a, [q.id]: ids }))} revealed={revealed} seed={`${quiz.id}-${attempt}`} />
         <div className="mt-6 flex items-center justify-between">
           <Button variant="ghost" onClick={() => setI(i - 1)} disabled={i === 0}><ArrowLeft size={16} />Back</Button>
           {!revealed

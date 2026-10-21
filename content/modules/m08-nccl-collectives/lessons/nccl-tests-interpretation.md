@@ -59,9 +59,9 @@ nccl-tests builds one binary per collective, for example:
 | `-f` | Multiplication factor between sizes | `2` |
 | `-g` | GPUs per thread (per process) | `1` with one MPI rank per GPU |
 | `-t` | Threads per process | `1` with MPI |
-| `-c` | Check results for correctness (1 = on) | `1` for acceptance, `0` to speed up long sweeps |
+| `-c` | Number of iterations whose results are checked for correctness (default 1; 0 = off) | `1` for acceptance, `0` to speed up long sweeps |
 | `-n` | Timed iterations per size | `20` or more for stable numbers |
-| `-w` | Warm-up iterations per size (not timed) | a few |
+| `-w` | Warm-up iterations per size (not timed; default 1) | a few |
 | `-d`, `-o` | Data type and reduction operation | defaults (float, sum) are fine for bandwidth tests |
 
 Run any binary with `-h` to see the full flag list for your version; defaults can differ between
@@ -130,8 +130,8 @@ equivalent; container launch details depend on your site.
        65536        16384  float    sum    -1    55.0    1.19    2.23      0    54.6    1.20    2.25      0
      1048576       262144  float    sum    -1   120.0    8.74   16.38      0   119.1    8.80   16.51      0
     16777216      4194304  float    sum    -1   420.0   39.95   74.90      0   418.3   40.11   75.20      0
-   134217728     33554432  float    sum    -1  1050.0  127.83  239.68      0  1046.2  128.29  240.54      0
-  1073741824    268435456  float    sum    -1  6200.0  173.18  324.71      0  6188.0  173.52  325.35      0
+   134217728     33554432  float    sum    -1  1050.0  127.83  239.67      0  1046.2  128.29  240.54      0
+  1073741824    268435456  float    sum    -1  6200.0  173.18  324.72      0  6188.0  173.52  325.35      0
   8589934592   2147483648  float    sum    -1 46500.0  184.73  346.37      0 46420.0  185.05  346.97      0
 # Out of bounds values : 0 OK
 # Avg bus bandwidth    : 97.3
@@ -147,7 +147,7 @@ Column by column:
 | time | Average time per operation in µs |
 | algbw, busbw | GB/s, where GB = 10^9 bytes |
 | #wrong | Elements that failed validation (with `-c 1`); must be 0 |
-| Avg bus bandwidth | Mean of busbw over all sizes in the sweep, including tiny ones |
+| Avg bus bandwidth | Mean of busbw over all sizes in the sweep (out-of-place and in-place results), including tiny ones |
 
 Check the arithmetic on the last row: algbw = 8,589,934,592 B / 46.5 ms ≈ 184.7 GB/s;
 busbw = 184.7 × 2 × 15/16 ≈ 346.4 GB/s.

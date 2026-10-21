@@ -68,7 +68,7 @@ variables it saw. That single habit prevents most "I set it but nothing changed"
 | `NCCL_IB_DISABLE` | Disable IB verbs transport | Testing only: force socket transport |
 | `NCCL_P2P_DISABLE` | Disable intra-node P2P | Testing only: isolate NVLink/PCIe P2P problems |
 | `NCCL_ALGO`, `NCCL_PROTO` | Restrict algorithms / protocols | Testing only, or a documented workaround |
-| `NCCL_MIN_NCHANNELS`, `NCCL_MAX_NCHANNELS` | Bound channel count | Rare; trades SMs for bandwidth |
+| `NCCL_MIN_NCHANNELS`, `NCCL_MAX_NCHANNELS` | Bound channel count | Rare; trades SMs for bandwidth (recent NCCL docs mark these deprecated in favour of `NCCL_MIN_CTAS`/`NCCL_MAX_CTAS`) |
 
 Defaults change between NCCL releases. Whenever this lesson mentions a default, verify it against
 the environment-variable page of the NCCL version in your container.

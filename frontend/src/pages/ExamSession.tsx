@@ -95,7 +95,7 @@ export default function ExamSession() {
         <div className="space-y-5">
           {exam.questions.map((q, k) => (
             <Card key={q.id} className={`p-5 ${isCorrect(q.options, answers[q.id] ?? []) ? '' : 'border-danger/40'}`}>
-              <QuestionCard q={q} index={k} total={exam.questions.length} chosen={answers[q.id] ?? []} onChange={() => {}} revealed />
+              <QuestionCard q={q} index={k} total={exam.questions.length} chosen={answers[q.id] ?? []} onChange={() => {}} revealed seed={String(startedAt.current)} />
             </Card>
           ))}
         </div>
@@ -114,7 +114,7 @@ export default function ExamSession() {
         <span className={`flex items-center gap-1 font-mono text-sm tabular-nums ${left < 300 ? 'text-danger' : ''}`}><Timer size={15} />{fmt(left)}</span>
       </div>
       <Card className="p-6">
-        <QuestionCard q={q} index={i} total={exam.questions.length} chosen={answers[q.id] ?? []} onChange={(ids) => setAnswers((a) => ({ ...a, [q.id]: ids }))} revealed={false} />
+        <QuestionCard q={q} index={i} total={exam.questions.length} chosen={answers[q.id] ?? []} onChange={(ids) => setAnswers((a) => ({ ...a, [q.id]: ids }))} revealed={false} seed={String(startedAt.current)} />
         <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
           <Button variant="ghost" onClick={() => setI(i - 1)} disabled={i === 0}><ArrowLeft size={16} />Back</Button>
           <button onClick={() => setFlags((f) => ({ ...f, [q.id]: !f[q.id] }))} className={`flex items-center gap-1.5 text-sm ${flags[q.id] ? 'text-warn' : 'text-muted hover:text-fg'}`}><Flag size={15} />{flags[q.id] ? 'Flagged' : 'Flag'}</button>

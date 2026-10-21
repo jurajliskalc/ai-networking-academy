@@ -165,7 +165,7 @@ Then set `NCCL_IB_SL=0` for training jobs and configure the storage client to us
 
 ```text
 $ perfquery -x 20 33
-# Port extended counters: Lid 20 port 33 (CapMask: 0x5A00)
+# Port extended counters: Lid 20 port 33 (CapMask: 0x5A00 CapMask2: 0x0000000)
 PortXmitData:....................183942874662
 PortRcvData:.....................174223981100
 PortXmitPkts:....................698322011

@@ -30,7 +30,7 @@ for f in "$@"; do
   fi
   pass "$f exists"
 
-  n_udp=$(tshark -r "$f" -Y 'udp.dstport == 4791' 2>/dev/null | wc -l)
+  n_udp=$(tshark -r "$f" -Y 'udp.dstport == 4791' 2>/dev/null | wc -l || true)
   if [[ $n_udp -gt 0 ]]; then
     pass "$f has $n_udp packet(s) to UDP port 4791"
   else

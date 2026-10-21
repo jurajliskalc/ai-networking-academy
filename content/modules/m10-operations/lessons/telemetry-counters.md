@@ -82,7 +82,7 @@ A useful mental model for the lossless counters:
 | Counter (mlx5, verify for your version) | Meaning | Healthy expectation |
 |---|---|---|
 | `rx_prio3_pause` / `tx_prio3_pause` | PFC pause frames received / sent on priority 3 (substitute your RoCE priority) | Low, steady rate under load; no outlier ports |
-| `rx_prio3_pause_duration` / `tx_prio3_pause_duration` | Time spent paused (units are documented per driver; treat as relative) | Small fraction of interval |
+| `rx_prio3_pause_duration` / `tx_prio3_pause_duration` | Time spent paused (the kernel mlx5 counters documentation gives microseconds; still compare across peers rather than reading it in isolation) | Small fraction of interval |
 | `rx_prio3_bytes` / `rx_prio3_packets` | Traffic received on that priority | Should carry essentially all RoCE traffic; if it is on prio 0 instead, mapping is wrong |
 | `rx_discards_phy` | Packets dropped by the port because of lack of buffer at the physical level | Zero on a lossless priority |
 | `rx_out_of_buffer` | Packets dropped because no receive descriptor (WQE) was available on the host side (kernel netdev queues) | Zero or near zero |
@@ -108,7 +108,7 @@ RDMA traffic bypasses the kernel network stack, so most transport-level events a
 | `local_ack_timeout_err` | Local ACK timeouts (retransmission due to no ACK) | Silent loss, or a remote node not responding |
 | `implied_nak_seq_err` | Read-response sequence gaps | Loss on RDMA READ paths |
 | `duplicate_request` | Retransmitted requests received | The sender retransmitted something we already got |
-| `rnr_nak_retry_err` | Receiver-not-ready retries exhausted | Application not posting receives fast enough |
+| `rnr_nak_retry_err` | RNR NAKs received (the responder had no receive WQE posted; counted while the QP retry limit is not yet exceeded) | Application not posting receives fast enough |
 | `out_of_buffer` | Drops due to lack of receive WQEs on RDMA QPs | Application/library receive starvation |
 
 > [!NOTE]
@@ -120,7 +120,7 @@ InfiniBand defines its counters in the IBTA PortCounters and PortCountersExtende
 
 | Counter | Meaning | Note |
 |---|---|---|
-| `PortXmitWait` | Ticks during which the port had data to send but no credits | The IB congestion indicator; compare across ports |
+| `PortXmitWait` | Ticks during which the port had data to send but sent nothing (insufficient credits or lost arbitration) | The IB congestion indicator; compare across ports |
 | `PortXmitData` / `PortRcvData` | Data in units of 4 octets (32-bit words) | Multiply by 4 for bytes |
 | `SymbolErrorCounter` | Minor physical-layer symbol errors | Small counts after a link-up can be normal; steady increase is not |
 | `LinkErrorRecoveryCounter` | Successful link retraining events | Any increment during operation deserves a look |
@@ -170,7 +170,7 @@ Illustrative output during an all-reduce on a RoCE port with priority 3 as the l
 rx_prio3_bytes:                         243516270592   # ~24 GB/s received on prio 3 = ~195 Gb/s, matches the expected rate
 tx_prio3_bytes:                         244011935744
 rx_prio3_pause:                                 1832   # pauses received from the leaf: modest, check vs peers
-rx_prio3_pause_duration:                        5120   # relative; compare with other NICs in the same rail
+rx_prio3_pause_duration:                        5120   # ~5 ms paused (microseconds) in 10 s; compare with rail peers
 tx_prio3_pause:                                    0   # this host is never the bottleneck: good
 rx_discards_phy:                                   0   # good
 rx_corrected_bits_phy:                           412   # FEC is working; normal on PAM4 links

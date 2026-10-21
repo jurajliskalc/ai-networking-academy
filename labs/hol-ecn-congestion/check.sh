@@ -65,13 +65,21 @@ if grep -qw dctcp /proc/sys/net/ipv4/tcp_available_congestion_control; then
   ip netns exec ecn-s2 sysctl -q -w net.ipv4.tcp_ecn=1
   ip netns exec ecn-rcv sysctl -q -w net.ipv4.tcp_congestion_control=dctcp
 
+  # A fresh one-off server on port 5299: its listening socket is created now, with DCTCP.
+  # (Linux accepts ECN from a DCTCP sender, whose SYN is ECT-marked, only if the listener's
+  # congestion control is DCTCP; the long-running servers may have been started with CUBIC.)
+  ip netns exec ecn-rcv timeout 30 iperf3 -s -1 -p 5299 >/dev/null 2>&1 &
+  srv_pid=$!
+  sleep 1
   m0=$(marked); c0=$(ce)
-  if ip netns exec ecn-s2 timeout 20 iperf3 -c 10.6.9.2 -p 5202 -t 3 >/dev/null 2>&1; then
+  if ip netns exec ecn-s2 timeout 20 iperf3 -c 10.6.9.2 -p 5299 -t 3 >/dev/null 2>&1; then
     pass "3-second DCTCP flow s2 -> receiver completed"
   else
     fail "DCTCP iperf3 flow failed"
   fi
   m1=$(marked); c1=$(ce)
+  kill "$srv_pid" 2>/dev/null || true
+  wait "$srv_pid" 2>/dev/null || true
 
   if [[ $((m1 - m0)) -gt 0 ]]; then pass "RED marked $((m1 - m0)) packets CE"; else fail "RED marked no packets (is the link really the bottleneck?)"; fi
   if [[ $((c1 - c0)) -gt 0 ]]; then pass "receiver saw $((c1 - c0)) CE-marked packets (IpExtInCEPkts)"; else fail "receiver saw no CE-marked packets"; fi

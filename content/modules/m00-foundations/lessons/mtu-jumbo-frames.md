@@ -88,7 +88,7 @@ For RoCEv2 over IPv4 without a VLAN tag, every packet carries:
 
 Packets per second = 400 x 10^9 / 8 / wire bytes. Two things improve with bigger packets:
 
-1. **Goodput**: 4096-byte packets deliver about 5 % more application data than 1024-byte packets at the same line rate.
+1. **Goodput**: 4096-byte packets deliver about 6 % more application data than 1024-byte packets (98.0 / 92.6) at the same line rate.
 2. **Packet rate**: the NIC, the switch pipeline and the receiver all do per-packet work. Pushing 45 million packets per second per port is much harder than 12 million, and as port speeds move to 800 Gb/s and beyond the packet rate doubles again. Jumbo MTUs keep the per-packet budget manageable.
 
 ```widget

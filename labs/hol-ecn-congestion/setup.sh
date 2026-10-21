@@ -9,6 +9,10 @@
 # real MTU-sized packets, which makes queue lengths and marking thresholds meaningful.
 #
 # Usage: sudo ./setup.sh
+#        sudo ./setup.sh --restart-servers   (only restart the three iperf3 servers; needed after
+#        changing ecn-rcv's tcp_congestion_control, because a listening socket keeps the
+#        congestion control it was created with, and Linux accepts ECN from a DCTCP sender,
+#        whose SYN is ECT-marked, only if the listener itself uses DCTCP)
 set -euo pipefail
 
 if [[ $EUID -ne 0 ]]; then
@@ -17,6 +21,28 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 run() { echo "+ $*"; "$@"; }
+
+start_servers() {
+  # One iperf3 server per sender (an iperf3 server handles one test at a time)
+  for i in 1 2 3; do
+    run ip netns exec ecn-rcv iperf3 -s -D -p "520$i" -I "/tmp/ecn-iperf3-$i.pid"
+  done
+}
+
+if [[ "${1:-}" == "--restart-servers" ]]; then
+  for i in 1 2 3; do
+    f=/tmp/ecn-iperf3-$i.pid
+    if [[ -f $f ]]; then
+      echo "+ kill $(cat "$f")   (iperf3 server on port 520$i)"
+      kill "$(cat "$f")" 2>/dev/null || true
+      rm -f "$f"
+    fi
+  done
+  sleep 1
+  start_servers
+  echo "iperf3 servers restarted with ecn-rcv congestion control: $(ip netns exec ecn-rcv sysctl -n net.ipv4.tcp_congestion_control)"
+  exit 0
+fi
 
 for tool in ethtool tc iperf3; do
   command -v "$tool" >/dev/null 2>&1 || { echo "Missing $tool (see labs/setup-ubuntu.sh)" >&2; exit 1; }
@@ -73,10 +99,7 @@ for ns in $NSS; do
   run ip netns exec "$ns" sysctl -q -w net.ipv4.tcp_ecn=2
 done
 
-# One iperf3 server per sender (an iperf3 server handles one test at a time)
-for i in 1 2 3; do
-  run ip netns exec ecn-rcv iperf3 -s -D -p "520$i" -I "/tmp/ecn-iperf3-$i.pid"
-done
+start_servers
 
 echo
 echo "Done. Next: sudo ./bottleneck.sh fifo   (see the lab instructions)"

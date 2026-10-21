@@ -32,9 +32,9 @@ const INFO: Record<Code, { text: string; tone: string; gdr: string }> = {
   X: { text: 'Self.', tone: 'text-muted', gdr: '' },
   NV18: { text: 'Connection traversing a bonded set of 18 NVLinks (here via NVSwitch). GPU↔GPU traffic never touches PCIe.', tone: 'text-accent', gdr: 'Best possible GPU↔GPU path. NCCL also uses it for PXN: move data over NVLink to the GPU whose NIC is local, then send.' },
   PIX: { text: 'Traverses at most a single PCIe bridge (one switch).', tone: 'text-accent', gdr: 'Ideal for GPUDirect RDMA: peer-to-peer TLPs turn around in the switch at full bandwidth, never reaching the CPU.' },
-  PXB: { text: 'Traverses multiple PCIe bridges, without crossing the PCIe host bridge.', tone: 'text-accent', gdr: 'Good for GPUDirect RDMA: still switch-local P2P. NCCL treats PXB as GDR-capable by default.' },
+  PXB: { text: 'Traverses multiple PCIe bridges, without crossing the PCIe host bridge.', tone: 'text-accent', gdr: 'Good for GPUDirect RDMA: still switch-local P2P. On typical PCIe-switch servers the GDR level NCCL auto-selects allows PXB.' },
   PHB: { text: 'Traverses PCIe and a PCIe host bridge (typically the CPU root complex).', tone: 'text-warn', gdr: 'Poor: P2P goes up through the root complex; bandwidth depends on the CPU. Not present in this layout.' },
-  NODE: { text: 'Traverses PCIe and the interconnect between PCIe host bridges within one NUMA node.', tone: 'text-warn', gdr: 'Poor: crosses the CPU\'s internal fabric. NCCL disables GDR by default beyond PXB (NCCL_NET_GDR_LEVEL).' },
+  NODE: { text: 'Traverses PCIe and the interconnect between PCIe host bridges within one NUMA node.', tone: 'text-warn', gdr: 'Poor: crosses the CPU\'s internal fabric. On typical PCIe-switch servers NCCL does not use GDR beyond PXB unless told to; the default is auto-selected per platform (override with NCCL_NET_GDR_LEVEL).' },
   SYS: { text: 'Traverses PCIe and the SMP interconnect between NUMA nodes (UPI / xGMI).', tone: 'text-danger', gdr: 'Worst: crosses sockets. P2P across UPI is slow or unsupported; data is staged in host memory. Avoid pairing this GPU with this NIC.' },
 };
 
