@@ -1,0 +1,10 @@
+id: m12-capstone
+order: 12
+title: "Capstone and career prep"
+level: 4
+summary: >
+  Design and defend a cluster fabric end to end, prepare for technical interviews, and plan certification study.
+lessons:
+  - design-review-capstone
+  - interview-preparation
+  - exam-strategy

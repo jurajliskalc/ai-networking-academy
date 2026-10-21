@@ -1,0 +1,48 @@
+id: sim-05-flapping-optic
+title: "The optic that is almost working"
+level: 3
+estimated_minutes: 40
+lessons: [link-layer-ber-fec, telemetry-counters, optics-cabling-power]
+summary: A marginal transceiver passes traffic but corrupts enough of it to halve one rail.
+start: node01
+ticket: |
+  **INC-4560 · Sev3 · Intermittent slowness, "the network is flaky"**
+
+  > Throughput varies between runs and never reaches the old baseline. No links are down. Users report
+  > occasional NCCL timeouts overnight. - ML platform team
+
+  Identify the faulty component from evidence, then have it replaced with the lab action `replace-cable`.
+faults:
+  - { type: bad_cable, switch: leaf05, port: swp3, ber: 1.0e-5 }
+hints:
+  - "Run a test, then look for physical-layer errors: `ethtool -S <if> | grep -E 'symbol|crc|link_down'`."
+  - "`mlxlink -d <dev> -c` shows raw and effective BER, `ethtool -m <if>` shows per-lane RX power, and `dmesg` shows link flaps."
+diagnosis:
+  prompt: Which evidence best identifies the root cause?
+  options:
+    - id: a
+      text: node03 enp154s0np0 shows rx_symbol_err_phy and rx_crc_errors_phy rising, a raw BER around 3E-05 with post-FEC errors, low RX power on one lane and link flaps in dmesg. The leaf05 swp3 cable or optic is bad.
+      correct: true
+      explanation: Symbol errors and a pre-FEC BER far above normal, uncorrectable (post-FEC) errors, one weak lane and flaps all point at the physical link. Corrupted packets are dropped and RDMA retransmits them, so that rail paces the collective.
+    - id: b
+      text: PFC pause counters are high on node03, so the fabric is congested.
+      explanation: Pause counters on this link are normal, and congestion does not produce CRC or symbol errors.
+    - id: c
+      text: The out_of_sequence counters prove a NIC firmware bug.
+      explanation: out_of_sequence counts gaps in PSNs seen by the receiver. It is a consequence of the dropped (corrupted) packets, not a cause.
+    - id: d
+      text: The GPU on node03 is throttling.
+      explanation: GPU throttling would not create link-layer errors on one NIC.
+checks:
+  - { description: "leaf05 swp3 link is clean (BER back to normal)", check: link_clean, args: { switch: leaf05, port: swp3 } }
+  - { description: "all_reduce bus bandwidth is above 360 GB/s", check: allreduce_min_busbw, args: { value: 360 } }
+solution: |
+  `ib_write_bw` from node03 on `mlx5_4` reaches only ~215 Gb/s. `ethtool -S enp154s0np0` shows symbol
+  and CRC errors, `mlxlink -d mlx5_4 -c` reports a raw BER of 3E-05 with non-zero effective errors,
+  `ethtool -m` shows one lane at -10.9 dBm, and `dmesg` shows repeated link down/up. Have the optic or
+  cable replaced: `replace-cable leaf05 swp3`.
+
+  In production: drain the node or shut the port first, clean and inspect the connectors, swap the
+  optic, then the cable, and track BER per link over time to catch degradation early.
+fix:
+  - "node01: replace-cable leaf05 swp3"

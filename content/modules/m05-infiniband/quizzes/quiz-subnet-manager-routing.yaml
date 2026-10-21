@@ -1,0 +1,149 @@
+id: quiz-subnet-manager-routing
+title: "Knowledge check: Subnet Manager and routing engines"
+lesson: subnet-manager-routing
+pass_pct: 70
+questions:
+  - id: q1
+    type: single
+    prompt: Two SMs on a subnet both have priority 15. Which becomes master?
+    options:
+      - id: a
+        text: The one with the lower port GUID.
+        correct: true
+        explanation: Priority is compared first (higher wins); GUID breaks ties (lower wins).
+      - id: b
+        text: The one that started first, regardless of GUID.
+        explanation: Start order alone does not decide the election between equal priorities.
+      - id: c
+        text: The one with the higher LID.
+        explanation: LIDs are assigned by the SM and play no part in election.
+      - id: d
+        text: Both become master and split the fabric.
+        explanation: Only one master SM is allowed per subnet.
+    tags: [sm-election]
+  - id: q2
+    type: multi
+    prompt: Which of these are tasks performed by the Subnet Manager? (Select all that apply.)
+    options:
+      - id: a
+        text: Assigning LIDs to HCA ports and switches.
+        correct: true
+        explanation: LID assignment is a core SM function.
+      - id: b
+        text: Computing routes and writing linear forwarding tables into switches.
+        correct: true
+        explanation: Switches only forward according to SM-programmed tables.
+      - id: c
+        text: Moving ports from Init through Armed to Active.
+        correct: true
+        explanation: Port activation is driven by the SM.
+      - id: d
+        text: Forwarding every data packet through the SM host.
+        explanation: The SM is control plane only; data never passes through it.
+    tags: [subnet-manager]
+  - id: q3
+    type: single
+    prompt: Why must InfiniBand routing be deadlock-free?
+    options:
+      - id: a
+        text: Because credit-based flow control never drops for lack of buffer, a cycle of buffer dependencies can freeze traffic permanently.
+        correct: true
+        explanation: Senders wait for credits; with a cyclic dependency nobody can ever move.
+      - id: b
+        text: Because the SM cannot recompute routes once installed.
+        explanation: The SM recomputes routes on heavy sweeps; the issue is buffer dependency cycles.
+      - id: c
+        text: Because loops cause broadcast storms as in Ethernet.
+        explanation: IB has no flooding or MAC learning; the risk is credit loops, not broadcast storms.
+    tags: [deadlock, credit-loops]
+  - id: q4
+    type: single
+    prompt: Which routing engine is designed specifically to balance destinations across uplinks in fat-tree topologies?
+    options:
+      - id: a
+        text: ftree
+        correct: true
+        explanation: ftree understands fat-tree levels and spreads destinations evenly across uplinks.
+      - id: b
+        text: dor
+        explanation: Dimension-order routing targets meshes and tori.
+      - id: c
+        text: torus-2QoS
+        explanation: This engine is for torus topologies.
+      - id: d
+        text: minhop
+        explanation: minhop is the general default; it is not fat-tree aware.
+    tags: [routing-engines, ftree]
+  - id: q5
+    type: scenario
+    prompt: >
+      After a maintenance window, all-reduce bandwidth on an IB fat tree drops by 30 percent. Links are
+      all up and error-free. sminfo now reports a master SM with a GUID nobody recognises, priority 15.
+      What is the most likely cause?
+    options:
+      - id: a
+        text: An unexpected SM (for example on a test host) became master and reprogrammed the fabric with its own routing configuration.
+        correct: true
+        explanation: A different master can use a different routing engine and settings, changing balance fabric-wide.
+      - id: b
+        text: The HCAs negotiated a lower link speed.
+        explanation: The question states links are healthy; an SM change explains a fabric-wide routing shift.
+      - id: c
+        text: The partition keys expired.
+        explanation: P_Keys do not expire; partition problems cause failures, not a uniform slowdown.
+      - id: d
+        text: The fabric needs a reboot after maintenance.
+        explanation: Rebooting without understanding the SM change risks repeating it.
+    tags: [troubleshooting, rogue-sm]
+  - id: q6
+    type: scenario
+    prompt: >
+      opensm.conf says routing_engine ftree,updn. The SM log shows ftree reporting a topology problem,
+      and LFT dumps show uneven use of spine uplinks. What happened and what should you do?
+    options:
+      - id: a
+        text: ftree could not validate the topology and OpenSM fell back to updn; fix the cabling or provide root/compute-node GUID files so ftree succeeds.
+        correct: true
+        explanation: Fallback engines are tried in order; imbalance follows from the fallback.
+      - id: b
+        text: ftree and updn are running simultaneously and conflicting; remove one.
+        explanation: Engines in the list are fallbacks, not concurrent.
+      - id: c
+        text: Uneven uplink use is normal for ftree; nothing to do.
+        explanation: Even spreading is ftree's purpose; imbalance is a symptom.
+    tags: [ftree, fallback]
+  - id: q7
+    type: single
+    prompt: What extra requirement does adaptive routing introduce compared with static destination-based routing?
+    options:
+      - id: a
+        text: Packets of one QP can arrive out of order, so the HCA and transport configuration must tolerate reordering.
+        correct: true
+        explanation: Per-packet path choice can reorder packets; vendor AR enablement includes HCA-side support.
+      - id: b
+        text: Each host needs an IP address on every switch.
+        explanation: AR is a switch and SM feature unrelated to IP addressing.
+      - id: c
+        text: The fabric must be converted to Ethernet.
+        explanation: Adaptive routing exists natively on InfiniBand switches.
+    tags: [adaptive-routing]
+  - id: q8
+    type: scenario
+    prompt: >
+      The SM log shows repeated heavy sweeps every few minutes, and users report brief, fabric-wide
+      stalls at the same times. What should you investigate first?
+    options:
+      - id: a
+        text: A flapping link whose up/down transitions trigger traps and route recomputation; find it with link error and link-downed counters.
+        correct: true
+        explanation: Heavy sweeps are triggered by topology changes; a marginal cable is the usual culprit.
+      - id: b
+        text: The light sweep interval is too long.
+        explanation: Light sweeps are cheap; the stalls correlate with heavy sweeps caused by changes.
+      - id: c
+        text: Too many partitions are configured.
+        explanation: Partition count does not cause periodic heavy sweeps.
+      - id: d
+        text: The HCAs are running out of QPs.
+        explanation: QP exhaustion is a host-side issue and does not trigger SM sweeps.
+    tags: [sweeps, troubleshooting]

@@ -1,0 +1,49 @@
+id: sim-04-roce-qos-lost
+title: "A leaf forgot it was lossless"
+level: 3
+estimated_minutes: 35
+lessons: [rocev2-configuration-end-to-end, buffers-headroom-ets, lossless-misconfigurations]
+summary: After a switch OS upgrade, one rail leaf comes back without its RoCE QoS profile.
+start: node01
+ticket: |
+  **INC-4533 · Sev2 · Cluster-wide slowdown after switch upgrades**
+
+  > The rolling NOS upgrade of the rail leaves completed at 03:00. All links are up, BGP is up, and
+  > there are no alarms. Since then `all_reduce_perf` peaks at ~110 GB/s instead of ~370 GB/s.
+  > - Network on-call
+
+  All eight leaves were upgraded with the same procedure. Find out what is different.
+faults:
+  - { type: switch_roce, switch: leaf06, mode: "off" }
+hints:
+  - Bandwidth is paced by the slowest rail. Which rail shows drops and retransmissions?
+  - "Compare `nv show qos roce` on leaf05 and leaf06."
+diagnosis:
+  prompt: What is the root cause?
+  options:
+    - id: a
+      text: leaf06 lost its RoCE QoS configuration (no PFC, no ECN), so rail 5 runs lossy and drops packets under load.
+      correct: true
+      explanation: Without the RoCE profile the switch puts RoCE in a lossy default class with no ECN marking. Every node's mlx5_5 sees drops and out-of-sequence NAKs, and the whole job slows to the speed of that rail.
+    - id: b
+      text: The upgrade reset all host NICs to trust PCP.
+      explanation: A switch upgrade does not change host NIC settings; mlnx_qos on the hosts still shows trust dscp.
+    - id: c
+      text: The spine uplinks of leaf06 are down.
+      explanation: Rail-local collective traffic stays on the leaf; spine uplinks do not carry it in this design.
+    - id: d
+      text: The new NOS defaults to an MTU of 1500.
+      explanation: nv show interface shows MTU 9216 on every port, and an MTU problem would make the job fail rather than slow down.
+checks:
+  - { description: "leaf06 runs RoCE in lossless mode", check: switch_roce, args: { switch: leaf06, mode: lossless } }
+  - { description: "No uncommitted NVUE changes on leaf06", check: no_pending, args: { switch: leaf06 } }
+  - { description: "all_reduce bus bandwidth is above 360 GB/s", check: allreduce_min_busbw, args: { value: 360 } }
+solution: |
+  After a test run, every node's `mlx5_5` shows `out_of_sequence` growth, and the leaf06 ports show TX
+  drops but no ECN marks. `nv show qos roce` on leaf06 reports `enable off`. Re-apply the profile with
+  `nv set qos roce` and `nv config apply`.
+
+  Prevention: make RoCE QoS part of the golden config and add `nv show qos roce` to post-upgrade checks.
+fix:
+  - "leaf06: nv set qos roce"
+  - "leaf06: nv config apply -y"

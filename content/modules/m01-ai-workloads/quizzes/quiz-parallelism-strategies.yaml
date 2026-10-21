@@ -1,0 +1,137 @@
+id: quiz-parallelism-strategies
+title: "Knowledge check: parallelism strategies"
+lesson: parallelism-strategies
+pass_pct: 70
+questions:
+  - id: q1
+    type: single
+    prompt: Which collective communication pattern is characteristic of expert parallelism in a mixture-of-experts model?
+    options:
+      - id: a
+        text: All-to-all, to dispatch tokens to experts and combine the results.
+        correct: true
+        explanation: Each GPU sends tokens to whichever GPUs host the chosen experts, and results come back the same way.
+      - id: b
+        text: Point-to-point send/recv between neighbouring stages only.
+        explanation: That is pipeline parallelism.
+      - id: c
+        text: A single gradient all-reduce at the end of the step.
+        explanation: That is plain data parallelism.
+      - id: d
+        text: Broadcast of the input batch from rank 0.
+        explanation: Inputs are not broadcast in expert parallelism.
+    tags: [moe, expert-parallel]
+  - id: q2
+    type: single
+    prompt: Why is tensor parallelism normally kept within the NVLink domain?
+    options:
+      - id: a
+        text: It needs several large all-reduces per layer on the critical path, which require far more bandwidth than a scale-out NIC provides.
+        correct: true
+        explanation: Per direction, Hopper-generation NVLink offers roughly 9x the per-GPU bandwidth of a 400 Gb/s NIC (more on Blackwell), with lower latency.
+      - id: b
+        text: Tensor parallelism only works between GPUs that share a PCIe switch.
+        explanation: TP is a software technique; it works over any transport but performs badly on slower links.
+      - id: c
+        text: The scale-out fabric cannot carry all-reduce traffic.
+        explanation: The scale-out fabric carries DP all-reduces routinely.
+      - id: d
+        text: Tensor parallelism generates no network traffic at all.
+        explanation: TP is the most communication-intensive strategy per layer.
+    tags: [tensor-parallel, nvlink]
+  - id: q3
+    type: scenario
+    prompt: >
+      A job runs on 64 nodes of 8 GPUs with TP 8 and PP 4. How many data-parallel replicas are there, and over which
+      network does the DP gradient reduction run?
+    options:
+      - id: a
+        text: 16 replicas; the DP reduction runs over the scale-out fabric between same-index GPUs of different nodes.
+        correct: true
+        explanation: 512 GPUs / (8 x 4) = 16. TP fills a node, so DP groups span nodes and use the back-end fabric.
+      - id: b
+        text: 64 replicas; the DP reduction runs over NVLink.
+        explanation: 64 is the node count, and DP partners are in different nodes, so NVLink cannot connect them.
+      - id: c
+        text: 4 replicas; the DP reduction runs over the front-end network.
+        explanation: 4 is the PP size; gradient traffic belongs on the back-end fabric, not the front-end.
+      - id: d
+        text: 32 replicas; the DP reduction runs over PCIe.
+        explanation: The arithmetic is wrong and PCIe does not connect different nodes.
+    tags: [parallelism, sizing]
+  - id: q4
+    type: single
+    prompt: "With Megatron-style tensor parallelism, hidden size 8192, sequence length 8192, micro-batch 1 and BF16, what is the size of one activation all-reduce?"
+    options:
+      - id: a
+        text: About 134 MB.
+        correct: true
+        explanation: 1 x 8192 x 8192 x 2 bytes = 134,217,728 bytes.
+      - id: b
+        text: About 134 KB.
+        explanation: This is a thousand times too small.
+      - id: c
+        text: About 16 MB.
+        explanation: 16 MB would correspond to a sequence of only 1024 tokens at this hidden size.
+      - id: d
+        text: About 1.1 TB.
+        explanation: That is the scale of the whole training state of a 70B model, not one activation.
+    tags: [tensor-parallel, sizing]
+  - id: q5
+    type: multi
+    prompt: Which statements about ZeRO stage 3 / FSDP full sharding are correct? Select all that apply.
+    options:
+      - id: a
+        text: Weights, gradients and optimizer states are all sharded across the data-parallel group.
+        correct: true
+        explanation: That is what distinguishes full sharding from stages 1 and 2.
+      - id: b
+        text: Weights are all-gathered before they are needed and gradients are reduce-scattered.
+        correct: true
+        explanation: Each GPU temporarily reconstructs the layer it needs, then discards it.
+      - id: c
+        text: It generates less total communication than plain data parallelism.
+        explanation: It generates about 1.5x the volume of plain DP; the gain is memory, not bandwidth.
+      - id: d
+        text: It eliminates the need for any network communication between nodes.
+        explanation: Sharding increases the number of collectives between GPUs.
+    tags: [fsdp, zero]
+  - id: q6
+    type: scenario
+    prompt: >
+      A fabric passed acceptance tests consisting only of large all-reduce benchmarks. A new MoE model with expert
+      parallelism across nodes runs far below expectations, with uneven, bursty traffic to many destinations. What is
+      the most useful next step?
+    options:
+      - id: a
+        text: Benchmark all-to-all performance across nodes, since EP traffic is all-to-all with many small, uneven messages.
+        correct: true
+        explanation: All-reduce results say little about all-to-all behaviour, which stresses incast and congestion control.
+      - id: b
+        text: Increase the tensor-parallel size so the model uses fewer nodes.
+        explanation: That is an ML-side change that may not fit the model and does not diagnose the network.
+      - id: c
+        text: Disable ECN, because it slows down bursty traffic.
+        explanation: ECN is a key congestion signal; removing it usually makes incast worse.
+      - id: d
+        text: Re-run the same all-reduce benchmark with larger messages.
+        explanation: More all-reduce data will not reveal all-to-all problems.
+    tags: [moe, validation]
+  - id: q7
+    type: single
+    prompt: What causes "bubbles" in pipeline parallelism?
+    options:
+      - id: a
+        text: Stages sit idle while waiting for micro-batches to flow through the earlier or later stages at the start and end of each step.
+        correct: true
+        explanation: More micro-batches per step shrink the idle fraction, roughly (p-1)/m for 1F1B schedules.
+      - id: b
+        text: Packet loss on the links between stages.
+        explanation: Bubbles exist even on a perfect network; they are inherent to the schedule.
+      - id: c
+        text: Air bubbles in liquid cooling loops.
+        explanation: The term is a scheduling concept, not a cooling issue.
+      - id: d
+        text: The all-to-all exchange of experts.
+        explanation: That belongs to expert parallelism.
+    tags: [pipeline-parallel]

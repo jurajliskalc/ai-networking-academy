@@ -1,0 +1,12 @@
+id: m02-gpu-server
+order: 2
+title: "Inside the GPU server"
+level: 2
+summary: >
+  PCIe and NUMA topology, NICs, DPUs and SuperNICs, GPUDirect, NVLink and NVSwitch: the half of the network that lives inside the box.
+lessons:
+  - pcie-numa-topology
+  - nics-dpus-supernics
+  - gpudirect-rdma-storage
+  - nvlink-nvswitch
+  - reading-server-topology

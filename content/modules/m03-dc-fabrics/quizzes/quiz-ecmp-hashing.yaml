@@ -1,0 +1,130 @@
+id: quiz-ecmp-hashing
+title: "Knowledge check: ECMP hashing"
+lesson: ecmp-hashing
+pass_pct: 70
+questions:
+  - id: q1
+    type: single
+    prompt: Why do most switches hash ECMP decisions per flow rather than spreading packets round robin?
+    options:
+      - id: a
+        text: To keep all packets of a flow on one path so they arrive in order.
+        correct: true
+        explanation: Different paths can have different delays; per-flow hashing avoids reordering without per-flow state.
+      - id: b
+        text: Because round robin is impossible in hardware.
+        explanation: Per-packet distribution is implementable; the problem is reordering at the receiver.
+      - id: c
+        text: To make sure every link carries exactly the same number of bytes.
+        explanation: Per-flow hashing does not guarantee that; it can be quite uneven with few large flows.
+      - id: d
+        text: Because the IEEE requires it.
+        explanation: ECMP behaviour is an implementation choice, not an IEEE mandate.
+    tags: [ecmp]
+  - id: q2
+    type: single
+    prompt: Between two given RoCEv2 NICs, which header field provides almost all of the ECMP entropy?
+    options:
+      - id: a
+        text: The UDP source port, which the NIC sets per queue pair
+        correct: true
+        explanation: IPs and the destination port 4791 are constant between the two NICs; only the source port varies.
+      - id: b
+        text: The UDP destination port
+        explanation: It is always 4791 for RoCEv2.
+      - id: c
+        text: The destination IP address
+        explanation: It is the same for every flow to that NIC.
+      - id: d
+        text: The Ethernet source MAC
+        explanation: MACs change hop by hop in a routed fabric and are constant per NIC.
+    tags: [rocev2, entropy]
+  - id: q3
+    type: scenario
+    prompt: "Eight equal elephant flows are hashed uniformly onto eight 400G uplinks. On average, how many uplinks would you expect to carry no flow at all?"
+    options:
+      - id: a
+        text: About 2 to 3 (roughly a third of the links)
+        correct: true
+        explanation: Expected idle links = n(1 - 1/n)^n, about 2.75 for n = 8.
+      - id: b
+        text: Zero, because hashing spreads flows evenly
+        explanation: The chance of a perfect spread with 8 flows on 8 links is about 0.24 %.
+      - id: c
+        text: About 7
+        explanation: That would mean nearly all flows collide on one link, which is very unlikely.
+      - id: d
+        text: Exactly 4
+        explanation: The expectation is not exactly half; it tends to n/e.
+    tags: [collisions, math]
+  - id: q4
+    type: scenario
+    prompt: "During a large all-reduce, a leaf's eight uplinks show utilization of 98, 97, 49, 3, 51, 2, 96 and 50 percent. Total load is about half the uplink capacity. What is the most likely cause?"
+    options:
+      - id: a
+        text: ECMP hash collisions among a small number of large flows
+        correct: true
+        explanation: Uneven load within one ECMP group, with some links saturated and others idle, is the classic signature.
+      - id: b
+        text: The leaf is oversubscribed 2:1
+        explanation: Oversubscription would show all uplinks evenly saturated.
+      - id: c
+        text: Two uplinks are down
+        explanation: Down links would show zero and the rest would be evenly loaded; here links at 2-3 % still carry traffic.
+      - id: d
+        text: PFC is pausing the busy links
+        explanation: PFC pauses would reduce utilization on congested links, not create this pattern by themselves.
+    tags: [collisions, troubleshooting]
+  - id: q5
+    type: single
+    prompt: What is hash polarization?
+    options:
+      - id: a
+        text: Correlated ECMP decisions at successive tiers because switches use the same hash function, seed and fields, leaving some next-tier links unused.
+        correct: true
+        explanation: Flows that shared hash bits at tier one share them again at tier two. Fix with per-tier seeds or algorithms.
+      - id: b
+        text: Hashing that sends A-to-B and B-to-A traffic on the same path.
+        explanation: That is symmetric hashing, a deliberate feature.
+      - id: c
+        text: The tendency of hashing to favour IPv6 over IPv4.
+        explanation: There is no such inherent bias.
+    tags: [polarization]
+  - id: q6
+    type: single
+    prompt: Why is resilient hashing valuable for RoCE traffic when an uplink fails?
+    options:
+      - id: a
+        text: It moves only the flows that were on the failed link, so other flows keep their path and do not risk out-of-order delivery and retransmissions.
+        correct: true
+        explanation: Modulo-style rehashing moves many unaffected flows, which can trigger RC recovery on a wide scale.
+      - id: b
+        text: It makes the failed link come back up faster.
+        explanation: Hashing has no effect on link recovery.
+      - id: c
+        text: It enables PFC on the remaining links.
+        explanation: PFC configuration is separate from ECMP hashing.
+      - id: d
+        text: It doubles the bandwidth of the surviving links.
+        explanation: Capacity is unchanged; only flow assignment is affected.
+    tags: [resilient-hashing]
+  - id: q7
+    type: multi
+    prompt: Which actions increase effective ECMP balance for RoCEv2 collectives? Select all that apply.
+    options:
+      - id: a
+        text: Include L4 source and destination ports in the switch hash.
+        correct: true
+        explanation: Without L4 fields, all QPs between two NICs look like a single flow.
+      - id: b
+        text: Use more QPs per connection (for example via NCCL_IB_QPS_PER_CONNECTION).
+        correct: true
+        explanation: More QPs mean more distinct source ports and more flows to spread.
+      - id: c
+        text: Use adaptive routing or packet spraying with NIC reordering support.
+        correct: true
+        explanation: These remove the dependence on static hashing.
+      - id: d
+        text: Configure the same hash seed on every switch.
+        explanation: That causes polarization in multi-tier fabrics.
+    tags: [entropy, load-balancing]

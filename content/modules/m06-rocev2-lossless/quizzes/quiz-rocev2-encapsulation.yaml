@@ -1,0 +1,132 @@
+id: quiz-rocev2-encapsulation
+title: "Knowledge check: RoCEv2 encapsulation"
+lesson: rocev2-encapsulation
+pass_pct: 70
+questions:
+  - id: q1
+    type: single
+    prompt: "Which field identifies a packet as RoCEv2 to switches, ACLs and Wireshark?"
+    options:
+      - id: a
+        text: "UDP destination port 4791"
+        correct: true
+        explanation: "IANA assigns UDP 4791 to RoCEv2. Classifiers and dissectors key on it."
+      - id: b
+        text: "EtherType 0x8915"
+        explanation: "That is RoCEv1, which has no IP or UDP header and cannot be routed."
+      - id: c
+        text: "UDP source port 4791"
+        explanation: "The source port is variable and carries per-flow entropy for ECMP. The destination port is fixed."
+      - id: d
+        text: "IP protocol number 0x1B"
+        explanation: "0x1B is the next-header value in an IB GRH that points to the BTH. RoCEv2 uses IP protocol 17 (UDP)."
+    tags: [rocev2, udp-4791]
+  - id: q2
+    type: scenario
+    prompt: "RDMA between two hosts on the same leaf works, but between hosts on different leaves (different IP subnets) QP connections time out. Ping and SSH work everywhere. show_gids shows index 2 as a v1 entry and index 3 as a v2 entry for the host IPv4 address, and the application was started with GID index 2. What is the most likely cause?"
+    options:
+      - id: a
+        text: "The application is using a RoCEv1 GID, which cannot be routed between subnets."
+        correct: true
+        explanation: "The GID index selects the RoCE version. A v1 GID makes the QP send RoCEv1 frames (EtherType 0x8915), which stay inside the L2 domain."
+      - id: b
+        text: "The spine switches are dropping UDP 4791 traffic with an ACL."
+        explanation: "Possible in general, but the GID index here is clearly the v1 entry, which explains the failure fully."
+      - id: c
+        text: "The RDMA MTU is too large for the spine links."
+        explanation: "An MTU problem typically breaks large transfers, not connection setup, and would not depend on same-leaf versus cross-leaf in this way."
+      - id: d
+        text: "PFC is not enabled on the spine links."
+        explanation: "Missing PFC causes drops under congestion, not connection failures on an idle fabric."
+    tags: [gid, rocev1]
+  - id: q3
+    type: single
+    prompt: "Why can a switch set the ECN CE codepoint on a RoCEv2 packet without the receiver rejecting it?"
+    options:
+      - id: a
+        text: "The ICRC is computed with the ToS byte (DSCP and ECN), TTL and other variant fields masked."
+        correct: true
+        explanation: "The invariant CRC deliberately excludes fields that routers legitimately change."
+      - id: b
+        text: "The receiver NIC ignores all CRC errors on RoCEv2 packets."
+        explanation: "ICRC errors cause the packet to be dropped. They are not ignored."
+      - id: c
+        text: "The switch recalculates the ICRC after marking."
+        explanation: "Switches do not recompute the ICRC. They only recompute the Ethernet FCS (and the IPv4 header checksum)."
+      - id: d
+        text: "ECN bits are carried in the BTH, which the ICRC does not cover."
+        explanation: "ECN lives in the IP header. The BTH is covered by the ICRC."
+    tags: [icrc, ecn]
+  - id: q4
+    type: scenario
+    prompt: "A new cluster reports ibv_devinfo active_mtu 1024 (3) on all RoCE ports, and large-message bandwidth is several percent below expectation. What is the best next check?"
+    options:
+      - id: a
+        text: "Check the netdev MTU with ip link. It is probably 1500, which caps the RDMA MTU at 1024."
+        correct: true
+        explanation: "A 2048-byte RDMA payload plus headers does not fit in 1500, so the NIC picks 1024. Jumbo MTU end to end allows 4096."
+      - id: b
+        text: "Increase the RDMA MTU to 9000 with ibv_devinfo."
+        explanation: "RDMA MTU tops out at 4096, and ibv_devinfo only reports, it does not configure."
+      - id: c
+        text: "Enable PFC, because the MTU drops when frames are lost."
+        explanation: "The active MTU does not change in response to loss. It is derived from the interface MTU."
+      - id: d
+        text: "Change the GID index to an IPv6 entry to get a larger MTU."
+        explanation: "The GID type does not change the RDMA MTU. The netdev MTU is the constraint."
+    tags: [mtu]
+  - id: q5
+    type: single
+    prompt: "What does the UDP source port of a RoCEv2 packet typically provide?"
+    options:
+      - id: a
+        text: "Per-QP flow entropy, so ECMP spreads different QPs while keeping each QP on one path"
+        correct: true
+        explanation: "All packets of a QP share a source port (ordering preserved), and different QPs get different values."
+      - id: b
+        text: "The source queue pair number"
+        explanation: "The BTH carries only the destination QP. The source port value is an entropy hash, not the QP number."
+      - id: c
+        text: "A random value per packet to spray packets across all paths"
+        explanation: "Per-packet randomisation would reorder packets of a QP. Classic RoCE keeps the source port per flow."
+      - id: d
+        text: "The PFC priority of the packet"
+        explanation: "Priority comes from DSCP or PCP, not from UDP ports."
+    tags: [ecmp, entropy]
+  - id: q6
+    type: multi
+    prompt: "Which statements about the BTH are correct? (Select all that apply.)"
+    options:
+      - id: a
+        text: "It is 12 bytes long and carries the opcode, destination QP and a 24-bit PSN."
+        correct: true
+        explanation: "These are the core transport fields of every RoCEv2 packet."
+      - id: b
+        text: "Opcode 0x81 identifies a Congestion Notification Packet used by DCQCN."
+        correct: true
+        explanation: "RoCEv2 defines CNP as BTH opcode 0x81."
+      - id: c
+        text: "It carries the remote virtual address and R_Key of every RDMA WRITE packet."
+        explanation: "Address and R_Key are in the RETH, present only in the first (or only) packet of a WRITE."
+      - id: d
+        text: "Its FECN and BECN bits are how RoCEv2 switches signal congestion."
+        explanation: "RoCEv2 uses the IP ECN field, which switches can read and mark. BTH FECN/BECN are not used for this."
+    tags: [bth]
+  - id: q7
+    type: scenario
+    prompt: "An engineer runs tcpdump on a host's RoCE interface during an ib_write_bw test at 380 Gb/s and sees no RoCE packets at all. What is the correct interpretation?"
+    options:
+      - id: a
+        text: "Expected: RDMA bypasses the kernel stack. Use switch mirroring, vendor RDMA sniffing support or counters instead."
+        correct: true
+        explanation: "The NIC moves RDMA data directly to memory, so the kernel capture point never sees it."
+      - id: b
+        text: "The test is actually running over TCP, because tcpdump would otherwise show UDP 4791."
+        explanation: "perftest ib_write_bw uses RDMA verbs. The absence in tcpdump is due to kernel bypass."
+      - id: c
+        text: "The traffic is RoCEv1, which tcpdump cannot decode."
+        explanation: "tcpdump would still capture RoCEv1 frames if the kernel saw them. The issue is bypass, not decoding."
+      - id: d
+        text: "The NIC is dropping all packets and the throughput figure is wrong."
+        explanation: "perftest bandwidth is measured from completed transfers. 380 Gb/s means data is flowing."
+    tags: [troubleshooting]

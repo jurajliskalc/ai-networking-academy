@@ -1,0 +1,137 @@
+id: quiz-ai-training-101
+title: "Knowledge check: AI training 101"
+lesson: ai-training-101
+pass_pct: 70
+questions:
+  - id: q1
+    type: single
+    prompt: In pure data-parallel training, at which point in each step does the network carry the most traffic?
+    options:
+      - id: a
+        text: When gradients are combined across GPUs (all-reduce), during and after the backward pass.
+        correct: true
+        explanation: Each GPU computes gradients on its own data slice; they must be averaged so every model copy applies the same update.
+      - id: b
+        text: During the forward pass, when each GPU sends its input batch to every other GPU.
+        explanation: In data parallelism each GPU processes its own data; inputs are not exchanged between GPUs.
+      - id: c
+        text: Only at the end of training, when the final model is saved.
+        explanation: Communication happens in every step; saving checkpoints is a separate, periodic storage burst.
+      - id: d
+        text: Never; data-parallel GPUs are fully independent.
+        explanation: Without gradient exchange the model copies would diverge.
+    tags: [training, data-parallel]
+  - id: q2
+    type: single
+    prompt: Using the rule of thumb of about 16 bytes per parameter for mixed-precision Adam, how much memory do weights, gradients and optimizer state of a 70B model need, before activations?
+    options:
+      - id: a
+        text: About 1.1 TB.
+        correct: true
+        explanation: 70e9 x 16 bytes = 1.12e12 bytes, far more than any single GPU holds.
+      - id: b
+        text: About 140 GB.
+        explanation: That is only the BF16 weights (2 bytes per parameter), ignoring gradients and optimizer state.
+      - id: c
+        text: About 70 GB.
+        explanation: That would be 1 byte per parameter, far below what training needs.
+      - id: d
+        text: About 16 TB.
+        explanation: That overstates it tenfold; 16 bytes x 70e9 is about 1.1 TB.
+    tags: [memory]
+  - id: q3
+    type: single
+    prompt: Roughly how many floating-point operations does it take to train a dense 70B-parameter model on 15 trillion tokens, using the 6ND rule?
+    options:
+      - id: a
+        text: About 6e24 FLOPs.
+        correct: true
+        explanation: 6 x 70e9 x 15e12 = 6.3e24.
+      - id: b
+        text: About 6e18 FLOPs.
+        explanation: Six orders of magnitude too low; that would take one GPU only a few hours.
+      - id: c
+        text: About 1e21 FLOPs.
+        explanation: Far too low for this model and data size.
+      - id: d
+        text: About 6e30 FLOPs.
+        explanation: Six orders of magnitude too high.
+    tags: [compute]
+  - id: q4
+    type: scenario
+    prompt: >
+      A 512-GPU synchronous training job slows from 1.0 s to 1.3 s per step after a maintenance window. Profiling shows
+      compute time is unchanged on every GPU. One node's NIC came up at 200 Gb/s instead of 400 Gb/s. Why does one
+      NIC affect the whole job?
+    options:
+      - id: a
+        text: Every step ends with collectives that include that NIC, and synchronous training cannot start the next step until the slowest participant finishes.
+        correct: true
+        explanation: The straggler sets the step time for all 512 GPUs.
+      - id: b
+        text: The slow NIC broadcasts errors that slow every other NIC.
+        explanation: A slow link does not degrade other links; the others simply wait for it.
+      - id: c
+        text: The job scheduler reduces all GPUs to the slowest NIC's speed as a policy.
+        explanation: There is no such policy; the slowdown is a natural consequence of synchronisation.
+      - id: d
+        text: It cannot; the slowdown must come from the GPUs.
+        explanation: Compute time is unchanged, so the extra 0.3 s is exposed communication.
+    tags: [straggler, synchronous]
+  - id: q5
+    type: multi
+    prompt: Which statements about overlapping communication with computation are correct? Select all that apply.
+    options:
+      - id: a
+        text: Gradient all-reduce for later layers can start while the backward pass is still computing earlier layers.
+        correct: true
+        explanation: Frameworks bucket gradients and launch communication as buckets become ready.
+      - id: b
+        text: Only the exposed (non-overlapped) part of communication adds to step time.
+        correct: true
+        explanation: Hidden communication costs bandwidth but not time on the critical path.
+      - id: c
+        text: Faster GPUs reduce the exposed communication, so the network matters less over time.
+        explanation: Faster compute leaves less time to hide communication behind, so more of it becomes exposed.
+      - id: d
+        text: Overlap removes the need for high-bandwidth NICs.
+        explanation: Overlap only hides communication if it finishes within the compute window, which still needs bandwidth.
+    tags: [overlap]
+  - id: q6
+    type: scenario
+    prompt: >
+      Every 30 minutes, a training job stalls for about two minutes and GPU utilisation drops to near zero on all
+      nodes; the back-end fabric is quiet during the stall. What is the most likely cause?
+    options:
+      - id: a
+        text: Synchronous checkpointing writing the training state to storage, limited by the storage system or storage network.
+        correct: true
+        explanation: Periodic, cluster-wide stalls with a quiet compute fabric point to checkpoint I/O.
+      - id: b
+        text: An ECMP hash collision on the back-end fabric.
+        explanation: A collision would show traffic on the back-end and would not repeat on a strict 30-minute period.
+      - id: c
+        text: A GPU overheating on one node.
+        explanation: That would cause a straggler on every step, not a periodic global stall.
+      - id: d
+        text: The optimizer step taking two minutes.
+        explanation: The optimizer step is part of every training step and takes milliseconds.
+    tags: [checkpointing, storage]
+  - id: q7
+    type: single
+    prompt: What does MFU (Model FLOPs Utilisation) measure, and why do network engineers care?
+    options:
+      - id: a
+        text: The fraction of the GPUs' theoretical peak compute doing useful model work; network stalls lower it directly.
+        correct: true
+        explanation: MFU summarises how much of the expensive compute is wasted waiting, including waiting on the network.
+      - id: b
+        text: The fraction of network bandwidth used by the model.
+        explanation: MFU is a compute metric, not a network utilisation metric.
+      - id: c
+        text: The memory footprint of the model in GPU memory.
+        explanation: That is memory usage, not FLOPs utilisation.
+      - id: d
+        text: The number of model files stored on the storage system.
+        explanation: MFU has nothing to do with file counts.
+    tags: [mfu]

@@ -1,0 +1,13 @@
+id: m11-troubleshooting
+order: 11
+title: "Troubleshooting mastery"
+level: 4
+summary: >
+  A methodology for AI fabric incidents, and deep dives into link-layer errors, lossless misconfigurations, slow collectives, RDMA connection failures and real-world case studies.
+lessons:
+  - troubleshooting-methodology
+  - link-layer-ber-fec
+  - lossless-misconfigurations
+  - slow-collectives-stragglers
+  - rdma-connection-failures
+  - case-studies

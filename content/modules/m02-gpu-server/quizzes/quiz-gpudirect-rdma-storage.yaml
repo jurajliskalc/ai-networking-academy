@@ -1,0 +1,130 @@
+id: quiz-gpudirect-rdma-storage
+title: "Knowledge check: GPUDirect RDMA and GPUDirect Storage"
+lesson: gpudirect-rdma-storage
+pass_pct: 70
+questions:
+  - id: q1
+    type: single
+    prompt: Without GPUDirect RDMA, how does data from a GPU buffer reach the NIC on the sending side?
+    options:
+      - id: a
+        text: It is copied from GPU memory into a pinned host buffer, then the NIC DMA-reads the host buffer.
+        correct: true
+        explanation: This is the bounce-buffer path; data crosses PCIe twice and passes through host memory.
+      - id: b
+        text: The NIC reads it directly through the GPU BAR.
+        explanation: That is exactly what GPUDirect RDMA enables; without it, the NIC cannot target GPU memory.
+      - id: c
+        text: The GPU sends it over NVLink to the NIC.
+        explanation: NICs attach over PCIe; NVLink connects GPUs (and Grace CPUs), not NICs in these designs.
+      - id: d
+        text: The CPU transmits it with the kernel TCP stack.
+        explanation: RDMA bypasses the kernel networking stack in both cases.
+    tags: [gdr]
+  - id: q2
+    type: single
+    prompt: What is the job of the nvidia-peermem kernel module?
+    options:
+      - id: a
+        text: It lets the RDMA stack pin GPU memory and obtain its PCIe addresses when an application registers a GPU buffer as a memory region.
+        correct: true
+        explanation: It is a peer-memory client that bridges ibv_reg_mr() on GPU addresses to the GPU driver.
+      - id: b
+        text: It implements NVLink routing between GPUs.
+        explanation: NVLink and NVSwitch are managed by the GPU driver and Fabric Manager, not by peermem.
+      - id: c
+        text: It provides the cuFile API for GPUDirect Storage.
+        explanation: cuFile is a user-space library; GDS historically relies on the nvidia-fs module.
+      - id: d
+        text: It enables PFC on the NIC.
+        explanation: PFC is NIC and switch QoS configuration, unrelated to GPU memory registration.
+    tags: [gdr, kernel]
+  - id: q3
+    type: scenario
+    prompt: "An all-reduce benchmark runs without errors but bus bandwidth is far below what the fabric should deliver. With NCCL_DEBUG=INFO, the network channel lines read 'via NET/IB/0' with no GDRDMA suffix. lsmod shows no nvidia_peermem, and the platform does not meet the DMA-BUF prerequisites. What is happening?"
+    options:
+      - id: a
+        text: NCCL cannot register GPU memory with the NIC, so it silently stages data through host memory.
+        correct: true
+        explanation: Load nvidia-peermem (or meet DMA-BUF requirements) and confirm GDRDMA appears in the logs.
+      - id: b
+        text: The fabric has PFC disabled, which removes the GDRDMA label.
+        explanation: The GDRDMA marker reflects the host-side data path, not switch QoS.
+      - id: c
+        text: The job is using NVLink instead of the network.
+        explanation: NET/IB lines are network channels; NVLink traffic is reported as P2P transport.
+      - id: d
+        text: This is normal; GDRDMA only appears on InfiniBand, never on RoCE.
+        explanation: GPUDirect RDMA works on both InfiniBand and RoCE.
+    tags: [gdr, nccl, troubleshooting]
+  - id: q4
+    type: single
+    prompt: Why are GPU-to-network sends usually more sensitive to PCIe path length than network-to-GPU receives?
+    options:
+      - id: a
+        text: Sends require the NIC to issue PCIe reads that wait for completions, while receives are posted writes that do not.
+        correct: true
+        explanation: Read round trips grow with path length, so the NIC needs more outstanding reads to fill the pipe.
+      - id: b
+        text: Sends are encrypted and receives are not.
+        explanation: Encryption is not part of the GDR mechanism.
+      - id: c
+        text: Receives use NVLink and sends use PCIe.
+        explanation: Both directions between NIC and GPU use PCIe.
+    tags: [gdr, pcie]
+  - id: q5
+    type: scenario
+    prompt: "On a server, GPU3's nearest NIC is on the other CPU socket (topology SYS). An engineer sets NCCL_NET_GDR_LEVEL=SYS to 'force GPUDirect everywhere' and bandwidth gets worse. Why?"
+    options:
+      - id: a
+        text: GDR across the socket interconnect makes the NIC read GPU memory over a slow, shared path; staging can be faster, and the real fix is the GPU-NIC mapping.
+        correct: true
+        explanation: NCCL's default threshold exists because cross-socket P2P often underperforms. Fix the placement rather than the threshold.
+      - id: b
+        text: SYS disables GPUDirect RDMA entirely.
+        explanation: SYS is the most permissive value; LOC disables GDR.
+      - id: c
+        text: The variable only affects storage, so the change is a coincidence.
+        explanation: NCCL_NET_GDR_LEVEL controls GDR on network transfers.
+      - id: d
+        text: SYS forces TCP sockets instead of RDMA.
+        explanation: The transport choice is separate; this variable only sets the GDR distance threshold.
+    tags: [gdr, nccl, numa]
+  - id: q6
+    type: multi
+    prompt: Which statements about GPUDirect Storage are true? Select all that apply.
+    options:
+      - id: a
+        text: Applications use the cuFile API to read and write files directly to and from GPU memory.
+        correct: true
+        explanation: cuFileRead and cuFileWrite are the core GDS calls.
+      - id: b
+        text: When GDS is not supported for a file, cuFile can fall back to a compatibility path through host memory.
+        correct: true
+        explanation: The fallback keeps applications working but loses the direct-path benefit.
+      - id: c
+        text: GDS works with every file system automatically, with no vendor support needed.
+        explanation: Support depends on the file system or storage client; check GDS compatibility documentation.
+      - id: d
+        text: GDS can be used with remote storage over RDMA, such as NVMe-oF or supported parallel file systems.
+        correct: true
+        explanation: The storage NIC RDMAs directly into GPU memory when the client supports it.
+    tags: [gds, storage]
+  - id: q7
+    type: single
+    prompt: Which tool from the GDS package reports whether the platform's drivers, file systems and devices support GPUDirect Storage?
+    options:
+      - id: a
+        text: gdscheck (for example gdscheck -p)
+        correct: true
+        explanation: It prints a platform support summary; gdsio is the companion benchmark.
+      - id: b
+        text: ibv_devinfo
+        explanation: That lists RDMA device attributes, not GDS support.
+      - id: c
+        text: nvidia-smi topo -m
+        explanation: That shows GPU/NIC topology, which is useful but does not report GDS support.
+      - id: d
+        text: ethtool -S
+        explanation: That shows NIC counters.
+    tags: [gds, tools]

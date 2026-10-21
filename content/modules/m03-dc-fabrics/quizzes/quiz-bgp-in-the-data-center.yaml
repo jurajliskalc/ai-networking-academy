@@ -1,0 +1,130 @@
+id: quiz-bgp-in-the-data-center
+title: "Knowledge check: BGP in the data center"
+lesson: bgp-in-the-data-center
+pass_pct: 70
+questions:
+  - id: q1
+    type: single
+    prompt: In an RFC 7938-style two-tier fabric, how are ASNs typically assigned?
+    options:
+      - id: a
+        text: All spines share one ASN; every leaf has its own unique ASN.
+        correct: true
+        explanation: Shared spine ASN prevents path hunting; unique leaf ASNs let leaves accept each other's routes.
+      - id: b
+        text: Every switch in the fabric shares one ASN and runs iBGP with route reflectors.
+        explanation: RFC 7938 recommends eBGP on every link, without iBGP or route reflectors.
+      - id: c
+        text: Every spine has a unique ASN; all leaves share one ASN.
+        explanation: Unique spine ASNs enable path hunting and shared leaf ASNs cause loop-prevention drops.
+      - id: d
+        text: ASNs are not used because BGP runs only inside one AS.
+        explanation: eBGP sessions require different ASNs on each side.
+    tags: [bgp, asn]
+  - id: q2
+    type: single
+    prompt: Why does a shared spine ASN eliminate path hunting after a leaf prefix is withdrawn?
+    options:
+      - id: a
+        text: Any alternative path that has passed through another spine already contains the spine ASN, so every spine rejects it with the AS_PATH loop check.
+        correct: true
+        explanation: Stale paths cannot bounce between spines via leaves, so the withdrawal is final immediately.
+      - id: b
+        text: Spines in the same ASN synchronize their routing tables over a dedicated link.
+        explanation: Spines do not connect to each other in a leaf-spine fabric.
+      - id: c
+        text: The shared ASN disables BGP updates during failures.
+        explanation: Updates are still sent; they are simply rejected when they would loop.
+    tags: [bgp, convergence]
+  - id: q3
+    type: scenario
+    prompt: "A leaf has eight uplinks, all with established BGP sessions. show ip bgp for a remote prefix lists eight paths, but show ip route installs only four next hops. What is the most likely cause?"
+    options:
+      - id: a
+        text: maximum-paths is set to 4 for that address family.
+        correct: true
+        explanation: BGP knows all eight paths but installs only as many as the multipath width allows.
+      - id: b
+        text: Four spines are down.
+        explanation: All sessions are established and BGP sees eight paths.
+      - id: c
+        text: BFD is disabled.
+        explanation: BFD affects failure detection speed, not how many ECMP paths are installed.
+      - id: d
+        text: The MTU is too small on four links.
+        explanation: MTU mismatch typically affects session establishment or data, not the number of installed paths when sessions are up.
+    tags: [ecmp, bgp]
+  - id: q4
+    type: scenario
+    prompt: "A server is dual-homed to leaf A (AS 65101) and leaf B (AS 65102), and advertises its prefix to both. A remote leaf sees two paths of equal length, '65000 65101' and '65000 65102', but installs only one. Which setting is missing?"
+    options:
+      - id: a
+        text: AS-path multipath-relax (for example bgp bestpath as-path multipath-relax in FRR)
+        correct: true
+        explanation: By default multipath requires identical AS paths; relax allows equal-length paths with different ASNs.
+      - id: b
+        text: allowas-in
+        explanation: That permits routes containing the local ASN; it does not combine paths with different ASNs.
+      - id: c
+        text: next-hop-self
+        explanation: Next-hop handling does not decide multipath eligibility in eBGP.
+      - id: d
+        text: A route reflector
+        explanation: RFC 7938 fabrics do not use route reflectors, and they would not fix multipath selection.
+    tags: [bgp, multipath]
+  - id: q5
+    type: multi
+    prompt: Which statements about BGP unnumbered are correct? Select all that apply.
+    options:
+      - id: a
+        text: Sessions use the IPv6 link-local addresses of the fabric interfaces.
+        correct: true
+        explanation: Every IPv6-enabled interface has a link-local address without any configuration.
+      - id: b
+        text: Neighbours discover each other's link-local address via IPv6 Router Advertisements.
+        correct: true
+        explanation: That is why RA must not be suppressed on unnumbered fabric links.
+      - id: c
+        text: IPv4 prefixes are advertised with an IPv6 next hop using the extended next hop capability (RFC 5549, now RFC 8950).
+        correct: true
+        explanation: This lets IPv4 routing work without IPv4 addresses on links.
+      - id: d
+        text: It requires a /31 IPv4 address on every link.
+        explanation: Removing per-link IPv4 addressing is the whole point.
+    tags: [bgp-unnumbered]
+  - id: q6
+    type: scenario
+    prompt: "A spine's line card stops forwarding but its links stay physically up. Fabric BGP uses 60 s keepalive and 180 s hold timers, and BFD is not configured. What will leaves experience, and what is the fix?"
+    options:
+      - id: a
+        text: Traffic hashed to that spine is blackholed for up to about three minutes until the hold timer expires; enable BFD and use short timers.
+        correct: true
+        explanation: With the link up, only keepalive loss or BFD reveals the failure.
+      - id: b
+        text: Nothing; ECMP automatically detects forwarding failures.
+        explanation: ECMP only uses next hops installed by routing; it has no data-plane health check.
+      - id: c
+        text: The leaves immediately withdraw the spine because link-down is detected.
+        explanation: The links stay physically up, so there is no link-down event.
+      - id: d
+        text: All traffic in the fabric stops until the spine reboots.
+        explanation: Only traffic hashed to the failed spine is affected.
+    tags: [bfd, timers]
+  - id: q7
+    type: single
+    prompt: Which ASN range is reserved for private use with 32-bit ASNs (RFC 6996) and is preferred for large fabrics?
+    options:
+      - id: a
+        text: 4200000000 to 4294967294
+        correct: true
+        explanation: It provides about 95 million private ASNs, enough for unique leaf ASNs at any scale.
+      - id: b
+        text: 64512 to 65534
+        explanation: That is the 16-bit private range, only 1,023 ASNs.
+      - id: c
+        text: 1 to 64511
+        explanation: These are public ASNs assigned by registries.
+      - id: d
+        text: 65535 to 65551
+        explanation: These are reserved values or documentation ranges, not the private-use block.
+    tags: [asn]

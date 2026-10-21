@@ -1,0 +1,1116 @@
+id: exam-ai-fabric-2
+title: "Mock assessment 2: AI fabric engineer"
+description: "Original practice material written for AI Networking Academy, not questions from any real certification. Engineer level: mostly scenario questions on RDMA, RoCEv2, NCCL and fabric design, with illustrative counters and command output."
+duration_minutes: 90
+pass_pct: 70
+domains:
+  - { id: foundations, title: "Networking and AI workload foundations" }
+  - { id: server, title: "GPU server internals" }
+  - { id: fabric, title: "Data center fabrics, load balancing and design" }
+  - { id: rdma, title: "RDMA and InfiniBand" }
+  - { id: roce, title: "RoCEv2, lossless Ethernet and congestion control" }
+  - { id: collectives, title: "Collective communication and NCCL" }
+  - { id: ops, title: "Operations and troubleshooting" }
+questions:
+  # ---------------- foundations (5) ----------------
+  - id: q1
+    domain: foundations
+    type: scenario
+    prompt: |
+      A new RoCE host shows the following (illustrative output). The fabric is configured for jumbo frames end to end.
+
+        $ ibv_devinfo -d mlx5_0 | grep -E 'max_mtu|active_mtu'
+              max_mtu:    4096 (5)
+              active_mtu: 1024 (3)
+        $ ip -br link show ens1f0np0
+        ens1f0np0  UP  ...  mtu 1500
+
+      What is the most likely explanation?
+    options:
+      - id: a
+        text: "The netdev MTU is 1500, so the RoCE path MTU is capped at the largest IB MTU that fits, 1024."
+        correct: true
+        explanation: "For RoCE the active MTU is derived from the Ethernet interface MTU minus RoCE headers. A 1500-byte netdev only fits a 1024-byte RoCE payload; raise the interface MTU (for example to 9000) to allow 4096."
+      - id: b
+        text: "The switch port is negotiating a lower speed, which reduces the active MTU."
+        explanation: "Link speed and MTU are independent. A slower link changes bandwidth, not the maximum packet size."
+      - id: c
+        text: "The NIC firmware does not support 4096-byte MTU and must be upgraded."
+        explanation: "max_mtu already reports 4096, so the device supports it. The limit comes from the configured interface MTU."
+      - id: d
+        text: "The subnet manager has assigned MTU 1024 to this port."
+        explanation: "RoCE runs over Ethernet and has no subnet manager. MTU is governed by the netdev configuration."
+    tags: [mtu, roce]
+
+  - id: q2
+    domain: foundations
+    type: single
+    prompt: "In a bandwidth-optimal ring all-reduce over N GPUs of a buffer of S bytes, roughly how many bytes does each GPU send?"
+    options:
+      - id: a
+        text: "2 x (N-1)/N x S"
+        correct: true
+        explanation: "A ring all-reduce is a reduce-scatter followed by an all-gather, each moving (N-1)/N x S per GPU, for 2(N-1)/N x S in total."
+      - id: b
+        text: "(N-1) x S"
+        explanation: "That is the cost of a naive scheme where every GPU sends its full buffer to every other GPU, not the ring algorithm."
+      - id: c
+        text: "S / N"
+        explanation: "S/N is the size of one chunk. Each GPU sends many chunks across the 2(N-1) steps."
+      - id: d
+        text: "log2(N) x S"
+        explanation: "A log factor appears in the latency term of tree algorithms, not in the ring's bandwidth term."
+    tags: [allreduce, ring]
+
+  - id: q3
+    domain: foundations
+    type: scenario
+    prompt: "A team is placing parallelism strategies on an 8-GPU HGX server cluster. Tensor parallelism (TP) exchanges activations several times per layer. Where should TP groups usually be placed, and why?"
+    options:
+      - id: a
+        text: "Inside one server, so its frequent, latency-sensitive exchanges use NVLink rather than the scale-out NICs."
+        correct: true
+        explanation: "TP sits on the critical path of every layer and moves large volumes, so it is normally confined to the NVLink domain, which offers far more bandwidth and lower latency than the scale-out fabric."
+      - id: b
+        text: "Across servers on the same rail, so each TP rank gets a dedicated 400G NIC."
+        explanation: "A single NIC offers much less bandwidth than NVLink within the node; spreading TP across servers usually slows every layer."
+      - id: c
+        text: "Across racks, to spread load evenly over all spine switches."
+        explanation: "Spreading TP widely adds hops and latency to the most frequent communication; load spreading is not the goal."
+      - id: d
+        text: "On the front-end network, because TP traffic is small control messages."
+        explanation: "TP traffic is large activation tensors, not control messages, and the front-end network is not built for it."
+    tags: [parallelism, nvlink]
+
+  - id: q4
+    domain: foundations
+    type: multi
+    prompt: "Which statements describe typical large-model training traffic on the back-end fabric? (Select all that apply.)"
+    options:
+      - id: a
+        text: "A relatively small number of long-lived, high-bandwidth flows (low flow entropy)."
+        correct: true
+        explanation: "Collectives use a few QPs per peer that each carry large volumes, which makes hash-based load balancing fragile."
+      - id: b
+        text: "Bursts are synchronized across many GPUs because they run the same step."
+        correct: true
+        explanation: "All ranks reach the communication phase together, producing synchronized bursts and incast."
+      - id: c
+        text: "Step time is gated by the slowest flow, so tail latency matters more than average."
+        correct: true
+        explanation: "A collective finishes only when its slowest participant finishes, so one congested link delays everyone."
+      - id: d
+        text: "Mostly short, independent request-response flows with high entropy."
+        explanation: "That describes web or microservice traffic, which hashes well over ECMP. Training traffic is the opposite."
+    tags: [traffic-patterns]
+
+  - id: q5
+    domain: foundations
+    type: scenario
+    prompt: "A cluster has a compute (back-end) fabric, a storage fabric, a front-end network and an out-of-band management network. A training job writes a multi-terabyte checkpoint to a parallel file system every hour. In a typical reference design, which network carries the checkpoint writes?"
+    options:
+      - id: a
+        text: "The storage fabric, kept separate so checkpoint bursts do not disturb collectives."
+        correct: true
+        explanation: "Most reference architectures give storage its own NICs and fabric (or a converged design with explicit isolation) so that large checkpoint I/O does not compete with gradient traffic."
+      - id: b
+        text: "The out-of-band management network, because it is otherwise idle."
+        explanation: "OOB management is low-bandwidth and meant for BMCs and switch consoles; it cannot carry checkpoint data."
+      - id: c
+        text: "The compute fabric, because it has the most bandwidth and is always lossless."
+        explanation: "Some designs converge storage onto the compute fabric, but the typical split keeps them apart to protect collective performance."
+      - id: d
+        text: "The NVLink domain, which is shared with the storage servers."
+        explanation: "NVLink connects GPUs within a server or scale-up domain; storage servers are not attached to it."
+    tags: [four-networks, storage]
+
+  # ---------------- server (6) ----------------
+  - id: q6
+    domain: server
+    type: scenario
+    prompt: |
+      NCCL performance is poor on one server model. Part of the topology matrix (illustrative):
+
+        $ nvidia-smi topo -m
+                GPU0  GPU1  ...  NIC0  NIC1
+        GPU0     X    NV18  ...  SYS   PIX
+        GPU1    NV18   X    ...  SYS   PIX
+
+      The job is pinned so that GPU0 and GPU1 use NIC0. What is wrong?
+    options:
+      - id: a
+        text: "NIC0 is attached to the other CPU socket, so RDMA traffic crosses the inter-socket link."
+        correct: true
+        explanation: "SYS means the path traverses the SMP interconnect between sockets. GPUDirect RDMA across sockets is slow or disabled; these GPUs should use NIC1, which is PIX (same PCIe switch)."
+      - id: b
+        text: "NV18 means the NVLink connection between GPU0 and GPU1 is degraded."
+        explanation: "NV18 means the pair is connected by 18 NVLinks (a bonded set), which is the healthy state on an H100 HGX board."
+      - id: c
+        text: "PIX means NIC1 is unusable because it shares a PCIe switch with the GPUs."
+        explanation: "PIX is the best case for GPUDirect RDMA: GPU and NIC sit behind the same PCIe switch."
+      - id: d
+        text: "The GPUs need to be reset because the matrix shows X on the diagonal."
+        explanation: "X on the diagonal just marks the device itself; it is not an error."
+    tags: [topology, gpudirect, numa]
+
+  - id: q7
+    domain: server
+    type: single
+    prompt: "In nvidia-smi topo -m output, what does PXB mean for a GPU-NIC pair?"
+    options:
+      - id: a
+        text: "The path crosses multiple PCIe bridges but does not go through the CPU host bridge."
+        correct: true
+        explanation: "PXB is still a good path for peer-to-peer DMA, though not as short as PIX (single bridge)."
+      - id: b
+        text: "The path crosses the PCIe host bridge of the CPU."
+        explanation: "That is PHB. Traffic goes up to the CPU root complex and back down."
+      - id: c
+        text: "The path crosses the interconnect between CPU sockets."
+        explanation: "That is SYS, the worst case for GPUDirect RDMA."
+      - id: d
+        text: "The two devices are connected by NVLink."
+        explanation: "NVLink connections show as NV# (for example NV18). PXB is a PCIe relationship."
+    tags: [topology, pcie]
+
+  - id: q8
+    domain: server
+    type: scenario
+    prompt: |
+      A 400G NIC delivers only about 110 Gb/s in ib_write_bw. lspci shows (illustrative, trimmed):
+
+        LnkCap: Port #0, Speed 32GT/s, Width x16
+        LnkSta: Speed 16GT/s (downgraded), Width x8 (downgraded)
+
+      What is the best interpretation?
+    options:
+      - id: a
+        text: "The PCIe link trained at Gen4 x8, which caps throughput near 126 Gb/s per direction; check slot, riser and BIOS."
+        correct: true
+        explanation: "16 GT/s x 8 lanes with 128b/130b encoding is about 126 Gb/s raw per direction, less after protocol overhead, which matches the result. Reseat the card, check the riser and slot wiring, and confirm BIOS PCIe settings."
+      - id: b
+        text: "The NIC is fine; ib_write_bw always reports a quarter of line rate with default settings."
+        explanation: "With a healthy PCIe link and reasonable message sizes, ib_write_bw on a single port normally gets close to line rate."
+      - id: c
+        text: "The switch port has auto-negotiated to 100G Ethernet."
+        explanation: "Possible in general, but the lspci output already shows a PCIe downgrade that fully explains the number."
+      - id: d
+        text: "The GPU is throttling because of thermal limits."
+        explanation: "ib_write_bw with host memory does not involve the GPU, and the PCIe link status points at the real bottleneck."
+    tags: [pcie, perftest]
+
+  - id: q9
+    domain: server
+    type: single
+    prompt: "What does GPUDirect RDMA provide?"
+    options:
+      - id: a
+        text: "The NIC reads and writes GPU memory directly over PCIe, without bouncing through host memory."
+        correct: true
+        explanation: "With GPUDirect RDMA the NIC DMAs straight into GPU memory (enabled for example by the nvidia-peermem module or dma-buf support), removing a copy and CPU involvement."
+      - id: b
+        text: "GPUs in different servers exchange data over NVLink without using the NIC."
+        explanation: "That describes a multi-node NVLink domain (such as NVL72), not GPUDirect RDMA."
+      - id: c
+        text: "The GPU runs the RDMA transport, replacing the NIC for scale-out traffic."
+        explanation: "The NIC still runs the transport; GPUDirect RDMA only changes where its DMA lands."
+      - id: d
+        text: "Storage servers mount GPU memory as a block device."
+        explanation: "GPUDirect Storage moves data between storage and GPU memory, but nothing mounts GPU memory as a block device."
+    tags: [gpudirect]
+
+  - id: q10
+    domain: server
+    type: multi
+    prompt: "Which statements about an 8-GPU H100 HGX baseboard are correct? (Select all that apply.)"
+    options:
+      - id: a
+        text: "NVSwitch chips give every GPU full-bandwidth connectivity to every other GPU in the board."
+        correct: true
+        explanation: "The NVSwitches form a non-blocking all-to-all fabric among the eight GPUs."
+      - id: b
+        text: "Each H100 SXM GPU has about 900 GB/s of total bidirectional NVLink bandwidth."
+        correct: true
+        explanation: "H100 SXM uses 18 NVLink 4 links for about 900 GB/s bidirectional; other generations differ, so always check the generation."
+      - id: c
+        text: "GPU-to-GPU traffic inside the board normally passes through the scale-out NICs."
+        explanation: "Intra-node traffic uses NVLink. The NICs carry inter-node traffic."
+      - id: d
+        text: "NVLink traffic inside the board requires PFC to be configured on the NICs."
+        explanation: "NVLink is a separate interconnect with its own flow control; Ethernet PFC is irrelevant to it."
+    tags: [nvlink, nvswitch]
+
+  - id: q11
+    domain: server
+    type: scenario
+    prompt: "On a bare-metal server, GPU-to-NIC peer-to-peer bandwidth is far below expectations even though nvidia-smi topo -m shows PIX for each GPU-NIC pair. The PCIe switches have Access Control Services (ACS) enabled. What is the likely effect and fix?"
+    options:
+      - id: a
+        text: "ACS redirects peer-to-peer transactions up to the root complex; disable ACS on bare metal as NCCL guidance recommends."
+        correct: true
+        explanation: "With ACS on, P2P requests are forced through the root complex, which hurts or breaks GPUDirect RDMA. NVIDIA's NCCL troubleshooting docs recommend disabling it on bare metal (virtualized setups need ATS and other care)."
+      - id: b
+        text: "ACS limits the PCIe link to Gen3; upgrade the switch firmware."
+        explanation: "ACS controls request routing and isolation, not link speed."
+      - id: c
+        text: "ACS enables encryption of PCIe traffic; turn off the encryption in the NIC."
+        explanation: "ACS is not an encryption feature."
+      - id: d
+        text: "ACS has no effect; the issue must be in the switch fabric."
+        explanation: "ACS is a well-known cause of poor GPU-NIC P2P performance, so it should be ruled out first."
+    tags: [pcie, acs, gpudirect]
+
+  # ---------------- fabric (8) ----------------
+  - id: q12
+    domain: fabric
+    type: scenario
+    prompt: "You build a non-blocking two-tier leaf-spine fabric from identical 32-port 400G switches. Each leaf uses half its ports for hosts and half for spines. What is the maximum number of 400G host ports?"
+    options:
+      - id: a
+        text: "512"
+        correct: true
+        explanation: "Each spine has 32 ports, so up to 32 leaves. Each leaf offers 16 host ports: 32 x 16 = 512, the k^2/2 rule for a two-tier fat tree."
+      - id: b
+        text: "1,024"
+        explanation: "That is k^2, which ignores that half of every leaf's ports go up to spines."
+      - id: c
+        text: "256"
+        explanation: "That would correspond to 16 leaves; with 32-port spines you can attach 32 leaves."
+      - id: d
+        text: "8,192"
+        explanation: "That is the three-tier limit (k^3/4) for radix 32, not two-tier."
+    tags: [sizing, clos]
+
+  - id: q13
+    domain: fabric
+    type: scenario
+    prompt: "A leaf has 48 x 100G host ports and 8 x 400G uplinks, all in use. What is its oversubscription ratio?"
+    options:
+      - id: a
+        text: "1.5:1"
+        correct: true
+        explanation: "Downlink capacity is 4,800 Gb/s and uplink capacity is 3,200 Gb/s; 4,800 / 3,200 = 1.5."
+      - id: b
+        text: "6:1"
+        explanation: "That compares port counts (48 vs 8) and ignores the different port speeds."
+      - id: c
+        text: "1:1"
+        explanation: "1:1 would need 4,800 Gb/s of uplink, i.e. 12 x 400G."
+      - id: d
+        text: "0.67:1"
+        explanation: "That inverts the ratio; oversubscription is downlink over uplink capacity."
+    tags: [oversubscription]
+
+  - id: q14
+    domain: fabric
+    type: scenario
+    prompt: "In a rail-optimized cluster, NIC i of every server connects to rail leaf i. GPU3 in server A must send to GPU5 in server B, which is in another rail group. With NCCL's PXN feature enabled, how is the transfer typically done to avoid crossing the spine?"
+    options:
+      - id: a
+        text: "GPU3 moves the data over NVLink to GPU5 of server A, whose NIC on rail 5 sends it to server B through the rail-5 leaf."
+        correct: true
+        explanation: "PXN (PCI x NVLink) uses the intra-node NVLink fabric to hop to the GPU attached to the destination's rail, so the network hop stays within one rail leaf."
+      - id: b
+        text: "GPU3's NIC on rail 3 sends to server B's rail-3 NIC, which forwards it to GPU5 over PCIe."
+        explanation: "That keeps the data on one rail too, but it is not what PXN does; PXN moves data across NVLink at the sender side."
+      - id: c
+        text: "The rail-3 leaf routes the packet to the rail-5 leaf through the spine layer."
+        explanation: "That is the default path without PXN, which consumes spine bandwidth and adds a hop."
+      - id: d
+        text: "The CPU copies the data into host memory and sends it over the front-end network."
+        explanation: "Collectives do not use the front-end network, and staging in host memory defeats GPUDirect RDMA."
+    tags: [rail-optimized, pxn, nccl]
+
+  - id: q15
+    domain: fabric
+    type: multi
+    prompt: |
+      During a large all-reduce, leaf uplink utilization looks like this (illustrative):
+
+        uplink1 99%   uplink2 31%   uplink3 28%   uplink4 97%
+        uplink5 30%   uplink6 29%   uplink7 33%   uplink8 30%
+
+      Which actions directly address the cause? (Select all that apply.)
+    options:
+      - id: a
+        text: "Enable adaptive routing or packet spraying on the switches (with NICs that tolerate reordering)."
+        correct: true
+        explanation: "The pattern shows hash collisions of elephant flows. Load-aware path selection spreads them across idle uplinks."
+      - id: b
+        text: "Increase the number of QPs per connection, for example with NCCL_IB_QPS_PER_CONNECTION."
+        correct: true
+        explanation: "More QPs means more distinct UDP source ports, more entropy, and a better chance that ECMP spreads the load."
+      - id: c
+        text: "Lower the MTU from 9000 to 1500 to break flows into more packets."
+        explanation: "ECMP hashes per flow, not per packet, so smaller packets do not change which uplink a flow uses; they only add overhead."
+      - id: d
+        text: "Disable PFC on the uplinks to free buffer space."
+        explanation: "This does not touch the hashing imbalance and would create drops for lossless RoCE traffic."
+    tags: [ecmp, adaptive-routing, entropy]
+
+  - id: q16
+    domain: fabric
+    type: single
+    prompt: "Which RoCEv2 header field gives ECMP hashing most of its per-connection entropy?"
+    options:
+      - id: a
+        text: "The UDP source port, which the NIC typically derives per QP."
+        correct: true
+        explanation: "The destination port is fixed at 4791, so the varying UDP source port is what differentiates RoCEv2 flows between the same two hosts."
+      - id: b
+        text: "The UDP destination port 4791."
+        explanation: "This value is the same for every RoCEv2 packet, so it adds no entropy."
+      - id: c
+        text: "The IP TTL field."
+        explanation: "TTL is not part of a standard 5-tuple hash and does not differ between flows."
+      - id: d
+        text: "The ICRC trailer."
+        explanation: "The ICRC is an integrity check computed over the packet; switches do not hash on it."
+    tags: [ecmp, rocev2]
+
+  - id: q17
+    domain: fabric
+    type: scenario
+    prompt: "Following the RFC 7938 style of eBGP in a two-tier Clos, all spines share one ASN and each leaf has its own ASN. What problem does giving all spines the same ASN prevent?"
+    options:
+      - id: a
+        text: "Paths of the form leaf-spine-leaf-spine, because a spine rejects routes that already contain its own ASN."
+        correct: true
+        explanation: "BGP AS-path loop prevention stops a route learned through one spine from being re-advertised up into another spine, so the fabric avoids suboptimal valley paths."
+      - id: b
+        text: "Running out of private ASNs."
+        explanation: "Sharing an ASN on spines saves few ASNs; the main reason is path behavior."
+      - id: c
+        text: "ECMP across spines, which would otherwise be unstable."
+        explanation: "The shared ASN does not hinder ECMP: paths through different spines carry identical AS paths, so standard BGP multipath can install all of them."
+      - id: d
+        text: "Spines from forming iBGP sessions with each other."
+        explanation: "Spines do not peer with each other in this design at all."
+    tags: [bgp, clos]
+
+  - id: q18
+    domain: fabric
+    type: scenario
+    prompt: "A fabric enables per-packet load balancing (packet spraying) on all switches to fix ECMP collisions. Which component must handle the resulting side effect?"
+    options:
+      - id: a
+        text: "The receiving NIC, which must accept out-of-order packets and place them correctly in memory."
+        correct: true
+        explanation: "Spraying delivers packets of one flow over different paths, so they can arrive out of order. Designs such as Spectrum-X rely on the SuperNIC to handle this; a classic RoCE NIC would treat gaps as loss and retransmit."
+      - id: b
+        text: "The spine switches, which must reassemble each flow before forwarding."
+        explanation: "Switches forward packets independently and do not reassemble flows."
+      - id: c
+        text: "The subnet manager, which recomputes routes for every packet."
+        explanation: "Ethernet fabrics have no subnet manager, and nothing recomputes routes per packet."
+      - id: d
+        text: "The application, which must disable RDMA and use TCP."
+        explanation: "The point of the design is to keep RDMA; reordering is handled in the NIC."
+    tags: [packet-spraying, spectrum-x]
+
+  - id: q19
+    domain: fabric
+    type: scenario
+    prompt: "An architect wants a non-blocking three-tier fat tree built entirely from 64-port switches. What is the theoretical maximum number of host ports?"
+    options:
+      - id: a
+        text: "65,536"
+        correct: true
+        explanation: "A three-tier fat tree from radix-k switches supports k^3/4 hosts: 64^3 / 4 = 65,536."
+      - id: b
+        text: "2,048"
+        explanation: "That is the two-tier limit, k^2/2."
+      - id: c
+        text: "262,144"
+        explanation: "That is k^3, which ignores the ports each tier spends on uplinks."
+      - id: d
+        text: "131,072"
+        explanation: "That is k^3/2, which double-counts the hosts each pod can attach."
+    tags: [sizing, fat-tree]
+
+  # ---------------- rdma (8) ----------------
+  - id: q20
+    domain: rdma
+    type: single
+    prompt: "Which RDMA operation completes at the target without consuming a receive work request there?"
+    options:
+      - id: a
+        text: "RDMA WRITE without immediate data"
+        correct: true
+        explanation: "A plain RDMA WRITE places data directly in a registered remote buffer using its rkey; the remote CPU and receive queue are not involved."
+      - id: b
+        text: "SEND"
+        explanation: "A SEND must match a posted receive WQE at the target."
+      - id: c
+        text: "RDMA WRITE with immediate"
+        explanation: "The immediate value is delivered through a receive completion, so it consumes a receive WQE."
+      - id: d
+        text: "SEND with invalidate"
+        explanation: "This is still a SEND and consumes a receive WQE."
+    tags: [verbs, operations]
+
+  - id: q21
+    domain: rdma
+    type: scenario
+    prompt: "An RC QP setup fails with 'Failed to modify QP to RTR'. During which transition must the application supply the remote QP number, the remote address (for RoCE, the destination GID) and the path MTU?"
+    options:
+      - id: a
+        text: "INIT to RTR"
+        correct: true
+        explanation: "Ready-to-Receive needs everything about the remote side: destination QPN, address handle with GID, receive PSN, path MTU and RDMA read resources."
+      - id: b
+        text: "RESET to INIT"
+        explanation: "INIT only needs the port, P_Key index and access flags."
+      - id: c
+        text: "RTR to RTS"
+        explanation: "RTS adds sender-side settings such as send PSN, timeout and retry counts."
+      - id: d
+        text: "RTS to SQD"
+        explanation: "SQD drains the send queue; it is not part of connection setup."
+    tags: [qp-state-machine]
+
+  - id: q22
+    domain: rdma
+    type: scenario
+    prompt: |
+      Two RoCE hosts are in different subnets behind a routed leaf-spine fabric. ibv_rc_pingpong works within one rack but fails between racks. show_gids on both hosts gives (illustrative):
+
+        DEV     PORT INDEX GID                                      IPv4         VER  DEV
+        mlx5_0  1    0     fe80:0000:0000:0000:....                              v1   ens1f0np0
+        mlx5_0  1    1     fe80:0000:0000:0000:....                              v2   ens1f0np0
+        mlx5_0  1    2     0000:0000:0000:0000:0000:ffff:0a00:0101  10.0.1.1     v1   ens1f0np0
+        mlx5_0  1    3     0000:0000:0000:0000:0000:ffff:0a00:0101  10.0.1.1     v2   ens1f0np0
+
+      The test was run with -g 0. What should be changed?
+    options:
+      - id: a
+        text: "Run ibv_rc_pingpong with -g 3 so it uses the RoCEv2 GID built from the routable IPv4 address."
+        correct: true
+        explanation: "Index 0 is a link-local RoCEv1 GID, which cannot be routed. Index 3 is RoCEv2 (UDP/IP) on 10.0.1.1, which works across L3 hops. Always check show_gids, because the index can differ per host."
+      - id: b
+        text: "Use -g 2, because RoCEv1 is preferred across routed fabrics."
+        explanation: "RoCEv1 is an Ethernet-layer protocol without an IP header, so it cannot cross a router."
+      - id: c
+        text: "Set the interface MTU to 1500 so packets fit across the spine."
+        explanation: "MTU is not the issue here; the GID selection is."
+      - id: d
+        text: "Start a subnet manager on one of the hosts."
+        explanation: "RoCE does not use a subnet manager; addressing comes from the IP configuration."
+    tags: [gid, rocev2, rdma-connection]
+
+  - id: q23
+    domain: rdma
+    type: single
+    prompt: "An application registers a buffer with ibv_reg_mr in protection domain PD-A, then posts a SEND whose scatter/gather entry uses that buffer's lkey on a QP created in a different protection domain, PD-B. What happens?"
+    options:
+      - id: a
+        text: "The work request completes with a local protection error (IBV_WC_LOC_PROT_ERR), because a QP may only use memory regions registered in its own PD."
+        correct: true
+        explanation: "The protection domain is an isolation boundary: the NIC validates the lkey against the QP's PD, and a mismatch is reported as a local protection error."
+      - id: b
+        text: "The SEND succeeds, because lkeys are valid for every QP on the same device."
+        explanation: "lkeys are only valid within the PD the MR was registered in; that is the purpose of protection domains."
+      - id: c
+        text: "The NIC silently copies the buffer into PD-B and the SEND succeeds."
+        explanation: "RDMA does not copy or re-register memory implicitly; the request is rejected."
+      - id: d
+        text: "The remote side reports IBV_WC_REM_ACCESS_ERR because its rkey check fails."
+        explanation: "A SEND uses the local lkey, not a remote rkey, and the PD check fails locally before anything useful reaches the peer."
+    tags: [verbs, memory-registration, protection-domain]
+
+  - id: q24
+    domain: rdma
+    type: scenario
+    prompt: "A custom RDMA application occasionally fails with completion status IBV_WC_RNR_RETRY_EXC_ERR on the sender. The network counters are clean. What is the most likely cause?"
+    options:
+      - id: a
+        text: "The receiver did not have receive WQEs posted in time, and the RNR retry count was exhausted."
+        correct: true
+        explanation: "RNR (Receiver Not Ready) NAKs mean SENDs arrived with no posted receive. Post receives earlier or deeper, and/or raise rnr_retry and min_rnr_timer."
+      - id: b
+        text: "Packets were dropped in the fabric and transport retries ran out."
+        explanation: "That gives IBV_WC_RETRY_EXC_ERR, a different status, and would usually show up in drop counters."
+      - id: c
+        text: "The remote key is invalid for the target buffer."
+        explanation: "A bad rkey gives a remote access error, not an RNR error."
+      - id: d
+        text: "The MTU of the two hosts does not match."
+        explanation: "MTU mismatches cause connection-setup or drop problems, not RNR NAKs."
+    tags: [rnr, completion-errors]
+
+  - id: q25
+    domain: rdma
+    type: scenario
+    prompt: "A long-running NCCL job aborts on several nodes with IBV_WC_RETRY_EXC_ERR (transport retry counter exceeded). Which investigation is most appropriate?"
+    options:
+      - id: a
+        text: "Look for packet loss or an unreachable peer: link flaps, drops, ACL or route changes, a crashed remote process."
+        correct: true
+        explanation: "This status means the sender got no ACK after all retries. Something between the QPs dropped packets or the peer stopped responding."
+      - id: b
+        text: "Increase the number of posted receive buffers on all ranks."
+        explanation: "That fixes RNR errors, not transport retry exhaustion."
+      - id: c
+        text: "Re-register memory with remote write permission."
+        explanation: "Permission problems produce access errors, not retry exhaustion."
+      - id: d
+        text: "Switch NCCL to the tree algorithm."
+        explanation: "The algorithm choice does not fix a lossy or broken path."
+    tags: [completion-errors, troubleshooting]
+
+  - id: q26
+    domain: rdma
+    type: multi
+    prompt: "Which tasks are performed by the InfiniBand subnet manager? (Select all that apply.)"
+    options:
+      - id: a
+        text: "Assigning LIDs to ports."
+        correct: true
+        explanation: "The SM addresses every port with a local identifier during subnet bring-up."
+      - id: b
+        text: "Computing and loading linear forwarding tables into switches."
+        correct: true
+        explanation: "The SM runs a routing engine (such as min-hop, up/down or fat-tree) and programs the switch LFTs."
+      - id: c
+        text: "Programming SL-to-VL mapping tables."
+        correct: true
+        explanation: "The SM configures how service levels map to virtual lanes on each port."
+      - id: d
+        text: "Granting per-packet flow-control credits on every link."
+        explanation: "Credit-based flow control is done by link hardware in real time, not by the SM."
+    tags: [subnet-manager, infiniband]
+
+  - id: q27
+    domain: rdma
+    type: scenario
+    prompt: |
+      On an InfiniBand fabric, perfquery on a leaf switch port toward a storage node shows (illustrative):
+
+        PortXmitData:  ...large and increasing...
+        PortXmitWait:  increasing quickly
+        SymbolErrorCounter: 0
+        PortRcvErrors: 0
+
+      What does this most likely indicate?
+    options:
+      - id: a
+        text: "Congestion: the port often had data to send but no credits from the downstream device."
+        correct: true
+        explanation: "PortXmitWait counts time the port waited for credits. With clean error counters, this points at a congested or slow receiver, not a bad link."
+      - id: b
+        text: "A failing cable generating bit errors."
+        explanation: "Bit errors would raise SymbolErrorCounter and possibly PortRcvErrors, both zero here."
+      - id: c
+        text: "The subnet manager is rerouting traffic through this port."
+        explanation: "Routing changes do not show up as transmit wait time."
+      - id: d
+        text: "The port is administratively disabled."
+        explanation: "A disabled port would not show increasing PortXmitData."
+    tags: [infiniband, congestion, counters]
+
+  # ---------------- roce (9) ----------------
+  - id: q28
+    domain: roce
+    type: scenario
+    prompt: |
+      On a RoCE host using priority 3 for RDMA, ethtool -S shows over one minute (illustrative):
+
+        rx_prio3_pause: +184,220
+        tx_prio3_pause: +0
+        rx_discards_phy: +0
+
+      What is happening?
+    options:
+      - id: a
+        text: "The switch is sending PFC pause frames to this host, throttling its transmissions; look for congestion downstream."
+        correct: true
+        explanation: "rx_prio3_pause counts pause frames the NIC received. The switch is pausing this sender because a queue toward the destination is filling."
+      - id: b
+        text: "The host is pausing the switch because its receive buffer is full."
+        explanation: "That would show up as tx_prio3_pause increasing, which is zero here."
+      - id: c
+        text: "The host is dropping RoCE packets because PFC is disabled."
+        explanation: "rx_discards_phy is zero, and pause frames are being received, so PFC is active."
+      - id: d
+        text: "The counters are expected to be zero on a lossless fabric, so this indicates a broken NIC."
+        explanation: "Some pausing is normal under load; large, sustained counts indicate congestion, not a NIC fault."
+    tags: [pfc, counters]
+
+  - id: q29
+    domain: roce
+    type: scenario
+    prompt: "A single storage client's NIC shows tx_prio3_pause rising steadily, while other hosts in the same rack show none. Its PCIe link is Gen5 x16 and healthy. Which explanation fits best?"
+    options:
+      - id: a
+        text: "The host cannot drain incoming data fast enough (for example memory or IOMMU pressure), so the NIC pauses the switch."
+        correct: true
+        explanation: "tx_prio3_pause means this NIC is generating pause frames: its receive buffer fills because the host side is slow. Look at host resources, IOMMU settings and out_of_buffer."
+      - id: b
+        text: "The fabric is congested, so the switch is pausing this host."
+        explanation: "That would increment rx_prio3_pause, not tx_prio3_pause."
+      - id: c
+        text: "The ECN thresholds on the leaf are too low."
+        explanation: "ECN settings change marking, not whether the host NIC generates pause frames."
+      - id: d
+        text: "The host's MTU is too large for the switch."
+        explanation: "An MTU mismatch causes drops of oversize frames, not pause generation."
+    tags: [pfc, slow-receiver]
+
+  - id: q30
+    domain: roce
+    type: single
+    prompt: "In DCQCN, which roles do the switch, the receiver NIC and the sender NIC play?"
+    options:
+      - id: a
+        text: "Switch marks ECN (CP), receiver sends CNPs (NP), sender cuts its rate (RP)."
+        correct: true
+        explanation: "The congestion point marks packets, the notification point turns marks into CNPs, and the reaction point applies rate reduction and recovery."
+      - id: b
+        text: "Switch sends CNPs, receiver marks ECN, sender pauses with PFC."
+        explanation: "Switches mark, they do not generate CNPs in standard DCQCN, and the sender reacts with rate control, not PFC."
+      - id: c
+        text: "Switch drops packets, receiver sends NAKs, sender retransmits."
+        explanation: "That describes loss recovery, which DCQCN is designed to avoid."
+      - id: d
+        text: "Switch pauses the sender, receiver measures RTT, sender adjusts its window."
+        explanation: "This mixes PFC with delay-based congestion control; it is not DCQCN."
+    tags: [dcqcn, ecn]
+
+  - id: q31
+    domain: roce
+    type: scenario
+    prompt: |
+      Counters on a receiver NIC and the matching sender NIC during a congested all-to-all (illustrative):
+
+        receiver: np_ecn_marked_roce_packets  +3,402,118
+        receiver: np_cnp_sent                 +0
+        sender:   rp_cnp_handled              +0
+
+      What is the most likely cause?
+    options:
+      - id: a
+        text: "ECN notification-point handling (CNP generation) is not enabled for this priority on the receiver."
+        correct: true
+        explanation: "The receiver sees marked packets but sends no CNPs, so senders never slow down. Enable DCQCN NP for the RoCE priority, using your NIC's configuration tools."
+      - id: b
+        text: "The switches are not marking ECN."
+        explanation: "np_ecn_marked_roce_packets is rising, so marks are arriving."
+      - id: c
+        text: "The CNPs are being dropped in the fabric."
+        explanation: "np_cnp_sent is zero, so no CNPs were generated in the first place."
+      - id: d
+        text: "The sender's reaction point is working and has already converged."
+        explanation: "rp_cnp_handled is zero, so the sender never received CNPs."
+    tags: [dcqcn, counters]
+
+  - id: q32
+    domain: roce
+    type: scenario
+    prompt: "A RoCE fabric shows frequent PFC pauses on the leaves but very few ECN-marked packets. ECN is enabled with min threshold 3 MB and max 6 MB, while the PFC XOFF threshold triggers at around 1 MB of queue. What should be changed?"
+    options:
+      - id: a
+        text: "Lower the ECN thresholds so marking starts well before the queue reaches the PFC XOFF point."
+        correct: true
+        explanation: "ECN should act first so DCQCN slows senders before PFC pauses links. With ECN thresholds above XOFF, PFC always fires first and congestion spreads."
+      - id: b
+        text: "Raise the PFC XOFF threshold above 6 MB so ECN can act."
+        explanation: "Moving XOFF higher reduces headroom safety and buffer for other ports; the ECN thresholds are what is wrong."
+      - id: c
+        text: "Disable ECN, since PFC already prevents loss."
+        explanation: "Without ECN, the fabric relies only on PFC, which causes head-of-line blocking and congestion spreading."
+      - id: d
+        text: "Enable PFC on all eight priorities."
+        explanation: "More lossless classes add risk and do not fix the order in which ECN and PFC trigger."
+    tags: [ecn, pfc, buffers]
+
+  - id: q33
+    domain: roce
+    type: single
+    prompt: "Which factors determine the PFC headroom buffer a switch port needs for a lossless priority?"
+    options:
+      - id: a
+        text: "Link speed, cable length (propagation delay), MTU and the peer's response time to a pause."
+        correct: true
+        explanation: "Headroom must absorb the data already in flight between sending XOFF and the peer stopping, which grows with speed, distance, frame size and reaction time."
+      - id: b
+        text: "The number of QPs and the size of the GPU memory."
+        explanation: "These do not affect how much data is in flight on one link after a pause."
+      - id: c
+        text: "The BGP hold timer and the number of ECMP paths."
+        explanation: "Routing timers and path counts have nothing to do with link-level pause timing."
+      - id: d
+        text: "Only the ECN marking thresholds."
+        explanation: "ECN thresholds relate to marking, not to the buffer reserved for in-flight data after XOFF."
+    tags: [headroom, pfc]
+
+  - id: q34
+    domain: roce
+    type: scenario
+    prompt: "NCCL runs with NCCL_IB_TC=106. The switches are configured in trust-PCP (L2) mode and the RoCE traffic is untagged. The PFC pause counters stay at zero during heavy congestion and drops appear on the switch. What is wrong?"
+    options:
+      - id: a
+        text: "The traffic carries DSCP 26 but the switch ignores DSCP, so it lands in the default lossy queue; switch to DSCP trust and map DSCP 26 to the lossless priority."
+        correct: true
+        explanation: "A traffic class of 106 means DSCP 26 with ECN bits set to ECT. Untagged frames have no PCP, so a PCP-trusting switch classifies them by its default, which is usually a lossy queue."
+      - id: b
+        text: "NCCL_IB_TC only affects InfiniBand, so the RoCE traffic has no marking at all."
+        explanation: "NCCL_IB_TC sets the traffic class for NCCL's verbs traffic, and on RoCE that becomes the IP DSCP/ECN byte."
+      - id: c
+        text: "106 is an invalid value and NCCL silently falls back to TCP."
+        explanation: "106 is a valid traffic class value and is commonly used for DSCP 26."
+      - id: d
+        text: "PFC must be enabled on priority 6 to match the value 106."
+        explanation: "The number 106 is a traffic class byte, not a priority; the priority comes from the switch's DSCP mapping."
+    tags: [qos-trust, dscp, nccl]
+
+  - id: q35
+    domain: roce
+    type: multi
+    prompt: "Which measures reduce the risk or impact of PFC storms and deadlocks? (Select all that apply.)"
+    options:
+      - id: a
+        text: "Enable a PFC watchdog that stops honoring pauses on a queue stuck for too long."
+        correct: true
+        explanation: "A watchdog breaks a storm caused, for example, by a NIC that sends pause frames continuously."
+      - id: b
+        text: "Keep lossless behavior to the RoCE class only and leave other traffic lossy."
+        correct: true
+        explanation: "Fewer lossless classes means fewer queues that can be blocked and fewer dependency chains."
+      - id: c
+        text: "Use loop-free up/down routing and avoid routing loops during convergence."
+        correct: true
+        explanation: "PFC deadlocks need a cyclic buffer dependency, which routing loops or non-up/down paths can create."
+      - id: d
+        text: "Enable PFC on every priority so all traffic is equally protected."
+        explanation: "This widens the blast radius of any pause storm and increases deadlock risk."
+    tags: [pfc-storm, deadlock]
+
+  - id: q36
+    domain: roce
+    type: scenario
+    prompt: "A RoCEv2 data packet carrying a 4,096-byte payload over IPv4 needs Ethernet, IPv4, UDP and BTH headers plus the ICRC. An engineer sets the interface MTU to exactly 4096 and expects RoCE to use a 4096-byte path MTU. Why does it not?"
+    options:
+      - id: a
+        text: "IP, UDP, BTH and ICRC add about 44 bytes on top of the payload, so 4096 does not fit; use a larger MTU such as 4200 or 9000."
+        correct: true
+        explanation: "20 (IPv4) + 8 (UDP) + 12 (BTH) + 4 (ICRC) = 44 bytes, more with extended headers such as RETH. The interface MTU must exceed the RoCE payload by at least that much."
+      - id: b
+        text: "RoCE path MTU is always fixed at 1024 bytes on Ethernet."
+        explanation: "RoCE supports IB MTUs of 256 to 4096 bytes, chosen to fit the Ethernet MTU."
+      - id: c
+        text: "The Ethernet FCS reduces the usable MTU by 1,500 bytes."
+        explanation: "The FCS is 4 bytes and is not counted in the interface MTU."
+      - id: d
+        text: "VXLAN encapsulation is always added on the back-end fabric."
+        explanation: "Back-end RoCE fabrics usually route RoCEv2 natively without VXLAN."
+    tags: [mtu, rocev2-encapsulation]
+
+  # ---------------- collectives (8) ----------------
+  - id: q37
+    domain: collectives
+    type: scenario
+    prompt: "all_reduce_perf across 16 GPUs reports algbw = 100 GB/s for a 4 GB buffer. What bus bandwidth (busbw) does nccl-tests report?"
+    options:
+      - id: a
+        text: "187.5 GB/s"
+        correct: true
+        explanation: "For all-reduce, busbw = algbw x 2(n-1)/n = 100 x 2 x 15/16 = 187.5 GB/s."
+      - id: b
+        text: "100 GB/s"
+        explanation: "algbw and busbw are only equal for operations whose correction factor is 1, such as broadcast."
+      - id: c
+        text: "93.75 GB/s"
+        explanation: "That uses (n-1)/n, the all-gather or reduce-scatter factor, not the all-reduce one."
+      - id: d
+        text: "200 GB/s"
+        explanation: "The factor is 2(n-1)/n, which approaches but never reaches 2."
+    tags: [nccl-tests, busbw]
+
+  - id: q38
+    domain: collectives
+    type: single
+    prompt: "For all_gather_perf, how does nccl-tests compute busbw from algbw for n ranks?"
+    options:
+      - id: a
+        text: "busbw = algbw x (n-1)/n"
+        correct: true
+        explanation: "Each rank must receive (n-1)/n of the final buffer, so that factor normalizes to link bandwidth."
+      - id: b
+        text: "busbw = algbw x 2(n-1)/n"
+        explanation: "That is the all-reduce factor."
+      - id: c
+        text: "busbw = algbw x n"
+        explanation: "No nccl-tests operation scales busbw by n."
+      - id: d
+        text: "busbw = algbw / n"
+        explanation: "That would make busbw shrink with scale, which is not the intent of the metric."
+    tags: [nccl-tests, busbw]
+
+  - id: q39
+    domain: collectives
+    type: scenario
+    prompt: |
+      A containerized training job is much slower than expected. NCCL_DEBUG=INFO shows (illustrative, trimmed):
+
+        NCCL INFO NET/Plugin: No plugin found, using internal implementation
+        NCCL INFO NET/Socket : Using [0]eth0:10.1.2.3<0>
+        NCCL INFO Using network Socket
+
+      What is the most likely cause?
+    options:
+      - id: a
+        text: "NCCL found no usable RDMA devices in the container and fell back to TCP sockets."
+        correct: true
+        explanation: "'Using network Socket' means the IB/RoCE transport was not used. Typical causes: /dev/infiniband not exposed, missing rdma-core libraries, or NCCL_IB_DISABLE set."
+      - id: b
+        text: "NCCL is using RoCE, and 'Socket' only refers to the bootstrap connection."
+        explanation: "The bootstrap does use sockets, but 'Using network Socket' refers to the data transport."
+      - id: c
+        text: "The tree algorithm was selected instead of ring."
+        explanation: "Algorithm choice is a separate decision and is not shown by these lines."
+      - id: d
+        text: "The GPUs are connected by PCIe instead of NVLink."
+        explanation: "Intra-node topology does not determine the inter-node network transport."
+    tags: [nccl-debugging, containers]
+
+  - id: q40
+    domain: collectives
+    type: scenario
+    prompt: "A 512-node job spends most of its communication time in small all-reduces (a few KB each). Which NCCL algorithm property matters most, and which algorithm usually benefits?"
+    options:
+      - id: a
+        text: "Latency; tree-based algorithms scale latency roughly with log(n) instead of linearly like a ring."
+        correct: true
+        explanation: "Small messages are latency-bound. A ring needs 2(n-1) steps, so latency grows with n; trees (and in-network reduction where available) keep it low at scale."
+      - id: b
+        text: "Bandwidth; the ring is always best because it is bandwidth-optimal."
+        explanation: "Bandwidth optimality matters for large messages; for small ones, the ring's step count dominates."
+      - id: c
+        text: "Memory usage; the ring uses less GPU memory, so it is always faster."
+        explanation: "Memory footprint is not what determines small-message all-reduce time."
+      - id: d
+        text: "MTU size; small all-reduces need 9000-byte MTU to use the tree algorithm."
+        explanation: "Algorithm selection does not depend on MTU."
+    tags: [collective-algorithms, ring, tree]
+
+  - id: q41
+    domain: collectives
+    type: scenario
+    prompt: "A multi-node job hangs during NCCL initialization. The hosts have interfaces eth0 (cluster network), docker0 and lo. Logs show NCCL bootstrapping over 172.17.0.1. What is the appropriate fix?"
+    options:
+      - id: a
+        text: "Set NCCL_SOCKET_IFNAME=eth0 (or exclude with NCCL_SOCKET_IFNAME=^docker0,lo)."
+        correct: true
+        explanation: "NCCL picked the Docker bridge address, which other hosts cannot reach. NCCL_SOCKET_IFNAME selects the interfaces for bootstrap and socket traffic; a leading ^ excludes interfaces."
+      - id: b
+        text: "Set NCCL_IB_HCA=docker0."
+        explanation: "NCCL_IB_HCA selects RDMA devices, and docker0 is not one."
+      - id: c
+        text: "Set NCCL_ALGO=Tree."
+        explanation: "The algorithm is irrelevant to which interface the bootstrap uses."
+      - id: d
+        text: "Set NCCL_NET_GDR_LEVEL=SYS."
+        explanation: "This controls GPUDirect RDMA use, not interface selection."
+    tags: [nccl-configuration, bootstrap]
+
+  - id: q42
+    domain: collectives
+    type: multi
+    prompt: "On a RoCE cluster, which NCCL environment variables help make sure NCCL uses the right devices, GID and traffic class? (Select all that apply.)"
+    options:
+      - id: a
+        text: "NCCL_IB_HCA"
+        correct: true
+        explanation: "Selects which RDMA devices (and optionally ports) NCCL uses."
+      - id: b
+        text: "NCCL_IB_GID_INDEX"
+        correct: true
+        explanation: "Selects the GID index, for example the RoCEv2 IPv4 GID."
+      - id: c
+        text: "NCCL_IB_TC"
+        correct: true
+        explanation: "Sets the traffic class, which on RoCE maps to DSCP/ECN so switches classify the traffic into the lossless queue."
+      - id: d
+        text: "NCCL_ALGO"
+        explanation: "Selects collective algorithms (ring, tree and others); it does not affect device, GID or QoS marking."
+    tags: [nccl-configuration, roce]
+
+  - id: q43
+    domain: collectives
+    type: scenario
+    prompt: "A 64-node ring all-reduce benchmark drops from its usual busbw to roughly half. All nodes look healthy except one NIC, which shows it has negotiated 200G instead of 400G. Why does one slow link affect the whole job so much?"
+    options:
+      - id: a
+        text: "A ring moves at the pace of its slowest link, so every rank waits on the degraded hop at each step."
+        correct: true
+        explanation: "Collectives are synchronous: each step needs data from the neighbor, so one half-speed link throttles the whole ring."
+      - id: b
+        text: "NCCL lowers every NIC's speed to match the slowest one through auto-negotiation."
+        explanation: "NCCL does not change link speeds; the other links stay at 400G but idle part of the time."
+      - id: c
+        text: "The degraded NIC sends PFC pauses to every other host in the cluster."
+        explanation: "PFC is per-hop and would not explain a clean halving across the job."
+      - id: d
+        text: "The other 63 nodes switch to the tree algorithm automatically."
+        explanation: "NCCL does not change algorithm in reaction to one slow link."
+    tags: [stragglers, ring]
+
+  - id: q44
+    domain: collectives
+    type: single
+    prompt: "What does NCCL_NET_GDR_LEVEL control?"
+    options:
+      - id: a
+        text: "The maximum topological distance between GPU and NIC at which NCCL still uses GPUDirect RDMA."
+        correct: true
+        explanation: "Values such as PIX, PXB, PHB or SYS set the threshold; beyond it, NCCL stages data through host memory."
+      - id: b
+        text: "The debug log verbosity of the network layer."
+        explanation: "Logging is controlled by NCCL_DEBUG and NCCL_DEBUG_SUBSYS."
+      - id: c
+        text: "The RoCE traffic class used for GPU traffic."
+        explanation: "That is NCCL_IB_TC."
+      - id: d
+        text: "The number of NVLink connections used per GPU."
+        explanation: "No such limit is set by this variable; it governs the NIC-GPU path."
+    tags: [nccl-configuration, gpudirect]
+
+  # ---------------- ops (6) ----------------
+  - id: q45
+    domain: ops
+    type: scenario
+    prompt: |
+      An IB link to one compute node is checked twice, 10 minutes apart (illustrative perfquery excerpts):
+
+        first:   SymbolErrorCounter: 12      LinkDownedCounter: 1
+        second:  SymbolErrorCounter: 4,817   LinkDownedCounter: 3
+
+      What is the right next step?
+    options:
+      - id: a
+        text: "Treat it as a physical-layer fault: check the link with mlxlink and reseat or replace the cable or transceiver."
+        correct: true
+        explanation: "Rapidly rising symbol errors and repeated link-down events point at the cable, optic or connector. Drain the node, inspect, reseat, and replace if errors continue."
+      - id: b
+        text: "Restart the subnet manager to reset the counters."
+        explanation: "Resetting counters hides the evidence; the SM is not the cause of symbol errors."
+      - id: c
+        text: "Increase the number of VLs to spread the errors."
+        explanation: "Virtual lanes do not affect bit errors on the wire."
+      - id: d
+        text: "Ignore it, because FEC corrects all symbol errors."
+        explanation: "Link-down events show that errors are already disrupting traffic."
+    tags: [ber, infiniband, cables]
+
+  - id: q46
+    domain: ops
+    type: scenario
+    prompt: "mlxlink on a 400G Ethernet link shows a non-zero, slowly rising pre-FEC BER that is within the vendor's acceptable range, and zero uncorrectable FEC blocks. What is the most reasonable action?"
+    options:
+      - id: a
+        text: "Keep the link in service, record the baseline and alert if pre-FEC BER rises toward the vendor threshold."
+        correct: true
+        explanation: "High-speed PAM4 links always have some pre-FEC errors; FEC corrects them. The trend matters. Check your vendor's thresholds, which vary by generation and optics."
+      - id: b
+        text: "Replace the transceiver immediately, because any pre-FEC error is a failure."
+        explanation: "Non-zero pre-FEC BER is normal on PAM4 links; replacing every such optic is wasteful."
+      - id: c
+        text: "Disable FEC to see the real errors."
+        explanation: "At 400G PAM4 speeds the link depends on FEC; disabling it would cause heavy loss."
+      - id: d
+        text: "Reduce the MTU to make frames less likely to hit errors."
+        explanation: "This does not address the physical layer and reduces efficiency."
+    tags: [ber, fec, mlxlink]
+
+  - id: q47
+    domain: ops
+    type: scenario
+    prompt: "A 256-node job runs 15% slower than last week. No node reports errors. What is an efficient way to find a possible straggler node?"
+    options:
+      - id: a
+        text: "Run nccl-tests on subsets (halves, then quarters, or pairwise) and compare busbw to isolate the node or link."
+        correct: true
+        explanation: "Bisecting with known benchmarks quickly finds the subset whose performance is off, then the node or link inside it."
+      - id: b
+        text: "Reboot all 256 nodes and rerun the job."
+        explanation: "This wastes time, may hide the problem, and gives no information about the cause."
+      - id: c
+        text: "Raise NCCL_DEBUG to TRACE on all nodes and read every log line."
+        explanation: "TRACE output at this scale is huge and usually does not point at a slow node directly."
+      - id: d
+        text: "Lower the learning rate so the job needs fewer steps."
+        explanation: "This changes model training, not network performance."
+    tags: [stragglers, nccl-tests]
+
+  - id: q48
+    domain: ops
+    type: multi
+    prompt: "Which steps belong in a burn-in and acceptance process for a new AI fabric before users get access? (Select all that apply.)"
+    options:
+      - id: a
+        text: "Validate cabling against the design (for example with LLDP or ibnetdiscover)."
+        correct: true
+        explanation: "Miscabling is common in large builds and breaks rail alignment and routing assumptions."
+      - id: b
+        text: "Soak links and check error counters and BER over time."
+        correct: true
+        explanation: "Marginal optics often show errors only under sustained load and temperature."
+      - id: c
+        text: "Run perftest per link and nccl-tests at increasing scale against baselines."
+        correct: true
+        explanation: "This verifies per-link performance and the collective performance the users will depend on."
+      - id: d
+        text: "Skip tests on links that report link up, since link up proves they are healthy."
+        explanation: "A link can be up with errors, a degraded speed or a wrong peer."
+    tags: [burn-in, validation]
+
+  - id: q49
+    domain: ops
+    type: scenario
+    prompt: "A monitoring system polls switch interface counters every 5 minutes. Users report short performance dips during collectives, but the graphs show average utilization below 40%. What is the best improvement?"
+    options:
+      - id: a
+        text: "Use streaming telemetry at a much finer interval and add queue or buffer occupancy data to see microbursts."
+        correct: true
+        explanation: "Collective bursts last milliseconds to seconds; 5-minute averages hide them. Higher-frequency streaming (for example gNMI) and buffer statistics reveal congestion."
+      - id: b
+        text: "Increase the polling interval to 15 minutes to smooth the graphs."
+        explanation: "Longer intervals hide bursts even more."
+      - id: c
+        text: "Conclude that the network is not the cause because utilization is below 40%."
+        explanation: "Low average utilization says nothing about short bursts that fill queues."
+      - id: d
+        text: "Disable ECN so the counters are easier to interpret."
+        explanation: "Removing congestion control makes performance worse and does not improve visibility."
+    tags: [telemetry, microbursts]
+
+  - id: q50
+    domain: ops
+    type: scenario
+    prompt: |
+      A RoCE host shows drops during an all-to-all, while the switch reports no pause frames received from this host. Host data (illustrative):
+
+        $ ethtool -S ens1f0np0 | grep -E 'rx_discards_phy|tx_prio3_pause'
+             rx_discards_phy: 92,113
+             tx_prio3_pause: 0
+        $ mlnx_qos -i ens1f0np0 | grep -A2 'PFC configuration'
+        PFC configuration:
+                priority    0   1   2   3   4   5   6   7
+                enabled     0   0   0   0   0   0   0   0
+
+      What is the fix?
+    options:
+      - id: a
+        text: "Enable PFC for priority 3 on the host (for example mlnx_qos -i ens1f0np0 --pfc 0,0,0,1,0,0,0,0) to match the switch."
+        correct: true
+        explanation: "With PFC disabled on the host, the NIC drops when its buffer fills instead of pausing the switch. Enabling PFC on the RoCE priority restores lossless behavior."
+      - id: b
+        text: "Disable PFC on the switch port so both sides match."
+        explanation: "That makes the whole path lossy, which is the opposite of what RoCE needs here."
+      - id: c
+        text: "Increase the ECN marking threshold on the switch."
+        explanation: "Marking later makes congestion worse and does not fix the host's missing PFC."
+      - id: d
+        text: "Change the RoCE GID index on both hosts."
+        explanation: "The connection works; the drops come from the host's missing flow control."
+    tags: [pfc, mlnx_qos, drops]

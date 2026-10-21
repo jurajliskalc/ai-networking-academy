@@ -1,0 +1,169 @@
+id: quiz-lossless-misconfigurations
+title: "Knowledge check: lossless Ethernet misconfigurations"
+lesson: lossless-misconfigurations
+pass_pct: 70
+questions:
+  - id: q1
+    type: scenario
+    prompt: >
+      During an all-to-all test, a host's 60-second ethtool -S deltas show tx_prio0_bytes of
+      1.3 TB and tx_prio3_bytes of a few kilobytes. The fabric is routed and untagged and the switches
+      trust DSCP. What is the most likely cause?
+    options:
+      - id: a
+        text: The NIC is in PCP trust mode, or the RDMA traffic class is not being set, so RoCE leaves on priority 0.
+        correct: true
+        explanation: On an untagged fabric there is no PCP; without DSCP trust and a correct traffic class RoCE falls into the default, lossy priority.
+      - id: b
+        text: PFC is enabled on priority 0 by mistake.
+        explanation: PFC configuration does not change which priority traffic is transmitted on; classification does.
+      - id: c
+        text: ECN is disabled on the switch RoCE queue.
+        explanation: ECN settings do not move traffic between priorities on the host.
+      - id: d
+        text: The MTU is too small on the host.
+        explanation: MTU affects packet size, not priority classification.
+    tags: [trust, classification]
+  - id: q2
+    type: scenario
+    prompt: >
+      A leaf port shows TC 3 (RoCE) with heavy drops, zero PFC pause transmitted on priority 3, and
+      steady PFC pause counters on priority 4. Host per-priority counters confirm RoCE is on priority
+      3. What is wrong?
+    options:
+      - id: a
+        text: PFC is enabled on priority 4 instead of 3 somewhere in the path.
+        correct: true
+        explanation: The RoCE queue cannot pause its sender and tail-drops, while an almost unused priority is protected.
+      - id: b
+        text: Headroom on priority 3 is too small.
+        explanation: Insufficient headroom shows drops while pause is being sent on the same priority; here no pause is sent on 3 at all.
+      - id: c
+        text: The CNP DSCP is mapped to the wrong queue.
+        explanation: CNP placement affects DCQCN reaction time, not whether PFC is active on the RoCE priority.
+      - id: d
+        text: Link CRC errors are being counted as drops.
+        explanation: CRC drops would not correlate with PFC being configured on another priority, and would show in error counters.
+    tags: [pfc]
+  - id: q3
+    type: single
+    prompt: RoCE data should use DSCP 26 with ECT(0) set. What value of NCCL_IB_TC (the full 8-bit traffic class) achieves this?
+    options:
+      - id: a
+        text: "106"
+        correct: true
+        explanation: ToS = DSCP x 4 + ECN bits = 26 x 4 + 2 = 106.
+      - id: b
+        text: "26"
+        explanation: As a full ToS byte, 26 means DSCP 6 with ECN bits 10 (ECT(0)); the DSCP is wrong.
+      - id: c
+        text: "104"
+        explanation: DSCP 26 with ECN bits 00 (Not-ECT). It selects the right DSCP but does not meet the ECT(0) requirement in the question; some NICs set ECT themselves when congestion control is enabled, so check your vendor guide.
+      - id: d
+        text: "3"
+        explanation: 3 is the priority, not a ToS value.
+    tags: [dscp, nccl]
+  - id: q4
+    type: scenario
+    prompt: >
+      ib_write_bw with -s 1024 succeeds between two hosts, but full-size transfers stall and the
+      sender eventually reports transport retry errors. Both hosts have netdev MTU 9000 and
+      active_mtu 4096. One spine in the path was recently replaced. What do you check first?
+    options:
+      - id: a
+        text: The MTU on the replacement spine's ports, and their oversize or MTU-exceeded discard counters.
+        correct: true
+        explanation: Small packets passing while full-size 4096-byte payloads fail is the classic MTU signature, and a replaced device is a likely place for a default MTU.
+      - id: b
+        text: The GID index on both hosts.
+        explanation: A wrong GID index usually prevents the connection from working at all, regardless of size.
+      - id: c
+        text: The ECN marking thresholds on the leaves.
+        explanation: ECN thresholds influence congestion response, not whether large packets are delivered.
+      - id: d
+        text: The CNP priority mapping.
+        explanation: CNP mapping does not cause size-dependent failure.
+    tags: [mtu]
+  - id: q5
+    type: scenario
+    prompt: >
+      Under incast load, the RoCE queue on a leaf shows high occupancy and many PFC frames. On the
+      receiving hosts np_ecn_marked_roce_packets and np_cnp_sent are both zero, and senders show
+      rp_cnp_handled of zero. What is the most likely misconfiguration?
+    options:
+      - id: a
+        text: ECN marking is disabled or configured on a different queue on the switch.
+        correct: true
+        explanation: Receivers see no CE-marked packets at all, so the problem is upstream of the NIC. PFC is the only brake.
+      - id: b
+        text: The receiving NIC has its notification point disabled.
+        explanation: Then np_ecn_marked_roce_packets would still rise while np_cnp_sent stayed at zero.
+      - id: c
+        text: CNPs are being dropped in a lossy queue.
+        explanation: No CNPs are sent in the first place, so their path is not yet the issue.
+      - id: d
+        text: PFC is disabled on the RoCE priority.
+        explanation: PFC is clearly active; it is the only mechanism working.
+    tags: [ecn, dcqcn]
+  - id: q6
+    type: scenario
+    prompt: >
+      Receivers show np_cnp_sent rising steadily under congestion, but senders show rp_cnp_handled
+      near zero. Switch counters show drops in the default (TC 0) queue on spine uplinks.
+      What is the best next step?
+    options:
+      - id: a
+        text: Check the DSCP and queue used by CNPs on every hop and map them to a high-priority queue.
+        correct: true
+        explanation: CNPs are generated but not arriving; drops in the default queue suggest CNPs travel there and are lost or delayed.
+      - id: b
+        text: Lower the ECN marking threshold on the RoCE queue.
+        explanation: Marking already works; the reverse path for CNPs is the problem.
+      - id: c
+        text: Enable PFC on priority 0.
+        explanation: Making the default class lossless risks spreading pause to all traffic and does not fix CNP classification.
+      - id: d
+        text: Raise the RDMA path MTU.
+        explanation: CNPs are tiny; MTU is unrelated.
+    tags: [cnp, dcqcn]
+  - id: q7
+    type: scenario
+    prompt: >
+      After a new long-distance spine link was added, its ingress port drops packets on the lossless
+      RoCE priority while actively sending PFC pause on that same priority. Drop-reason telemetry
+      reports a buffer reason. What is the likely cause?
+    options:
+      - id: a
+        text: PFC headroom sized for short cables is too small for the longer link's round-trip in-flight data.
+        correct: true
+        explanation: Headroom must absorb bytes in flight after XOFF; longer cables need more. Drops while pausing are the signature.
+      - id: b
+        text: PFC is enabled on the wrong priority.
+        explanation: Pause is being sent on the correct priority, so PFC priority is right.
+      - id: c
+        text: The NIC trust mode is PCP.
+        explanation: Classification is correct since traffic is in the lossless class; the issue is buffering.
+      - id: d
+        text: ECN is disabled on the hosts.
+        explanation: Host ECN settings do not cause ingress buffer overflow during pause on a switch.
+    tags: [headroom, pfc]
+  - id: q8
+    type: multi
+    prompt: Which checks should a lossless-fabric acceptance test include to catch misconfigurations that idle point-to-point tests miss? (Select all that apply.)
+    options:
+      - id: a
+        text: An incast or all-to-all test while watching PFC, ECN and CNP counters.
+        correct: true
+        explanation: Only congestion exercises PFC, ECN marking and CNP paths.
+      - id: b
+        text: Full-size RDMA transfers across every path, not just small messages.
+        correct: true
+        explanation: Small messages never expose an MTU gap on one hop.
+      - id: c
+        text: A diff of every switch's live QoS config against the intended template.
+        correct: true
+        explanation: Partial rollouts affect only some paths and look random under ECMP.
+      - id: d
+        text: A single ib_write_bw run between two idle hosts on the same leaf.
+        explanation: It touches one hop and never creates congestion; it would pass with most misconfigurations present.
+    tags: [acceptance, verification]

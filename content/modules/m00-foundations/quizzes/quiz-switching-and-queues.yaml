@@ -1,0 +1,137 @@
+id: quiz-switching-and-queues
+title: "Knowledge check: switching, buffers and queues"
+lesson: switching-and-queues
+pass_pct: 70
+questions:
+  - id: q1
+    type: single
+    prompt: What does an Ethernet switch do with a frame whose destination MAC address is not in its MAC table?
+    options:
+      - id: a
+        text: Floods it out of every other port in the same VLAN.
+        correct: true
+        explanation: Unknown unicast is flooded so the destination can receive it, and the reply teaches the switch where it lives.
+      - id: b
+        text: Drops it and sends an ICMP error.
+        explanation: L2 switches do not generate ICMP, and dropping unknown unicast would break first contact between hosts.
+      - id: c
+        text: Sends it back out of the port it arrived on.
+        explanation: Switches never forward a frame back to its ingress port.
+      - id: d
+        text: Queues it until the address is learned.
+        explanation: Switches do not hold frames waiting for learning; they flood immediately.
+    tags: [switching]
+  - id: q2
+    type: single
+    prompt: A 400 Gb/s egress port has 1 MB queued ahead of a newly arrived packet. Roughly how long will that packet wait?
+    options:
+      - id: a
+        text: About 20 microseconds.
+        correct: true
+        explanation: 1e6 bytes x 8 = 8e6 bits; 8e6 / 400e9 = 20e-6 s.
+      - id: b
+        text: About 20 nanoseconds.
+        explanation: That is three orders of magnitude too small.
+      - id: c
+        text: About 2.5 milliseconds.
+        explanation: That would be the delay at roughly 3.2 Gb/s, not 400 Gb/s.
+      - id: d
+        text: It does not wait, because cut-through switching skips the queue.
+        explanation: Cut-through only helps when the egress port is idle; a queued packet waits regardless.
+    tags: [queueing, latency]
+  - id: q3
+    type: scenario
+    prompt: >
+      Eight senders each transmit at 400 Gb/s to one receiver behind a single 400 Gb/s leaf port. The port's queue
+      may use 2 MB of buffer. Approximately how long until the queue is full if nothing slows the senders?
+    options:
+      - id: a
+        text: About 6 microseconds.
+        correct: true
+        explanation: Excess arrival is 2.8 Tb/s = 350 MB/ms = 0.35 MB/us; 2 MB / 0.35 MB/us is about 6 us.
+      - id: b
+        text: About 6 milliseconds.
+        explanation: That is a thousand times too long; at these rates buffers fill in microseconds.
+      - id: c
+        text: Never, because the shared buffer grows as needed.
+        explanation: Shared buffers have finite size and per-queue limits.
+      - id: d
+        text: About 6 seconds.
+        explanation: This vastly underestimates the excess rate of 2.8 Tb/s.
+    tags: [incast, buffers]
+  - id: q4
+    type: multi
+    prompt: Which are possible switch responses to a congested queue? Select all that apply.
+    options:
+      - id: a
+        text: Tail-drop arriving packets once the queue limit is reached.
+        correct: true
+        explanation: The default behaviour of a lossy queue.
+      - id: b
+        text: Set the ECN field to Congestion Experienced on packets once a threshold is passed.
+        correct: true
+        explanation: ECN signals congestion without dropping; the receiver echoes it to the sender.
+      - id: c
+        text: Send PFC pause frames upstream for the affected priority.
+        correct: true
+        explanation: PFC makes a priority lossless by stopping the upstream sender.
+      - id: d
+        text: Increase the egress link speed temporarily.
+        explanation: Link speed is fixed by the PHY; a switch cannot speed up a link on demand.
+    tags: [ecn, pfc, drop]
+  - id: q5
+    type: single
+    prompt: Which scheduling choice is most appropriate for congestion notification packets (CNPs) in a RoCE fabric?
+    options:
+      - id: a
+        text: Strict priority, because CNPs are small, rare and latency-critical.
+        correct: true
+        explanation: Strict priority suits small control traffic; it would starve others if used for bulk data.
+      - id: b
+        text: The same queue as RDMA data with equal weight.
+        explanation: CNPs would then wait behind the very congestion they are reporting.
+      - id: c
+        text: The lowest-weight best-effort queue.
+        explanation: Delayed CNPs mean senders slow down late, making congestion worse.
+      - id: d
+        text: Drop them, since the receiver can infer congestion from latency.
+        explanation: DCQCN depends on CNPs actually arriving at the sender.
+    tags: [scheduling, ets]
+  - id: q6
+    type: scenario
+    prompt: >
+      A host's NIC shows rx_prio3_pause increasing by tens of thousands per second, tx_prio3_pause at zero, and no
+      discards. What is the correct reading?
+    options:
+      - id: a
+        text: The switch is repeatedly pausing this host's transmissions on priority 3 because a queue downstream is congested.
+        correct: true
+        explanation: Received pauses come from the neighbour (the switch) and mean it wants this host to stop sending that priority.
+      - id: b
+        text: The host is congested and pausing the switch.
+        explanation: That would show up as transmitted pause frames, which are zero here.
+      - id: c
+        text: The link is dropping packets on priority 3.
+        explanation: Pauses prevent drops; the discard counter is zero.
+      - id: d
+        text: The counters show a cabling fault.
+        explanation: Pause frames are a congestion mechanism, not a physical-layer error.
+    tags: [pfc, counters]
+  - id: q7
+    type: single
+    prompt: Why is PFC said to cause head-of-line blocking across links?
+    options:
+      - id: a
+        text: Pausing a priority on a link stops every flow of that priority on that link, including flows headed to uncongested destinations.
+        correct: true
+        explanation: PFC acts per priority per link, not per flow, so innocent flows are blocked too.
+      - id: b
+        text: PFC reorders packets so that the head of the queue is sent last.
+        explanation: PFC does not reorder packets; it stops and resumes transmission.
+      - id: c
+        text: PFC drops the packet at the head of the queue.
+        explanation: PFC exists precisely to avoid drops.
+      - id: d
+        text: PFC only works on the first packet of each flow.
+        explanation: PFC pauses all traffic of a priority, not individual packets.
+    tags: [pfc, hol-blocking]

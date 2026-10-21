@@ -1,0 +1,140 @@
+id: nccl
+title: NCCL tests and environment variables
+description: The nccl-tests benchmark binaries with their common flags, how to launch them across nodes, and the NCCL environment variables used most often when tuning and debugging; example output is illustrative.
+commands:
+  - cmd: ./build/all_reduce_perf -b 8 -e 8G -f 2 -g 8
+    platform: nccl
+    summary: Benchmark all-reduce on 8 GPUs in one process, sweeping message size from 8 bytes to 8 GB, doubling each step.
+    example: |
+      #       size         count      type   redop    root     time   algbw   busbw #wrong     time   algbw   busbw #wrong
+      #        (B)    (elements)                               (us)  (GB/s)  (GB/s)            (us)  (GB/s)  (GB/s)
+        8589934592    2147483648     float     sum      -1    xxxxx  xxx.xx  xxx.xx      0    xxxxx  xxx.xx  xxx.xx      0
+      # Avg bus bandwidth    : xxx.xx
+    notes: "Flags: -b min bytes, -e max bytes, -f multiplication factor between sizes (or -i fixed increment), -g GPUs per thread, -t threads per process, -n timed iterations, -w warm-up iterations, -c 1/0 enables/disables result checking, -d data type, -o reduction op. Compare busbw (not algbw) at large sizes against the fabric's expected per-GPU bandwidth, and #wrong must be 0. Output is illustrative."
+    tags: [nccl-tests, allreduce, benchmark]
+
+  - cmd: mpirun -np 16 -N 8 -x NCCL_DEBUG=INFO ./build/all_reduce_perf -b 1M -e 4G -f 2 -g 1
+    platform: nccl
+    summary: Run all-reduce across 2 nodes with Open MPI, one process per GPU (16 ranks, 8 per node), exporting an NCCL variable to every rank.
+    notes: "-np total ranks, -N ranks per node and -x exports an environment variable are Open MPI options; other launchers (Slurm srun, other MPI implementations) spell these differently. nccl-tests must be built with MPI support (make MPI=1) for multi-node runs. Add a hostfile or --host list for your nodes."
+    tags: [nccl-tests, mpi, multi-node]
+
+  - cmd: ./build/all_gather_perf -b 8 -e 4G -f 2 -g 8
+    platform: nccl
+    summary: Benchmark all-gather (every rank ends with the concatenation of all ranks' buffers).
+    notes: All-gather and reduce-scatter are the building blocks of sharded data parallelism (FSDP/ZeRO). The reported busbw already applies the (n-1)/n correction so it is comparable to the link speed.
+    tags: [nccl-tests, allgather, benchmark]
+
+  - cmd: ./build/reduce_scatter_perf -b 8 -e 4G -f 2 -g 8
+    platform: nccl
+    summary: Benchmark reduce-scatter (reduce across ranks, each rank keeps one shard of the result).
+    tags: [nccl-tests, reducescatter, benchmark]
+
+  - cmd: ./build/alltoall_perf -b 8 -e 1G -f 2 -g 8
+    platform: nccl
+    summary: Benchmark all-to-all, the traffic pattern of mixture-of-experts expert parallelism.
+    notes: All-to-all stresses the bisection of the fabric and is far more sensitive to ECMP collisions and oversubscription than ring all-reduce. Expect lower busbw than all-reduce on the same fabric.
+    tags: [nccl-tests, alltoall, moe, benchmark]
+
+  - cmd: ./build/broadcast_perf -b 8 -e 1G -f 2 -g 8
+    platform: nccl
+    summary: Benchmark broadcast from a root rank to all other ranks (use -r to choose the root).
+    tags: [nccl-tests, broadcast, benchmark]
+
+  - cmd: ./build/sendrecv_perf -b 8 -e 1G -f 2 -g 8
+    platform: nccl
+    summary: Benchmark point-to-point send/receive between rank pairs, the pattern used by pipeline parallelism.
+    notes: Useful to isolate one pair of nodes or one rail when a collective is slow.
+    tags: [nccl-tests, p2p, pipeline, benchmark]
+
+  - cmd: NCCL_DEBUG=INFO
+    platform: nccl
+    summary: Make NCCL log its version, the network plugin and transport chosen, the NICs it uses and the rings/trees it builds (other levels include WARN and TRACE).
+    example: |
+      node1:1234:1234 [0] NCCL INFO NCCL version 2.x.x+cuda12.x
+      node1:1234:1250 [0] NCCL INFO NET/IB : Using [0]mlx5_0:1/RoCE [1]mlx5_1:1/RoCE ...
+      node1:1234:1250 [0] NCCL INFO Channel 00/16 :    0   1   2   3 ...
+    notes: The first variable to set when a job is slow or hangs. Check that NET/IB (not NET/Socket) is used and that the expected NICs are listed. TRACE needs a build with tracing enabled. Output is illustrative.
+    tags: [nccl, env, debug]
+
+  - cmd: NCCL_DEBUG_SUBSYS=INIT,NET,GRAPH
+    platform: nccl
+    summary: Restrict (or extend) INFO logging to chosen subsystems, for example INIT, NET, GRAPH, TUNING, COLL, P2P, ENV or ALL.
+    notes: GRAPH shows the topology search result, NET the network transport decisions. Check the NCCL environment variable documentation for the subsystem list of your version.
+    tags: [nccl, env, debug]
+
+  - cmd: NCCL_DEBUG_FILE=/tmp/nccl.%h.%p.log
+    platform: nccl
+    summary: Write NCCL debug output to a per-host, per-process file instead of stdout (%h = hostname, %p = PID).
+    tags: [nccl, env, debug]
+
+  - cmd: NCCL_IB_HCA=mlx5_0,mlx5_1,mlx5_2,mlx5_3
+    platform: nccl
+    summary: Choose which RDMA devices (and optionally ports, as mlx5_0:1) NCCL may use; a leading ^ excludes devices and a leading = forces exact name matching.
+    notes: Without the = prefix the names are prefix matches, so mlx5_1 also matches mlx5_10 and up. Typical use is excluding a storage or front-end NIC from the compute rails.
+    tags: [nccl, env, nic-selection]
+
+  - cmd: NCCL_SOCKET_IFNAME=eth0
+    platform: nccl
+    summary: Select the IP interface NCCL uses for its bootstrap (out-of-band) connections and for the socket transport; a ^ prefix excludes interfaces.
+    notes: Point it at a routable management or front-end interface. A wrong value (for example docker0 or a link-local interface) is a classic cause of hangs during init.
+    tags: [nccl, env, bootstrap]
+
+  - cmd: NCCL_IB_GID_INDEX=3
+    platform: nccl
+    summary: Select the GID table index NCCL uses on RoCE ports, which determines RoCE v1 vs v2 and IPv4 vs IPv6 addressing.
+    notes: The right index is whatever the RoCE v2 IPv4 (or IPv6) entry is on your hosts - check with show_gids or the sysfs GID tables. Index 3 is common on default ConnectX setups but is not guaranteed. Recent NCCL versions can select a GID automatically; check your version's documentation.
+    tags: [nccl, env, roce, gid]
+
+  - cmd: NCCL_IB_TC=106
+    platform: nccl
+    summary: Set the IP traffic class byte NCCL places on its RoCE packets; the DSCP is the upper six bits (106 = DSCP 26 with ECN bits 10).
+    notes: Must match the DSCP your switches map to the lossless (PFC/ECN) queue. Some deployments instead set the default via the NIC (cma_roce_tos or the device's traffic class setting); pick one and verify with a packet capture or switch queue counters.
+    tags: [nccl, env, roce, qos, dscp]
+
+  - cmd: NCCL_IB_SL=3
+    platform: nccl
+    summary: Set the InfiniBand service level NCCL uses on its connections (maps to a virtual lane on IB fabrics).
+    tags: [nccl, env, infiniband, qos]
+
+  - cmd: NCCL_NET_GDR_LEVEL=PHB
+    platform: nccl
+    summary: Set the maximum GPU-to-NIC topological distance at which NCCL uses GPUDirect RDMA (LOC, PIX, PXB, PHB, SYS).
+    notes: If the NIC is farther than this level, NCCL stages through host memory, which costs bandwidth and CPU. Normally leave it at default and fix the topology instead; use it to test whether GDR is the cause of a problem.
+    tags: [nccl, env, gpudirect, topology]
+
+  - cmd: NCCL_ALGO=Ring
+    platform: nccl
+    summary: Restrict NCCL to a set of collective algorithms (for example Ring, Tree, CollnetDirect, CollnetChain, NVLS, NVLSTree).
+    notes: A debugging and benchmarking knob - compare Ring vs Tree to see whether a problem is algorithm-specific. Leaving it unset lets NCCL's tuner pick per message size. Available names depend on NCCL version and hardware.
+    tags: [nccl, env, tuning, algorithm]
+
+  - cmd: NCCL_PROTO=Simple
+    platform: nccl
+    summary: Restrict NCCL to a set of protocols (LL, LL128, Simple).
+    notes: LL and LL128 trade bandwidth for latency at small sizes; Simple gives peak bandwidth at large sizes. Forcing a protocol is for diagnosis; LL128 in particular is only enabled by default on platforms where NCCL considers it safe.
+    tags: [nccl, env, tuning, protocol]
+
+  - cmd: NCCL_TOPO_DUMP_FILE=/tmp/nccl_topo.xml
+    platform: nccl
+    summary: Dump the system topology NCCL detected (GPUs, NICs, PCIe switches, NVLinks, CPUs) to an XML file.
+    notes: Compare the dump with nvidia-smi topo -m. Wrong PCIe paths or missing NICs in the XML explain bad ring/tree choices; virtualized hosts often need a corrected topology file (NCCL_TOPO_FILE).
+    tags: [nccl, env, topology, debug]
+
+  - cmd: NCCL_IB_QPS_PER_CONNECTION=4
+    platform: nccl
+    summary: Use several queue pairs per connection between two ranks, spreading traffic over more flows (more ECMP entropy on RoCE fabrics).
+    notes: Helps with flow collisions on static-ECMP fabrics at the cost of more QPs and memory. Measure with nccl-tests before and after; the best value depends on fabric and scale.
+    tags: [nccl, env, ecmp, roce, tuning]
+
+  - cmd: NCCL_CROSS_NIC=0
+    platform: nccl
+    summary: Control whether a ring/tree may leave a node on one NIC and arrive on a different NIC (rail) on the next node (0 = keep each channel on the same rail, 1 = allow crossing, 2 = default, decided by NCCL).
+    notes: On rail-optimized fabrics keeping traffic on the same rail avoids crossing the spine layer. Check the meaning of each value in the documentation for your NCCL version.
+    tags: [nccl, env, rail, topology]
+
+  - cmd: NCCL_P2P_LEVEL=NVL
+    platform: nccl
+    summary: Set the maximum topological distance at which NCCL uses direct GPU peer-to-peer transport inside a node (for example LOC, NVL, PIX, PXB, PHB, SYS).
+    notes: Mostly used to disable P2P over problematic PCIe paths (some virtualized or ACS-enabled systems) while debugging intra-node hangs or corruption.
+    tags: [nccl, env, p2p, intra-node]

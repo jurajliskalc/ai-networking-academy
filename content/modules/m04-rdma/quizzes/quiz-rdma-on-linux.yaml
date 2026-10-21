@@ -1,0 +1,147 @@
+id: quiz-rdma-on-linux
+title: "Knowledge check: RDMA on Linux"
+lesson: rdma-on-linux
+pass_pct: 70
+questions:
+  - id: q1
+    type: single
+    prompt: In ibv_devinfo output, which field tells you whether a port is InfiniBand or RoCE (Ethernet)?
+    options:
+      - id: a
+        text: link_layer
+        correct: true
+        explanation: link_layer reads InfiniBand or Ethernet.
+      - id: b
+        text: transport
+        explanation: transport describes the verbs transport and shows InfiniBand for RoCE devices too.
+      - id: c
+        text: vendor_id
+        explanation: vendor_id identifies the manufacturer, not the link type.
+      - id: d
+        text: phys_port_cnt
+        explanation: This is only the number of ports.
+    tags: [ibv_devinfo]
+  - id: q2
+    type: single
+    prompt: Which kernel module provides the device files that user-space verbs applications open (/dev/infiniband/uverbsN)?
+    options:
+      - id: a
+        text: ib_uverbs
+        correct: true
+        explanation: ib_uverbs exposes the verbs control path to user space.
+      - id: b
+        text: rdma_rxe
+        explanation: rdma_rxe is the Soft-RoCE driver, an RDMA device implementation, not the user-space interface.
+      - id: c
+        text: ib_umad
+        explanation: ib_umad provides /dev/infiniband/umadN for management datagrams.
+      - id: d
+        text: mlx5_core
+        explanation: mlx5_core is the ConnectX core/Ethernet driver; RDMA is added by mlx5_ib.
+    tags: [kernel, stack]
+  - id: q3
+    type: multi
+    prompt: Which statements about the RoCE GID table are true? (Select all that apply.)
+    options:
+      - id: a
+        text: Entries are created from IP addresses on the associated netdev, typically one RoCE v1 and one RoCE v2 entry per address.
+        correct: true
+        explanation: The kernel populates the table from the netdev and its VLAN interfaces.
+      - id: b
+        text: The GID index chosen by a QP selects RoCE version, source IP and VLAN.
+        correct: true
+        explanation: That is why choosing the wrong index breaks connectivity.
+      - id: c
+        text: Index 3 is guaranteed by the RoCE standard to be RoCEv2 IPv4.
+        explanation: It is common but not guaranteed; indexes shift as addresses change.
+      - id: d
+        text: The type of each entry can be read from /sys/class/infiniband/<dev>/ports/<n>/gid_attrs/types/<index>.
+        correct: true
+        explanation: This sysfs file prints "IB/RoCE v1" or "RoCE v2".
+    tags: [gid, roce]
+  - id: q4
+    type: scenario
+    prompt: >
+      On an InfiniBand host, ibv_devinfo shows "state: PORT_INIT" and rdma link shows physical_state
+      LINK_UP. The cable and switch port LEDs look fine. What is the most likely cause?
+    options:
+      - id: a
+        text: No Subnet Manager has configured the port (assigned a LID and moved it to Active).
+        correct: true
+        explanation: On IB the physical link trains on its own, but the logical state needs the SM.
+      - id: b
+        text: The netdev MTU is set to 1500.
+        explanation: There is no Ethernet netdev MTU involved on a native IB port.
+      - id: c
+        text: The GID index is wrong.
+        explanation: GID index is a QP attribute and does not affect port state.
+      - id: d
+        text: The memlock limit is too low.
+        explanation: memlock affects memory registration, not port state.
+    tags: [port-state, subnet-manager]
+  - id: q5
+    type: scenario
+    prompt: >
+      A RoCE host reports active_mtu 1024 and large-message bandwidth is noticeably below its peers,
+      which show active_mtu 4096. What should you check?
+    options:
+      - id: a
+        text: The MTU of the associated Ethernet netdev; it is probably still 1500 instead of a jumbo value.
+        correct: true
+        explanation: On RoCE the RDMA active MTU is derived from the netdev MTU; 1500 gives 1024.
+      - id: b
+        text: The Subnet Manager's MTU setting.
+        explanation: RoCE fabrics do not have a Subnet Manager.
+      - id: c
+        text: The number of QPs.
+        explanation: QP count does not change the port's active MTU.
+    tags: [mtu, roce]
+  - id: q6
+    type: scenario
+    prompt: >
+      Inside a Kubernetes pod, ibv_devices prints nothing. On the node, ibv_devices lists mlx5_0..mlx5_7.
+      The pod image was built from a minimal base. Which pair of causes is most plausible?
+    options:
+      - id: a
+        text: The /dev/infiniband device files were not passed into the pod, or the image lacks rdma-core and the mlx5 provider library.
+        correct: true
+        explanation: The pod needs both the device files and matching user-space libraries.
+      - id: b
+        text: The switch ports are in the wrong VLAN, or PFC is disabled.
+        explanation: Fabric settings affect traffic, not whether devices are listed locally.
+      - id: c
+        text: The GID index is wrong, or the timeout value is too small.
+        explanation: These are QP attributes; they do not affect device enumeration.
+    tags: [containers]
+  - id: q7
+    type: single
+    prompt: Which tools are scripts from NVIDIA's MLNX_OFED/DOCA stack rather than upstream rdma-core or iproute2?
+    options:
+      - id: a
+        text: show_gids and ibdev2netdev
+        correct: true
+        explanation: Both are convenience scripts shipped with the NVIDIA stack; on inbox systems use sysfs and rdma link.
+      - id: b
+        text: ibv_devinfo and ibv_devices
+        explanation: These are part of rdma-core.
+      - id: c
+        text: rdma link and rdma resource
+        explanation: The rdma tool is part of iproute2.
+    tags: [tools]
+  - id: q8
+    type: scenario
+    prompt: >
+      During a RoCE benchmark you sample /sys/class/infiniband/mlx5_0/ports/1/hw_counters every second and
+      see out_of_sequence and local_ack_timeout_err increasing steadily. What does this indicate?
+    options:
+      - id: a
+        text: Packets are being lost (or badly reordered) in the path, triggering sequence gaps and retransmission timeouts.
+        correct: true
+        explanation: These transport counters rise when the reliable transport detects gaps and missing ACKs.
+      - id: b
+        text: The application is not posting receive buffers fast enough.
+        explanation: That would raise RNR-related counters, not sequence and ACK timeout counters.
+      - id: c
+        text: The counters always increase during benchmarks and can be ignored.
+        explanation: On a healthy lossless fabric these should be zero or close to it.
+    tags: [counters, troubleshooting]

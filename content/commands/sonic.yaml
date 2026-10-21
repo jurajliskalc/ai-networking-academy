@@ -1,0 +1,112 @@
+id: sonic
+title: SONiC
+description: Common SONiC CLI commands for interfaces, PFC, queues, buffers, PFC watchdog and BGP; SONiC builds differ by release and vendor, so confirm syntax and output in the documentation for your build.
+commands:
+  - cmd: show interfaces status
+    platform: sonic
+    summary: List all ports with lanes, speed, MTU, FEC, alias, oper/admin state and optic type.
+    example: |2
+        Interface            Lanes    Speed    MTU    FEC    Alias    Vlan    Oper    Admin    Type
+      -----------  ---------------  -------  -----  -----  -------  ------  ------  -------  ------
+        Ethernet0  0,1,2,3,4,5,6,7     400G   9100     rs   etp1    routed      up       up  QSFP-DD...
+    notes: First check for down ports, unexpected speeds, FEC mismatches and MTU. Columns vary by release; output is illustrative.
+    tags: [sonic, interface, verify]
+
+  - cmd: show interfaces counters
+    platform: sonic
+    summary: Show per-port RX/TX packets, bandwidth, utilization, errors (ERR), drops (DRP) and overruns (OVR).
+    notes: RX_ERR growing usually means a physical-layer problem (optic, cable, FEC); RX_DRP or TX_DRP indicate buffer drops - which should be zero on a lossless RoCE class.
+    tags: [sonic, counters, troubleshooting]
+
+  - cmd: show interfaces counters errors
+    platform: sonic
+    summary: Focus the counter view on error and drop columns per port.
+    notes: Subcommand availability depends on the release; check show interfaces counters --help.
+    tags: [sonic, counters, errors]
+
+  - cmd: show pfc counters
+    platform: sonic
+    summary: Show PFC pause frames received and transmitted per port and per priority (PFC0-PFC7).
+    example: |2
+        Port Rx    PFC0    PFC1    PFC2    PFC3    PFC4  ...
+      ---------  ------  ------  ------  ------  ------
+      Ethernet0       0       0       0   12,345       0
+        Port Tx    PFC0    PFC1    PFC2    PFC3    PFC4  ...
+      Ethernet0       0       0       0      210       0
+    notes: Pauses should appear only on the lossless priority (often 3, sometimes also 4). Rx pauses on a port mean the neighbor is congested; Tx pauses mean this switch is congested on ingress from that port. Output is illustrative.
+    tags: [sonic, pfc, lossless, counters]
+
+  - cmd: show queue counters Ethernet0
+    platform: sonic
+    summary: Show per-queue (UC0-UC7, MC) transmitted and dropped packets and bytes on a port; omit the port for all ports.
+    notes: Drops on the lossless queue mean PFC is not protecting it (mismatched mapping, headroom too small or PFC disabled). Drops on lossy queues under congestion are expected.
+    tags: [sonic, queue, drops, counters]
+
+  - cmd: show queue watermark unicast
+    platform: sonic
+    summary: Show the peak buffer occupancy of unicast egress queues since the last watermark clear.
+    notes: Watermarks reveal microbursts that average utilization hides. Check show queue watermark --help for the variants your release supports.
+    tags: [sonic, buffer, watermark]
+
+  - cmd: show priority-group watermark headroom
+    platform: sonic
+    summary: Show the peak use of each ingress priority group's headroom buffer (the space that absorbs in-flight data after PFC XOFF).
+    notes: Headroom usage close to its configured size means a risk of lossless drops (cable length, MTU or PFC response time may have been under-sized). There are also shared and persistent-watermark variants (for example show priority-group persistent-watermark headroom); availability varies by release.
+    tags: [sonic, buffer, headroom, pfc]
+
+  - cmd: show priority-group watermark shared
+    platform: sonic
+    summary: Show the peak use of the shared buffer per ingress priority group.
+    tags: [sonic, buffer, watermark]
+
+  - cmd: show pfcwd config
+    platform: sonic
+    summary: Show the PFC watchdog configuration per port - action (drop/forward), detection time and restoration time.
+    notes: The PFC watchdog breaks PFC storms (a queue paused for too long) by dropping or forwarding that queue's traffic.
+    tags: [sonic, pfc, watchdog]
+
+  - cmd: show pfcwd stats
+    platform: sonic
+    summary: Show per-queue PFC watchdog statistics - storms detected and restored, and packets dropped by the watchdog action.
+    notes: Any storm detected is an incident to investigate (a stuck NIC, a deadlock loop or a misconfigured priority), not just a counter to clear.
+    tags: [sonic, pfc, watchdog, storm]
+
+  - cmd: show ip bgp summary
+    platform: sonic
+    summary: Show IPv4 BGP neighbors with state, uptime and number of prefixes received.
+    notes: A neighbor showing a state (Active, Connect, Idle) instead of a prefix count is not established. Equivalent FRR view - vtysh -c "show bgp summary".
+    tags: [sonic, bgp, verify]
+
+  - cmd: show lldp table
+    platform: sonic
+    summary: Show a compact table of LLDP neighbors per local port (remote device, remote port, capabilities).
+    notes: Use it to verify cabling against the design (which leaf port goes to which GPU NIC or spine port). show lldp neighbors gives the verbose per-port view.
+    tags: [sonic, lldp, cabling, verify]
+
+  - cmd: show version
+    platform: sonic
+    summary: Show the SONiC software version, ASIC/platform, HwSKU, serial number and uptime.
+    tags: [sonic, inventory]
+
+  - cmd: show runningconfiguration all
+    platform: sonic
+    summary: Dump the running configuration (the CONFIG_DB contents) as JSON.
+    notes: Look at the PORT_QOS_MAP, DSCP_TO_TC_MAP, BUFFER_PG and BUFFER_QUEUE tables to confirm lossless mapping. Table names depend on the release and on whether dynamic buffer calculation is enabled.
+    tags: [sonic, config, qos]
+
+  - cmd: sudo config qos reload
+    platform: sonic
+    summary: Regenerate and apply the QoS and buffer configuration from the platform templates for the device's HwSKU.
+    notes: Overwrites manual QoS/buffer edits and can disrupt traffic; use in a maintenance window, then config save to persist. Option support (for example --no-dynamic-buffer) varies by release.
+    tags: [sonic, qos, config]
+
+  - cmd: sudo config save -y
+    platform: sonic
+    summary: Save the running configuration to /etc/sonic/config_db.json so that it persists across reboots.
+    tags: [sonic, config]
+
+  - cmd: sonic-clear counters
+    platform: sonic
+    summary: Reset the interface counter baseline so the next show interfaces counters reflects only new activity.
+    notes: Related commands include sonic-clear pfccounters and sonic-clear queuecounters. Clearing affects only the CLI view baseline, not telemetry exports; note the time you cleared in the incident log.
+    tags: [sonic, counters, troubleshooting]

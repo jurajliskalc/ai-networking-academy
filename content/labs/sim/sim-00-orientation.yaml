@@ -1,0 +1,49 @@
+id: sim-00-orientation
+title: "Orientation: walk the rails of a GPU cluster"
+level: 1
+estimated_minutes: 20
+lessons: [four-networks-of-an-ai-cluster, reading-server-topology, rail-optimized-topology]
+summary: Learn the simulator, the cluster and its addressing before you fix anything.
+start: node01
+ticket: |
+  **Welcome to the `aurora` cluster.** Nothing is broken yet. This lab teaches you to move around.
+
+  - 4 GPU nodes (`node01`-`node04`), each with 8 GPUs and 8 400G RoCE NICs (`mlx5_0`-`mlx5_7`).
+  - NIC *r* of every node is cabled to rail leaf `leaf0(r+1)`, port `swp<node number>`.
+  - Each leaf has two uplinks (`swp31`, `swp32`) to `spine01` and `spine02`.
+  - Fabric addresses are `10.<rail>.<node>.1/31` on the host and `.0` on the leaf.
+
+  Try, in order:
+  1. `ibdev2netdev` and `nvidia-smi topo -m`: which NIC is closest to GPU 5?
+  2. `ip -br addr`, then `ping -c 2 10.5.3.1` (node03, rail 5).
+  3. `ssh leaf06`, then `nv show interface`: find node03's link. `exit` to come back.
+  4. `all_reduce_perf -b 8 -e 8G -f 2 -g 1` and read the busbw column.
+
+  Then answer the question below.
+faults: []
+hints:
+  - Rail r (mlx5_r) lands on leaf0(r+1). Rails are numbered from 0, leaves from 1.
+  - "nv show interface on a leaf lists the remote host and port of every swp (learned via LLDP)."
+diagnosis:
+  prompt: node03 reports a problem with mlx5_5. Which switch port is at the other end of that cable?
+  options:
+    - id: a
+      text: leaf06 swp3
+      correct: true
+      explanation: mlx5_5 is rail 5, rails map to leaf0(r+1) = leaf06, and node03 is on swp3.
+    - id: b
+      text: leaf05 swp3
+      explanation: leaf05 carries rail 4 (mlx5_4). Rails are zero-based, leaves one-based.
+    - id: c
+      text: leaf03 swp6
+      explanation: That swaps the roles of node and rail. In a rail-optimized fabric the leaf is chosen by the rail.
+    - id: d
+      text: spine01 swp6
+      explanation: GPU NICs never connect to spines in this design; spines only interconnect rail leaves.
+checks: []
+solution: |
+  `ssh leaf06` and `nv show interface` shows `swp3 ... node03 enp170s0np0`. In a rail-optimized fabric
+  every NIC with the same index lands on the same leaf, so most NCCL traffic between GPUs with the same
+  local index stays one switch hop away. A healthy `all_reduce_perf` run peaks at roughly 370 GB/s bus
+  bandwidth in this model.
+fix: []

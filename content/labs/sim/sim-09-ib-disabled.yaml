@@ -1,0 +1,39 @@
+id: sim-09-ib-disabled
+title: "Training over TCP: NCCL fell back to sockets"
+level: 2
+estimated_minutes: 20
+lessons: [nccl-architecture, nccl-debugging, slow-collectives-stragglers]
+summary: A debugging variable forces NCCL onto the management network.
+start: node01
+ticket: |
+  **INC-4630 · Sev2 · Jobs 40x slower, no errors**
+
+  > All jobs complete, but at a fraction of their normal speed, and nothing shows up in the logs. The
+  > fabric team says the RoCE links are idle. - ML platform team
+faults:
+  - { type: nccl_conf, node: node04, set: { NCCL_IB_DISABLE: "1" } }
+hints:
+  - "If the RoCE links are idle, the traffic is going somewhere else. Set NCCL_DEBUG=INFO and look for the `Using network` line."
+diagnosis:
+  prompt: What happened?
+  options:
+    - id: a
+      text: node04's /etc/nccl.conf contains NCCL_IB_DISABLE=1, so NCCL uses the socket transport over eno1 for the whole job.
+      correct: true
+      explanation: In this model, NCCL picks one network for the whole communicator, so with IB disabled on one rank the job runs on NET/Socket and the RoCE NICs sit idle.
+    - id: b
+      text: The RoCE NICs on node04 are down.
+      explanation: rdma link shows them ACTIVE and ib_write_bw works.
+    - id: c
+      text: GPUDirect RDMA is disabled, so data is staged through host memory.
+      explanation: That costs some bandwidth, but RoCE would still be used and the links would not be idle.
+    - id: d
+      text: The spine switches are congested.
+      explanation: Rail-local traffic does not use the spines, and the links carry no traffic at all.
+checks:
+  - { description: "all_reduce runs on NET/IB above 360 GB/s", check: allreduce_min_busbw, args: { value: 360 } }
+solution: |
+  With `NCCL_DEBUG=INFO` the log shows `NET/IB : Disabled` and `Using network Socket`. node04's
+  nccl.conf contains `NCCL_IB_DISABLE=1`. Remove it with `sed -i '/NCCL_IB_DISABLE/d' /etc/nccl.conf`.
+fix:
+  - "node04: sed -i '/NCCL_IB_DISABLE/d' /etc/nccl.conf"

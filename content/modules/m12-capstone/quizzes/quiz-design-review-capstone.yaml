@@ -1,0 +1,139 @@
+id: quiz-design-review-capstone
+title: "Knowledge check: Capstone design review"
+lesson: design-review-capstone
+pass_pct: 70
+questions:
+  - id: q1
+    type: scenario
+    prompt: >
+      You build a non-blocking two-tier rail-optimized fabric for 128 servers with 8 x 400G compute NICs
+      each, using radix-64 400G switches and 32-server scalable units. How many leaves and spines do you need?
+    options:
+      - id: a
+        text: 32 leaves and 16 spines.
+        correct: true
+        explanation: "4 SUs x 8 rails = 32 leaves, each 32 down + 32 up; 32 x 32 = 1,024 uplinks / 64 ports = 16 spines."
+      - id: b
+        text: 16 leaves and 8 spines.
+        explanation: "That is the count for a radix-128 switch (64 servers per rail leaf). With radix 64 a leaf only has 32 downlinks at 1:1."
+      - id: c
+        text: 32 leaves and 32 spines.
+        explanation: "32 spines is the half-populated growth option; the minimum for 1,024 uplinks on 64-port spines is 16."
+      - id: d
+        text: 64 leaves and 16 spines.
+        explanation: "64 leaves would only be needed at 16 servers per leaf; 1:1 on radix 64 allows 32 downlinks per leaf."
+    tags: [sizing, rail-optimized]
+  - id: q2
+    type: single
+    prompt: What is the maximum number of endpoints a non-blocking two-tier fat tree built from radix-k switches can connect?
+    options:
+      - id: a
+        text: "k squared divided by 2"
+        correct: true
+        explanation: "Each spine has k ports, so there can be up to k leaves; each leaf uses k/2 ports down and k/2 up. k x k/2 = k^2/2, which is 2,048 for k = 64."
+      - id: b
+        text: "k squared"
+        explanation: "Each leaf must reserve half its ports for uplinks to stay non-blocking, so you lose a factor of 2."
+      - id: c
+        text: "k times 2"
+        explanation: "This badly underestimates the scale; two tiers multiply the radix rather than add to it."
+      - id: d
+        text: "k cubed divided by 4"
+        explanation: "That is the classic three-tier fat-tree formula, not two-tier."
+    tags: [sizing, fat-tree]
+  - id: q3
+    type: scenario
+    prompt: >
+      The storage system can deliver about 400 GB/s read. The 128 servers have 2 x 200G storage ports each
+      (6.4 TB/s total). A reviewer proposes a 1:1 storage fabric. What is the strongest counter-argument?
+    options:
+      - id: a
+        text: The storage system, not the network, caps throughput; 2:1 server leaves still give several times the storage system's capability.
+        correct: true
+        explanation: "8 server leaves x 3.2 Tb/s uplink = 25.6 Tb/s (3.2 TB/s), about 8x the 400 GB/s the storage can deliver, so 1:1 buys unused bandwidth."
+      - id: b
+        text: Storage traffic is always lossy, so oversubscription has no cost.
+        explanation: "Many storage protocols (NFS over RDMA, NVMe-oF, parallel FS over RoCE) can be RDMA-based and sensitive to loss; this is not an argument for oversubscription."
+      - id: c
+        text: A 1:1 fabric would require a three-tier design.
+        explanation: "The storage fabric is small; 1:1 would cost more switches and optics, but it would not force a third tier at this scale."
+      - id: d
+        text: Checkpoints are written only by rank 0, so storage bandwidth does not matter.
+        explanation: "Large-model checkpoints are usually sharded and written by many ranks in parallel; aggregate write bandwidth matters."
+    tags: [storage, oversubscription]
+  - id: q4
+    type: single
+    prompt: "A 70B-parameter model checkpoint is estimated at 14 bytes per parameter. At 200 GB/s aggregate write, how long does the write take?"
+    options:
+      - id: a
+        text: About 4.9 seconds.
+        correct: true
+        explanation: "70e9 x 14 B = 0.98 TB; 0.98 TB / 200 GB/s = 4.9 s."
+      - id: b
+        text: About 49 seconds.
+        explanation: "Off by a factor of ten; check the units (TB vs GB)."
+      - id: c
+        text: About 0.7 seconds.
+        explanation: "That would be 140 GB (BF16 weights only) at 200 GB/s; the optimizer state and master weights are part of the checkpoint."
+      - id: d
+        text: About 39 seconds.
+        explanation: "That is 0.98 TB at 200 Gb/s (25 GB/s): the bits-versus-bytes mistake. The quoted rate is 200 GB/s."
+    tags: [storage, checkpoint, math]
+  - id: q5
+    type: scenario
+    prompt: >
+      During a design review, the board asks for the blast radius of a single rail leaf failure in your
+      4-SU rail-optimized design (32 servers per SU). What is the most honest answer?
+    options:
+      - id: a
+        text: One NIC on each of 32 servers is lost; since most jobs need all 8 NICs, those 32 servers (256 GPUs) are effectively unavailable for multi-node jobs until repair.
+        correct: true
+        explanation: "A rail leaf connects rail r of every server in the SU. NCCL jobs typically cannot continue without a NIC, so the practical impact is the SU's servers."
+      - id: b
+        text: Only 32 GPUs are affected, so the impact is 3% of the cluster.
+        explanation: "32 NICs are lost, but each sits in a different server; jobs on those servers usually fail entirely, so the practical impact is larger."
+      - id: c
+        text: Nothing; ECMP reroutes the traffic over other leaves.
+        explanation: "Servers connect to exactly one leaf per rail; there is no alternate leaf for that NIC to use."
+      - id: d
+        text: The whole cluster stops because every spine loses a link.
+        explanation: "Spines lose links to that leaf, but other leaves keep full connectivity; jobs not using that SU continue."
+    tags: [resilience, rail-optimized]
+  - id: q6
+    type: multi
+    prompt: Which items belong in a design's acceptance (handover) test plan? Select all that apply.
+    options:
+      - id: a
+        text: LLDP neighbour comparison against the cabling plan for every port.
+        correct: true
+        explanation: "Catches rail swaps and miscabling, a classic defect in rail-optimized builds."
+      - id: b
+        text: Per-NIC RDMA bandwidth tests with the correct device and GID index.
+        correct: true
+        explanation: "Validates each NIC, cable and leaf port end to end before NCCL is involved."
+      - id: c
+        text: NCCL all-reduce at server, SU and full-cluster scope, compared across SUs.
+        correct: true
+        explanation: "Scope-by-scope tests localise problems and set the busbw baseline."
+      - id: d
+        text: A single ping between two random servers as proof of fabric health.
+        explanation: "Ping proves basic reachability on one path; it says nothing about bandwidth, loss or lossless behaviour."
+    tags: [validation, acceptance]
+  - id: q7
+    type: single
+    prompt: Why does placing each data-parallel group within one SU help in a rail-optimized fabric?
+    options:
+      - id: a
+        text: Same-rank GPUs of servers in one SU share a rail leaf, so the gradient all-reduce stays one switch hop away and off the spine.
+        correct: true
+        explanation: "This is the core benefit of rail alignment combined with locality-aware scheduling."
+      - id: b
+        text: It lets the job avoid using RDMA entirely.
+        explanation: "Inter-server traffic still uses RDMA through the NICs; placement changes the path, not the transport."
+      - id: c
+        text: It removes the need for NVLink inside the server.
+        explanation: "NVLink still carries the tensor-parallel traffic inside the server."
+      - id: d
+        text: It allows the spine to be oversubscribed 8:1 with no impact.
+        explanation: "Pipeline, expert and cross-SU traffic still crosses the spine, and not every job is placed perfectly."
+    tags: [rail-optimized, scheduling]

@@ -1,0 +1,136 @@
+id: quiz-osi-ethernet-frames
+title: "Knowledge check: the layered model and the Ethernet frame"
+lesson: osi-ethernet-frames
+pass_pct: 70
+questions:
+  - id: q1
+    type: single
+    prompt: At which layer does a leaf switch port running in routed (L3) mode make its forwarding decision for a RoCEv2 packet?
+    options:
+      - id: a
+        text: Layer 3, using the destination IP address.
+        correct: true
+        explanation: A routed port strips the Ethernet header, looks up the IP destination, and builds a new Ethernet header for the next hop.
+      - id: b
+        text: Layer 2, using the destination MAC address only.
+        explanation: That describes a bridged (L2) switch port. In a routed fabric the destination MAC is the router itself, so it carries no end-to-end information.
+      - id: c
+        text: Layer 4, using the InfiniBand destination queue pair in the BTH.
+        explanation: The BTH is end-to-end transport state interpreted by the NICs; fabric switches do not route on it.
+      - id: d
+        text: Layer 1, using the optical wavelength of the link.
+        explanation: Ordinary data center switches do not route by wavelength; the physical layer just carries bits.
+    tags: [osi, routing]
+  - id: q2
+    type: single
+    prompt: What is the size of a standard untagged Ethernet II frame carrying a 1500-byte IP packet, as counted by the 802.3 frame-size definition?
+    options:
+      - id: a
+        text: 1518 bytes.
+        correct: true
+        explanation: 6 (dst MAC) + 6 (src MAC) + 2 (EtherType) + 1500 (payload) + 4 (FCS) = 1518.
+      - id: b
+        text: 1500 bytes.
+        explanation: 1500 is the payload (the MTU); the header and FCS add 18 bytes.
+      - id: c
+        text: 1538 bytes.
+        explanation: 1538 also includes preamble, SFD and inter-packet gap, which are wire overhead but not part of the frame.
+      - id: d
+        text: 1522 bytes.
+        explanation: 1522 is the maximum with an 802.1Q tag; the question asked about an untagged frame.
+    tags: [ethernet, frame]
+  - id: q3
+    type: multi
+    prompt: Which of the following consume time on an Ethernet link but do NOT appear as bytes in a typical packet capture? Select all that apply.
+    options:
+      - id: a
+        text: The 7-byte preamble and 1-byte start frame delimiter.
+        correct: true
+        explanation: They are generated and stripped by the PHY/MAC and never handed to the capture tool.
+      - id: b
+        text: The minimum 12-byte inter-packet gap.
+        correct: true
+        explanation: The gap is idle time between frames; it is not data at all.
+      - id: c
+        text: The source and destination MAC addresses.
+        explanation: These are the first bytes of every captured frame and are shown by tcpdump -e.
+      - id: d
+        text: The EtherType field.
+        explanation: The EtherType is captured and decoded (for example "ethertype IPv4 (0x0800)").
+    tags: [ethernet, overhead]
+  - id: q4
+    type: single
+    prompt: How many bits does the 802.1Q tag use for the frame's priority, and how many priority values does that give?
+    options:
+      - id: a
+        text: 3 bits (PCP), giving 8 priorities.
+        correct: true
+        explanation: PCP values 0-7 are why Ethernet QoS and PFC work with eight priorities.
+      - id: b
+        text: 12 bits, giving 4096 priorities.
+        explanation: The 12-bit field is the VLAN ID, not the priority.
+      - id: c
+        text: 6 bits, giving 64 priorities.
+        explanation: Six bits is the DSCP field in the IP header, a different (L3) marking.
+      - id: d
+        text: 1 bit, giving high and low priority.
+        explanation: The single bit is DEI (drop eligible indicator), a hint about which frames to drop first.
+    tags: [vlan, qos]
+  - id: q5
+    type: scenario
+    prompt: >
+      An engineer runs tcpdump on a GPU server's 400G RDMA interface during an NCCL all-reduce that the switch counters
+      show is moving about 380 Gb/s. The capture shows almost no packets. What is the most likely explanation?
+    options:
+      - id: a
+        text: RoCE traffic is generated and consumed by the NIC hardware, bypassing the kernel path that tcpdump normally sees.
+        correct: true
+        explanation: RDMA kernel bypass means host captures usually miss the data path unless the NIC offers a sniffer feature or the switch mirrors the port.
+      - id: b
+        text: The switch counters are wrong; if tcpdump sees nothing, nothing is being sent.
+        explanation: Switch port counters are a reliable view of transmitted frames; the capture tool is the blind one here.
+      - id: c
+        text: tcpdump cannot capture frames larger than 1518 bytes.
+        explanation: tcpdump captures jumbo frames fine (the snap length is configurable); size is not the issue.
+      - id: d
+        text: The traffic is encrypted, so tcpdump discards it.
+        explanation: tcpdump captures encrypted traffic too; it just cannot read the payload.
+    tags: [rdma, troubleshooting]
+  - id: q6
+    type: single
+    prompt: Which statement correctly describes how RoCEv2 relates to InfiniBand?
+    options:
+      - id: a
+        text: RoCEv2 reuses the InfiniBand transport (BTH and above) and carries it in UDP/IP over Ethernet, with UDP destination port 4791.
+        correct: true
+        explanation: That is exactly the RoCEv2 encapsulation, which makes it routable across IP fabrics.
+      - id: b
+        text: RoCEv2 is InfiniBand with Ethernet MAC addresses instead of LIDs, still using the InfiniBand link layer.
+        explanation: RoCEv2 uses the Ethernet link layer, not the IB link layer (LRH, VCRC).
+      - id: c
+        text: RoCEv2 runs directly over Ethernet with EtherType 0x8915 and cannot be routed.
+        explanation: That describes RoCEv1. RoCEv2 moved into UDP/IP precisely to become routable.
+      - id: d
+        text: RoCEv2 is a TCP-based protocol that emulates InfiniBand verbs in software.
+        explanation: RoCEv2 uses UDP, and the transport is implemented in NIC hardware, not emulated over TCP.
+    tags: [rocev2, infiniband]
+  - id: q7
+    type: scenario
+    prompt: >
+      Traffic marked with VLAN priority (PCP) 3 is placed in the correct lossless queue on the first leaf switch, but after
+      it crosses a routed spine it lands in the default queue on the far leaf. Which explanation fits best?
+    options:
+      - id: a
+        text: The PCP field lives in the Ethernet header, which is rebuilt at each routed hop, so the marking is lost; the fabric should classify on DSCP instead.
+        correct: true
+        explanation: Routed hops do not preserve L2 tags. IP-header DSCP survives routing, which is why routed RoCE fabrics trust DSCP.
+      - id: b
+        text: The spine's FCS check modified the priority bits.
+        explanation: The FCS is a checksum; checking it never changes header fields.
+      - id: c
+        text: PCP values above 2 are reserved and are reset by all switches.
+        explanation: All eight PCP values are valid; nothing about value 3 is special in the standard.
+      - id: d
+        text: The UDP destination port 4791 overrides any priority marking.
+        explanation: Port 4791 identifies RoCEv2 but has no built-in effect on queue selection.
+    tags: [qos, vlan, routing]

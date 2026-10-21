@@ -1,0 +1,163 @@
+id: infiniband
+title: InfiniBand diagnostics (infiniband-diags, ibdiagnet, OpenSM)
+description: Commands for inspecting InfiniBand ports, discovering the fabric, reading port counters, finding errors and running the subnet manager.
+commands:
+  - cmd: ibstat
+    platform: infiniband
+    summary: Show every local HCA port with state, physical state, rate, LID, SM LID and port GUID.
+    example: |
+      # illustrative output (trimmed)
+      CA 'mlx5_0'
+              CA type: MT4129
+              Firmware version: 28.41.1000
+              Port 1:
+                      State: Active
+                      Physical state: LinkUp
+                      Rate: 400
+                      Base lid: 117
+                      SM lid: 1
+                      Port GUID: 0xb83fd20300aabb01
+                      Link layer: InfiniBand
+    notes: "State Active + Physical state LinkUp is healthy. State Initializing with LinkUp means the link trained but no SM has configured the port. Physical state Polling means no link (cable, optic, peer down). Rate below the expected speed indicates a degraded link (fewer lanes or a lower speed)."
+    tags: [infiniband-diags, port, verify]
+
+  - cmd: ibstat mlx5_0 1
+    platform: infiniband
+    summary: Show one CA and port only.
+    notes: "'ibstat -p' prints just the port GUIDs, which is handy for scripts and SM configuration."
+    tags: [infiniband-diags, port]
+
+  - cmd: ibstatus
+    platform: infiniband
+    summary: Compact port summary per device - default GID, base LID, SM LID, state, physical state, rate and link layer.
+    example: |
+      # illustrative output
+      Infiniband device 'mlx5_0' port 1 status:
+              default gid:     fe80:0000:0000:0000:b83f:d203:00aa:bb01
+              base lid:        0x75
+              sm lid:          0x1
+              state:           4: ACTIVE
+              phys state:      5: LinkUp
+              rate:            400 Gb/sec (4X NDR)
+              link_layer:      InfiniBand
+    tags: [infiniband-diags, port, verify]
+
+  - cmd: iblinkinfo
+    platform: infiniband
+    summary: Walk the fabric and print every switch port with its width, speed, state and the device on the other end.
+    example: |
+      # illustrative output (trimmed)
+      Switch: 0x... leaf01:
+                12    1[  ] ==( 4X  106.25 Gbps Active/  LinkUp)==>     117    1[  ] "gpu-node-01 mlx5_0" ( )
+                12    2[  ] ==( 4X  106.25 Gbps Active/  LinkUp)==>     118    1[  ] "gpu-node-02 mlx5_0" ( )
+                12    3[  ] ==(                Down/ Polling)==>             [  ] "" ( )
+    notes: The per-lane speed column depends on the generation and tool version. Look for ports at the wrong width (1X instead of 4X) or speed, and for Polling ports that should be cabled. Run from a host with an active port on the fabric; large fabrics take a while.
+    tags: [infiniband-diags, topology, links]
+
+  - cmd: ibnetdiscover > fabric-topology.txt
+    platform: infiniband
+    summary: Discover the full fabric topology (switches, CAs, links, GUIDs, LIDs) and save it as a topology file.
+    notes: Diff a fresh capture against a known-good one to detect miscabling or missing links after maintenance. Node descriptions (hostnames) make the output far more readable, so set them on hosts and switches.
+    tags: [infiniband-diags, topology, discovery]
+
+  - cmd: ibhosts
+    platform: infiniband
+    summary: List all channel adapters (hosts) in the fabric with GUID and node description.
+    notes: Quick count check during bring-up - the number of HCAs found should match your cabling plan. ibswitches does the same for switches.
+    tags: [infiniband-diags, inventory]
+
+  - cmd: ibswitches
+    platform: infiniband
+    summary: List all switches in the fabric with GUID, port count, LID and node description.
+    tags: [infiniband-diags, inventory]
+
+  - cmd: perfquery
+    platform: infiniband
+    summary: Read the PortCounters (errors and traffic) of the local port.
+    example: |
+      # illustrative output (trimmed)
+      # Port counters: Lid 117 port 1 (CapMask: 0x5A00)
+      PortSelect:......................1
+      SymbolErrorCounter:..............0
+      LinkErrorRecoveryCounter:........0
+      LinkDownedCounter:...............0
+      PortRcvErrors:...................0
+      PortRcvRemotePhysicalErrors:.....0
+      PortXmitDiscards:................0
+      PortXmitWait:....................18342
+    notes: Basic counters are 32-bit or smaller and saturate; use -x for 64-bit data counters. PortXmitWait counts time the port had data to send but no credits - the IB symptom of congestion. SymbolErrorCounter or LinkErrorRecoveryCounter increasing points to a marginal cable or optic.
+    tags: [infiniband-diags, counters]
+
+  - cmd: perfquery -x 117 1
+    platform: infiniband
+    summary: Read extended (64-bit) port counters - PortXmitData, PortRcvData, packets - of port 1 on LID 117.
+    notes: Data counters are in units of 4 bytes (multiply by 4 for bytes). Read twice and divide the delta by the interval to get throughput.
+    tags: [infiniband-diags, counters, throughput]
+
+  - cmd: perfquery -r 117 1
+    platform: infiniband
+    summary: Read and then reset the counters of port 1 on LID 117.
+    notes: Resetting erases evidence other people or monitoring may rely on; prefer recording deltas. Coordinate with whoever runs UFM or your telemetry system before resetting.
+    tags: [infiniband-diags, counters]
+
+  - cmd: ibqueryerrors
+    platform: infiniband
+    summary: Scan the fabric and report only ports whose error counters exceed thresholds.
+    notes: The fastest fabric-wide "where are the errors" check. Options for clearing counters, thresholds and suppressing specific counters differ across infiniband-diags versions; see "ibqueryerrors --help".
+    tags: [infiniband-diags, counters, troubleshooting]
+
+  - cmd: ibdiagnet
+    platform: infiniband
+    summary: NVIDIA's comprehensive fabric diagnostic - discovery, duplicate GUID/LID checks, link speed/width checks, counters, routing and cable information - with reports written to a log directory.
+    notes: Output typically goes to /var/tmp/ibdiagnet2/ (check the path the tool prints). Start with the summary at the end of the run, then the .log and the per-check files. Options for counter clearing, extended counters, cable info and routing checks vary by version; run "ibdiagnet --help" on your installation rather than copying flags from older guides.
+    tags: [ibdiagnet, fabric, validation, troubleshooting]
+
+  - cmd: sminfo
+    platform: infiniband
+    summary: Query the master subnet manager - its LID, GUID, activity count, priority and state.
+    example: |
+      # illustrative output
+      sminfo: sm lid 1 sm guid 0x..., activity count 518231 priority 14 state 3 SMINFO_MASTER
+    notes: A steadily increasing activity count shows the SM is alive. If you expect a specific SM (for example on UFM) to be master and another one is, check SM priorities.
+    tags: [infiniband-diags, subnet-manager]
+
+  - cmd: saquery
+    platform: infiniband
+    summary: Query the subnet administrator (SA) database; with no arguments it lists node records.
+    notes: Can also query other record types such as path or multicast records. The record-type keywords are listed in "saquery --help".
+    tags: [infiniband-diags, subnet-manager, sa]
+
+  - cmd: ibtracert 117 245
+    platform: infiniband
+    summary: Trace the path the forwarding tables send traffic on from LID 117 to LID 245, hop by hop.
+    notes: Shows which switches and ports a given source/destination pair uses under the current routing, useful to confirm whether two flows share a link. With adaptive routing enabled, actual packets may take other paths.
+    tags: [infiniband-diags, routing, path]
+
+  - cmd: ibroute 12
+    platform: infiniband
+    summary: Dump the linear forwarding table (LID to output port) of the switch at LID 12.
+    tags: [infiniband-diags, routing]
+
+  - cmd: ibping -S
+    platform: infiniband
+    summary: Start an ibping responder; on another host run "ibping <lid>" to ping it over IB management datagrams.
+    notes: Verifies IB reachability without IP, independent of IPoIB.
+    tags: [infiniband-diags, connectivity]
+
+  - cmd: ibportstate 117 1 query
+    platform: infiniband
+    summary: Query the state, width and speed of port 1 on LID 117; the same tool can enable, disable or reset a port.
+    notes: Disabling a port remotely is a powerful fault-isolation tool and also an easy way to cut yourself off - double-check the LID and port.
+    tags: [infiniband-diags, port]
+
+  - cmd: opensm -B
+    platform: infiniband
+    summary: Start the OpenSM subnet manager as a background daemon on this host's first active port.
+    notes: In production it is normally run as a system service (or replaced by the switch-embedded SM or UFM). Use -g <port GUID> to bind to a specific port and set a priority so the intended SM becomes master. Configuration lives in an opensm.conf (location depends on packaging); routing engine, for example ftree or updn, is chosen there. Check "opensm --help" for options on your version.
+    tags: [opensm, subnet-manager]
+
+  - cmd: smpquery nodeinfo 117
+    platform: infiniband
+    summary: Send a subnet management query for the NodeInfo attribute of LID 117 (node type, port count, GUIDs).
+    notes: smpquery supports other attributes (portinfo, nodedesc, switchinfo); see its help for the list.
+    tags: [infiniband-diags, smp]

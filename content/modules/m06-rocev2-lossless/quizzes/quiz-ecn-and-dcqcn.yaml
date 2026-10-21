@@ -1,0 +1,151 @@
+id: quiz-ecn-and-dcqcn
+title: "Knowledge check: ECN and DCQCN"
+lesson: ecn-and-dcqcn
+pass_pct: 70
+questions:
+  - id: q1
+    type: single
+    prompt: "Which ECN codepoint does a congested switch write into an ECN-capable packet?"
+    options:
+      - id: a
+        text: "11 (CE, Congestion Experienced)"
+        correct: true
+        explanation: "RFC 3168: switches set CE instead of dropping ECN-capable packets."
+      - id: b
+        text: "10 (ECT(0))"
+        explanation: "ECT(0) is set by the sender to declare ECN capability."
+      - id: c
+        text: "00 (Not-ECT)"
+        explanation: "Not-ECT means the transport is not ECN-capable. A congested switch must drop such packets rather than mark them."
+      - id: d
+        text: "01 (ECT(1))"
+        explanation: "ECT(1) is the alternative ECN-capable codepoint set by senders, not a congestion mark."
+    tags: [ecn, rfc3168]
+  - id: q2
+    type: single
+    prompt: "With a WRED/ECN profile of Kmin, Kmax and Pmax, what happens when the egress queue is between Kmin and Kmax?"
+    options:
+      - id: a
+        text: "Packets are marked with a probability that rises linearly from 0 towards Pmax."
+        correct: true
+        explanation: "That is the RED-style ramp. Above Kmax every ECN-capable packet is marked."
+      - id: b
+        text: "Every packet is marked."
+        explanation: "Marking every packet happens above Kmax."
+      - id: c
+        text: "Packets are dropped with probability Pmax."
+        explanation: "For ECN-capable packets in an ECN profile, the switch marks instead of dropping."
+      - id: d
+        text: "The switch sends a PFC frame."
+        explanation: "ECN marking and PFC are separate mechanisms with separate thresholds."
+    tags: [ecn, wred]
+  - id: q3
+    type: multi
+    prompt: "Match the DCQCN roles correctly. (Select all that apply.)"
+    options:
+      - id: a
+        text: "CP is the switch egress queue that marks CE."
+        correct: true
+        explanation: "The congestion point detects queue build-up and marks."
+      - id: b
+        text: "NP is the receiving NIC that generates CNPs."
+        correct: true
+        explanation: "The notification point converts CE marks into CNPs, rate-limited per flow."
+      - id: c
+        text: "RP is the sending NIC that adjusts the flow rate."
+        correct: true
+        explanation: "The reaction point cuts and recovers the rate."
+      - id: d
+        text: "NP is the spine switch that forwards CNPs with priority."
+        explanation: "Switches only forward CNPs. The NP role belongs to the receiving NIC."
+    tags: [dcqcn]
+  - id: q4
+    type: scenario
+    prompt: "During an incast test, the receiver shows np_ecn_marked_roce_packets and np_cnp_sent rising quickly, but every sender shows rp_cnp_handled at 0. Switch PFC counters are high. What is the most likely problem?"
+    options:
+      - id: a
+        text: "CNPs are lost or misclassified on the return path, for example a CNP DSCP mapped to a congested lossy queue or filtered."
+        correct: true
+        explanation: "Marking and CNP generation work, but CNPs never reach the senders, so DCQCN cannot react and PFC carries the load."
+      - id: b
+        text: "The switches are not configured for ECN marking."
+        explanation: "The receiver is seeing CE-marked packets, so marking works."
+      - id: c
+        text: "The receiver's NP function is disabled."
+        explanation: "np_cnp_sent is rising, so the NP is active."
+      - id: d
+        text: "The incast is too small to trigger congestion control."
+        explanation: "Marks, CNPs and high PFC all show significant congestion."
+    tags: [dcqcn, cnp, troubleshooting]
+  - id: q5
+    type: single
+    prompt: "A DCQCN sender at 400 Gb/s with alpha = 1 receives its first CNP. What is its new current rate according to the DCQCN algorithm?"
+    options:
+      - id: a
+        text: "200 Gb/s, because R_C becomes R_C × (1 − alpha/2)"
+        correct: true
+        explanation: "With alpha = 1 the cut is 50 %. R_T stores 400 Gb/s as the target for recovery."
+      - id: b
+        text: "0 Gb/s until the CNP timer expires"
+        explanation: "DCQCN reduces the rate multiplicatively. It does not stop the flow."
+      - id: c
+        text: "396 Gb/s, an additive decrease of 1 %"
+        explanation: "DCQCN uses multiplicative decrease scaled by alpha, not a fixed additive step."
+      - id: d
+        text: "100 Gb/s, a 75 % cut"
+        explanation: "The maximum cut per CNP is alpha/2, which is at most 50 %."
+    tags: [dcqcn, rate]
+  - id: q6
+    type: scenario
+    prompt: "After a switch upgrade, PFC pause frames on the leaves start appearing before any ECN marks during incast, and throughput oscillates. Host DCQCN settings are unchanged. What should you suspect first?"
+    options:
+      - id: a
+        text: "The ECN marking thresholds on the RoCE queue are now set above the point where PFC triggers (or ECN is off)."
+        correct: true
+        explanation: "ECN must signal congestion before XOFF. If marking starts too late, PFC fires first and DCQCN cannot act."
+      - id: b
+        text: "The CNP DSCP is wrong on the hosts."
+        explanation: "That would show marks without CNP handling. Here, marks themselves are missing or late."
+      - id: c
+        text: "The DCQCN alpha gain g is too small."
+        explanation: "Host settings are unchanged, and the symptom is the ordering of switch thresholds."
+      - id: d
+        text: "Headroom is too large."
+        explanation: "Excess headroom wastes buffer but does not make PFC fire before ECN."
+    tags: [ecn, pfc, thresholds]
+  - id: q7
+    type: single
+    prompt: "Why are CNPs usually sent in a strict-priority class such as priority 6?"
+    options:
+      - id: a
+        text: "So that they overtake the congested data traffic and the feedback loop stays fast"
+        correct: true
+        explanation: "A CNP queued behind the congestion it reports arrives too late to help."
+      - id: b
+        text: "Because CNPs must be lossless and only priority 6 supports PFC"
+        explanation: "Any priority can have PFC. CNPs are usually lossy but strict, because occasional loss is tolerable."
+      - id: c
+        text: "Because the IBTA specification mandates DSCP 48 for CNPs"
+        explanation: "DSCP 48 / priority 6 is a common NVIDIA convention, not a standard requirement."
+      - id: d
+        text: "To prevent CNPs from being ECN-marked, which would create a loop"
+        explanation: "The reason is latency of feedback, not marking loops."
+    tags: [cnp, qos]
+  - id: q8
+    type: single
+    prompt: "What distinguishes an RTT-based congestion control such as NVIDIA RTTCC from DCQCN?"
+    options:
+      - id: a
+        text: "It infers congestion from NIC-measured round-trip time, so it depends less on ECN configuration in switches."
+        correct: true
+        explanation: "RTT-based schemes treat rising delay as the congestion signal. Availability depends on NIC generation and firmware."
+      - id: b
+        text: "It requires in-band network telemetry from every switch."
+        explanation: "That describes telemetry-based schemes such as HPCC, not RTT-based ones."
+      - id: c
+        text: "It uses PFC pause frames as its congestion signal."
+        explanation: "No mainstream end-to-end congestion control uses PFC as its signal."
+      - id: d
+        text: "It only works on InfiniBand."
+        explanation: "RTTCC is aimed at RoCE on Ethernet."
+    tags: [rttcc, congestion-control]

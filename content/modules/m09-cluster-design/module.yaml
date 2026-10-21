@@ -1,0 +1,14 @@
+id: m09-cluster-design
+order: 9
+title: "AI cluster architecture and design"
+level: 4
+summary: >
+  Rail-optimized topologies, the SuperPOD reference architecture, sizing math, optics, cabling and power, storage and front-end networks, multi-tenancy and scale-up domains.
+lessons:
+  - rail-optimized-topology
+  - superpod-reference-architecture
+  - fabric-sizing-math
+  - optics-cabling-power
+  - storage-and-frontend-networks
+  - multi-tenancy-isolation
+  - scale-up-domains-nvl72

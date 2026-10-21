@@ -1,0 +1,151 @@
+id: quiz-network-automation-for-ai
+title: "Knowledge check: network automation for AI fabrics"
+lesson: network-automation-for-ai
+pass_pct: 70
+questions:
+  - id: q1
+    type: scenario
+    prompt: >
+      After a QoS change rolled out to 200 leaves, nodes behind one leaf show drops on the RoCE priority. The
+      deployment log shows that leaf returned an error mid-apply, but the rollout continued. What is the best
+      process fix?
+    options:
+      - id: a
+        text: Stop the rollout on any device error or failed post-check, and make the apply idempotent so it can be safely re-run.
+        correct: true
+        explanation: Partial application leaves a device in an unintended state. Failing fast and re-applying idempotently restores consistency.
+      - id: b
+        text: Log into the leaf and fix the configuration by hand.
+        explanation: This fixes the symptom once but creates drift unless folded back into the source of truth, and the process gap remains.
+      - id: c
+        text: Push to all devices in parallel next time so the change finishes faster.
+        explanation: Parallel push increases blast radius and does nothing about errors.
+      - id: d
+        text: Disable PFC on that leaf to stop the drops.
+        explanation: Without PFC the RoCE class becomes lossy, making the problem worse.
+    tags: [rollout, idempotence]
+  - id: q2
+    type: single
+    prompt: What does idempotent configuration deployment guarantee?
+    options:
+      - id: a
+        text: Applying the same desired state once or many times results in the same device configuration.
+        correct: true
+        explanation: That makes re-running after partial failures and continuous drift remediation safe.
+      - id: b
+        text: The configuration can never contain errors.
+        explanation: Idempotence says nothing about whether the intent itself is correct; CI checks address that.
+      - id: c
+        text: Each run applies the commands again in the same order regardless of current state.
+        explanation: That describes an imperative script, which is often not idempotent.
+    tags: [idempotence]
+  - id: q3
+    type: scenario
+    prompt: >
+      An LLDP-versus-source-of-truth check reports that leaf-r3-06 swp02 expects node-0301 nic3 but observes
+      node-0301 nic2. What does this mean and why does it matter?
+    options:
+      - id: a
+        text: The NIC of the wrong rail is cabled to a rail-3 leaf, breaking rail alignment and likely reducing collective bandwidth.
+        correct: true
+        explanation: In a rail-optimized design NIC N of every node must land on rail N's leaves; a wrong-rail cable forces traffic through spines.
+      - id: b
+        text: It is cosmetic because the link is up and BGP is established.
+        explanation: Link and routing state do not prove correct placement; rail alignment is a performance property.
+      - id: c
+        text: The source of truth is always wrong in such cases, so update it to match the network.
+        explanation: Update the SoT only if the design intentionally changed; otherwise recable to the plan.
+      - id: d
+        text: LLDP is unreliable on AI fabrics and should be ignored.
+        explanation: LLDP is the standard way to discover neighbours and is reliable for this purpose.
+    tags: [sot, cabling, rails]
+  - id: q4
+    type: multi
+    prompt: Which invariants should a CI pipeline enforce for a RoCE AI fabric? (Select all that apply.)
+    options:
+      - id: a
+        text: PFC is enabled on exactly the lossless priority on all RoCE-facing and fabric ports.
+        correct: true
+        explanation: A wrong or missing PFC priority on any device makes the RoCE class lossy there.
+      - id: b
+        text: The DSCP trust map sends RoCE and CNP DSCPs to their designed priorities everywhere.
+        correct: true
+        explanation: Trust mismatches are among the most common lossless misconfigurations.
+      - id: c
+        text: Every host NIC is cabled to a leaf of its own rail.
+        correct: true
+        explanation: Checked from SoT cable data, this protects the rail-optimized design.
+      - id: d
+        text: Every switch uses a different MTU to spread load.
+        explanation: MTU must be consistent end to end; it does not affect load balancing.
+    tags: [ci, invariants]
+  - id: q5
+    type: scenario
+    prompt: >
+      During an incident an engineer hand-edited ECN thresholds on four spines. Two weeks later a routine
+      deployment reverts them and the incident symptoms return. What process failed?
+    options:
+      - id: a
+        text: The manual fix was never folded back into the policy/source of truth, so the next render overwrote it.
+        correct: true
+        explanation: Every manual change must get a follow-up change to the source of truth before the incident is closed.
+      - id: b
+        text: Full-config replace should never be used.
+        explanation: Full replace worked as designed by enforcing intent; the intent was out of date.
+      - id: c
+        text: The deployment tool is not idempotent.
+        explanation: An idempotent tool reapplying stale intent produces exactly this result; the gap is the intent.
+      - id: d
+        text: Spines should be excluded from automation.
+        explanation: Excluding devices creates more drift, not less.
+    tags: [drift, process]
+  - id: q6
+    type: single
+    prompt: Why are host NIC QoS settings part of fabric automation, not only server configuration management?
+    options:
+      - id: a
+        text: Lossless operation requires hosts and switches to agree on trust, PFC priority, DSCP and MTU, so both must come from one policy.
+        correct: true
+        explanation: Host-switch disagreement is a top cause of drops on the RoCE class.
+      - id: b
+        text: Switches copy their QoS configuration to hosts via LLDP automatically in all deployments.
+        explanation: DCBX can exchange some settings in some setups, but it is not universal and is often disabled; you cannot rely on it.
+      - id: c
+        text: Host NICs do not have QoS settings.
+        explanation: NICs have trust mode, PFC enablement and RoCE traffic class settings.
+    tags: [host, qos]
+  - id: q7
+    type: scenario
+    prompt: >
+      You need to roll out a new buffer profile across a rail-optimized fabric with 8 rails. Which rollout order
+      minimises impact on running jobs?
+    options:
+      - id: a
+        text: One leaf as canary, then one rail at a time, with pre/post checks and automatic stop on regression.
+        correct: true
+        explanation: Changing one rail affects one NIC per node, limiting impact, and canaries catch errors before they spread.
+      - id: b
+        text: All leaves of all rails at once during a maintenance window.
+        explanation: Every node is affected simultaneously; a bad change hits the entire cluster.
+      - id: c
+        text: All spines first, then all leaves, in parallel.
+        explanation: Spine changes affect every cross-leaf path; doing them in parallel maximises blast radius.
+      - id: d
+        text: Random devices until all are done.
+        explanation: Random order makes impact unpredictable and post-change correlation hard.
+    tags: [rollout, rails]
+  - id: q8
+    type: single
+    prompt: On Cumulus Linux with NVUE, which sequence matches a safe manual change workflow?
+    options:
+      - id: a
+        text: nv set ..., then nv config diff, then nv config apply, then nv show to verify.
+        correct: true
+        explanation: Stage, review the diff, apply, and verify operational state; automation should mirror this.
+      - id: b
+        text: nv config apply first, then nv set to stage the change.
+        explanation: Applying before staging applies nothing new; the order is reversed.
+      - id: c
+        text: Edit files under /etc directly and reboot.
+        explanation: Editing files behind NVUE bypasses its revision model and is overwritten or causes drift.
+    tags: [nvue]

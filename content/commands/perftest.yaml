@@ -1,0 +1,127 @@
+id: perftest
+title: perftest RDMA benchmarks
+description: The perftest suite (ib_write_bw, ib_read_bw, ib_send_bw and the matching latency tools) for measuring point-to-point RDMA bandwidth and latency on InfiniBand and RoCE.
+commands:
+  - cmd: ib_write_bw -d mlx5_0 -x 3 -F --report_gbits
+    platform: rdma
+    summary: Start the server side of an RDMA WRITE bandwidth test on device mlx5_0 using GID index 3, reporting in Gb/s.
+    notes: "Every perftest test is a server/client pair: run without a host argument on the server, then run the same flags plus the server's address on the client. -d device, -x GID index (needed on RoCE; ignored on IB), -F suppresses the CPU-frequency warning, --report_gbits prints Gb/s instead of MB/s. Flags must match on both sides."
+    tags: [perftest, bandwidth, server]
+
+  - cmd: ib_write_bw -d mlx5_0 -x 3 -F --report_gbits 10.0.0.11
+    platform: rdma
+    summary: Client side of the RDMA WRITE bandwidth test, connecting to the server at 10.0.0.11.
+    example: |
+      # illustrative output (trimmed)
+      ---------------------------------------------------------------------------------------
+                          RDMA_Write BW Test
+       Dual-port       : OFF          Device         : mlx5_0
+       Number of qps   : 1            Transport type : IB
+       Connection type : RC           Using SRQ      : OFF
+       MTU             : 4096[B]
+       Link type       : Ethernet
+       GID index       : 3
+      ---------------------------------------------------------------------------------------
+       #bytes     #iterations    BW peak[Gb/sec]    BW average[Gb/sec]   MsgRate[Mpps]
+       65536      5000             392.11             391.87               0.747420
+      ---------------------------------------------------------------------------------------
+    notes: "Check the header first: MTU, Link type and GID index confirm you tested what you meant to. On a healthy 400G link, a large-message WRITE test typically lands a little below line rate because of header overhead. The server address is used for an out-of-band TCP exchange of QP info."
+    tags: [perftest, bandwidth, client]
+
+  - cmd: ib_write_bw -d mlx5_0 -x 3 -a -F --report_gbits 10.0.0.11
+    platform: rdma
+    summary: Sweep all message sizes from 2 bytes up to 8 MB (powers of two) and print bandwidth for each.
+    notes: Shows where bandwidth saturates. Small messages are limited by message rate, not link speed; a link that never reaches line rate even at large sizes points at PCIe, MTU, NUMA placement or a degraded link.
+    tags: [perftest, bandwidth, sweep]
+
+  - cmd: ib_write_bw -d mlx5_0 -x 3 -s 1048576 -n 10000 -F --report_gbits 10.0.0.11
+    platform: rdma
+    summary: Fixed message size (-s, bytes) and fixed iteration count (-n).
+    notes: Use a fixed large size when comparing NICs or hosts against each other so results are comparable.
+    tags: [perftest, bandwidth]
+
+  - cmd: ib_write_bw -d mlx5_0 -x 3 -D 30 -F --report_gbits 10.0.0.11
+    platform: rdma
+    summary: Run for a fixed duration in seconds (-D) instead of a fixed number of iterations.
+    notes: Longer runs expose thermal, FEC or congestion effects that a 1-second run hides. Use during burn-in.
+    tags: [perftest, bandwidth, burn-in]
+
+  - cmd: ib_write_bw -d mlx5_0 -x 3 -q 8 -F --report_gbits 10.0.0.11
+    platform: rdma
+    summary: Use 8 queue pairs in parallel (-q).
+    notes: Multiple QPs create multiple flows with different UDP source ports on RoCEv2, which spreads load over ECMP paths, and they can also improve NIC pipeline utilization. Compare -q 1 and -q 8 across a fabric to see hashing effects.
+    tags: [perftest, bandwidth, ecmp, qp]
+
+  - cmd: ib_write_bw -d mlx5_0 -x 3 -b -F --report_gbits 10.0.0.11
+    platform: rdma
+    summary: Bidirectional test (-b) - both sides send at the same time; the reported figure is the sum of both directions.
+    notes: Bidirectional results expose PCIe or memory bottlenecks that a one-way test does not; expect roughly double the unidirectional number on a healthy system.
+    tags: [perftest, bandwidth, bidirectional]
+
+  - cmd: ib_write_bw -d mlx5_0 -R -F --report_gbits 10.0.0.11
+    platform: rdma
+    summary: Establish the connection with RDMA CM (-R) instead of the default out-of-band TCP exchange.
+    notes: With -R the GID is chosen by RDMA CM from the IP address and route, so it tests the same path an RDMA CM application would. If a test works without -R but fails with it, look at routing, ARP and the RDMA CM RoCE mode.
+    tags: [perftest, rdma-cm]
+
+  - cmd: ib_write_bw -d mlx5_0 -x 3 -T 106 -F --report_gbits 10.0.0.11
+    platform: rdma
+    summary: Set the IP ToS / traffic class (-T) on the test traffic, here 106 (DSCP 26 with ECT).
+    notes: Use to verify that test traffic lands in the switch's lossless RoCE queue. Confirm with switch queue/PFC counters while the test runs.
+    tags: [perftest, qos, dscp, roce]
+
+  - cmd: ib_write_bw -d mlx5_0 -x 3 -m 4096 -F --report_gbits 10.0.0.11
+    platform: rdma
+    summary: Request a specific path MTU (-m) for the test in bytes (256, 512, 1024, 2048 or 4096).
+    notes: The MTU cannot exceed the port's active MTU. Comparing 1024 vs 4096 shows the header-overhead effect on bandwidth.
+    tags: [perftest, mtu]
+
+  - cmd: ib_write_bw -d mlx5_0 -x 3 --use_cuda=0 -F --report_gbits 10.0.0.11
+    platform: rdma
+    summary: Allocate the test buffers in GPU 0 memory to exercise GPUDirect RDMA (NIC reads/writes GPU memory directly).
+    notes: Only works if perftest was built with CUDA support and the GPUDirect RDMA kernel support (nvidia-peermem or dma-buf) is in place. Option spelling has changed between perftest versions (older releases took --use_cuda with no index; newer ones also offer --use_cuda_dmabuf); check "ib_write_bw --help" on your build. Pick a GPU close to the NIC (same PCIe switch) or results drop.
+    tags: [perftest, gpudirect, cuda]
+
+  - cmd: ib_write_bw -d mlx5_0 -x 3 --run_infinitely -F --report_gbits 10.0.0.11
+    platform: rdma
+    summary: Run until interrupted, printing bandwidth periodically.
+    notes: Useful as a steady background load while you watch switch counters, move cables or test failover.
+    tags: [perftest, load, burn-in]
+
+  - cmd: ib_read_bw -d mlx5_0 -x 3 -F --report_gbits 10.0.0.11
+    platform: rdma
+    summary: RDMA READ bandwidth test (client shown; start the server without the address first).
+    notes: READ is limited by the number of outstanding read requests a QP may have in flight; -o sets outstanding reads, within the device limit. READ bandwidth below WRITE bandwidth at small and medium sizes is normal.
+    tags: [perftest, bandwidth, read]
+
+  - cmd: ib_send_bw -d mlx5_0 -x 3 -F --report_gbits 10.0.0.11
+    platform: rdma
+    summary: SEND/RECV bandwidth test (two-sided operations; the receiver must post receive buffers).
+    notes: Can be run over UD with -c UD (message size then limited to the MTU). Two-sided traffic is what many storage and MPI paths use.
+    tags: [perftest, bandwidth, send]
+
+  - cmd: ib_write_lat -d mlx5_0 -x 3 -a -F 10.0.0.11
+    platform: rdma
+    summary: RDMA WRITE latency for all message sizes (client shown).
+    example: |
+      # illustrative output (trimmed; numbers vary by NIC generation, switch hops and host tuning)
+       #bytes #iterations    t_min[usec]    t_max[usec]  t_typical[usec]    t_avg[usec]    t_stdev[usec]   99% percentile[usec]   99.9% percentile[usec]
+       2       1000          1.68           5.12         1.74               1.76           0.10            2.01                   5.12
+    notes: Reported values are one-way estimates (half the round trip) for the ping-pong lat tests. Look at t_typical and the 99/99.9 percentiles, not just t_min; a fat tail indicates congestion, power management or interrupts.
+    tags: [perftest, latency]
+
+  - cmd: ib_read_lat -d mlx5_0 -x 3 -F 10.0.0.11
+    platform: rdma
+    summary: RDMA READ latency test; a READ is a full round trip by nature.
+    tags: [perftest, latency, read]
+
+  - cmd: ib_send_lat -d mlx5_0 -x 3 -F 10.0.0.11
+    platform: rdma
+    summary: SEND/RECV latency test.
+    tags: [perftest, latency, send]
+
+  - cmd: ib_write_bw -d mlx5_0 -i 1 -F --report_gbits
+    platform: rdma
+    summary: Select the IB port number on the device (-i / --ib-port); on InfiniBand no GID index is needed because addressing uses the LID.
+    notes: Most modern NICs expose one port per RDMA device (mlx5_0, mlx5_1, ...), so -i 1 is the usual value.
+    tags: [perftest, infiniband]

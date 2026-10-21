@@ -1,0 +1,139 @@
+id: quiz-interview-preparation
+title: "Knowledge check: Interview preparation"
+lesson: interview-preparation
+pass_pct: 70
+questions:
+  - id: q1
+    type: scenario
+    prompt: >
+      In a troubleshooting round the interviewer says: "Training throughput dropped 20% overnight on a
+      512-GPU job." What is the best first move?
+    options:
+      - id: a
+        text: Ask about scope and timeline (which jobs, which nodes, what changed) before forming hypotheses.
+        correct: true
+        explanation: "Scope and change history narrow the search space and show method, which is what the round grades."
+      - id: b
+        text: Propose rebooting the spine switches to clear any stuck state.
+        explanation: "An action without evidence; it may destroy the evidence and rarely fixes a real root cause."
+      - id: c
+        text: Immediately set NCCL_ALGO=Tree to see if it helps.
+        explanation: "Changing tuning before understanding the symptom confuses the investigation."
+      - id: d
+        text: Say the network is probably fine and blame the model code.
+        explanation: "Dismissing a layer without evidence is exactly what interviewers mark down."
+    tags: [troubleshooting, interview]
+  - id: q2
+    type: single
+    prompt: Which answer structure works best for a conceptual question such as "explain PFC"?
+    options:
+      - id: a
+        text: Layers - definition, mechanism, AI relevance, failure mode or trade-off, how to verify - pausing between layers.
+        correct: true
+        explanation: "Shows depth while letting the interviewer steer and keeping within time."
+      - id: b
+        text: A complete ten-minute monologue covering every detail you know.
+        explanation: "Monologues prevent steering and often run past what the interviewer wanted."
+      - id: c
+        text: A one-sentence definition and nothing else.
+        explanation: "Too shallow for an engineering role; it gives no evidence of mechanism-level understanding."
+      - id: d
+        text: A list of every vendor's default PFC settings.
+        explanation: "Trivia that varies by product and version; it does not show reasoning."
+    tags: [interview, communication]
+  - id: q3
+    type: scenario
+    prompt: >
+      An interviewer asks for the exact ethtool counter name that shows CNPs handled on a NIC from a vendor
+      you have never used. What should you do?
+    options:
+      - id: a
+        text: Explain the concept (reaction-point CNP counters exist, names are driver-specific) and say where you would check, for example ethtool -S output and the driver documentation.
+        correct: true
+        explanation: "Honest, shows you know the mechanism, and gives a concrete method to find the exact name."
+      - id: b
+        text: Give the NVIDIA mlx5 name confidently as if it applies to every vendor.
+        explanation: "Counter names are driver-specific; presenting one vendor's name as universal is a credibility risk."
+      - id: c
+        text: Invent a plausible counter name to avoid looking unprepared.
+        explanation: "Bluffing is the fastest way to lose a technical interviewer's trust."
+      - id: d
+        text: Say that CNPs cannot be observed on Ethernet NICs.
+        explanation: "Incorrect; RoCE NICs commonly expose notification-point and reaction-point counters."
+    tags: [interview, honesty, roce]
+  - id: q4
+    type: single
+    prompt: A job's NCCL_DEBUG=INFO log shows it is using NET/Socket instead of NET/IB. What is the most likely class of cause?
+    options:
+      - id: a
+        text: NCCL could not use the RDMA devices (not visible in the container, plugin or library failure, or IB disabled by environment).
+        correct: true
+        explanation: "NCCL falls back to sockets when its IB transport is unavailable; check ibv_devinfo inside the container and the environment."
+      - id: b
+        text: The switches have PFC disabled.
+        explanation: "PFC settings do not change NCCL's transport choice; a lossy fabric would still show NET/IB."
+      - id: c
+        text: The message size is too small for RDMA.
+        explanation: "NCCL does not pick sockets based on message size."
+      - id: d
+        text: NVLink is down between the GPUs.
+        explanation: "NVLink affects intra-node P2P transport, not the inter-node network transport selection."
+    tags: [nccl, troubleshooting]
+  - id: q5
+    type: multi
+    prompt: Which actions belong in the first five minutes of a whiteboard design round? Select all that apply.
+    options:
+      - id: a
+        text: Clarify GPUs per server, NICs per GPU and link speed.
+        correct: true
+        explanation: "These numbers drive every sizing step that follows."
+      - id: b
+        text: Ask about growth, storage throughput and multi-tenancy needs.
+        correct: true
+        explanation: "Growth sets the radix and tier decision; storage and tenancy shape the other networks."
+      - id: c
+        text: Write the requirements and your explicit assumptions on the board.
+        correct: true
+        explanation: "Makes your reasoning auditable and lets the interviewer correct you early."
+      - id: d
+        text: Start configuring ECN thresholds for the spine.
+        explanation: "Detailed QoS tuning before sizing is a classic time-management mistake."
+    tags: [design, interview]
+  - id: q6
+    type: scenario
+    prompt: >
+      You are told `tx_prio3_pause` is climbing quickly on one host's NVIDIA NIC while `rx_prio3_pause` on that
+      host stays flat. Which interpretation is best?
+    options:
+      - id: a
+        text: The host itself is sending pause frames on priority 3, so its receive path cannot drain fast enough; investigate host-side bottlenecks.
+        correct: true
+        explanation: "tx pause means this NIC is asking its peer to stop; look at receive discards, out_of_buffer, PCIe link status and NUMA placement."
+      - id: b
+        text: The switch is pausing the host because the fabric is congested.
+        explanation: "That would show as rx_prio3_pause on the host (pause frames received)."
+      - id: c
+        text: ECN is working correctly and no action is needed.
+        explanation: "Pause frames are PFC, not ECN; fast-climbing transmitted pauses indicate a receiver problem."
+      - id: d
+        text: The counter is cosmetic and only increments on link flaps.
+        explanation: "It counts pause frames transmitted on that priority; it is a key lossless health signal."
+    tags: [roce, pfc, troubleshooting]
+  - id: q7
+    type: single
+    prompt: Which role's loop most typically emphasises test methodology, perftest and nccl-tests fluency, and writing actionable bug reports for vendors?
+    options:
+      - id: a
+        text: Network test / verification engineer.
+        correct: true
+        explanation: "Qualifying hardware, firmware and configurations before production is the core of that role."
+      - id: b
+        text: Fabric architect.
+        explanation: "Architects are tested more on design, sizing and trade-offs, though testing knowledge helps."
+      - id: c
+        text: Recruiter.
+        explanation: "Recruiters run screens but are not the role being hired for here."
+      - id: d
+        text: Facilities engineer.
+        explanation: "Facilities covers power and cooling, not network test methodology."
+    tags: [career, roles]

@@ -1,0 +1,138 @@
+id: quiz-exam-strategy
+title: "Knowledge check: Exam strategy"
+lesson: exam-strategy
+pass_pct: 70
+questions:
+  - id: q1
+    type: single
+    prompt: Where should you confirm the current name, blueprint, format and price of an NVIDIA certification exam?
+    options:
+      - id: a
+        text: On the official NVIDIA certification pages and the exam guide published there.
+        correct: true
+        explanation: "Catalogues change; only the official pages are authoritative."
+      - id: b
+        text: In a forum post summarising the exam from last year.
+        explanation: "Third-party summaries go stale and may be wrong."
+      - id: c
+        text: In this academy's mock exams.
+        explanation: "The mock exams are original practice material, not a description of any real exam."
+      - id: d
+        text: From a colleague who passed a previous version.
+        explanation: "Useful for anecdotes, but exams are re-versioned; verify officially."
+    tags: [certification]
+  - id: q2
+    type: scenario
+    prompt: >
+      You have two blueprint domains: Domain A is 25% of the exam and your confidence is 2/5; Domain B is
+      10% and your confidence is 4/5. Using weight x (5 - confidence), how should you split extra study time?
+    options:
+      - id: a
+        text: "Roughly 7.5 : 1 in favour of Domain A (25 x 3 = 75 versus 10 x 1 = 10)."
+        correct: true
+        explanation: "The heuristic prioritises heavy, weak domains."
+      - id: b
+        text: Equal time, because both domains are on the exam.
+        explanation: "Ignores both weight and weakness, so returns per hour differ greatly."
+      - id: c
+        text: More time on Domain B because it is nearly mastered.
+        explanation: "Polishing a strong, light domain yields little score improvement."
+      - id: d
+        text: "2.5 : 1 in favour of Domain A, based on weight alone."
+        explanation: "That uses weight only; the heuristic also multiplies by how far you are from mastery."
+    tags: [study-plan]
+  - id: q3
+    type: single
+    prompt: Which study activity is an example of retrieval practice?
+    options:
+      - id: a
+        text: Closing the lesson and writing down how DCQCN reacts to a CNP, then checking.
+        correct: true
+        explanation: "Recalling from memory before checking is retrieval, which strengthens memory most."
+      - id: b
+        text: Re-reading the DCQCN section three times.
+        explanation: "Re-reading builds familiarity, which is easily mistaken for recall."
+      - id: c
+        text: Highlighting the key sentences of the lesson.
+        explanation: "Highlighting is passive and has weak evidence as a learning method."
+      - id: d
+        text: Copying the lesson's diagrams into a notebook.
+        explanation: "Copying with the source visible does not require recall."
+    tags: [learning-science]
+  - id: q4
+    type: scenario
+    prompt: >
+      In a Leitner system with five boxes, a card in box 4 (two-week interval) is answered wrong. Where does it go?
+    options:
+      - id: a
+        text: Back to box 1, reviewed daily.
+        correct: true
+        explanation: "Any miss resets the card so it is relearned with short intervals."
+      - id: b
+        text: Box 3, one step down.
+        explanation: "Some software variants do this, but the classic Leitner rule sends missed cards to box 1."
+      - id: c
+        text: It stays in box 4.
+        explanation: "Leaving it means the forgotten item will not be seen for another two weeks."
+      - id: d
+        text: It is deleted because it is too hard.
+        explanation: "Hard cards are the ones that most need practice; rewrite it if it is ambiguous."
+    tags: [spaced-repetition]
+  - id: q5
+    type: scenario
+    prompt: >
+      After a timed attempt at exam-ai-fabric-2 you missed four roce questions: two because you did not know
+      headroom math, two because you overlooked the word NOT. What is the best action plan?
+    options:
+      - id: a
+        text: Reread the headroom section and make cards for the knowledge gaps; practise underlining qualifiers for the misreads.
+        correct: true
+        explanation: "Different causes need different fixes; this is the point of the error log categories."
+      - id: b
+        text: Retake the same exam tomorrow until you score 100%.
+        explanation: "An immediate retake mostly measures memory of the answers, not understanding."
+      - id: c
+        text: Reread the entire RoCE module from the beginning.
+        explanation: "Inefficient and does nothing for the misread problem."
+      - id: d
+        text: Ignore the misreads, since they were careless mistakes.
+        explanation: "Misreads recur under exam pressure unless you change your reading technique."
+    tags: [mock-exams, error-log]
+  - id: q6
+    type: multi
+    prompt: Which are sound exam-day techniques for scenario questions? Select all that apply.
+    options:
+      - id: a
+        text: Read the final question line first so you know what evidence matters.
+        correct: true
+        explanation: "Reading output with a purpose is faster and more accurate."
+      - id: b
+        text: Translate command output into a plain sentence before looking at options.
+        correct: true
+        explanation: "Forces you to interpret the evidence rather than pattern-match options."
+      - id: c
+        text: Do arithmetic on scratch paper with units.
+        correct: true
+        explanation: "Bits versus bytes and per-direction versus bidirectional are classic traps."
+      - id: d
+        text: Spend as long as needed on each question in order.
+        explanation: "Without a time budget, the last questions get guessed; flag and move on."
+    tags: [exam-technique]
+  - id: q7
+    type: single
+    prompt: A 90-minute exam has 50 questions. What is a sensible point at which to flag a question and move on?
+    options:
+      - id: a
+        text: After roughly 3.5 minutes, about twice the 1.8-minute average budget.
+        correct: true
+        explanation: "90 / 50 = 1.8 minutes per question; doubling it leaves room for hard questions without starving the rest."
+      - id: b
+        text: After 30 seconds, regardless of difficulty.
+        explanation: "Too aggressive for scenario questions with output to read."
+      - id: c
+        text: Never; always finish a question once started.
+        explanation: "Risks running out of time on questions you could have answered quickly."
+      - id: d
+        text: After 10 minutes.
+        explanation: "Five such questions would consume more than half the exam."
+    tags: [exam-technique, pacing]

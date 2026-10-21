@@ -1,0 +1,138 @@
+id: quiz-four-networks-of-an-ai-cluster
+title: "Knowledge check: the four networks of an AI cluster"
+lesson: four-networks-of-an-ai-cluster
+pass_pct: 70
+questions:
+  - id: q1
+    type: single
+    prompt: Which network carries data-parallel gradient all-reduce traffic between GPUs in different servers?
+    options:
+      - id: a
+        text: The compute (back-end) fabric.
+        correct: true
+        explanation: Cross-server GPU-to-GPU RDMA collectives are the compute fabric's purpose.
+      - id: b
+        text: The out-of-band management network.
+        explanation: OOB is a 1GbE network for BMCs and switch management, not data traffic.
+      - id: c
+        text: The front-end network.
+        explanation: The front-end carries user, scheduler and image traffic, not collectives (unless misconfigured).
+      - id: d
+        text: The NVLink domain.
+        explanation: NVLink connects GPUs within a server or rack, not between independent servers in different NVLink domains.
+    tags: [compute-fabric]
+  - id: q2
+    type: single
+    prompt: Which statement best describes the difference between scale-up and scale-out?
+    options:
+      - id: a
+        text: Scale-up joins GPUs within a server or rack over NVLink at hundreds of GB/s per GPU; scale-out joins many such nodes over NICs at 400-800 Gb/s per GPU.
+        correct: true
+        explanation: That is why the heaviest parallelism (TP) lives in the scale-up domain.
+      - id: b
+        text: Scale-up means adding more servers; scale-out means adding faster GPUs.
+        explanation: The terms are reversed and misdefined.
+      - id: c
+        text: Scale-up is the storage network; scale-out is the front-end.
+        explanation: Neither term refers to storage or front-end networks.
+      - id: d
+        text: They are two names for the same InfiniBand fabric.
+        explanation: Scale-up is NVLink-based; the scale-out fabric may be InfiniBand or Ethernet.
+    tags: [scale-up, scale-out]
+  - id: q3
+    type: scenario
+    prompt: >
+      During a fabric outage caused by a PFC storm on the compute network, operators can still SSH to the nodes and
+      the scheduler keeps working. Which design principle made this possible?
+    options:
+      - id: a
+        text: Physical and logical separation of the compute fabric from the in-band management/front-end network.
+        correct: true
+        explanation: Separate networks are separate failure domains; a back-end problem does not take down management.
+      - id: b
+        text: Using the same switches for compute and front-end with different VLANs.
+        explanation: Shared switches would share fate with the storm.
+      - id: c
+        text: Running SSH over RDMA.
+        explanation: SSH runs over TCP on the in-band network.
+      - id: d
+        text: Disabling PFC on the compute fabric.
+        explanation: The storm happened, so PFC was active; separation is what protected management.
+    tags: [failure-isolation]
+  - id: q4
+    type: multi
+    prompt: Which of the following are typically connected to the out-of-band management network? Select all that apply.
+    options:
+      - id: a
+        text: Server BMCs (IPMI/Redfish).
+        correct: true
+        explanation: Remote power, console, sensors and firmware management.
+      - id: b
+        text: Switch management ports.
+        correct: true
+        explanation: So switches can be reached even when the data-plane networks are broken.
+      - id: c
+        text: PDUs and console servers.
+        correct: true
+        explanation: Power and console access are classic OOB devices.
+      - id: d
+        text: The GPUs' 400G RDMA NICs.
+        explanation: Those belong to the compute fabric.
+    tags: [oob]
+  - id: q5
+    type: scenario
+    prompt: >
+      A new cluster's first training job runs at a fraction of expected speed. Compute-rail NIC counters are nearly
+      idle, while the front-end NIC on each node is busy. NCCL logs show it is using a socket transport. What is the
+      most likely cause?
+    options:
+      - id: a
+        text: NCCL was not restricted to, or could not initialise RDMA on, the compute-fabric devices and fell back to TCP sockets over the front-end.
+        correct: true
+        explanation: Collectives running over the wrong network is a classic bring-up mistake; check device selection and RDMA initialisation.
+      - id: b
+        text: The storage network is undersized.
+        explanation: Storage would show stalls at checkpoints, not collectives on the front-end.
+      - id: c
+        text: The OOB network is overloaded.
+        explanation: OOB carries no job traffic.
+      - id: d
+        text: The NVLink domain is too small.
+        explanation: NVLink size would not move collectives onto the front-end NIC.
+    tags: [nccl, misconfiguration]
+  - id: q6
+    type: single
+    prompt: What traffic pattern is the classic stress for the storage network during training?
+    options:
+      - id: a
+        text: Synchronised checkpoint writes from many clients converging on fewer storage servers (many-to-few incast).
+        correct: true
+        explanation: Checkpoints are large, bursty and often on the critical path.
+      - id: b
+        text: Tensor-parallel all-reduces every layer.
+        explanation: TP traffic stays in the NVLink domain.
+      - id: c
+        text: BMC sensor polling.
+        explanation: That is tiny OOB traffic.
+      - id: d
+        text: ARP broadcasts between rail leaves.
+        explanation: ARP is negligible and not a storage concern.
+    tags: [storage]
+  - id: q7
+    type: single
+    prompt: Why is the compute fabric commonly built as a closed network without a route to the Internet or front-end?
+    options:
+      - id: a
+        text: It isolates the high-performance RDMA fabric from user-reachable networks for security and keeps unrelated traffic out of its tightly managed queues.
+        correct: true
+        explanation: Both security and predictable, lossless performance benefit from keeping it closed.
+      - id: b
+        text: RDMA packets cannot be routed at all.
+        explanation: RoCEv2 is routable; closing the fabric is a design choice.
+      - id: c
+        text: The Internet requires 9000-byte MTU.
+        explanation: The Internet commonly uses 1500; this is not the reason.
+      - id: d
+        text: InfiniBand and Ethernet cannot coexist in one data center.
+        explanation: They coexist routinely; clusters often use InfiniBand for compute and Ethernet elsewhere.
+    tags: [design, security]

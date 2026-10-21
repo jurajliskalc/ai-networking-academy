@@ -1,0 +1,12 @@
+id: m04-rdma
+order: 4
+title: "RDMA fundamentals"
+level: 2
+summary: >
+  Kernel bypass and zero copy, verbs, queue pairs and memory regions, transport types, the Linux RDMA stack and benchmarking with perftest.
+lessons:
+  - why-rdma
+  - verbs-qps-mrs
+  - transport-types-operations
+  - rdma-on-linux
+  - perftest-benchmarking

@@ -1,0 +1,129 @@
+# hol-clos-bgp-unnumbered: 2 spines + 4 leaves, eBGP unnumbered on FRR, one host per leaf.
+#
+#            spine1 (AS 65000)          spine2 (AS 65000)
+#           eth1 eth2 eth3 eth4        eth1 eth2 eth3 eth4
+#             |    |    |    |           |    |    |    |
+#   leaf1 eth1 ... (every leaf: eth1 -> spine1, eth2 -> spine2, eth3 -> host)
+#   leaf1 AS 65101, leaf2 AS 65102, leaf3 AS 65103, leaf4 AS 65104
+#   hN eth1 -- leafN eth3, subnet 192.168.1N.0/24 (leaf .1, host .10)
+#
+# Deploy:  sudo containerlab deploy -t topology.clab.yml
+# Destroy: sudo containerlab destroy -t topology.clab.yml --cleanup
+#
+# The FRR image tag is pinned on purpose. If it cannot be pulled, pick another
+# released tag from https://quay.io/repository/frrouting/frr?tab=tags and
+# replace it in the "kinds" section below.
+name: hol-clos
+
+topology:
+  kinds:
+    linux:
+      image: quay.io/frrouting/frr:10.2.1
+
+  nodes:
+    spine1:
+      kind: linux
+      binds:
+        - config/daemons:/etc/frr/daemons
+        - config/vtysh.conf:/etc/frr/vtysh.conf
+        - config/spine1/frr.conf:/etc/frr/frr.conf
+      exec:
+        - sysctl -w net.ipv4.ip_forward=1
+        - sysctl -w net.ipv6.conf.all.disable_ipv6=0
+        - sysctl -w net.ipv4.conf.all.rp_filter=0
+    spine2:
+      kind: linux
+      binds:
+        - config/daemons:/etc/frr/daemons
+        - config/vtysh.conf:/etc/frr/vtysh.conf
+        - config/spine2/frr.conf:/etc/frr/frr.conf
+      exec:
+        - sysctl -w net.ipv4.ip_forward=1
+        - sysctl -w net.ipv6.conf.all.disable_ipv6=0
+        - sysctl -w net.ipv4.conf.all.rp_filter=0
+    leaf1:
+      kind: linux
+      binds:
+        - config/daemons:/etc/frr/daemons
+        - config/vtysh.conf:/etc/frr/vtysh.conf
+        - config/leaf1/frr.conf:/etc/frr/frr.conf
+      exec:
+        - sysctl -w net.ipv4.ip_forward=1
+        - sysctl -w net.ipv6.conf.all.disable_ipv6=0
+        - sysctl -w net.ipv4.conf.all.rp_filter=0
+    leaf2:
+      kind: linux
+      binds:
+        - config/daemons:/etc/frr/daemons
+        - config/vtysh.conf:/etc/frr/vtysh.conf
+        - config/leaf2/frr.conf:/etc/frr/frr.conf
+      exec:
+        - sysctl -w net.ipv4.ip_forward=1
+        - sysctl -w net.ipv6.conf.all.disable_ipv6=0
+        - sysctl -w net.ipv4.conf.all.rp_filter=0
+    leaf3:
+      kind: linux
+      binds:
+        - config/daemons:/etc/frr/daemons
+        - config/vtysh.conf:/etc/frr/vtysh.conf
+        - config/leaf3/frr.conf:/etc/frr/frr.conf
+      exec:
+        - sysctl -w net.ipv4.ip_forward=1
+        - sysctl -w net.ipv6.conf.all.disable_ipv6=0
+        - sysctl -w net.ipv4.conf.all.rp_filter=0
+    leaf4:
+      kind: linux
+      binds:
+        - config/daemons:/etc/frr/daemons
+        - config/vtysh.conf:/etc/frr/vtysh.conf
+        - config/leaf4/frr.conf:/etc/frr/frr.conf
+      exec:
+        - sysctl -w net.ipv4.ip_forward=1
+        - sysctl -w net.ipv6.conf.all.disable_ipv6=0
+        - sysctl -w net.ipv4.conf.all.rp_filter=0
+
+    h1:
+      kind: linux
+      image: alpine:3.20
+      exec:
+        - ip addr add 192.168.11.10/24 dev eth1
+        - ip route add 10.0.0.0/24 via 192.168.11.1
+        - ip route add 192.168.0.0/16 via 192.168.11.1
+    h2:
+      kind: linux
+      image: alpine:3.20
+      exec:
+        - ip addr add 192.168.12.10/24 dev eth1
+        - ip route add 10.0.0.0/24 via 192.168.12.1
+        - ip route add 192.168.0.0/16 via 192.168.12.1
+    h3:
+      kind: linux
+      image: alpine:3.20
+      exec:
+        - ip addr add 192.168.13.10/24 dev eth1
+        - ip route add 10.0.0.0/24 via 192.168.13.1
+        - ip route add 192.168.0.0/16 via 192.168.13.1
+    h4:
+      kind: linux
+      image: alpine:3.20
+      exec:
+        - ip addr add 192.168.14.10/24 dev eth1
+        - ip route add 10.0.0.0/24 via 192.168.14.1
+        - ip route add 192.168.0.0/16 via 192.168.14.1
+
+  links:
+    # spine1 downlinks
+    - endpoints: ["spine1:eth1", "leaf1:eth1"]
+    - endpoints: ["spine1:eth2", "leaf2:eth1"]
+    - endpoints: ["spine1:eth3", "leaf3:eth1"]
+    - endpoints: ["spine1:eth4", "leaf4:eth1"]
+    # spine2 downlinks
+    - endpoints: ["spine2:eth1", "leaf1:eth2"]
+    - endpoints: ["spine2:eth2", "leaf2:eth2"]
+    - endpoints: ["spine2:eth3", "leaf3:eth2"]
+    - endpoints: ["spine2:eth4", "leaf4:eth2"]
+    # hosts
+    - endpoints: ["leaf1:eth3", "h1:eth1"]
+    - endpoints: ["leaf2:eth3", "h2:eth1"]
+    - endpoints: ["leaf3:eth3", "h3:eth1"]
+    - endpoints: ["leaf4:eth3", "h4:eth1"]

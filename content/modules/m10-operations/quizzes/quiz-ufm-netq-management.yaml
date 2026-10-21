@@ -1,0 +1,135 @@
+id: quiz-ufm-netq-management
+title: "Knowledge check: UFM and NetQ"
+lesson: ufm-netq-management
+pass_pct: 70
+questions:
+  - id: q1
+    type: scenario
+    prompt: >
+      Jobs on an InfiniBand cluster fail in a burst, and UFM shows heavy sweeps and routing changes. sminfo now
+      reports a master SM GUID that does not belong to either UFM server. What is the most likely cause?
+    options:
+      - id: a
+        text: A rogue subnet manager (for example OpenSM on a test or compute node) with a higher priority took mastership.
+        correct: true
+        explanation: Only intended SMs should be able to become master. An unknown master GUID is the signature of a stray SM.
+      - id: b
+        text: A single bad cable on one leaf.
+        explanation: A bad cable causes local errors and perhaps a sweep, but does not change the master SM GUID.
+      - id: c
+        text: PFC is misconfigured on the spines.
+        explanation: InfiniBand uses credit-based flow control; PFC does not apply.
+      - id: d
+        text: The NetQ agent crashed.
+        explanation: NetQ is an Ethernet operations tool and does not run the IB subnet manager.
+    tags: [ufm, sm]
+  - id: q2
+    type: single
+    prompt: Why is UFM's availability a production dependency on InfiniBand rather than only a monitoring concern?
+    options:
+      - id: a
+        text: Its subnet manager is the fabric control plane, handling discovery, LID assignment, routing and partitions.
+        correct: true
+        explanation: Without a working SM the fabric cannot react to changes, and a newly booted fabric cannot come up.
+      - id: b
+        text: All data packets are forwarded through the UFM server.
+        explanation: Data is forwarded by switches using tables the SM programs; UFM is not in the data path.
+      - id: c
+        text: UFM provides DHCP for all hosts.
+        explanation: DHCP is not a UFM function.
+    tags: [ufm]
+  - id: q3
+    type: scenario
+    prompt: >
+      Intermittent RoCE retransmissions affect only some flows between two scalable units. Per-device checks look
+      fine. netq check mtu reports one link with MTU 1500 facing a spine port at 9216. What explains the pattern?
+    options:
+      - id: a
+        text: Only flows hashed by ECMP onto the mismatched link have their full-size packets dropped, so loss appears intermittent.
+        correct: true
+        explanation: ECMP spreads flows across many links; only those using the bad link are affected, which looks random from the endpoints.
+      - id: b
+        text: The MTU mismatch causes every flow to fragment, slowing all traffic equally.
+        explanation: RoCEv2 packets are not fragmented by the fabric; oversize packets are dropped, and only on that link.
+      - id: c
+        text: MTU mismatches cannot cause loss; the cause must be elsewhere.
+        explanation: A frame larger than the receiving interface's MTU is discarded.
+      - id: d
+        text: The spine is running an old NetQ agent.
+        explanation: Agent versions affect visibility, not forwarding.
+    tags: [netq, mtu]
+  - id: q4
+    type: single
+    prompt: Which NetQ capability is most useful for answering what changed before an incident?
+    options:
+      - id: a
+        text: Querying stored state (sessions, routes, interfaces, neighbours) as it was at an earlier time.
+        correct: true
+        explanation: Historical state snapshots let you compare before and after without having captured it manually.
+      - id: b
+        text: Running the InfiniBand subnet manager.
+        explanation: That is a UFM function on InfiniBand.
+      - id: c
+        text: Generating Jinja2 templates.
+        explanation: Templates belong to the automation pipeline, not NetQ.
+    tags: [netq]
+  - id: q5
+    type: scenario
+    prompt: >
+      During an incident engineers have to check UFM, NetQ and Grafana separately, and alerts from UFM go to an
+      email nobody reads. What is the best architectural improvement?
+    options:
+      - id: a
+        text: Forward platform events and counters into the shared TSDB and alert routing, deduplicated, alongside host and GPU data.
+        correct: true
+        explanation: One place for correlated data and one alert pipeline shortens triage and avoids missed events.
+      - id: b
+        text: Remove UFM and NetQ to reduce the number of tools.
+        explanation: You lose the SM (on IB) and vendor health rules; integration is the better answer.
+      - id: c
+        text: Add a fourth dashboard tool.
+        explanation: More silos make the problem worse.
+      - id: d
+        text: Increase the email alert frequency.
+        explanation: More unread email does not improve response.
+    tags: [integration]
+  - id: q6
+    type: scenario
+    prompt: >
+      UFM marks an InfiniBand port as unhealthy because of rising symbol errors. Jobs keep being scheduled on the
+      node behind it and run slowly. Which integration would have prevented this?
+    options:
+      - id: a
+        text: A scheduler hook that drains nodes behind ports UFM marks unhealthy until the link is repaired.
+        correct: true
+        explanation: Connecting fabric health to scheduling keeps jobs off degraded paths automatically.
+      - id: b
+        text: Lowering the symbol error threshold in UFM.
+        explanation: Detection already worked; the gap is acting on it.
+      - id: c
+        text: Running nccl-tests nightly.
+        explanation: Useful for regression detection but does not react to a specific unhealthy port in real time.
+      - id: d
+        text: Enabling ECN on the IB switches.
+        explanation: ECN marking is not the relevant mechanism, and it would not keep jobs off a degraded link.
+    tags: [ufm, scheduler]
+  - id: q7
+    type: multi
+    prompt: Which statements are good practice for fabric management platforms? (Select all that apply.)
+    options:
+      - id: a
+        text: Run at least two SM-capable UFM servers with deliberate SM priorities and tested failover.
+        correct: true
+        explanation: SM high availability protects the IB control plane.
+      - id: b
+        text: Reconcile the platform's discovered topology with the source of truth automatically.
+        correct: true
+        explanation: Mismatches reveal miscabling or stale intent.
+      - id: c
+        text: Treat predictive analytics output as certain and replace flagged links immediately without checks.
+        explanation: Predictions are prioritised hints; confirm with BER and counters.
+      - id: d
+        text: Pin runbooks to platform versions and re-test commands after upgrades.
+        correct: true
+        explanation: Commands and features change between releases.
+    tags: [best-practice]

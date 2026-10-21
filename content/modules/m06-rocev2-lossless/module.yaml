@@ -1,0 +1,14 @@
+id: m06-rocev2-lossless
+order: 6
+title: "RoCEv2 and lossless Ethernet"
+level: 3
+summary: >
+  RoCEv2 encapsulation, PFC, buffers and headroom, ECN and DCQCN, QoS trust and mapping, PFC storms and deadlocks, and an end-to-end configuration.
+lessons:
+  - rocev2-encapsulation
+  - pfc-priority-flow-control
+  - buffers-headroom-ets
+  - ecn-and-dcqcn
+  - qos-trust-and-mapping
+  - pfc-storms-deadlocks
+  - rocev2-configuration-end-to-end

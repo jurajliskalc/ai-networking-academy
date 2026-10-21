@@ -1,0 +1,137 @@
+id: quiz-ip-addressing-routing
+title: "Knowledge check: IP addressing, subnets and routing"
+lesson: ip-addressing-routing
+pass_pct: 70
+questions:
+  - id: q1
+    type: single
+    prompt: What is the usable host range of 10.0.3.77/26?
+    options:
+      - id: a
+        text: 10.0.3.65 to 10.0.3.126
+        correct: true
+        explanation: /26 gives blocks of 64; 77 lies in the 64-127 block, whose first address is the network and last is the broadcast.
+      - id: b
+        text: 10.0.3.64 to 10.0.3.127
+        explanation: Those are the network and broadcast addresses themselves, which are not usable as host addresses in a normal subnet.
+      - id: c
+        text: 10.0.3.1 to 10.0.3.254
+        explanation: That is the range of a /24, not a /26.
+      - id: d
+        text: 10.0.3.77 to 10.0.3.140
+        explanation: Subnets are aligned blocks starting at multiples of their size, not ranges starting at the host address.
+    tags: [subnetting]
+  - id: q2
+    type: single
+    prompt: Why do data center fabrics commonly use /31 prefixes on switch-to-switch links?
+    options:
+      - id: a
+        text: RFC 3021 allows both addresses of a /31 to be used on point-to-point links, so no addresses are wasted on network and broadcast.
+        correct: true
+        explanation: With thousands of links, /31 halves the address consumption compared with /30.
+      - id: b
+        text: A /31 enables ECMP, which is impossible with other prefix lengths.
+        explanation: ECMP depends on having several equal-cost routes, not on the prefix length of the links.
+      - id: c
+        text: A /31 makes the link lossless.
+        explanation: Losslessness is a link-layer property (PFC or IB credits), unrelated to IP addressing.
+      - id: d
+        text: A /31 is required by BGP.
+        explanation: BGP works on any prefix length, and BGP unnumbered can even run with no IPv4 address on the link.
+    tags: [subnetting, fabric]
+  - id: q3
+    type: single
+    prompt: A host has routes for 0.0.0.0/0, 10.0.0.0/8 and 10.4.0.0/16. Which route is used for a packet to 10.4.7.25?
+    options:
+      - id: a
+        text: 10.4.0.0/16, because it is the longest matching prefix.
+        correct: true
+        explanation: All three match, and longest-prefix match picks the most specific.
+      - id: b
+        text: 0.0.0.0/0, because the default route always wins.
+        explanation: The default route is the least specific and is only used when nothing better matches.
+      - id: c
+        text: 10.0.0.0/8, because it was probably installed first.
+        explanation: Installation order does not decide among different prefix lengths.
+      - id: d
+        text: All three, load-balanced with ECMP.
+        explanation: ECMP balances across several next hops of the same prefix, not across different prefixes.
+    tags: [routing]
+  - id: q4
+    type: multi
+    prompt: Which fields normally change as an IPv4 RoCEv2 packet crosses a routed leaf-spine fabric hop? Select all that apply.
+    options:
+      - id: a
+        text: The source and destination MAC addresses.
+        correct: true
+        explanation: Each router builds a new Ethernet header for the next link.
+      - id: b
+        text: The IP TTL.
+        correct: true
+        explanation: Every router decrements TTL (and recomputes the IPv4 header checksum).
+      - id: c
+        text: The destination IP address.
+        explanation: IP addresses are end to end inside a fabric; there is no NAT.
+      - id: d
+        text: The UDP destination port 4791.
+        explanation: Routers do not touch the transport header.
+    tags: [routing, ethernet]
+  - id: q5
+    type: scenario
+    prompt: >
+      A GPU server has eight back-end NICs, each on its own /31 to a rail leaf. "ping 10.4.7.25" works, but
+      "ping -I 10.0.0.13 10.4.7.25" (the address of NIC 2) fails. ip route get 10.4.7.25 from 10.0.0.13 shows the
+      packet leaving via NIC 1. What is the most likely fix?
+    options:
+      - id: a
+        text: Add per-NIC routing tables and ip rule entries so traffic sourced from each NIC's address uses that NIC's gateway.
+        correct: true
+        explanation: Without policy routing the main table picks one best route for all sources, so NIC 2's traffic leaves via NIC 1 and is dropped by reverse-path checks or the leaf.
+      - id: b
+        text: Increase the MTU on NIC 2.
+        explanation: A small ping is not affected by MTU; this is a path selection problem.
+      - id: c
+        text: Change NIC 2's prefix to /8 so it covers all destinations.
+        explanation: That creates overlapping, incorrect on-link routes and would make the host ARP for remote addresses.
+      - id: d
+        text: Disable ECMP on the spines.
+        explanation: The output shows the host itself choosing the wrong interface; the fabric is not involved yet.
+    tags: [multi-nic, policy-routing, troubleshooting]
+  - id: q6
+    type: single
+    prompt: In a RoCEv2 fabric, which header field typically provides most of the variety that ECMP hashing needs to spread flows?
+    options:
+      - id: a
+        text: The UDP source port, chosen by the NIC per queue pair.
+        correct: true
+        explanation: The destination port is always 4791 and addresses repeat between the same GPU pairs, so the source port supplies entropy.
+      - id: b
+        text: The IP TTL.
+        explanation: TTL is not normally part of the hash and is identical for flows of the same path length.
+      - id: c
+        text: The ECN bits.
+        explanation: ECN reflects congestion state and is not used for path selection.
+      - id: d
+        text: The Ethernet FCS.
+        explanation: The FCS is a checksum recomputed per hop and is not a hashing input.
+    tags: [ecmp, rocev2]
+  - id: q7
+    type: scenario
+    prompt: >
+      A leaf switch's ARP table shows the same MAC address for the IP addresses of four different NICs on one GPU
+      server. Traffic for those rails is arriving on the wrong NIC. What is the best explanation?
+    options:
+      - id: a
+        text: Linux's default ARP behaviour lets any interface answer for any local address (ARP flux); arp_ignore and arp_announce should be tuned.
+        correct: true
+        explanation: On multi-homed hosts this default causes exactly this symptom; vendor multi-NIC guides recommend restricting it.
+      - id: b
+        text: The four NICs physically share one MAC address by design.
+        explanation: Each NIC port has its own MAC; the shared MAC in the table comes from wrong ARP replies.
+      - id: c
+        text: The leaf's ECMP hash is mapping several IPs to one MAC.
+        explanation: ECMP selects next hops for routed traffic; it does not create ARP entries.
+      - id: d
+        text: The IP TTL is too low for ARP to reach the right NIC.
+        explanation: ARP is not an IP packet and has no TTL.
+    tags: [arp, multi-nic]

@@ -1,0 +1,138 @@
+id: quiz-linux-networking-toolkit
+title: "Knowledge check: the Linux networking toolkit"
+lesson: linux-networking-toolkit
+pass_pct: 70
+questions:
+  - id: q1
+    type: single
+    prompt: Which command tells you exactly which route, next hop and interface the kernel would use for traffic from 10.0.0.13 to 10.4.7.25, including policy rules?
+    options:
+      - id: a
+        text: ip route get 10.4.7.25 from 10.0.0.13
+        correct: true
+        explanation: It performs a real lookup, honouring ip rule entries and per-NIC tables.
+      - id: b
+        text: ip route show
+        explanation: That prints the main table only and leaves you to guess which entry wins, ignoring policy rules.
+      - id: c
+        text: ethtool -S
+        explanation: ethtool shows NIC statistics, not routing decisions.
+      - id: d
+        text: ip neigh show
+        explanation: That shows ARP/neighbour entries, not which route is chosen.
+    tags: [ip, routing]
+  - id: q2
+    type: single
+    prompt: You need to see transceiver type and, where supported, per-lane optical receive power. Which command is designed for this?
+    options:
+      - id: a
+        text: ethtool -m <interface>
+        correct: true
+        explanation: -m dumps the module EEPROM, including diagnostics where the optic supports them.
+      - id: b
+        text: ethtool -i <interface>
+        explanation: -i shows driver and firmware details, not optics.
+      - id: c
+        text: ip -s link show dev <interface>
+        explanation: That shows kernel packet and error counters, not optical levels.
+      - id: d
+        text: lldpctl <interface>
+        explanation: LLDP shows the neighbour's identity, not module diagnostics.
+    tags: [ethtool, optics]
+  - id: q3
+    type: scenario
+    prompt: >
+      During a large NCCL job, ip -s link on a back-end interface shows only a few megabytes transmitted, while the
+      switch reports the port near line rate. What is the correct interpretation?
+    options:
+      - id: a
+        text: RDMA traffic is handled in NIC hardware and bypasses the kernel, so kernel interface counters do not include it; check ethtool -S physical-port counters.
+        correct: true
+        explanation: Kernel-bypass is the reason; NIC-level counters reflect the real traffic.
+      - id: b
+        text: The switch counters must be wrong.
+        explanation: Switch counters count frames on the wire and are trustworthy here.
+      - id: c
+        text: The job is running over the front-end network instead.
+        explanation: The switch port for this back-end NIC is busy, so the traffic is on this link.
+      - id: d
+        text: The kernel counters wrapped around.
+        explanation: Modern 64-bit counters do not wrap that quickly, and a wrap would not explain the pattern.
+    tags: [rdma, counters]
+  - id: q4
+    type: multi
+    prompt: Which statements about ethtool -S counters are correct? Select all that apply.
+    options:
+      - id: a
+        text: Counter names are chosen by each driver and can differ between NIC vendors.
+        correct: true
+        explanation: Always confirm names per driver before building alerts.
+      - id: b
+        text: They are cumulative, so they should be compared as deltas over a known interval.
+        correct: true
+        explanation: A large absolute value may be months old; the rate is what matters.
+      - id: c
+        text: They are standardised by IEEE 802.3, so the same names exist on every NIC.
+        explanation: IEEE defines some managed objects, but ethtool -S names are driver-specific.
+      - id: d
+        text: They only count traffic that passed through the Linux kernel stack.
+        explanation: Physical-port counters in ethtool -S typically count everything on the wire, including RDMA.
+    tags: [ethtool, counters]
+  - id: q5
+    type: scenario
+    prompt: >
+      In a rail-optimized cluster, lldpctl on NIC 2 (ens3f0np0) of a server shows its neighbour as leaf-r07-rail5 port
+      swp9. All other NICs show the expected rail leaves. What should you conclude?
+    options:
+      - id: a
+        text: NIC 2 is miscabled to the rail-5 leaf; its traffic will take cross-rail paths, so fix the cabling and re-validate.
+        correct: true
+        explanation: Rail designs depend on NIC n reaching the rail-n leaf; LLDP is the quickest way to catch swaps.
+      - id: b
+        text: Nothing; LLDP neighbour names are arbitrary.
+        explanation: Names follow the cabling plan, and a mismatch is a real defect.
+      - id: c
+        text: The NIC firmware is faulty because it reports a rail-5 neighbour.
+        explanation: LLDP reports what the neighbour advertises; it reflects the physical cable.
+      - id: d
+        text: ECMP has rerouted NIC 2 through rail 5.
+        explanation: ECMP changes routed paths, not which switch a cable physically plugs into.
+    tags: [lldp, cabling]
+  - id: q6
+    type: single
+    prompt: Why is iperf3 a poor tool for judging whether a 400 Gb/s RoCE link performs correctly?
+    options:
+      - id: a
+        text: It measures TCP through the kernel, which is often CPU-limited well below 400 Gb/s on one host; perftest tools drive RDMA directly.
+        correct: true
+        explanation: Use ib_write_bw and friends for RDMA, and iperf3 only to validate the TCP/IP path.
+      - id: b
+        text: iperf3 cannot send packets larger than 1500 bytes.
+        explanation: iperf3 uses the interface MTU like any TCP application.
+      - id: c
+        text: iperf3 only works on InfiniBand.
+        explanation: iperf3 runs over ordinary TCP/UDP sockets on any IP network.
+      - id: d
+        text: iperf3 disables jumbo frames automatically.
+        explanation: It does no such thing.
+    tags: [iperf3, rdma]
+  - id: q7
+    type: scenario
+    prompt: >
+      mtr from a GPU node to a peer shows 40 % loss at hop 2 (a spine) and 0 % loss at the final hop. NCCL performance
+      is normal. What is the best interpretation?
+    options:
+      - id: a
+        text: The spine's control plane is rate-limiting ICMP replies; data-plane forwarding is fine because the final hop shows no loss.
+        correct: true
+        explanation: Loss that does not persist to the destination is almost always ICMP generation limits.
+      - id: b
+        text: The spine is dropping 40 % of all traffic and must be replaced.
+        explanation: If it were, the final hop and NCCL would show loss too.
+      - id: c
+        text: The TTL is misconfigured on the GPU node.
+        explanation: TTL issues would not produce intermittent loss at one middle hop only.
+      - id: d
+        text: MTU is mismatched on hop 2.
+        explanation: mtr uses small probes by default, so MTU would not cause this pattern.
+    tags: [mtr, icmp]

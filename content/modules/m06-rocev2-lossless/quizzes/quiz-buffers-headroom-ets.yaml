@@ -1,0 +1,133 @@
+id: quiz-buffers-headroom-ets
+title: "Knowledge check: Buffers, headroom and ETS"
+lesson: buffers-headroom-ets
+pass_pct: 70
+questions:
+  - id: q1
+    type: multi
+    prompt: "Which components must PFC headroom absorb after a lossless PG crosses XOFF? (Select all that apply.)"
+    options:
+      - id: a
+        text: "Bytes in flight on the cable, and the time for the PFC frame to propagate to the upstream device"
+        correct: true
+        explanation: "Together these make the round-trip cable term, proportional to length and line rate."
+      - id: b
+        text: "Up to one maximum-size frame at each end that cannot be interrupted"
+        correct: true
+        explanation: "The PFC frame may wait behind a frame in progress, and the upstream finishes its current frame."
+      - id: c
+        text: "The upstream device's PHY, FEC and MAC response delay"
+        correct: true
+        explanation: "Data keeps arriving while the upstream processes the pause. This term is device-specific."
+      - id: d
+        text: "The time for DCQCN at the sender to reduce its rate"
+        explanation: "Headroom is about link-level reaction. DCQCN acts end to end over a much longer loop and is not part of headroom sizing."
+    tags: [headroom]
+  - id: q2
+    type: single
+    prompt: "For a 400 Gb/s port with a 100 m fibre, what order of magnitude of headroom per lossless PG is reasonable?"
+    options:
+      - id: a
+        text: "About 100 KB"
+        correct: true
+        explanation: "The cable round trip (~1 µs) is ~50 KB, plus two MTUs (~18 KB) and response delays. On the order of 100 KB."
+      - id: b
+        text: "About 1 KB"
+        explanation: "One jumbo frame alone is 9 KB. 1 KB cannot absorb even one in-progress frame."
+      - id: c
+        text: "About 10 MB"
+        explanation: "That would be a large fraction of the whole switch buffer, for one PG on one port."
+      - id: d
+        text: "About 1 MB"
+        explanation: "That is the order of magnitude for a 2 km link at 400 Gb/s, not 100 m."
+    tags: [headroom, calculation]
+  - id: q3
+    type: scenario
+    prompt: "Lossless-class ingress drops appear only on the 150 m leaf-to-spine links in one hall, and only during heavy incast. The headroom watermark on those PGs hits the configured headroom size. Short links never drop. What is the most likely fix?"
+    options:
+      - id: a
+        text: "Set the correct cable length for those ports, so that the switch allocates enough headroom."
+        correct: true
+        explanation: "Headroom computed for a short default cable is too small for 150 m. The watermark reaching the limit confirms it."
+      - id: b
+        text: "Increase the ETS share of the RoCE traffic class."
+        explanation: "ETS affects scheduling shares, not the buffer reserved for in-flight bytes after a pause."
+      - id: c
+        text: "Disable ECN, so that PFC triggers earlier."
+        explanation: "Disabling ECN increases reliance on PFC and does not add headroom."
+      - id: d
+        text: "Lower the MTU on the host NICs to 1500."
+        explanation: "This reduces the MTU term slightly but costs efficiency and does not fix the length-dependent cable term."
+    tags: [headroom, troubleshooting]
+  - id: q4
+    type: single
+    prompt: "TC3 (RoCE) has an ETS share of 60 % and TC0 has 40 %. TC0 has no traffic. What bandwidth can TC3 use?"
+    options:
+      - id: a
+        text: "Up to the full link rate, because ETS shares are minimum guarantees under contention"
+        correct: true
+        explanation: "Unused share is redistributed among the classes that have traffic."
+      - id: b
+        text: "Exactly 60 % of the link, because ETS acts as a shaper"
+        explanation: "ETS is not a rate limit. Use a shaper if you need a cap."
+      - id: c
+        text: "60 % plus a burst allowance"
+        explanation: "There is no burst allowance concept in ETS shares. Unused bandwidth is simply shared."
+      - id: d
+        text: "40 %, because the scheduler alternates between TCs"
+        explanation: "Empty queues are skipped by the scheduler."
+    tags: [ets]
+  - id: q5
+    type: scenario
+    prompt: "A design puts RoCE (priority 3, PFC on) and bulk TCP backup traffic (priority 2, lossy) into the same traffic class to save queues. During RoCE congestion, the TCP backups stall completely. Why?"
+    options:
+      - id: a
+        text: "PFC pauses the shared queue, so lossy traffic in it is blocked along with RoCE."
+        correct: true
+        explanation: "A paused priority blocks the queue it shares. Give the lossless priority its own TC."
+      - id: b
+        text: "TCP does not support ECN, so it is dropped."
+        explanation: "TCP can use ECN, and the problem described is a stall, not drops."
+      - id: c
+        text: "The strict-priority CNP queue starves TC2."
+        explanation: "CNP traffic is tiny. The stall coincides with RoCE pauses, which points to the shared queue."
+      - id: d
+        text: "Dynamic thresholds give all buffer to the lossy class."
+        explanation: "Buffer allocation does not explain a complete stall tied to RoCE pause events."
+    tags: [ets, pfc]
+  - id: q6
+    type: single
+    prompt: "In DCBX, what does the willing bit control?"
+    options:
+      - id: a
+        text: "Whether a device accepts its neighbour's advertised PFC and ETS configuration"
+        correct: true
+        explanation: "A willing device adopts the peer's settings. Typically switches are non-willing and hosts are willing, or DCBX is not used at all."
+      - id: b
+        text: "Whether the device will send PFC frames"
+        explanation: "PFC transmission is governed by the PFC configuration, not by the DCBX willing bit."
+      - id: c
+        text: "Whether LLDP is enabled on the port"
+        explanation: "DCBX runs over LLDP. The willing bit is a field inside the DCBX TLVs."
+      - id: d
+        text: "Whether the device prefers the CEE or IEEE DCBX version"
+        explanation: "Version selection is separate. Both ends must run the same version."
+    tags: [dcbx]
+  - id: q7
+    type: single
+    prompt: "What does a dynamic threshold (alpha) on a shared-buffer switch do?"
+    options:
+      - id: a
+        text: "It lets a PG or queue grow up to alpha times the currently free shared buffer, so limits shrink as the switch gets busy."
+        correct: true
+        explanation: "This adapts per-queue limits to load, and for lossless PGs it effectively sets the XOFF point."
+      - id: b
+        text: "It sets a fixed maximum size for every queue."
+        explanation: "That would be a static threshold, which wastes memory when other ports are idle."
+      - id: c
+        text: "It controls the ECN marking probability."
+        explanation: "Marking probability is set by Pmax in the WRED/ECN profile."
+      - id: d
+        text: "It decides how much headroom a lossless PG reserves."
+        explanation: "Headroom is reserved separately, based on speed, cable length and MTU."
+    tags: [buffers]

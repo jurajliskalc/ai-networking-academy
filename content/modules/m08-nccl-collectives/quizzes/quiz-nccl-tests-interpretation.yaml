@@ -1,0 +1,133 @@
+id: quiz-nccl-tests-interpretation
+title: "Knowledge check: interpreting nccl-tests"
+lesson: nccl-tests-interpretation
+pass_pct: 70
+questions:
+  - id: q1
+    type: single
+    prompt: "For all_reduce_perf with n ranks, how is bus bandwidth computed from algorithm bandwidth?"
+    options:
+      - id: a
+        text: "busbw = algbw x 2(n-1)/n"
+        correct: true
+        explanation: "All-reduce moves 2(n-1)/n of the data per rank, per nccl-tests PERFORMANCE.md."
+      - id: b
+        text: "busbw = algbw x (n-1)/n"
+        explanation: "That factor applies to all-gather and reduce-scatter."
+      - id: c
+        text: "busbw = algbw x 1"
+        explanation: "That factor applies to broadcast and reduce."
+      - id: d
+        text: "busbw = algbw x n"
+        explanation: "This would overstate bandwidth massively at scale."
+    tags: [busbw]
+  - id: q2
+    type: scenario
+    prompt: "An 8 GiB (8,589,934,592 B) all-reduce across 16 ranks takes 46.5 ms. What are algbw and busbw approximately?"
+    options:
+      - id: a
+        text: "algbw about 185 GB/s, busbw about 346 GB/s."
+        correct: true
+        explanation: "8.59e9 / 0.0465 is about 184.7 GB/s; x 2 x 15/16 = 1.875 gives about 346 GB/s."
+      - id: b
+        text: "algbw about 346 GB/s, busbw about 185 GB/s."
+        explanation: "busbw is larger than algbw for all-reduce, not smaller."
+      - id: c
+        text: "algbw about 185 GB/s, busbw about 173 GB/s."
+        explanation: "This applies the (n-1)/n factor instead of 2(n-1)/n."
+      - id: d
+        text: "algbw about 23 GB/s, busbw about 43 GB/s."
+        explanation: "This divides by 8 GPUs; algbw is size divided by time."
+    tags: [math]
+  - id: q3
+    type: single
+    prompt: "Why is busbw, not algbw, used to compare all-reduce results between 16-rank and 256-rank runs?"
+    options:
+      - id: a
+        text: "algbw naturally falls as n grows, while busbw normalizes to the per-link load of an optimal algorithm and stays comparable with hardware speeds."
+        correct: true
+        explanation: "The 2(n-1)/n factor accounts for the increasing data each rank must move."
+      - id: b
+        text: "busbw includes the time of warm-up iterations."
+        explanation: "Warm-up iterations are not timed."
+      - id: c
+        text: "algbw is measured only on rank 0."
+        explanation: "Both are derived from the same timing."
+      - id: d
+        text: "busbw measures PCIe bus utilization directly."
+        explanation: "busbw is a computed number, not a measured bus counter."
+    tags: [busbw]
+  - id: q4
+    type: scenario
+    prompt: "A report claims a cluster 'only reaches 97 GB/s' based on the final 'Avg bus bandwidth' line of an all-reduce sweep from 8 B to 8 GB, while the 8 GB row shows 346 GB/s busbw. What is the right interpretation?"
+    options:
+      - id: a
+        text: "The average includes latency-bound small sizes; quote busbw at a stated large size for peak comparison."
+        correct: true
+        explanation: "Avg bus bandwidth is a sweep-dependent mean useful for regressions with identical parameters."
+      - id: b
+        text: "The cluster is broken because the average should equal the peak."
+        explanation: "Small messages are latency-bound, so the average is always far below the peak."
+      - id: c
+        text: "The 8 GB row is wrong and should be ignored."
+        explanation: "Large sizes are where bandwidth is measured best."
+      - id: d
+        text: "The test should be rerun with -c 0 to raise the average."
+        explanation: "Disabling validation does not change the timed result meaningfully."
+    tags: [avg-busbw]
+  - id: q5
+    type: scenario
+    prompt: "Servers have 8 GPUs and 8 x 400 Gb/s NICs each. A 2-node ring all-reduce plateaus at 340 GB/s busbw. A colleague says busbw cannot exceed one NIC's 50 GB/s, so the number must be wrong. Who is right?"
+    options:
+      - id: a
+        text: "The result is plausible: each ring passes through each node once, so the node's 8 NICs together bound ring busbw at about 400 GB/s."
+        correct: true
+        explanation: "With one NIC per GPU, the network-side ceiling is roughly NICs per node times per-NIC rate, capped by NVLink."
+      - id: b
+        text: "The colleague is right; busbw is bounded by a single NIC."
+        explanation: "That holds with one GPU per node, not with 8 GPUs and 8 NICs per node."
+      - id: c
+        text: "Both are wrong; busbw is bounded by PCIe Gen5 x16 bandwidth of one GPU."
+        explanation: "Each GPU only sends its own NIC's share across PCIe; the aggregate is higher."
+      - id: d
+        text: "The test must have used SHARP, which is the only way to exceed 50 GB/s."
+        explanation: "SHARP is not required for this result."
+    tags: [ceiling]
+  - id: q6
+    type: single
+    prompt: "What does a non-zero value in the #wrong column mean?"
+    options:
+      - id: a
+        text: "Elements failed result validation: a serious correctness fault to isolate (GPU, memory, NIC or software)."
+        correct: true
+        explanation: "With -c 1 nccl-tests checks results; any errors indicate corruption."
+      - id: b
+        text: "Packets were retransmitted, which is normal."
+        explanation: "Retransmissions are not counted in #wrong."
+      - id: c
+        text: "Some iterations were slower than average."
+        explanation: "#wrong is about data correctness, not timing."
+      - id: d
+        text: "The message size was not a power of two."
+        explanation: "Sizes need not be powers of two; this is unrelated."
+    tags: [validation]
+  - id: q7
+    type: multi
+    prompt: "Which practices help nccl-tests find a single faulty node or link in a large cluster? (Select all that apply.)"
+    options:
+      - id: a
+        text: "Pairwise two-node tests, rotating partners."
+        correct: true
+        explanation: "A node that pairs badly with everyone stands out."
+      - id: b
+        text: "Repeating runs to expose variance and intermittent faults."
+        correct: true
+        explanation: "One good run proves little when faults or collisions are intermittent."
+      - id: c
+        text: "Starting with single-node tests before multi-node."
+        correct: true
+        explanation: "This separates intra-node (NVLink/P2P) problems from network problems."
+      - id: d
+        text: "Running only the full-scale test with the smallest message size."
+        explanation: "Small messages are latency-bound and a full-scale run hides which node is bad."
+    tags: [methodology]

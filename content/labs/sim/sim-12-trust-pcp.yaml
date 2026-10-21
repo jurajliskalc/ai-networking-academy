@@ -1,0 +1,42 @@
+id: sim-12-trust-pcp
+title: "Trust issues: a NIC that classifies by PCP on an untagged link"
+level: 3
+estimated_minutes: 30
+lessons: [qos-trust-and-mapping, pfc-priority-flow-control, lossless-misconfigurations]
+summary: One NIC trusts PCP, so untagged RoCE traffic is received in priority 0 and PFC never protects it.
+start: node01
+ticket: |
+  **INC-4688 · Sev3 · node01 drags every job down**
+
+  > node01 was swapped for an RMA unit and re-provisioned by hand. Jobs that include it are ~3x slower,
+  > yet ib_write_bw is fine everywhere. - HPC operations
+faults:
+  - { type: host_trust, node: node01, rail: 0, trust: pcp }
+hints:
+  - "These host links are untagged (no VLAN), so there is no PCP field to trust."
+  - "`mlnx_qos -i enp24s0np0` shows the trust state."
+diagnosis:
+  prompt: What is the root cause?
+  options:
+    - id: a
+      text: node01 enp24s0np0 trusts PCP. On untagged links every received packet is classified as priority 0, so the NIC never generates PFC for RoCE and its receive buffer overflows.
+      correct: true
+      explanation: With trust PCP and no 802.1Q tag, the NIC maps everything to the default priority. RoCE traffic arriving at node01 is not protected by PFC on priority 3, so the NIC drops packets under incast and the senders retransmit.
+    - id: b
+      text: leaf01 trusts DSCP when it should trust PCP.
+      explanation: DSCP trust is the right choice for routed, untagged RoCE fabrics.
+    - id: c
+      text: node01 has the wrong GID index.
+      explanation: The connections come up fine; the problem appears only under load.
+    - id: d
+      text: The replacement node has slower GPUs.
+      explanation: The counters show drops and out-of-sequence events on one NIC, which is a network symptom.
+checks:
+  - { description: "node01 mlx5_0 trusts DSCP", check: host_trust, args: { node: node01, rail: 0, trust: dscp } }
+  - { description: "all_reduce bus bandwidth is above 360 GB/s", check: allreduce_min_busbw, args: { value: 360 } }
+solution: |
+  After a run, `ethtool -S enp24s0np0` on node01 shows RoCE arriving in `rx_prio0_packets`, and the
+  RDMA counters show `out_of_sequence` growth. `mlnx_qos -i enp24s0np0` shows `Priority trust state:
+  pcp`. Fix it with `mlnx_qos -i enp24s0np0 --trust dscp`.
+fix:
+  - "node01: mlnx_qos -i enp24s0np0 --trust dscp"

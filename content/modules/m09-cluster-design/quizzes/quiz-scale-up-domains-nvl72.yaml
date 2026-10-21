@@ -1,0 +1,164 @@
+id: quiz-scale-up-domains-nvl72
+title: "Knowledge check: Scale-up domains and NVL72"
+lesson: scale-up-domains-nvl72
+pass_pct: 70
+questions:
+  - id: q1
+    type: scenario
+    prompt: >
+      A vendor slide says "NVLink 5 gives 1.8 TB/s per GPU versus 800 Gb/s for the NIC, an 18x
+      advantage." Compared on a like-for-like basis (GB/s per direction), what is the actual ratio?
+    options:
+      - id: a
+        text: 9x (900 GB/s versus 100 GB/s per direction).
+        correct: true
+        explanation: 1.8 TB/s is bidirectional, so 900 GB/s each way; 800 Gb/s / 8 = 100 GB/s each way; 900 / 100 = 9.
+      - id: b
+        text: 18x, as the slide says.
+        explanation: 18x compares bidirectional bytes with unidirectional bytes (1,800 / 100).
+      - id: c
+        text: 2.25x (1.8 TB/s versus 800 Gb/s).
+        explanation: This mixes terabytes with gigabits without converting units.
+      - id: d
+        text: 36x.
+        explanation: 36x is the bidirectional-versus-unidirectional mistake applied to a 400G NIC.
+    tags: [bandwidth, units]
+  - id: q2
+    type: scenario
+    prompt: >
+      Ring all-reduce of a 2 GB buffer across the 8 GPUs of an HGX H100-class server
+      (NVLink 4, 900 GB/s bidirectional per GPU). Using only the bandwidth term, how long does it take
+      on NVLink, and how long would it take over 400G NICs?
+    options:
+      - id: a
+        text: About 7.8 ms on NVLink and 70 ms over 400G NICs.
+        correct: true
+        explanation: Each GPU sends 2 x 7 / 8 x 2 GB = 3.5 GB; 3.5 / 450 GB/s = 7.8 ms; 3.5 / 50 GB/s = 70 ms.
+      - id: b
+        text: About 3.9 ms on NVLink and 70 ms over NICs.
+        explanation: 3.9 ms uses 900 GB/s per direction, but NVLink 4's 900 GB/s is bidirectional (450 GB/s each way).
+      - id: c
+        text: About 2.2 ms on NVLink and 40 ms over NICs.
+        explanation: Those are the lesson's NVL72 figures for a 1 GB buffer on 72 GPUs at NVLink 5 speeds.
+      - id: d
+        text: About 4.4 ms on NVLink and 40 ms over NICs.
+        explanation: This uses S instead of 2(N-1)/N x S for the bytes sent per GPU.
+    tags: [all-reduce, calculation]
+  - id: q3
+    type: scenario
+    prompt: >
+      An MoE layer uses a 32-GPU expert-parallel group with uniform routing (destinations counted
+      including the sender). What share of the all-to-all must cross the scale-out fabric on 8-GPU
+      NVLink servers, and on an NVL72 rack?
+    options:
+      - id: a
+        text: 75% on 8-GPU servers; 0% on NVL72.
+        correct: true
+        explanation: On 8-GPU servers 8 / 32 = 25% stays on NVLink, so 75% crosses NICs; 32 GPUs fit in one 72-GPU domain.
+      - id: b
+        text: 25% on 8-GPU servers; 0% on NVL72.
+        explanation: 25% is the share that stays on NVLink, not the share that leaves.
+      - id: c
+        text: 87.5% on 8-GPU servers; 55% on NVL72.
+        explanation: 87.5% is for a 64-GPU group; and a 32-GPU group fits entirely in NVL72.
+      - id: d
+        text: 75% in both cases.
+        explanation: The domain size changes the answer; NVL72 holds the entire group.
+    tags: [expert-parallel, moe]
+  - id: q4
+    type: scenario
+    prompt: >
+      Each GPU in an NVL72 rack has one 800G scale-out NIC. How much scale-out bandwidth does a rack
+      need, and how does that compare with a 64 x 800G (51.2 Tb/s) leaf switch?
+    options:
+      - id: a
+        text: 57.6 Tb/s; more than one entire 51.2 Tb/s switch (72 ports versus 64).
+        correct: true
+        explanation: 72 x 800 Gb/s = 57.6 Tb/s, which needs 72 leaf ports, more than a full 64-port switch even before uplinks.
+      - id: b
+        text: 28.8 Tb/s; about half a switch.
+        explanation: 28.8 Tb/s is the figure for 400G NICs.
+      - id: c
+        text: 800 Gb/s; one port, since NVLink aggregates all GPUs.
+        explanation: Scale-out keeps one NIC per GPU; NVLink does not funnel the rack through one port.
+      - id: d
+        text: 129.6 Tb/s; about 2.5 switches.
+        explanation: 129.6 TB/s is the aggregate NVLink bandwidth (in bytes), not the scale-out requirement.
+    tags: [scale-out, sizing]
+  - id: q5
+    type: multi
+    prompt: Which are genuine costs or risks of moving from 8-GPU to 72-GPU NVLink domains? Select all that apply.
+    options:
+      - id: a
+        text: Rack power density on the order of 100+ kW, requiring liquid cooling.
+        correct: true
+        explanation: NVL72 racks are liquid cooled and draw far more than typical air-cooled racks.
+      - id: b
+        text: A larger failure domain; a failed tray affects a 72-GPU unit that schedulers must handle.
+        correct: true
+        explanation: Partial domains and spares become a scheduling concern.
+      - id: c
+        text: Copper reach confines the domain to a rack-scale physical footprint.
+        correct: true
+        explanation: The NVLink spine is copper, bounding the domain physically.
+      - id: d
+        text: Tensor parallelism can no longer use NVLink.
+        explanation: The opposite; larger domains give TP and EP more NVLink-connected GPUs.
+    tags: [trade-offs]
+  - id: q6
+    type: scenario
+    prompt: >
+      A TP=16 job on GB200 NVL72 racks runs much slower than a TP=16 benchmark from the vendor.
+      nccl-tests inside one rack look fine. NCCL logs show the TP group's collectives using NET
+      transport for half the ranks. What is the most likely cause?
+    options:
+      - id: a
+        text: The scheduler split the TP group across two NVLink domains (racks), pushing TP collectives onto the scale-out network.
+        correct: true
+        explanation: TP collectives should stay on NVLink; NET transport for TP ranks shows the group spans domains.
+      - id: b
+        text: PFC is disabled on the scale-out fabric.
+        explanation: Even a perfect scale-out fabric is several times slower than NVLink for TP.
+      - id: c
+        text: The NVLink domain is limited to 8 GPUs.
+        explanation: NVL72 is a 72-GPU domain; TP=16 fits within it.
+      - id: d
+        text: The storage fabric is oversubscribed.
+        explanation: Storage is not on the TP collective path.
+    tags: [scheduling, troubleshooting]
+  - id: q7
+    type: single
+    prompt: Which statement about UALink is the most accurate, appropriately hedged summary?
+    options:
+      - id: a
+        text: An industry consortium published a first memory-semantic accelerator interconnect specification in 2025, stated to scale to up to 1,024 accelerators per pod; products and interoperability are still early.
+        correct: true
+        explanation: This matches the consortium's public statements while noting maturity.
+      - id: b
+        text: UALink is NVIDIA's name for 6th-generation NVLink.
+        explanation: UALink is an open consortium effort, separate from NVLink.
+      - id: c
+        text: UALink is a scale-out Ethernet standard replacing RoCEv2.
+        explanation: UALink targets scale-up (accelerator-to-accelerator, memory semantic), not scale-out RDMA.
+      - id: d
+        text: UALink is widely deployed in production clusters larger than NVL72.
+        explanation: As of the lesson's writing, UALink is early; such claims need evidence.
+    tags: [ualink]
+  - id: q8
+    type: single
+    prompt: Where does NVIDIA's figure of about 130 TB/s of NVLink bandwidth for a GB200 NVL72 rack come from?
+    options:
+      - id: a
+        text: 72 GPUs x 1.8 TB/s per GPU (bidirectional) = 129.6 TB/s.
+        correct: true
+        explanation: It is the sum of per-GPU NVLink bandwidth across the domain.
+      - id: b
+        text: 72 GPUs x 800 Gb/s NICs.
+        explanation: That is 57.6 Tb/s of scale-out bandwidth, in bits.
+      - id: c
+        text: 9 NVLink switch trays x 14.4 TB/s each, unidirectional.
+        explanation: "The switch-side sum happens to give the same 129.6, but NVIDIA states the rack total as 72 GPUs x 1.8 TB/s, and every figure involved is bidirectional; calling it unidirectional is wrong."
+      - id: d
+        text: 36 Grace CPUs x 3.6 TB/s.
+        explanation: The figure is GPU NVLink bandwidth, not CPU bandwidth.
+    tags: [nvl72, bandwidth]

@@ -1,0 +1,131 @@
+id: quiz-qos-trust-and-mapping
+title: "Knowledge check: QoS trust and mapping"
+lesson: qos-trust-and-mapping
+pass_pct: 70
+questions:
+  - id: q1
+    type: single
+    prompt: "An application should send RoCE with DSCP 26 and ECN capable (ECT(0)). Which traffic-class (ToS byte) value should it set?"
+    options:
+      - id: a
+        text: "106"
+        correct: true
+        explanation: "26 × 4 = 104, plus ECT(0) (binary 10, value 2) = 106."
+      - id: b
+        text: "26"
+        explanation: "A ToS byte of 26 is DSCP 6 with ECT(0). That is a classic mistake."
+      - id: c
+        text: "104"
+        explanation: "104 is DSCP 26 with ECN bits 00. It is close, but not ECN-capable as written."
+      - id: d
+        text: "3"
+        explanation: "3 is the priority the DSCP maps to, not a ToS value. ToS 3 would be DSCP 0 with CE set."
+    tags: [dscp, tos]
+  - id: q2
+    type: scenario
+    prompt: "A job runs with NCCL_IB_TC=26. Under load it suffers drops and retransmissions, and the hosts' ethtool counters show the bytes in tx_prio0_bytes rather than tx_prio3_bytes. Hosts trust DSCP with the default class-selector map. What is happening?"
+    options:
+      - id: a
+        text: "ToS 26 is DSCP 6, which maps to priority 0 (lossy), so RoCE misses the lossless class."
+        correct: true
+        explanation: "NCCL_IB_TC sets the whole ToS byte. For DSCP 26 the value is 104 or 106."
+      - id: b
+        text: "NCCL does not support DSCP marking, so all NCCL traffic is priority 0."
+        explanation: "NCCL marks according to NCCL_IB_TC. The value here is simply wrong."
+      - id: c
+        text: "The switch is remarking DSCP 26 to 0."
+        explanation: "The host counters already show priority 0 at transmission, before any switch."
+      - id: d
+        text: "PFC is disabled on priority 3 on the hosts."
+        explanation: "The traffic is not in priority 3 at all, so PFC configuration on 3 is not the issue."
+    tags: [dscp, nccl, misconfiguration]
+  - id: q3
+    type: single
+    prompt: "Why do routed AI back-end fabrics generally trust DSCP rather than PCP?"
+    options:
+      - id: a
+        text: "DSCP is in the IP header and survives routed hops, while PCP lives in the VLAN tag, which is rebuilt or absent on routed links."
+        correct: true
+        explanation: "Untagged routed host links carry no PCP at all."
+      - id: b
+        text: "PCP only has 4 values."
+        explanation: "PCP has 3 bits, so 8 values, which is enough for the 8 priorities."
+      - id: c
+        text: "PFC frames carry DSCP values."
+        explanation: "PFC frames carry priorities. That is why every hop must map DSCP to the same priority."
+      - id: d
+        text: "PCP cannot be set by RDMA NICs."
+        explanation: "NICs can set PCP on VLAN interfaces. Trust PCP is just fragile in routed designs."
+    tags: [trust]
+  - id: q4
+    type: scenario
+    prompt: "Hosts are configured with trust DSCP and PFC on priority 3, and send untagged RoCE with DSCP 26. The leaf switches show no PFC activity, and every RoCE packet is counted in queue 0, which drops under incast. What is the most likely leaf misconfiguration?"
+    options:
+      - id: a
+        text: "The leaf ports trust PCP (L2), so untagged packets get the default priority 0."
+        correct: true
+        explanation: "With no VLAN tag there is no PCP to trust, so everything lands in the default priority."
+      - id: b
+        text: "The leaf's ECN Kmin is too high."
+        explanation: "ECN thresholds do not determine which queue a packet lands in."
+      - id: c
+        text: "The hosts' CNP DSCP is wrong."
+        explanation: "CNP classification does not affect the queue that data packets land in."
+      - id: d
+        text: "Headroom is not allocated on PG3."
+        explanation: "Traffic is not reaching priority 3 at all, so headroom on PG3 is irrelevant."
+    tags: [trust, pcp, misconfiguration]
+  - id: q5
+    type: single
+    prompt: "Which statement about the DSCP 26 / priority 3 and DSCP 48 / priority 6 plan is accurate?"
+    options:
+      - id: a
+        text: "It is a common NVIDIA convention that aligns with the class-selector default map (DSCP >> 3). It is not mandated by any standard."
+        correct: true
+        explanation: "Other platforms, for example SONiC's default templates, may use different lossless priorities."
+      - id: b
+        text: "It is required by the IBTA RoCEv2 annex."
+        explanation: "The RoCEv2 annex does not mandate DSCP values."
+      - id: c
+        text: "It is required by IEEE 802.1Qbb."
+        explanation: "802.1Qbb defines PFC per priority. It does not assign DSCP values to applications."
+      - id: d
+        text: "It only works on InfiniBand."
+        explanation: "DSCP and PFC priorities are Ethernet/IP concepts used for RoCE."
+    tags: [convention]
+  - id: q6
+    type: scenario
+    prompt: "perftest with -R (rdma_cm) shows perfect lossless behaviour after cma_roce_tos -d mlx5_0 -t 106 was configured, but NCCL jobs on the same hosts show their traffic on priority 0. What explains it?"
+    options:
+      - id: a
+        text: "cma_roce_tos sets the default only for rdma_cm connections. NCCL creates its QPs without rdma_cm and needs NCCL_IB_TC."
+        correct: true
+        explanation: "Each library that does not use rdma_cm needs its own traffic-class setting."
+      - id: b
+        text: "cma_roce_tos only applies after a reboot."
+        explanation: "It takes effect for new rdma_cm connections. The perftest result shows it already works."
+      - id: c
+        text: "NCCL overrides the DSCP-to-priority map on the NIC."
+        explanation: "NCCL sets the traffic class of its QPs. It does not change the NIC's QoS maps."
+      - id: d
+        text: "NCCL always uses RoCEv1."
+        explanation: "NCCL uses the GID it is configured or auto-selects, normally RoCEv2."
+    tags: [rdma_cm, nccl]
+  - id: q7
+    type: single
+    prompt: "In a switch's classification pipeline, which stage decides when PFC frames are generated?"
+    options:
+      - id: a
+        text: "The ingress priority group the internal priority maps to"
+        correct: true
+        explanation: "PFC is driven by ingress PG occupancy against XOFF/XON."
+      - id: b
+        text: "The egress traffic class scheduler"
+        explanation: "The egress TC governs ETS scheduling and ECN marking, not PFC generation."
+      - id: c
+        text: "The egress DSCP remarking stage"
+        explanation: "Remarking changes what the next hop sees. It does not generate pauses."
+      - id: d
+        text: "The routing table lookup"
+        explanation: "Routing picks the egress port. QoS stages decide PFC."
+    tags: [pipeline]

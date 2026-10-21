@@ -1,0 +1,164 @@
+id: quiz-multi-tenancy-isolation
+title: "Knowledge check: Multi-tenancy and isolation"
+lesson: multi-tenancy-isolation
+pass_pct: 70
+questions:
+  - id: q1
+    type: single
+    prompt: An InfiniBand port's PKey table contains 0x8105. What does this mean?
+    options:
+      - id: a
+        text: The port is a full member of partition 0x0105.
+        correct: true
+        explanation: The top bit (0x8000) set means full membership; the low 15 bits give partition 0x0105.
+      - id: b
+        text: The port is a limited member of partition 0x8105.
+        explanation: The top bit is the membership flag, not part of the partition number, and set means full.
+      - id: c
+        text: The port belongs to VLAN 0x105.
+        explanation: PKeys are InfiniBand partitions, unrelated to Ethernet VLAN IDs.
+      - id: d
+        text: The port is in the default partition.
+        explanation: The default partition is 0x7FFF (0xFFFF as a full member).
+    tags: [pkey]
+  - id: q2
+    type: scenario
+    prompt: >
+      Two compute nodes of different tenants are both limited members of the default partition
+      (PKey 0x7FFF in their tables), and a shared monitoring server is a full member (0xFFFF). Which
+      communication works over the default partition?
+    options:
+      - id: a
+        text: Each node can talk to the monitoring server, but the two nodes cannot talk to each other.
+        correct: true
+        explanation: Communication needs at least one full member; limited-to-limited is blocked.
+      - id: b
+        text: All three can talk to each other.
+        explanation: Limited members cannot communicate with other limited members.
+      - id: c
+        text: Nobody can talk because limited members are blocked entirely.
+        explanation: Limited members can still reach full members of the same partition.
+      - id: d
+        text: Only the two nodes can talk to each other.
+        explanation: That reverses the rule; limited-to-limited is the forbidden case.
+    tags: [pkey, membership]
+  - id: q3
+    type: scenario
+    prompt: >
+      RoCEv2 packets with a 4,096-byte payload and 58 bytes of inner headers (Ethernet, IPv4, UDP,
+      BTH, ICRC) are carried in VXLAN over an IPv6 underlay (70 bytes of encapsulation). What share
+      of the encapsulated frame is VXLAN overhead?
+    options:
+      - id: a
+        text: About 1.7%.
+        correct: true
+        explanation: 4,096 + 58 = 4,154; + 70 = 4,224; 70 / 4,224 = 1.66%.
+      - id: b
+        text: About 1.2%.
+        explanation: 1.2% is the IPv4 underlay case (50 bytes).
+      - id: c
+        text: About 17%.
+        explanation: An order-of-magnitude slip; 70 bytes is a small fraction of 4,224.
+      - id: d
+        text: About 0.07%.
+        explanation: That divides by roughly 100,000 bytes; recompute with the frame size.
+    tags: [vxlan, overhead]
+  - id: q4
+    type: scenario
+    prompt: >
+      A 4-SU rail-optimized cluster (256 GPUs per SU) hosts a 512-GPU tenant on SU 1-2. A new 64-GPU
+      tenant needs 8 servers. Which allocation gives the new tenant the best performance isolation?
+    options:
+      - id: a
+        text: 8 servers in the same SU (for example SU 4), so its rail-local traffic stays on rail leaves and never touches the spines.
+        correct: true
+        explanation: Same-SU servers share leaves only on disjoint ports; rail-local traffic does not share links with other tenants.
+      - id: b
+        text: 2 servers in each of the 4 SUs to spread load.
+        explanation: Scattering forces rail-local traffic over spines shared with the large tenant's cross-SU traffic.
+      - id: c
+        text: Any 8 servers; a 1:1 fabric guarantees no interference.
+        explanation: 1:1 capacity does not prevent ECMP collisions and shared queues on spines.
+      - id: d
+        text: 8 servers inside SU 1, interleaved with the large tenant's servers.
+        explanation: SU 1 is already fully allocated to the 512-GPU tenant.
+    tags: [placement, performance-isolation]
+  - id: q5
+    type: multi
+    prompt: Which mechanisms primarily provide performance isolation (as opposed to reachability isolation)? Select all that apply.
+    options:
+      - id: a
+        text: SU-aware, whole-server placement of tenants.
+        correct: true
+        explanation: It removes link sharing between tenants for rail-local traffic.
+      - id: b
+        text: Adaptive routing and congestion control on shared spine links.
+        correct: true
+        explanation: They reduce collisions and congestion spreading where sharing remains.
+      - id: c
+        text: Separate InfiniBand service levels mapped to different virtual lanes.
+        correct: true
+        explanation: Different VLs get separate buffers and arbitration, limiting head-of-line interference.
+      - id: d
+        text: InfiniBand PKeys.
+        explanation: PKeys decide who can talk to whom; partitions still share the same links and queues.
+    tags: [performance-isolation]
+  - id: q6
+    type: single
+    prompt: Why do bare-metal GPU clouds often enforce tenant networking on a BlueField DPU rather than in the host OS?
+    options:
+      - id: a
+        text: The DPU is a separate trust domain, so a tenant with root on the host cannot change the isolation policy, and encapsulation runs in hardware.
+        correct: true
+        explanation: Moving policy off the host is the key property for bare-metal tenancy.
+      - id: b
+        text: Host operating systems cannot run VXLAN.
+        explanation: Linux supports VXLAN; the issue is trust, not capability.
+      - id: c
+        text: DPUs remove the need for an underlay network.
+        explanation: An underlay is still required; DPUs let it stay simple.
+      - id: d
+        text: DPUs increase the number of available VLAN IDs.
+        explanation: VLAN ID space is fixed at 12 bits; DPUs typically use VXLAN VNIs.
+    tags: [dpu, bluefield]
+  - id: q7
+    type: scenario
+    prompt: >
+      After moving a tenant's RoCE traffic into a VXLAN overlay, small RDMA messages work but large
+      transfers stall or fail. Underlay links use a 4,150-byte IP MTU and the hosts use a 4,096-byte RoCE
+      MTU. What is the most likely cause?
+    options:
+      - id: a
+        text: The encapsulated packets (about 4,190 bytes at the outer IP layer, 4,204 bytes as frames, with IPv4 VXLAN) exceed the underlay MTU.
+        correct: true
+        explanation: The inner IP packet (4,140 bytes) fits 4,150, but adding the inner Ethernet header and VXLAN/UDP/IPv4 gives a 4,190-byte outer IP packet; raise the underlay MTU (jumbo frames on every hop).
+      - id: b
+        text: VXLAN cannot carry UDP traffic.
+        explanation: VXLAN carries any inner Ethernet frame, including RoCEv2's UDP packets.
+      - id: c
+        text: The EVPN control plane is not advertising MAC routes.
+        explanation: Missing routes would break small messages too.
+      - id: d
+        text: PKeys are blocking large messages.
+        explanation: PKeys are an InfiniBand mechanism and do not depend on message size.
+    tags: [vxlan, mtu, troubleshooting]
+  - id: q8
+    type: scenario
+    prompt: >
+      A GPU cloud plans for about 6,000 isolated customer segments across its Ethernet fabric. Which
+      identifier space fits, and why?
+    options:
+      - id: a
+        text: VXLAN VNIs, because 24 bits give about 16.7 million identifiers while VLANs offer only 4,094.
+        correct: true
+        explanation: 6,000 exceeds the usable 12-bit VLAN space; VNIs (with EVPN) scale far beyond it, subject to per-switch scale limits.
+      - id: b
+        text: VLANs, because 12 bits give 6,000 identifiers.
+        explanation: 12 bits give 4,096 values, of which 4,094 are usable.
+      - id: c
+        text: InfiniBand PKeys on the Ethernet switches.
+        explanation: PKeys are InfiniBand-only.
+      - id: d
+        text: DSCP values, one per customer.
+        explanation: DSCP is a 6-bit QoS marking (64 values), not an isolation identifier.
+    tags: [vxlan, scale]

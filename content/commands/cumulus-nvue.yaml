@@ -1,0 +1,111 @@
+id: cumulus-nvue
+title: NVIDIA Cumulus Linux (NVUE)
+description: Common NVUE (nv) commands for interfaces, RoCE QoS, configuration management, BGP and EVPN on Cumulus Linux 5.x; syntax and output vary by release, so verify against the NVUE command reference for your Cumulus Linux version.
+commands:
+  - cmd: nv show interface
+    platform: cumulus
+    summary: Summarize all interfaces - admin/oper state, speed, MTU, type and LLDP neighbor.
+    example: |
+      Interface  MTU   Speed  State  Remote Host  Remote Port  Type    Summary
+      ---------  ----  -----  -----  -----------  -----------  ------  ------------------
+      swp1       9216  400G   up     gpu-node-01  eth0         swp
+      swp2       9216  400G   down                             swp
+    notes: Quick check for down ports, wrong speeds and MTU mismatches across the fabric. Columns differ between releases; output is illustrative.
+    tags: [cumulus, nvue, interface, verify]
+
+  - cmd: nv show interface swp1
+    platform: cumulus
+    summary: Show detailed configuration and operational state of one interface.
+    notes: Compare the applied (configured) and operational values; NVUE separates what you asked for from what the hardware is doing.
+    tags: [cumulus, nvue, interface]
+
+  - cmd: nv show interface swp1 counters
+    platform: cumulus
+    summary: Show packet, byte, error and discard counters for one interface.
+    notes: Look at input/output errors and discards. Availability and layout of this subcommand depend on the Cumulus Linux release; verify against the NVUE command reference for your version (Linux tools such as ethtool -S swp1 remain available).
+    tags: [cumulus, nvue, counters, troubleshooting]
+
+  - cmd: nv set interface swp1-32 link mtu 9216
+    platform: cumulus
+    summary: Set the MTU on a range of switch ports (staged until nv config apply).
+    notes: RoCE fabrics usually run jumbo MTU on switch links so that a 4096-byte RDMA MTU plus headers fits; make the MTU consistent end to end.
+    tags: [cumulus, nvue, mtu, config]
+
+  - cmd: nv set qos roce
+    platform: cumulus
+    summary: Enable the built-in RoCE QoS profile (lossless mode by default), which configures trust, PFC, ECN and buffers for RoCE traffic in one step.
+    notes: "Staged until nv config apply. The defaults (which priority/DSCP is lossless, ECN thresholds) are release-specific; check them with nv show qos roce and make the hosts match. Verify against the NVUE command reference for your Cumulus Linux release."
+    tags: [cumulus, nvue, roce, pfc, ecn, config]
+
+  - cmd: nv set qos roce mode lossless
+    platform: cumulus
+    summary: Explicitly select lossless RoCE mode (PFC plus ECN) instead of lossy mode (ECN only, no PFC).
+    notes: Use lossy mode only if your design deliberately relies on ECN/congestion control without PFC (for example some adaptive-routing designs following vendor guidance). Verify against the NVUE command reference for your Cumulus Linux release.
+    tags: [cumulus, nvue, roce, lossless]
+
+  - cmd: nv show qos roce
+    platform: cumulus
+    summary: Show the active RoCE QoS settings - mode, trust, lossless priority, PFC, ECN thresholds and the DSCP/priority mappings.
+    notes: Compare this with mlnx_qos on the hosts. The lossless priority and the DSCP that NCCL or the NIC stamps (NCCL_IB_TC / cma_roce_tos) must line up. Output format varies by release.
+    tags: [cumulus, nvue, roce, verify]
+
+  - cmd: nv show interface swp1 qos roce counters
+    platform: cumulus
+    summary: Show per-port RoCE-related counters such as PFC pause frames sent/received and ECN-marked packets.
+    notes: Rising PFC pause counts on a port indicate congestion or a slow receiver behind it; ECN marks show congestion control at work. This command path is release-specific; verify against the NVUE command reference for your Cumulus Linux release.
+    tags: [cumulus, nvue, roce, pfc, ecn, counters]
+
+  - cmd: nv config diff
+    platform: cumulus
+    summary: Show the difference between the staged (pending) configuration and the currently applied one.
+    notes: Always review the diff before applying on a production fabric switch.
+    tags: [cumulus, nvue, config]
+
+  - cmd: nv config apply
+    platform: cumulus
+    summary: Apply the staged configuration to the running system.
+    notes: Some changes (QoS buffer changes in particular) can briefly disrupt traffic; apply in a maintenance window. Use -y to skip the confirmation prompt in automation.
+    tags: [cumulus, nvue, config]
+
+  - cmd: nv config save
+    platform: cumulus
+    summary: Save the applied configuration to the startup configuration file so that it persists across reboots.
+    notes: Some releases save automatically on apply (configurable); check your release behaviour and save explicitly if unsure.
+    tags: [cumulus, nvue, config]
+
+  - cmd: nv config history
+    platform: cumulus
+    summary: List previously applied configuration revisions, useful for audits and rollback.
+    tags: [cumulus, nvue, config, audit]
+
+  - cmd: nv show router bgp
+    platform: cumulus
+    summary: Show the global BGP configuration and state (ASN, router ID, enabled address families).
+    tags: [cumulus, nvue, bgp]
+
+  - cmd: nv show vrf default router bgp neighbor
+    platform: cumulus
+    summary: List BGP neighbors in the default VRF with their session state.
+    example: |
+      Neighbor  Remote AS  State        Uptime    ...
+      swp51     65100      established  2d03h
+      swp52     65100      established  2d03h
+    notes: Unnumbered BGP neighbors appear by interface name. Columns differ by release; output is illustrative. Equivalent FRR view - sudo vtysh -c "show bgp summary".
+    tags: [cumulus, nvue, bgp, verify]
+
+  - cmd: nv show evpn
+    platform: cumulus
+    summary: Show the global EVPN configuration and state, used on VXLAN/EVPN front-end or multi-tenant fabrics.
+    notes: EVPN is typical for the front-end or tenant networks, rarely for the back-end RDMA rail fabric. Drill down with nv show evpn vni (check availability in your release).
+    tags: [cumulus, nvue, evpn, vxlan]
+
+  - cmd: nv show system
+    platform: cumulus
+    summary: Show switch identity - hostname, Cumulus Linux version, uptime and platform.
+    tags: [cumulus, nvue, inventory]
+
+  - cmd: sudo vtysh -c "show bgp summary"
+    platform: cumulus
+    summary: Query FRR (the routing suite underneath NVUE) directly for a compact BGP summary across address families.
+    notes: Useful when you want the familiar FRR output format. Make configuration changes through NVUE, not vtysh, or NVUE will overwrite them.
+    tags: [cumulus, frr, bgp]

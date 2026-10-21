@@ -1,0 +1,130 @@
+id: quiz-evpn-vxlan-frontend
+title: "Knowledge check: EVPN-VXLAN for the front-end network"
+lesson: evpn-vxlan-frontend
+pass_pct: 70
+questions:
+  - id: q1
+    type: single
+    prompt: How many bytes of outer headers does VXLAN add with an IPv4 outer header and no outer VLAN tag?
+    options:
+      - id: a
+        text: 50 bytes
+        correct: true
+        explanation: Outer Ethernet 14 + IPv4 20 + UDP 8 + VXLAN 8.
+      - id: b
+        text: 8 bytes
+        explanation: That is only the VXLAN header itself.
+      - id: c
+        text: 28 bytes
+        explanation: That is IPv4 plus UDP, without outer Ethernet and VXLAN headers.
+      - id: d
+        text: 70 bytes
+        explanation: That is the overhead with an IPv6 outer header.
+    tags: [vxlan, mtu]
+  - id: q2
+    type: single
+    prompt: Which EVPN route type advertises a host's MAC address (and optionally its IP) together with the VTEP behind which it lives?
+    options:
+      - id: a
+        text: Type 2, MAC/IP Advertisement
+        correct: true
+        explanation: It also enables ARP suppression by carrying the IP-to-MAC binding.
+      - id: b
+        text: Type 3, Inclusive Multicast Ethernet Tag
+        explanation: Type 3 announces VTEP membership of a VNI for BUM flooding.
+      - id: c
+        text: Type 5, IP Prefix
+        explanation: Type 5 carries IP prefixes, not individual MACs.
+      - id: d
+        text: Type 4, Ethernet Segment
+        explanation: Type 4 is used for multihoming and designated forwarder election.
+    tags: [evpn, route-types]
+  - id: q3
+    type: scenario
+    prompt: "Tenants on a new EVPN-VXLAN front-end can ping each other across leaves with small packets, but large file transfers between racks stall. Tenant interfaces use MTU 9000 and fabric links use MTU 9000. What is wrong?"
+    options:
+      - id: a
+        text: The underlay MTU does not accommodate VXLAN overhead; full-size tenant frames plus 50 bytes exceed 9000 and are dropped.
+        correct: true
+        explanation: Raise the underlay MTU (for example around 9216) or lower tenant MTUs so encapsulated frames fit.
+      - id: b
+        text: ARP suppression blocks large packets.
+        explanation: ARP suppression affects ARP handling only.
+      - id: c
+        text: Route targets are mismatched.
+        explanation: RT mismatch would break connectivity entirely, including small pings.
+      - id: d
+        text: The VNI is too large.
+        explanation: VNIs are 24-bit identifiers and do not affect packet size.
+    tags: [vxlan, mtu, troubleshooting]
+  - id: q4
+    type: scenario
+    prompt: "On leaf 1, show evpn vni lists VNI 100 with zero remote VTEPs, although leaf 2 and leaf 3 also have VNI 100 configured and EVPN sessions to the spines are established. Leaf 1 receives other EVPN routes. What is the most likely cause?"
+    options:
+      - id: a
+        text: The route targets for VNI 100 on leaf 1 do not match those on the other leaves, so their type 3 and type 2 routes are not imported.
+        correct: true
+        explanation: Routes arrive but are not imported into VNI 100 without a matching RT.
+      - id: b
+        text: The underlay MTU is too small.
+        explanation: MTU affects data forwarding, not import of control-plane routes.
+      - id: c
+        text: The spines do not have VNI 100 configured.
+        explanation: Spines do not need VNIs; they only relay EVPN routes.
+      - id: d
+        text: ARP suppression is disabled.
+        explanation: That would increase flooding but would not hide remote VTEPs.
+    tags: [evpn, troubleshooting]
+  - id: q5
+    type: single
+    prompt: What is the main scaling advantage of symmetric IRB over asymmetric IRB?
+    options:
+      - id: a
+        text: Leaves route through a per-tenant L3 VNI, so each leaf needs only the VNIs and MACs of locally attached subnets.
+        correct: true
+        explanation: Asymmetric IRB requires every leaf to have every VNI and learn all MACs of all subnets.
+      - id: b
+        text: It removes the need for a BGP control plane.
+        explanation: Both models rely on EVPN in BGP.
+      - id: c
+        text: It eliminates the VXLAN header.
+        explanation: Traffic is still VXLAN-encapsulated in both models.
+    tags: [irb]
+  - id: q6
+    type: multi
+    prompt: Which statements about EVPN multihoming (ESI) are correct? Select all that apply.
+    options:
+      - id: a
+        text: Both leaves attached to a dual-homed server configure the same Ethernet Segment Identifier on those ports.
+        correct: true
+        explanation: The ESI identifies the shared segment across leaves.
+      - id: b
+        text: Type 4 routes support designated forwarder election so the server does not receive BUM traffic twice.
+        correct: true
+        explanation: Only the DF forwards BUM traffic to the segment.
+      - id: c
+        text: Type 1 routes enable aliasing and fast mass withdrawal when a leaf loses its link to the segment.
+        correct: true
+        explanation: Remote leaves balance across both leaves and react to one withdrawal per segment.
+      - id: d
+        text: It requires a peer link between the two leaves, as MLAG does.
+        explanation: No peer link is needed, which keeps the fabric a pure Clos.
+    tags: [multihoming]
+  - id: q7
+    type: single
+    prompt: Why is the AI back-end compute fabric usually built as a plain routed L3 Clos without EVPN-VXLAN?
+    options:
+      - id: a
+        text: GPU NICs need simple routed connectivity at maximum performance, and avoiding an overlay keeps RoCE behaviour, MTU and QoS predictable.
+        correct: true
+        explanation: Overlays are used on the back-end only when multi-tenancy requires them, in switches or DPUs.
+      - id: b
+        text: VXLAN cannot carry UDP traffic such as RoCEv2.
+        explanation: VXLAN encapsulates any Ethernet frame, including RoCEv2 packets.
+      - id: c
+        text: BGP cannot run on back-end switches.
+        explanation: Back-end Ethernet fabrics commonly run eBGP underlays.
+      - id: d
+        text: EVPN only works with InfiniBand.
+        explanation: EVPN is an Ethernet VPN technology.
+    tags: [ai-fabric, design]

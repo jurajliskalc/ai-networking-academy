@@ -1,0 +1,156 @@
+id: quiz-verbs-qps-mrs
+title: "Knowledge check: Verbs, queue pairs and memory regions"
+lesson: verbs-qps-mrs
+pass_pct: 70
+questions:
+  - id: q1
+    type: single
+    prompt: What is the correct order of states an RC queue pair passes through before it can post sends?
+    options:
+      - id: a
+        text: RESET, INIT, RTR, RTS
+        correct: true
+        explanation: Each transition is made with ibv_modify_qp and requires its own set of attributes.
+      - id: b
+        text: INIT, RESET, RTS, RTR
+        explanation: A new QP starts in RESET, and RTR (ready to receive) precedes RTS (ready to send).
+      - id: c
+        text: RESET, RTS, RTR, INIT
+        explanation: The QP must be bound to a port (INIT) and know its peer (RTR) before it can send.
+      - id: d
+        text: RESET, INIT, RTS, SQD
+        explanation: SQD is an optional drain state used later; RTR cannot be skipped.
+    tags: [qp-state-machine]
+  - id: q2
+    type: single
+    prompt: Which attributes are needed for the INIT to RTR transition of an RC QP?
+    options:
+      - id: a
+        text: Remote address (AH attributes), path MTU, destination QPN, receive PSN, max_dest_rd_atomic and min_rnr_timer.
+        correct: true
+        explanation: RTR is where the QP learns who its peer is and how to receive from it.
+      - id: b
+        text: Send PSN, timeout, retry_cnt, rnr_retry and max_rd_atomic.
+        explanation: Those are the RTR to RTS attributes.
+      - id: c
+        text: Port number, P_Key index and access flags only.
+        explanation: Those are set in the RESET to INIT transition.
+      - id: d
+        text: Only the Q_Key.
+        explanation: A Q_Key is used by UD QPs, set at INIT.
+    tags: [qp-state-machine, attributes]
+  - id: q3
+    type: single
+    prompt: An RC QP has timeout = 18 and retry_cnt = 7. Roughly how long can a sender wait before reporting IBV_WC_RETRY_EXC_ERR on a dead path?
+    options:
+      - id: a
+        text: About 8 x 1.07 s, so roughly 8-9 seconds.
+        correct: true
+        explanation: Timeout is 4.096 us x 2^18 = about 1.07 s per attempt; with 7 retries there are about 8 attempts.
+      - id: b
+        text: About 18 microseconds.
+        explanation: The value is an exponent, not a time in microseconds.
+      - id: c
+        text: About 7 milliseconds.
+        explanation: That underestimates the exponential timeout by several orders of magnitude.
+      - id: d
+        text: It waits forever because retry_cnt 7 means infinite.
+        explanation: The value 7 means infinite only for rnr_retry, not retry_cnt.
+    tags: [timeout, retry]
+  - id: q4
+    type: multi
+    prompt: Which statements about memory registration (ibv_reg_mr) are true? (Select all that apply.)
+    options:
+      - id: a
+        text: It pins the buffer's pages so they cannot be swapped out while the NIC may access them.
+        correct: true
+        explanation: Pinning is why registration counts against the memlock limit.
+      - id: b
+        text: It returns an lkey for local work requests and an rkey that a peer uses for remote access.
+        correct: true
+        explanation: Both keys are fields of the returned struct ibv_mr.
+      - id: c
+        text: Remote write requires IBV_ACCESS_REMOTE_WRITE (together with local write).
+        correct: true
+        explanation: The libibverbs API requires local write whenever remote write or atomic access is requested.
+      - id: d
+        text: It is cheap enough to call for every message on the data path.
+        explanation: Registration involves a system call, pinning and NIC table updates; applications register once and reuse buffers.
+    tags: [memory-region]
+  - id: q5
+    type: scenario
+    prompt: >
+      An application's logs show thousands of IBV_WC_WR_FLUSH_ERR completions and one
+      IBV_WC_REM_ACCESS_ERR that appeared just before them, right after the peer reallocated its
+      receive buffers. What is the most likely root cause?
+    options:
+      - id: a
+        text: The initiator is using a stale rkey or address for buffers the peer deregistered and re-registered.
+        correct: true
+        explanation: The remote access error is the first error; it moved the QP to ERR, and everything else was flushed.
+      - id: b
+        text: The fabric is dropping packets, causing the flush errors.
+        explanation: Packet loss would show as retry-exceeded errors, not remote access errors; flushes are only consequences.
+      - id: c
+        text: The CQ is too small, which causes flush errors.
+        explanation: CQ overflow causes an asynchronous CQ error, not a remote access error on a specific WR.
+      - id: d
+        text: The local buffer was not registered.
+        explanation: That would cause a local protection error (IBV_WC_LOC_PROT_ERR), not a remote access error.
+    tags: [troubleshooting, completions]
+  - id: q6
+    type: scenario
+    prompt: >
+      On a RoCE cluster, a new benchmark program's QPs reach RTS without error, but the very first
+      RDMA Write completes with "transport retry counter exceeded". ibv_rc_pingpong between the same
+      hosts works when run with -g 3. What should you check first in the new program?
+    options:
+      - id: a
+        text: The GID index (sgid_index) in the address vector used for INIT to RTR.
+        correct: true
+        explanation: A wrong GID index (wrong RoCE version or IP) lets the QP reach RTS but packets never reach the peer, so retries are exhausted.
+      - id: b
+        text: Whether the MR has IBV_ACCESS_REMOTE_READ.
+        explanation: Missing permissions produce access errors, not retry exhaustion.
+      - id: c
+        text: Whether the CQ uses a completion channel.
+        explanation: Polling versus events does not affect whether packets reach the peer.
+      - id: d
+        text: Whether IBV_SEND_INLINE is set.
+        explanation: Inline only affects how the payload is fetched by the local NIC.
+    tags: [roce, gid, troubleshooting]
+  - id: q7
+    type: single
+    prompt: What does a successful work completion for an RDMA Write on an RC QP guarantee?
+    options:
+      - id: a
+        text: The remote NIC acknowledged the data; it does not mean the remote application has looked at it.
+        correct: true
+        explanation: RDMA Write is one-sided, so the remote application must be told separately (e.g. Write-with-Immediate or a follow-up Send).
+      - id: b
+        text: The remote application has processed the data.
+        explanation: The remote CPU is not involved in an RDMA Write and gets no notification.
+      - id: c
+        text: The data has only been copied into a local kernel buffer.
+        explanation: RDMA does not stage data in kernel buffers.
+    tags: [completions, semantics]
+  - id: q8
+    type: scenario
+    prompt: >
+      rdma resource show qp on a stuck training node lists the job's RC QPs in state INIT, with rqpn 0,
+      for several minutes. The IB ports are Active. Where is the problem most likely to be?
+    options:
+      - id: a
+        text: The out-of-band exchange of connection details (bootstrap network, rendezvous) has not completed.
+        correct: true
+        explanation: A QP needs the peer's QPN, PSN and address to move to RTR; without the exchange it stays in INIT.
+      - id: b
+        text: The QPs ran out of retries and entered ERR.
+        explanation: Retry exhaustion would show ERR, and only happens once sending has started in RTS.
+      - id: c
+        text: The switches are dropping RDMA packets.
+        explanation: No RDMA packets are sent from INIT; the QP has not been connected yet.
+      - id: d
+        text: The memory regions lack remote write permission.
+        explanation: Permissions are checked when operations arrive, not during state transitions.
+    tags: [qp-state-machine, troubleshooting]

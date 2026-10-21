@@ -1,0 +1,159 @@
+id: quiz-fabric-sizing-math
+title: "Knowledge check: Fabric sizing math"
+lesson: fabric-sizing-math
+pass_pct: 70
+questions:
+  - id: q1
+    type: single
+    prompt: A non-blocking two-tier fat tree is built from 48-port switches. What is the maximum number of endpoints and the total switch count?
+    options:
+      - id: a
+        text: 1,152 endpoints, 72 switches.
+        correct: true
+        explanation: k^2 / 2 = 48^2 / 2 = 2,304 / 2 = 1,152; switches = 3k / 2 = 48 leaves + 24 spines = 72.
+      - id: b
+        text: 2,304 endpoints, 96 switches.
+        explanation: k^2 forgets that half of each leaf's ports are uplinks.
+      - id: c
+        text: 27,648 endpoints, 2,880 switches.
+        explanation: Those are the three-tier figures (k^3 / 4 and 5k^2 / 4).
+      - id: d
+        text: 576 endpoints, 48 switches.
+        explanation: That halves the endpoint count again; each spine can reach 48 leaves, not 24.
+    tags: [fat-tree, two-tier]
+  - id: q2
+    type: single
+    prompt: For a full three-tier fat tree of 32-port switches, how many endpoints and core switches are there?
+    options:
+      - id: a
+        text: 8,192 endpoints and 256 core switches.
+        correct: true
+        explanation: k^3 / 4 = 32,768 / 4 = 8,192; core = k^2 / 4 = 1,024 / 4 = 256.
+      - id: b
+        text: 512 endpoints and 16 core switches.
+        explanation: 512 is the two-tier limit (k^2 / 2) for k = 32; core count is k^2 / 4, not k / 2.
+      - id: c
+        text: 32,768 endpoints and 1,024 core switches.
+        explanation: Those are k^3 and k^2 without the divisions by 4.
+      - id: d
+        text: 8,192 endpoints and 1,280 core switches.
+        explanation: 1,280 = 5k^2 / 4 is the total switch count, not the core layer alone.
+    tags: [fat-tree, three-tier]
+  - id: q3
+    type: scenario
+    prompt: >
+      You must connect 4,096 GPUs (400G each) 1:1 using only 64-port 400G switches. Using the
+      lesson's partial three-tier method (pods of k^2/4 endpoints), how many switches do you need?
+    options:
+      - id: a
+        text: 320 (128 leaves, 128 aggregation, 64 core).
+        correct: true
+        explanation: Pods of 1,024 endpoints means 4 pods; 4 x 32 leaves and 4 x 32 aggregation; 128 x 32 uplinks / 64 = 64 core.
+      - id: b
+        text: 96 (64 leaves, 32 spines).
+        explanation: That is the two-tier answer for 128-port switches; 64-port switches top out at 2,048 endpoints in two tiers.
+      - id: c
+        text: "5,120."
+        explanation: That is a full k = 64 three-tier tree for 65,536 endpoints; a partial build is far smaller.
+      - id: d
+        text: 192 (128 leaves, 64 spines).
+        explanation: Two tiers of 64-port switches cannot have 128 leaves; each spine only has 64 ports.
+    tags: [sizing, three-tier]
+  - id: q4
+    type: scenario
+    prompt: >
+      A storage network uses 48-port 400G leaves at 2:1 oversubscription in two tiers. What is the
+      maximum endpoint count, and what bandwidth can each endpoint get when all endpoints on a leaf
+      send off-leaf at once?
+    options:
+      - id: a
+        text: 1,536 endpoints, 200 Gb/s each.
+        correct: true
+        explanation: d = 48 x 2 / 3 = 32 down, u = 16 up; 48 leaves x 32 = 1,536; 16 x 400 / 32 = 200 Gb/s.
+      - id: b
+        text: 1,152 endpoints, 400 Gb/s each.
+        explanation: That is the non-blocking (1:1) result, not 2:1.
+      - id: c
+        text: 2,304 endpoints, 100 Gb/s each.
+        explanation: That would need all 48 ports down; there would be no uplinks.
+      - id: d
+        text: 1,536 endpoints, 133 Gb/s each.
+        explanation: 133 Gb/s is the 3:1 figure; at 2:1 an endpoint gets half of line rate.
+    tags: [oversubscription]
+  - id: q5
+    type: scenario
+    prompt: >
+      A 1,024-GPU two-tier fabric uses 64-port 400G switches (32 leaves, 16 spines), all links
+      optical. Hosts use single-port 400G modules; switches use twin-port 2 x 400G modules. How many
+      transceivers are needed?
+    options:
+      - id: a
+        text: "2,560."
+        correct: true
+        explanation: Host 1,024 + leaf down 1,024 / 2 = 512 + leaf-spine 1,024 links x 2 ends / 2 = 1,024; total 2,560.
+      - id: b
+        text: "2,048."
+        explanation: 1,024 host + 1,024 leaf-spine omits the 512 leaf-side modules that terminate the host links.
+      - id: c
+        text: "4,096."
+        explanation: That treats every 400G port on switches as its own module, ignoring twin-port modules.
+      - id: d
+        text: "1,536."
+        explanation: This omits the host-side modules.
+    tags: [optics, counting]
+  - id: q6
+    type: single
+    prompt: What does splitting each 800G port of a 64-port 51.2 Tb/s switch into 2 x 400G change?
+    options:
+      - id: a
+        text: Radix doubles to 128 at half the per-port speed; total switch bandwidth stays 51.2 Tb/s.
+        correct: true
+        explanation: Splitting trades speed for radix, which raises the two-tier limit from 2,048 to 8,192 endpoints.
+      - id: b
+        text: Total switch bandwidth doubles to 102.4 Tb/s.
+        explanation: The ASIC capacity is unchanged; 128 x 400G = 64 x 800G.
+      - id: c
+        text: The two-tier limit stays at 2,048 endpoints because the ASIC is the same.
+        explanation: The limit depends on radix, which doubles; k^2 / 2 becomes 8,192.
+      - id: d
+        text: Oversubscription becomes 2:1 automatically.
+        explanation: Oversubscription depends on how many ports you assign up versus down, not on splitting.
+    tags: [radix, port-splitting]
+  - id: q7
+    type: multi
+    prompt: Which checks catch real errors in a fat-tree bill of materials? Select all that apply.
+    options:
+      - id: a
+        text: In a 1:1 two-tier design, the leaf-spine link count equals the endpoint count.
+        correct: true
+        explanation: Every endpoint port has a matching uplink port at 1:1.
+      - id: b
+        text: Leaf uplinks divide evenly across the spines.
+        correct: true
+        explanation: Uneven distribution leaves some spines with more paths and makes ECMP uneven.
+      - id: c
+        text: Transceivers are counted per link end, then divided by ports per module.
+        correct: true
+        explanation: Counting one module per link halves the optical order.
+      - id: d
+        text: The number of spines equals the number of GPUs per server.
+        explanation: That is the number of rail leaves per SU, not a spine rule.
+    tags: [bom, validation]
+  - id: q8
+    type: single
+    prompt: What is the bisection bandwidth of a full non-blocking two-tier fat tree with 8,192 endpoints at 400G?
+    options:
+      - id: a
+        text: 1,638.4 Tb/s.
+        correct: true
+        explanation: Half the endpoints x link rate = 4,096 x 400 Gb/s = 1,638,400 Gb/s = 1,638.4 Tb/s.
+      - id: b
+        text: 3,276.8 Tb/s.
+        explanation: That is total injection bandwidth (all 8,192 endpoints), not the bisection.
+      - id: c
+        text: 409.6 Tb/s.
+        explanation: That is the bisection for 2,048 endpoints.
+      - id: d
+        text: 51.2 Tb/s.
+        explanation: That is the capacity of one switch.
+    tags: [bisection]

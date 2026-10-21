@@ -1,0 +1,12 @@
+id: m03-dc-fabrics
+order: 3
+title: "Data center fabric fundamentals"
+level: 2
+summary: >
+  Clos and leaf-spine fabrics, oversubscription, ECMP, BGP in the data center and EVPN-VXLAN for the front-end network.
+lessons:
+  - clos-leaf-spine
+  - oversubscription-and-blocking
+  - ecmp-hashing
+  - bgp-in-the-data-center
+  - evpn-vxlan-frontend

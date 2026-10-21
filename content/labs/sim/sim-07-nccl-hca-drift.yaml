@@ -1,0 +1,46 @@
+id: sim-07-nccl-hca-drift
+title: "Config drift: half the rails silently unused"
+level: 2
+estimated_minutes: 25
+lessons: [nccl-configuration, nccl-debugging, network-automation-for-ai]
+summary: A leftover from a debugging session on one node limits every job to four NICs.
+start: node01
+ticket: |
+  **INC-4602 · Sev3 · Exactly half the expected bandwidth**
+
+  > `all_reduce_perf` gives ~185 GB/s instead of ~370. Every link is up, there are no errors anywhere,
+  > and every NIC passes ib_write_bw at line rate. - ML platform team
+
+  Find out why NCCL uses less of the fabric than it should.
+faults:
+  - { type: nccl_conf, node: node03, set: { NCCL_IB_HCA: "mlx5_0,mlx5_1,mlx5_2,mlx5_3" } }
+hints:
+  - "Turn on NCCL logging with `sed -i 's/NCCL_DEBUG=WARN/NCCL_DEBUG=INFO/' /etc/nccl.conf` and run the test again. Which NICs does NET/IB use?"
+  - Compare /etc/nccl.conf across all four nodes.
+diagnosis:
+  prompt: What is the root cause?
+  options:
+    - id: a
+      text: node03's /etc/nccl.conf restricts NCCL_IB_HCA to mlx5_0-mlx5_3, so the job can only use four rails.
+      correct: true
+      explanation: The rings need the same rails on every rank, so one node's restriction limits everyone. This is a classic leftover from a debugging session that bypassed configuration management.
+    - id: b
+      text: Four of the eight leaves are oversubscribed.
+      explanation: There are no drops and no pause storms; the missing half is traffic that is never sent.
+    - id: c
+      text: NCCL_IB_GID_INDEX is wrong on node03.
+      explanation: A wrong GID index makes connections fail outright.
+    - id: d
+      text: NCCL picked the tree algorithm, which uses half the bandwidth.
+      explanation: The choice of algorithm does not halve bandwidth exactly, and NCCL INFO shows only four HCAs in use.
+checks:
+  - { description: "node03 lets NCCL use all eight HCAs", check: nccl_hca_all, args: { node: node03 } }
+  - { description: "all_reduce bus bandwidth is above 360 GB/s", check: allreduce_min_busbw, args: { value: 360 } }
+solution: |
+  With `NCCL_DEBUG=INFO` the log shows only `NET/IB : Using [0]mlx5_0:1/RoCE ... [3]mlx5_3:1/RoCE`.
+  `cat /etc/nccl.conf` on node03 shows `NCCL_IB_HCA=mlx5_0,mlx5_1,mlx5_2,mlx5_3`. Restore it, for
+  example with `sed -i 's/^NCCL_IB_HCA=.*/NCCL_IB_HCA=mlx5/' /etc/nccl.conf`.
+
+  Prevention: manage nccl.conf with configuration management and alert on drift.
+fix:
+  - "node03: sed -i 's/^NCCL_IB_HCA=.*/NCCL_IB_HCA=mlx5/' /etc/nccl.conf"

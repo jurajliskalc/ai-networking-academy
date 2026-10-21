@@ -1,0 +1,159 @@
+id: quiz-telemetry-counters
+title: "Knowledge check: counters that matter"
+lesson: telemetry-counters
+pass_pct: 70
+questions:
+  - id: q1
+    type: scenario
+    prompt: >
+      Over 60 seconds of an all-reduce, two nodes in the same job show similar np_ecn_marked_roce_packets,
+      np_cnp_sent and rp_cnp_handled deltas. Node B additionally shows out_of_sequence +14,000,
+      packet_seq_err +3,000 and local_ack_timeout_err +200; node A shows zero for all three. What is the
+      most likely conclusion?
+    options:
+      - id: a
+        text: Node B's path is losing packets, so its RC transport is retransmitting; look for drops or link errors on that path.
+        correct: true
+        explanation: Sequence errors and ACK timeouts are the transport's reaction to loss. Congestion signals are equal, so the difference is loss, not congestion.
+      - id: b
+        text: Node B has DCQCN disabled, which is why it sees more congestion.
+        explanation: Node B handles CNPs (rp_cnp_handled is similar to node A), so congestion control is active on both.
+      - id: c
+        text: Both nodes are healthy; sequence errors are a normal side effect of ECN marking.
+        explanation: ECN marking does not drop or reorder packets. Sequence errors indicate loss or reordering.
+      - id: d
+        text: Node A is the problem because it shows no sequence errors at all.
+        explanation: Zero sequence errors is the expected healthy state for an RC transport on a lossless fabric.
+    tags: [rdma, counters]
+  - id: q2
+    type: scenario
+    prompt: >
+      A RoCE host NIC shows tx_prio3_pause increasing quickly while its leaf switch port shows no egress
+      congestion towards the host. What should you suspect first?
+    options:
+      - id: a
+        text: The host cannot drain received traffic fast enough, for example a PCIe link downtrained to fewer lanes or receive starvation.
+        correct: true
+        explanation: A NIC transmits pauses when its own receive buffer fills. That points inside the host, at the path from NIC to memory or at the consumer.
+      - id: b
+        text: The spine is congested and pausing the host.
+        explanation: Spine congestion would show as pauses received by the host (rx_prio3_pause), not transmitted by it.
+      - id: c
+        text: ECN is disabled on the leaf.
+        explanation: ECN configuration affects marking on the switch; it does not explain the host originating pauses.
+      - id: d
+        text: The optic on the host port has a high pre-FEC BER.
+        explanation: Physical errors cause corrupted or dropped frames, not a host sending PFC pauses.
+    tags: [pfc, host]
+  - id: q3
+    type: single
+    prompt: Why must most hardware counters be converted to rates or deltas before alerting?
+    options:
+      - id: a
+        text: They are cumulative since driver load or the last clear, so an absolute value mostly reflects uptime.
+        correct: true
+        explanation: A large absolute pause count may be years of normal operation. The rate over a window is what reflects current behaviour.
+      - id: b
+        text: They reset every second, so absolute values are always near zero.
+        explanation: Hardware counters do not reset each second; they accumulate.
+      - id: c
+        text: Prometheus cannot store integers larger than 32 bits.
+        explanation: Prometheus stores samples as 64-bit floats; storage width is not the reason.
+    tags: [telemetry]
+  - id: q4
+    type: scenario
+    prompt: >
+      Across a RoCE fabric, PFC pause counters are rising on many leaf ports during training, but switch
+      ECN-marked packet counters and host np_cnp_sent stay at zero. What is the most likely issue?
+    options:
+      - id: a
+        text: ECN marking is not enabled (or not effective) on the RoCE queue, so PFC is doing all the congestion control.
+        correct: true
+        explanation: In a well-tuned fabric ECN marks and CNPs appear before PFC is needed. No marks at all while pauses rise indicates ECN is off or thresholded above XOFF.
+      - id: b
+        text: The fabric is perfectly healthy; zero CNPs means no congestion.
+        explanation: The pauses prove there is congestion. Zero CNPs means the end-to-end signal is missing.
+      - id: c
+        text: The optics are failing and causing retransmissions.
+        explanation: Physical errors show as symbol, CRC or FEC uncorrectable counters, not as a pattern of pauses with no ECN.
+      - id: d
+        text: The GPUs are thermally throttling.
+        explanation: GPU throttling reduces offered load; it does not suppress ECN marking.
+    tags: [ecn, pfc, dcqcn]
+  - id: q5
+    type: scenario
+    prompt: >
+      perfquery on an InfiniBand switch port shows SymbolErrorCounter and PortRcvErrors increasing between
+      polls, while every other port on the same switch is clean. What is the best next step?
+    options:
+      - id: a
+        text: Check the link's BER with mlxlink, then reseat or replace the cable/transceiver on that link and clear counters to verify.
+        correct: true
+        explanation: Errors isolated to one port point at its physical link (cable, optic or far-end port). Fix, clear and re-measure under load.
+      - id: b
+        text: Restart the Subnet Manager to recompute routes.
+        explanation: Routing does not cause symbol errors; the problem is physical.
+      - id: c
+        text: Increase PortXmitWait thresholds so the alert stops.
+        explanation: PortXmitWait measures credit starvation and is unrelated to symbol errors; silencing alerts hides a real fault.
+      - id: d
+        text: Enable PFC on the port.
+        explanation: InfiniBand uses credit-based flow control; PFC is an Ethernet mechanism.
+    tags: [infiniband, perfquery]
+  - id: q6
+    type: single
+    prompt: Which counter is the primary congestion indicator on an InfiniBand port?
+    options:
+      - id: a
+        text: PortXmitWait
+        correct: true
+        explanation: It counts ticks where the port had data to send but no credits, the IB equivalent of being paused.
+      - id: b
+        text: LinkDownedCounter
+        explanation: Counts link-down events, a physical stability metric.
+      - id: c
+        text: rx_prio3_pause
+        explanation: That is an Ethernet PFC counter on mlx5 netdevs, not an IB port counter.
+      - id: d
+        text: VL15Dropped
+        explanation: Counts dropped management (VL15) packets, not data congestion.
+    tags: [infiniband]
+  - id: q7
+    type: multi
+    prompt: Which statements about mlx5 host counters are correct? (Select all that apply.)
+    options:
+      - id: a
+        text: RDMA transport counters such as out_of_sequence are exposed under /sys/class/infiniband/<dev>/ports/<port>/hw_counters.
+        correct: true
+        explanation: RoCE transport events bypass the kernel stack and appear in the RDMA hw_counters tree (also via rdma statistic).
+      - id: b
+        text: rx_out_of_buffer counts host receive-queue starvation rather than switch buffer drops.
+        correct: true
+        explanation: It means no receive descriptor was available on the host, which is distinct from the port or fabric dropping packets.
+      - id: c
+        text: A non-zero rx_corrected_bits_phy always means the optic must be replaced.
+        explanation: PAM4 links correct some bits routinely. Uncorrectable errors and BER trends are what matter.
+      - id: d
+        text: Counter names are identical across all ConnectX generations and driver versions.
+        explanation: Names and availability vary; verify against the mlx5 documentation for your version.
+    tags: [mlx5, counters]
+  - id: q8
+    type: scenario
+    prompt: >
+      One node is consistently the slowest rank in nccl-tests. Its NIC, RDMA and leaf counters look identical
+      to its peers. DCGM shows the SM clock on two of its GPUs dropping periodically. What do you check next?
+    options:
+      - id: a
+        text: DCGM clock event (throttle) reasons and GPU temperature/power for those GPUs.
+        correct: true
+        explanation: Clean network counters plus GPU clock drops point at thermal or power throttling, which DCGM reports directly.
+      - id: b
+        text: Increase the PFC headroom on the leaf.
+        explanation: There is no evidence of drops or pauses; buffer changes will not fix slow GPUs.
+      - id: c
+        text: Replace the node's network optics.
+        explanation: Link counters are clean, so the optics are not implicated.
+      - id: d
+        text: Disable ECN to reduce CNPs.
+        explanation: Congestion signals match peers; disabling ECN would only make the fabric worse.
+    tags: [dcgm, gpu]

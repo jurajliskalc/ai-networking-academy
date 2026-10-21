@@ -1,0 +1,724 @@
+terms:
+  - term: "5-tuple"
+    definition: "The set of header fields (source IP, destination IP, protocol, source port, destination port) that switches commonly hash to pick an ECMP next hop. All packets with the same 5-tuple follow the same path, which keeps order but makes per-flow collisions possible."
+    lesson: ecmp-hashing
+  - term: "ACS"
+    expansion: "Access Control Services"
+    definition: "A PCIe capability that can force peer-to-peer transactions up to the root complex for isolation checks. When enabled on PCIe switches it can break or slow GPU-to-NIC peer-to-peer traffic, so GPUDirect RDMA deployments commonly disable it on bare metal (check your platform guidance)."
+    lesson: pcie-numa-topology
+  - term: "Adaptive routing"
+    expansion: "AR"
+    definition: "A forwarding mode in which a switch chooses the egress port per packet (or per flowlet) based on current queue occupancy or congestion instead of a static hash. It spreads load far better than static ECMP but can deliver packets out of order, so the endpoints must tolerate or repair reordering."
+    lesson: adaptive-routing-packet-spraying
+  - term: "algbw"
+    expansion: "Algorithm bandwidth"
+    definition: "The nccl-tests metric equal to the data size divided by the operation time. It reflects what the application sees but is not directly comparable to link speed for collectives that move more data than the buffer size."
+    lesson: nccl-tests-interpretation
+  - term: "All-gather"
+    definition: "A collective in which every rank contributes a chunk and every rank ends up with the concatenation of all chunks. It is used heavily by sharded data parallelism (for example FSDP/ZeRO) to rebuild parameters before compute."
+    lesson: collective-operations
+  - term: "All-reduce"
+    definition: "A collective that combines (typically sums) a buffer across all ranks and leaves the identical result on every rank. It is the dominant communication pattern of data-parallel training, where it averages gradients each step."
+    lesson: collective-operations
+  - term: "All-to-all"
+    definition: "A collective in which every rank sends a distinct chunk to every other rank. It is the signature traffic of expert parallelism (Mixture of Experts) and stresses bisection bandwidth and congestion control more than ring all-reduce."
+    lesson: collective-operations
+  - term: "Alpha-beta model"
+    definition: "A simple cost model for communication where the time to send n bytes is alpha (fixed per-message latency) plus n times beta (inverse bandwidth). It explains why ring algorithms win on large messages and tree or latency-optimized algorithms win on small ones."
+    lesson: collective-algorithms
+  - term: "AOC"
+    expansion: "Active Optical Cable"
+    definition: "A cable with optical transceivers permanently attached at both ends. It reaches further than copper DAC (tens of metres) but cannot be re-terminated or have its ends replaced separately."
+    lesson: optics-cabling-power
+  - term: "ARP"
+    expansion: "Address Resolution Protocol"
+    definition: "The IPv4 protocol that maps a next-hop IP address to a MAC address on a broadcast domain. RoCEv2 relies on ARP (or IPv6 neighbor discovery) to resolve the destination MAC for each GID."
+    lesson: ip-addressing-routing
+  - term: "ASN"
+    expansion: "Autonomous System Number"
+    definition: "The identifier of a BGP speaker's routing domain. Data center designs often give each leaf (or each leaf pair) its own private ASN and the spines a shared ASN so that eBGP loop prevention works naturally in a Clos."
+    lesson: bgp-in-the-data-center
+  - term: "Atomic operations"
+    definition: "RDMA operations (Compare-and-Swap and Fetch-and-Add on 64-bit values) that a remote NIC executes atomically on remote memory. They are available on Reliable Connected transport and are used for locks and counters rather than bulk transfer."
+    lesson: transport-types-operations
+  - term: "Back-end network"
+    definition: "The dedicated GPU-to-GPU compute fabric (InfiniBand or RoCE) that carries collective traffic between servers. It is usually physically separate from the front-end, storage and management networks and is designed for high bandwidth and minimal loss."
+    lesson: four-networks-of-an-ai-cluster
+  - term: "Bandwidth-delay product"
+    expansion: "BDP"
+    definition: "Link bandwidth multiplied by round-trip time: the amount of data in flight on a path. It determines how much buffer headroom PFC needs per lossless priority and how much a sender must keep outstanding to fill a link."
+    lesson: buffers-headroom-ets
+  - term: "BER"
+    expansion: "Bit Error Rate"
+    definition: "The fraction of bits received in error on a link. On modern PAM4 links a non-zero pre-FEC BER is normal; what matters is that the post-FEC (effective) error rate stays far below the threshold that causes packet loss."
+    lesson: link-layer-ber-fec
+  - term: "BGP"
+    expansion: "Border Gateway Protocol"
+    definition: "The path-vector routing protocol used as the underlay routing protocol in most large Ethernet data center fabrics (RFC 7938 describes the design). eBGP between leaves and spines with ECMP gives a simple, scalable L3 Clos."
+    lesson: bgp-in-the-data-center
+  - term: "BGP unnumbered"
+    definition: "A configuration style in which BGP sessions run over interface IPv6 link-local addresses (RFC 5549/8950 next hops) so that point-to-point fabric links need no IPv4 addressing plan. Cumulus Linux and SONiC-based designs commonly use it."
+    lesson: bgp-in-the-data-center
+  - term: "Bisection bandwidth"
+    definition: "The total bandwidth crossing the worst-case cut that splits the network into two equal halves. A non-blocking fat tree has full bisection bandwidth, meaning any half of the endpoints can talk to the other half at line rate in theory."
+    lesson: oversubscription-and-blocking
+  - term: "BlueField"
+    definition: "NVIDIA's DPU family, combining a ConnectX network engine with Arm cores and accelerators. BlueField-3 is also used as a SuperNIC in Spectrum-X designs."
+    lesson: nics-dpus-supernics
+  - term: "Breakout cable"
+    definition: "A cable that splits one high-speed switch port into several lower-speed ports, for example one 800G switch port into two 400G NIC links. Breakouts change port-count math in fabric sizing and must match on both ends."
+    lesson: optics-cabling-power
+  - term: "BTH"
+    expansion: "Base Transport Header"
+    definition: "The 12-byte InfiniBand transport header carried in every IB and RoCE packet. It holds the opcode, destination QP number, partition key and packet sequence number (PSN)."
+    lesson: rocev2-encapsulation
+  - term: "Burn-in"
+    definition: "An extended stress test of a newly built cluster (links, GPUs, collectives) run before handover to find marginal cables, optics and components. Typical burn-in combines link BER checks, perftest, nccl-tests at scale and real training jobs."
+    lesson: fabric-validation-burn-in
+  - term: "busbw"
+    expansion: "Bus bandwidth"
+    definition: "The nccl-tests metric that rescales algbw by the amount of data each rank actually moves, so it can be compared with hardware link speed. For all-reduce, busbw = algbw x 2(n-1)/n where n is the number of ranks."
+    lesson: nccl-tests-interpretation
+  - term: "Checkpoint"
+    definition: "A periodic snapshot of model weights and optimizer state written to storage so training can resume after a failure. Checkpoint writes create large bursts on the storage network."
+    lesson: ai-training-101
+  - term: "Clos network"
+    definition: "A multistage switching topology in which every leaf connects to every spine, giving many equal-cost paths between any two endpoints. Leaf-spine and fat-tree data center fabrics are Clos networks."
+    lesson: clos-leaf-spine
+  - term: "CNP"
+    expansion: "Congestion Notification Packet"
+    definition: "The RoCEv2 packet (BTH opcode 0x81) that a receiver sends back to the sender when it receives ECN-marked packets. In DCQCN the sender's NIC reduces its rate on receiving CNPs."
+    lesson: ecn-and-dcqcn
+  - term: "Collective operation"
+    definition: "A communication pattern in which a group of ranks participates together, such as all-reduce, all-gather, reduce-scatter, broadcast and all-to-all. Libraries like NCCL implement collectives on top of NVLink and the network."
+    lesson: collective-operations
+  - term: "Completion Queue"
+    expansion: "CQ"
+    definition: "An RDMA queue where the NIC posts Completion Queue Entries (CQEs) when work requests finish. The application polls (or waits on events from) the CQ to learn that a send, receive or RDMA operation completed and with what status."
+    lesson: verbs-qps-mrs
+  - term: "Congestion spreading"
+    definition: "The way PFC pause propagates upstream hop by hop from a congested port, stalling flows that never touched the congested link (victim flows). It is the main operational cost of lossless Ethernet."
+    lesson: pfc-storms-deadlocks
+  - term: "ConnectX"
+    definition: "NVIDIA (formerly Mellanox) NIC family that supports both InfiniBand and Ethernet/RoCE. Generations differ in speed: for example ConnectX-7 supports up to 400 Gb/s and ConnectX-8 up to 800 Gb/s (check the datasheet of your exact model)."
+    lesson: nics-dpus-supernics
+  - term: "CPO"
+    expansion: "Co-Packaged Optics"
+    definition: "An approach that places optical engines in the same package as the switch ASIC instead of in pluggable modules. It reduces electrical reach and power per bit at the cost of field serviceability."
+    lesson: optics-cabling-power
+  - term: "Credit-based flow control"
+    definition: "InfiniBand's link-level flow control: the receiver advertises buffer credits per virtual lane and the sender transmits only when it holds credits. Packets are therefore never dropped for lack of buffer, unlike Ethernet, which needs PFC for the same effect."
+    lesson: ib-flow-control-vls
+  - term: "Cut-through switching"
+    definition: "A forwarding mode in which a switch starts transmitting a frame as soon as it has read the header, before the whole frame arrives. It lowers latency compared with store-and-forward but cannot drop a frame with a bad FCS before forwarding it."
+    lesson: switching-and-queues
+  - term: "DAC"
+    expansion: "Direct Attach Copper"
+    definition: "A passive copper cable with connectors on both ends. It is the cheapest and lowest-power link option but at 100G-per-lane speeds its reach is limited to a few metres, so it is mostly used within a rack."
+    lesson: optics-cabling-power
+  - term: "Data parallelism"
+    expansion: "DP"
+    definition: "A training strategy in which each GPU holds a full model replica (or a shard, in sharded variants) and processes different data. Gradients are synchronized every step with all-reduce or reduce-scatter/all-gather."
+    lesson: parallelism-strategies
+  - term: "DCB"
+    expansion: "Data Center Bridging"
+    definition: "The family of IEEE 802.1 enhancements that make Ethernet suitable for lossless storage and RDMA traffic: PFC (802.1Qbb), ETS (802.1Qaz), DCBX (802.1Qaz) and congestion notification (802.1Qau)."
+    lesson: pfc-priority-flow-control
+  - term: "DCBX"
+    expansion: "Data Center Bridging Exchange"
+    definition: "An LLDP-based protocol that lets switches and NICs exchange and optionally negotiate DCB settings such as PFC priorities and ETS bandwidth. Many AI deployments configure NICs explicitly instead of relying on DCBX negotiation."
+    lesson: qos-trust-and-mapping
+  - term: "DCGM"
+    expansion: "Data Center GPU Manager"
+    definition: "NVIDIA's suite for GPU health monitoring, diagnostics and telemetry. dcgmi diag runs GPU diagnostics, and DCGM exporters feed GPU metrics into monitoring systems."
+    lesson: telemetry-counters
+  - term: "DCQCN"
+    expansion: "Data Center Quantized Congestion Notification"
+    definition: "The classic RoCEv2 end-to-end congestion control: switches ECN-mark packets, the receiver NIC returns CNPs, and the sender NIC cuts its rate and then recovers gradually. It keeps queues short so PFC rarely triggers."
+    lesson: ecn-and-dcqcn
+  - term: "DCT"
+    expansion: "Dynamically Connected Transport"
+    definition: "An NVIDIA/Mellanox RDMA transport that provides reliable delivery while creating connections on demand, so a process needs far fewer QPs than with one RC QP per peer. It addresses RC's QP-scaling problem in large clusters."
+    lesson: transport-types-operations
+  - term: "Decode"
+    definition: "The token-by-token generation phase of LLM inference. It is memory-bandwidth bound and latency sensitive, in contrast to the compute-heavy prefill phase."
+    lesson: inference-networking
+  - term: "DGX"
+    definition: "NVIDIA's integrated AI server line (for example DGX H100 with eight GPUs, NVSwitch and one 400G compute NIC per GPU). DGX systems are the building block of the DGX SuperPOD reference architectures."
+    lesson: superpod-reference-architecture
+  - term: "DOCA"
+    definition: "NVIDIA's software framework and driver/SDK stack for BlueField DPUs and ConnectX NICs. Newer host driver packages (DOCA-Host) succeed the standalone MLNX_OFED distribution."
+    lesson: nics-dpus-supernics
+  - term: "DPU"
+    expansion: "Data Processing Unit"
+    definition: "A NIC with general-purpose cores and accelerators that can run infrastructure services (networking, storage, security) isolated from the host CPU. It is often used on the front-end network for multi-tenant isolation."
+    lesson: nics-dpus-supernics
+  - term: "DSCP"
+    expansion: "Differentiated Services Code Point"
+    definition: "The 6-bit field in the IP header used to mark traffic class. RoCEv2 deployments usually trust DSCP on switch ports and map the RoCE DSCP value to a lossless priority and queue."
+    lesson: qos-trust-and-mapping
+  - term: "ECMP"
+    expansion: "Equal-Cost Multi-Path"
+    definition: "Forwarding that spreads flows over several equal-cost next hops, typically by hashing header fields. Static per-flow ECMP keeps ordering but can collide several elephant flows on one link."
+    lesson: ecmp-hashing
+  - term: "ECN"
+    expansion: "Explicit Congestion Notification"
+    definition: "A two-bit IP header mechanism (RFC 3168) that lets a switch mark packets as having experienced congestion instead of dropping them. RoCEv2 congestion control (DCQCN) relies on ECN marking at a queue threshold."
+    lesson: ecn-and-dcqcn
+  - term: "Effective BER"
+    definition: "The error rate remaining after forward error correction, as reported by tools such as mlxlink (hedge the exact label by tool version). Uncorrectable errors after FEC become dropped or corrupted packets."
+    lesson: link-layer-ber-fec
+  - term: "Elephant flow"
+    definition: "A long-lived, high-bandwidth flow, such as the RDMA streams of a large all-reduce. A few elephants hashed onto the same link can cut collective throughput sharply."
+    lesson: flow-collisions-entropy
+  - term: "Entropy"
+    definition: "The variability in header fields that a hash function can use to spread flows across paths. AI fabrics have low entropy because they carry few, very large flows; RoCEv2 adds entropy by varying the UDP source port per QP."
+    lesson: flow-collisions-entropy
+  - term: "Ethertype"
+    definition: "The 2-byte Ethernet header field identifying the payload protocol, for example 0x0800 for IPv4, 0x86DD for IPv6, 0x8100 for an 802.1Q tag and 0x8915 for RoCEv1."
+    lesson: osi-ethernet-frames
+  - term: "ETS"
+    expansion: "Enhanced Transmission Selection"
+    definition: "The IEEE 802.1Qaz scheduler that allocates guaranteed bandwidth percentages to traffic classes while letting idle bandwidth be borrowed. It ensures RoCE traffic and other classes share a link predictably."
+    lesson: buffers-headroom-ets
+  - term: "EVPN"
+    expansion: "Ethernet VPN"
+    definition: "A BGP address family that distributes MAC and IP reachability for overlay networks. With VXLAN it builds multi-tenant L2/L3 front-end fabrics without flooding-based learning."
+    lesson: evpn-vxlan-frontend
+  - term: "Expert parallelism"
+    expansion: "EP"
+    definition: "A parallelism strategy for Mixture-of-Experts models in which different experts live on different GPUs and tokens are routed to them with all-to-all communication."
+    lesson: parallelism-strategies
+  - term: "Fabric Manager"
+    definition: "NVIDIA software that configures and monitors NVSwitch-based NVLink fabrics in HGX/DGX systems. If it is not running on such systems, GPUs may fail to initialize their NVLink peer connectivity."
+    lesson: nvlink-nvswitch
+  - term: "Fat tree"
+    definition: "A Clos topology in which bandwidth toward the core is kept equal to bandwidth toward the hosts at every tier, making it non-blocking. Two-tier fat trees serve a few thousand endpoints with typical switch radix; larger clusters need three tiers."
+    lesson: clos-leaf-spine
+  - term: "FCS"
+    expansion: "Frame Check Sequence"
+    definition: "The 32-bit CRC at the end of every Ethernet frame. A receiver that computes a different CRC counts an FCS/CRC error and drops the frame; rising CRC errors point to a bad cable, optic or connector."
+    lesson: osi-ethernet-frames
+  - term: "FEC"
+    expansion: "Forward Error Correction"
+    definition: "Coding added by the PHY that lets a receiver correct bit errors without retransmission. PAM4 links at 50G per lane and above require Reed-Solomon FEC, and both ends must use the same FEC mode or the link will not come up."
+    lesson: link-layer-ber-fec
+  - term: "Flowlet"
+    definition: "A burst of packets within a flow separated from the next burst by an idle gap larger than the path delay difference. Switching paths at flowlet boundaries rebalances load without reordering packets."
+    lesson: adaptive-routing-packet-spraying
+  - term: "Front-end network"
+    definition: "The general-purpose Ethernet network connecting servers to users, orchestration, the internet and often to storage. It is usually a conventional leaf-spine with EVPN/VXLAN, separate from the GPU back-end."
+    lesson: storage-and-frontend-networks
+  - term: "ftree routing"
+    definition: "The OpenSM routing engine optimized for fat-tree topologies, which balances destination LIDs across up-links to avoid hotspots. Other engines include minhop, updn, dor and ar_updn (availability depends on SM version)."
+    lesson: subnet-manager-routing
+  - term: "GDS"
+    expansion: "GPUDirect Storage"
+    definition: "A technology that moves data directly between storage (local NVMe or networked storage) and GPU memory without staging in host memory. It reduces CPU load and host memory bandwidth for data loading and checkpoints."
+    lesson: gpudirect-rdma-storage
+  - term: "GID"
+    expansion: "Global Identifier"
+    definition: "A 128-bit RDMA port address. In RoCE every IP address on the netdev produces GID table entries per RoCE version, so applications must pick the right GID index (for example the RoCEv2 IPv4 entry)."
+    lesson: rocev2-encapsulation
+  - term: "gNMI"
+    expansion: "gRPC Network Management Interface"
+    definition: "An OpenConfig-defined gRPC protocol for streaming telemetry and configuration. Its Subscribe RPC lets collectors receive counter updates at sub-second intervals or on change, replacing SNMP polling."
+    lesson: streaming-telemetry-gnmi
+  - term: "Go-back-N"
+    definition: "A retransmission scheme in which, after a lost packet, the sender resends that packet and every packet after it. Classic RoCE RC retransmission works this way, which is why loss is so expensive; newer NICs may support selective repeat (check your NIC generation)."
+    lesson: transport-types-operations
+  - term: "GPUDirect RDMA"
+    definition: "A technology that lets a NIC read and write GPU memory directly over PCIe, bypassing host memory. It requires a good PCIe path between GPU and NIC (ideally the same PCIe switch) and the appropriate kernel module (nvidia-peermem or dma-buf)."
+    lesson: gpudirect-rdma-storage
+  - term: "Gradient"
+    definition: "The derivative of the loss with respect to each model parameter, computed in the backward pass. In data-parallel training the gradients from all replicas are averaged with all-reduce before the optimizer step."
+    lesson: ai-training-101
+  - term: "GRH"
+    expansion: "Global Route Header"
+    definition: "The 40-byte InfiniBand header, modelled on IPv6, that carries source and destination GIDs for routing between subnets. RoCEv1 uses a GRH; RoCEv2 replaces it with an IP and UDP header."
+    lesson: ib-architecture
+  - term: "GUID"
+    expansion: "Globally Unique Identifier"
+    definition: "A 64-bit identifier burned into InfiniBand nodes, ports and devices. The subnet manager discovers devices by GUID and assigns LIDs to them."
+    lesson: ib-architecture
+  - term: "Hash polarization"
+    definition: "A failure of ECMP in which successive switch tiers use the same hash function and inputs, so flows that took one path at the first tier all make the same choice at the next tier and some links stay idle. Seeds or different hash fields per tier avoid it."
+    lesson: ecmp-hashing
+  - term: "HCA"
+    expansion: "Host Channel Adapter"
+    definition: "The InfiniBand term for a host network adapter that implements the transport in hardware. In Linux tools RDMA devices are still named after it (for example mlx5_0)."
+    lesson: ib-architecture
+  - term: "HDR"
+    expansion: "High Data Rate"
+    definition: "The InfiniBand generation at 50 Gb/s per lane, giving 200 Gb/s per 4x port (HDR100 splits a port into 2x 100 Gb/s)."
+    lesson: ib-speeds-cables
+  - term: "Head-of-line blocking"
+    definition: "A situation where a packet waiting at the front of a queue blocks packets behind it that could otherwise be forwarded. PFC creates a form of it: pausing a priority stops all flows in that priority on the link, including those not headed to the congested port."
+    lesson: switching-and-queues
+  - term: "Headroom"
+    definition: "Buffer reserved per lossless priority-group to absorb the data still arriving after a switch sends PFC XOFF (cable propagation, response time and in-flight frames). Too little headroom causes drops on a lossless priority; it grows with cable length and link speed."
+    lesson: buffers-headroom-ets
+  - term: "HGX"
+    definition: "NVIDIA's GPU baseboard platform (for example eight GPUs connected by NVSwitch) that server vendors build systems around. DGX systems use the same baseboard design."
+    lesson: nvlink-nvswitch
+  - term: "Incast"
+    definition: "A many-to-one traffic pattern in which many senders transmit to one receiver at the same time, overflowing the egress queue toward that receiver. It is common in all-to-all phases, parameter aggregation and storage reads."
+    lesson: incast-and-congestion-hotspots
+  - term: "InfiniBand"
+    expansion: "IB"
+    definition: "A lossless, credit-flow-controlled network architecture with a hardware RDMA transport and a centralized subnet manager. It is the traditional fabric for HPC and many large AI training clusters."
+    lesson: ib-architecture
+  - term: "IPoIB"
+    expansion: "IP over InfiniBand"
+    definition: "A driver that carries IP traffic over an InfiniBand fabric, exposing an ib0-style netdev. It is used for management-style IP traffic and for RDMA connection setup through rdma_cm on IB."
+    lesson: ib-architecture
+  - term: "Job completion time"
+    expansion: "JCT"
+    definition: "The wall-clock time a training job takes to finish. Because synchronous training waits for the slowest collective, network tail latency rather than average throughput drives JCT."
+    lesson: ai-traffic-patterns
+  - term: "Jumbo frame"
+    definition: "An Ethernet frame larger than the standard 1500-byte MTU, commonly 9000-9216 bytes. Every hop must support the size; a mismatch causes drops or fragmentation problems that are often hard to see."
+    lesson: mtu-jumbo-frames
+  - term: "Kernel bypass"
+    definition: "Moving data between application memory and the NIC without system calls or kernel copies on the data path. RDMA provides it; the kernel is involved only in setup (registering memory, creating queues)."
+    lesson: why-rdma
+  - term: "KV cache"
+    expansion: "Key-Value cache"
+    definition: "The stored attention keys and values for tokens already processed during LLM inference. Disaggregated inference transfers KV cache between prefill and decode servers, creating a new latency-sensitive network flow."
+    lesson: inference-networking
+  - term: "Leaf switch"
+    definition: "The first-tier switch in a leaf-spine fabric that servers connect to. Each leaf connects to every spine, so any two leaves are two hops apart."
+    lesson: clos-leaf-spine
+  - term: "LID"
+    expansion: "Local Identifier"
+    definition: "A 16-bit address assigned by the subnet manager to each InfiniBand port and used for forwarding inside a subnet. Unicast LIDs range from 0x0001 to 0xBFFF."
+    lesson: ib-architecture
+  - term: "Link flap"
+    definition: "A link that repeatedly goes down and up. In an AI fabric each flap can stall or abort collectives and RDMA connections, so flapping links are drained and their cables or optics replaced."
+    lesson: link-layer-ber-fec
+  - term: "LinkDownedCounter"
+    definition: "An InfiniBand port counter that increments each time the link training state machine fails to recover and the link goes down. A non-zero, growing value indicates an unstable physical link."
+    lesson: ib-tools-diagnostics
+  - term: "lkey"
+    expansion: "Local key"
+    definition: "The key returned when memory is registered that the local NIC uses to validate the memory a work request references. It pairs with the rkey used by remote peers."
+    lesson: verbs-qps-mrs
+  - term: "LLDP"
+    expansion: "Link Layer Discovery Protocol"
+    definition: "A protocol (IEEE 802.1AB) in which devices advertise their identity and port to neighbors. Comparing LLDP neighbors with the intended cabling plan is the standard way to find miswired fabric links."
+    lesson: fabric-validation-burn-in
+  - term: "LMC"
+    expansion: "LID Mask Control"
+    definition: "A subnet manager setting that assigns 2^LMC consecutive LIDs to each port (LMC 0-7). Different LIDs can map to different paths, enabling multipathing in InfiniBand."
+    lesson: subnet-manager-routing
+  - term: "Lossless Ethernet"
+    definition: "Ethernet configured so that a chosen traffic class is not dropped due to buffer overflow, usually with PFC plus adequate headroom and ECN-based congestion control. It does not prevent drops from bit errors or misconfiguration."
+    lesson: pfc-priority-flow-control
+  - term: "LPO"
+    expansion: "Linear Pluggable Optics"
+    definition: "Pluggable optical modules without a DSP retimer, relying on the host SerDes to drive the optics directly. They save power and latency but require host and module to be qualified together."
+    lesson: optics-cabling-power
+  - term: "MAC address"
+    definition: "The 48-bit layer-2 address of an Ethernet interface. Switches forward frames within a broadcast domain by destination MAC."
+    lesson: osi-ethernet-frames
+  - term: "MAD"
+    expansion: "Management Datagram"
+    definition: "The 256-byte InfiniBand management packet format used by the subnet manager (SMPs) and other managers such as performance management (GMPs). Tools like perfquery send MADs to read port counters."
+    lesson: subnet-manager-routing
+  - term: "Memory Region"
+    expansion: "MR"
+    definition: "A buffer registered with the RDMA device so it is pinned and the NIC can translate its addresses. Registration returns an lkey and an rkey and sets access rights such as remote write."
+    lesson: verbs-qps-mrs
+  - term: "MFU"
+    expansion: "Model FLOPs Utilization"
+    definition: "The fraction of a cluster's peak arithmetic throughput that the training job actually spends on model math. Communication stalls and stragglers show up directly as lower MFU."
+    lesson: ai-training-101
+  - term: "Microburst"
+    definition: "A traffic burst lasting microseconds to milliseconds that fills a queue but is invisible in per-second or per-minute counters. High-resolution telemetry or queue-watermark counters are needed to see it."
+    lesson: incast-and-congestion-hotspots
+  - term: "Mixture of Experts"
+    expansion: "MoE"
+    definition: "A model architecture in which a router sends each token to a few expert sub-networks out of many. Distributing experts over GPUs produces all-to-all traffic."
+    lesson: parallelism-strategies
+  - term: "mlxlink"
+    definition: "An NVIDIA firmware tool that shows link state, speed, FEC mode, BER, eye opening and cable/module information for ConnectX NICs and switch ports. It is a primary tool for diagnosing physical-layer problems."
+    lesson: link-layer-ber-fec
+  - term: "MPI"
+    expansion: "Message Passing Interface"
+    definition: "The long-standing HPC standard for message passing and collectives between processes. AI frameworks mostly use NCCL for GPU collectives, but MPI is often used to launch jobs such as nccl-tests across nodes."
+    lesson: collective-operations
+  - term: "MPO"
+    expansion: "Multi-fiber Push On"
+    definition: "A multi-fiber connector (for example 8, 12 or 16 fibers) used by parallel-optic transceivers such as SR and DR variants. Polarity and cleanliness of MPO links are common causes of link failures."
+    lesson: optics-cabling-power
+  - term: "MTU"
+    expansion: "Maximum Transmission Unit"
+    definition: "The largest payload a link layer carries in one frame. For RoCE, the RDMA path MTU (for example 1024, 2048 or 4096 bytes) must fit within the Ethernet MTU with header overhead."
+    lesson: mtu-jumbo-frames
+  - term: "NCCL"
+    expansion: "NVIDIA Collective Communications Library"
+    definition: "The library that implements collectives between NVIDIA GPUs over NVLink, PCIe, InfiniBand, RoCE and sockets. It detects topology, picks algorithms (ring, tree, NVLS, CollNet) and protocols, and drives the NICs with GPUDirect RDMA."
+    lesson: nccl-architecture
+  - term: "NCCL channel"
+    definition: "An independent parallel lane of an NCCL collective, each with its own ring or tree and its own set of connections. More channels use more NICs and SMs in parallel; NCCL_MIN_NCHANNELS and NCCL_MAX_NCHANNELS bound the number."
+    lesson: nccl-architecture
+  - term: "NCCL protocol"
+    definition: "The data transfer mode NCCL uses inside a collective: Simple (high bandwidth), LL (low latency, flag per 8 bytes) or LL128 (low latency with 128-byte lines). It can be forced with NCCL_PROTO for testing."
+    lesson: nccl-architecture
+  - term: "nccl-tests"
+    definition: "NVIDIA's open-source benchmark suite (all_reduce_perf, all_gather_perf and others) that runs NCCL collectives over a range of sizes and reports time, algbw and busbw. It is the standard tool to validate fabric performance for AI."
+    lesson: nccl-tests-interpretation
+  - term: "NCCL_DEBUG"
+    definition: "The NCCL environment variable that sets log verbosity (for example WARN or INFO). INFO output shows the chosen NICs, transports, rings, trees and GPUDirect usage, and is the first thing to collect when debugging."
+    lesson: nccl-debugging
+  - term: "NCCL_IB_GID_INDEX"
+    definition: "The NCCL environment variable that selects which GID table entry to use on RoCE. Choosing the wrong index (for example a RoCEv1 or link-local entry) breaks or misroutes cross-node traffic."
+    lesson: nccl-configuration
+  - term: "NCCL_IB_HCA"
+    definition: "The NCCL environment variable that selects which RDMA devices (and optionally ports) NCCL may use, for example mlx5_0,mlx5_1. A prefix of ^ excludes the listed devices."
+    lesson: nccl-configuration
+  - term: "NCCL_NET_GDR_LEVEL"
+    definition: "The NCCL environment variable that sets the maximum PCIe distance between NIC and GPU at which GPUDirect RDMA is used (values like PIX, PXB, PHB, SYS). Beyond it NCCL stages through host memory."
+    lesson: nccl-configuration
+  - term: "NCCL_SOCKET_IFNAME"
+    definition: "The NCCL environment variable that selects the IP interfaces used for bootstrap and for the socket transport. Getting it wrong can make NCCL hang at init or bootstrap over the wrong network."
+    lesson: nccl-configuration
+  - term: "NDR"
+    expansion: "Next Data Rate"
+    definition: "The InfiniBand generation at 100 Gb/s per lane, giving 400 Gb/s per 4x port. NDR switches typically expose ports through twin-port OSFP cages (check the specific switch model)."
+    lesson: ib-speeds-cables
+  - term: "NetQ"
+    definition: "NVIDIA's network operations tool for Ethernet fabrics that collects state and telemetry from switches and hosts and validates configuration (for example BGP, MTU and RoCE settings) across the fabric."
+    lesson: ufm-netq-management
+  - term: "NIC"
+    expansion: "Network Interface Card"
+    definition: "The adapter connecting a server to the network. In AI servers the compute NICs are RDMA-capable and typically one is paired with each GPU."
+    lesson: nics-dpus-supernics
+  - term: "Non-blocking"
+    definition: "A fabric whose internal capacity at every tier equals the capacity of its host ports (1:1), so any permutation of traffic can in principle run at line rate. In practice hashing collisions can still prevent full throughput."
+    lesson: oversubscription-and-blocking
+  - term: "NUMA"
+    expansion: "Non-Uniform Memory Access"
+    definition: "A server architecture where each CPU socket has its own local memory and PCIe devices, and access to the other socket's resources crosses a slower inter-socket link. Placing processes, GPUs and NICs on the same NUMA node avoids that penalty."
+    lesson: pcie-numa-topology
+  - term: "nvidia-smi topo -m"
+    definition: "A command that prints the connectivity matrix between GPUs, NICs and CPUs, using labels such as NV# (NVLink), PIX, PXB, PHB, NODE and SYS. It shows which NIC is closest to each GPU."
+    lesson: reading-server-topology
+  - term: "NVL72"
+    definition: "NVIDIA's rack-scale system (GB200 NVL72 and successors) that connects 72 Blackwell GPUs and 36 Grace CPUs in one NVLink domain through NVLink switch trays. It extends the scale-up domain from one server to a full rack."
+    lesson: scale-up-domains-nvl72
+  - term: "NVLink"
+    definition: "NVIDIA's high-bandwidth GPU-to-GPU interconnect. Per-GPU bandwidth depends on generation, for example about 900 GB/s total for NVLink 4 on H100 and about 1.8 TB/s for NVLink 5 on Blackwell (check the product datasheet)."
+    lesson: nvlink-nvswitch
+  - term: "NVLink SHARP"
+    expansion: "NVLS"
+    definition: "In-switch reduction and multicast performed by NVSwitch (third generation and later). NCCL can use it as the NVLS algorithm to accelerate all-reduce within an NVLink domain."
+    lesson: nvlink-nvswitch
+  - term: "NVSwitch"
+    definition: "The NVLink switch chip that connects all GPUs in a server or rack so every GPU can talk to every other at full NVLink bandwidth."
+    lesson: nvlink-nvswitch
+  - term: "NVUE"
+    expansion: "NVIDIA User Experience"
+    definition: "The object-model CLI and API for Cumulus Linux, using commands such as nv set, nv show and nv config apply. It replaces the older NCLU."
+    lesson: network-automation-for-ai
+  - term: "OpenConfig"
+    definition: "A vendor-neutral set of YANG data models for network configuration and operational state. gNMI telemetry commonly uses OpenConfig paths such as interface counters."
+    lesson: streaming-telemetry-gnmi
+  - term: "OpenSM"
+    definition: "The open-source InfiniBand subnet manager distributed with rdma-core/OFED. It discovers the fabric, assigns LIDs and computes forwarding tables; UFM embeds an enhanced subnet manager for large fabrics."
+    lesson: subnet-manager-routing
+  - term: "OSFP"
+    expansion: "Octal Small Form-factor Pluggable"
+    definition: "An eight-lane pluggable module form factor designed for 400G and 800G (and beyond). It has more thermal headroom than QSFP-DD and is widely used on NDR/XDR InfiniBand and 800G Ethernet switches."
+    lesson: optics-cabling-power
+  - term: "Out-of-band management network"
+    definition: "A separate, low-speed network for BMCs, switch management ports and PDUs. It must keep working when the data networks fail so operators can still reach devices."
+    lesson: four-networks-of-an-ai-cluster
+  - term: "Oversubscription"
+    definition: "The ratio of downlink (host-facing) bandwidth to uplink bandwidth on a switch tier, for example 2:1. AI back-end fabrics are usually built 1:1 (non-blocking), while front-end and storage networks can tolerate oversubscription."
+    lesson: oversubscription-and-blocking
+  - term: "Packet spraying"
+    definition: "Distributing the packets of a single flow across many paths, per packet. It gives near-perfect load balance but requires the receiver to handle out-of-order arrival, for example by placing data directly by address."
+    lesson: adaptive-routing-packet-spraying
+  - term: "PAM4"
+    expansion: "Four-level Pulse Amplitude Modulation"
+    definition: "A signaling scheme that encodes 2 bits per symbol using four voltage levels. It doubles bits per symbol versus NRZ but has a much lower signal-to-noise margin, which is why PAM4 links depend on FEC."
+    lesson: link-layer-ber-fec
+  - term: "Path MTU"
+    definition: "The largest MTU usable on the whole path between two endpoints. RDMA QPs are configured with an active path MTU, and a value larger than the smallest hop supports causes silent drops."
+    lesson: mtu-jumbo-frames
+  - term: "PCIe"
+    expansion: "Peripheral Component Interconnect Express"
+    definition: "The serial bus connecting GPUs, NICs and NVMe to the CPU. A Gen5 x16 link carries roughly 64 GB/s per direction before protocol overhead, so a 400 Gb/s NIC needs Gen5 x16 (or Gen4 x32 via multi-host/socket-direct) to run at line rate."
+    lesson: pcie-numa-topology
+  - term: "PCIe switch"
+    definition: "A device that fans one PCIe upstream port out to several downstream devices. In AI servers a GPU and its paired NIC usually sit under the same PCIe switch so GPUDirect RDMA traffic does not cross the CPU."
+    lesson: pcie-numa-topology
+  - term: "PCP"
+    expansion: "Priority Code Point"
+    definition: "The 3-bit priority field in the 802.1Q VLAN tag (values 0-7). PFC acts on these priorities; with DSCP trust the switch derives the internal priority from DSCP instead."
+    lesson: qos-trust-and-mapping
+  - term: "Peer-to-peer"
+    expansion: "P2P"
+    definition: "Direct data transfer between two PCIe or NVLink devices, such as GPU to GPU or GPU to NIC, without going through host memory."
+    lesson: gpudirect-rdma-storage
+  - term: "perftest"
+    definition: "The package of RDMA microbenchmarks (ib_write_bw, ib_read_bw, ib_send_bw, ib_write_lat and others) used to measure point-to-point RDMA bandwidth and latency. It isolates the network from NCCL and the application."
+    lesson: perftest-benchmarking
+  - term: "PFC"
+    expansion: "Priority-based Flow Control"
+    definition: "The IEEE 802.1Qbb mechanism that pauses one of eight priorities on a link when the receiver's buffer for that priority fills. It makes a priority lossless but can cause head-of-line blocking, congestion spreading and deadlock."
+    lesson: pfc-priority-flow-control
+  - term: "PFC deadlock"
+    definition: "A state in which a cycle of PFC pauses (a cyclic buffer dependency) means no switch in the loop can drain, so traffic in that priority stops permanently. Routing loops or non-tree paths in lossless traffic are usual causes."
+    lesson: pfc-storms-deadlocks
+  - term: "PFC storm"
+    definition: "A sustained flood of PFC pause frames, often from a malfunctioning NIC or host that stops draining its receive queue. It can freeze a lossless priority across large parts of the fabric."
+    lesson: pfc-storms-deadlocks
+  - term: "PFC watchdog"
+    definition: "A switch feature that detects a queue stuck in the paused state for too long and temporarily ignores pause or drops traffic for that queue, breaking storms and deadlocks at the cost of loss."
+    lesson: pfc-storms-deadlocks
+  - term: "Pipeline bubble"
+    definition: "Idle time in pipeline-parallel training when some stages wait for activations or gradients from neighbors. Micro-batching reduces bubbles."
+    lesson: parallelism-strategies
+  - term: "Pipeline parallelism"
+    expansion: "PP"
+    definition: "Splitting a model's layers into stages on different GPUs, passing activations forward and gradients backward between stages. Its traffic is point-to-point and relatively modest, so it often crosses the scale-out network."
+    lesson: parallelism-strategies
+  - term: "PKey"
+    expansion: "Partition Key"
+    definition: "An InfiniBand 16-bit key carried in every packet that defines which partition the packet belongs to. Ports can only communicate when they share a partition, which is how IB isolates tenants."
+    lesson: multi-tenancy-isolation
+  - term: "PortXmitWait"
+    definition: "An InfiniBand port counter of time ticks during which the port had data to send but no flow-control credits. Rising values indicate congestion downstream of that port."
+    lesson: ib-tools-diagnostics
+  - term: "Pre-FEC BER"
+    definition: "The bit error rate measured before forward error correction (also called raw BER). It indicates physical link margin: healthy PAM4 links show a small, stable value, while a value approaching the FEC limit predicts errors and flaps."
+    lesson: link-layer-ber-fec
+  - term: "Prefill"
+    definition: "The first phase of LLM inference in which the whole prompt is processed in parallel to build the KV cache. It is compute-bound and produces the time to first token."
+    lesson: inference-networking
+  - term: "Priority group"
+    expansion: "PG"
+    definition: "An ingress buffer accounting class on a switch to which one or more priorities are mapped. PFC thresholds (XOFF/XON) and headroom are configured per priority group."
+    lesson: buffers-headroom-ets
+  - term: "Protection Domain"
+    expansion: "PD"
+    definition: "An RDMA object that groups QPs and memory regions; a QP can only access memory registered in the same PD. It is a basic isolation boundary between users of one device."
+    lesson: verbs-qps-mrs
+  - term: "PSN"
+    expansion: "Packet Sequence Number"
+    definition: "The 24-bit sequence number in the BTH used by reliable RDMA transports to detect lost or duplicated packets and to trigger NAKs and retransmission."
+    lesson: transport-types-operations
+  - term: "QP"
+    expansion: "Queue Pair"
+    definition: "The RDMA communication endpoint: a send queue and a receive queue to which the application posts work requests. A reliable connected QP is bound to exactly one remote QP."
+    lesson: verbs-qps-mrs
+  - term: "QP state machine"
+    definition: "The sequence of states a QP moves through: RESET, INIT, RTR (ready to receive), RTS (ready to send), plus SQD, SQE and ERR. Each transition requires specific attributes such as remote QP number, PSN, path MTU and timeouts."
+    lesson: verbs-qps-mrs
+  - term: "QSFP"
+    expansion: "Quad Small Form-factor Pluggable"
+    definition: "A four-lane pluggable module family (QSFP28, QSFP56, QSFP112) and its eight-lane double-density variant QSFP-DD. Lane speed sets port speed, for example QSFP112 is 4x 100G for 400G."
+    lesson: optics-cabling-power
+  - term: "Radix"
+    definition: "The number of ports on a switch (at a given speed). Radix determines how many endpoints a two-tier fabric can serve: a non-blocking two-tier fat tree of radix-k switches supports k^2/2 endpoints."
+    lesson: fabric-sizing-math
+  - term: "Rail"
+    definition: "In a rail-optimized cluster, the set of GPUs with the same local index across servers (for example GPU 3 of every server) together with the NIC and leaf switch they connect to."
+    lesson: rail-optimized-topology
+  - term: "Rail-optimized topology"
+    definition: "A back-end design in which NIC k of every server in a scalable unit connects to leaf (rail) k, so same-index GPUs reach each other in one switch hop. Cross-rail traffic goes through NVLink inside the server or through the spines."
+    lesson: rail-optimized-topology
+  - term: "RC"
+    expansion: "Reliable Connected"
+    definition: "The RDMA transport in which each QP is connected to one remote QP and the hardware guarantees in-order, reliable delivery with acknowledgements and retransmission. It supports Send, RDMA Write, RDMA Read and atomics."
+    lesson: transport-types-operations
+  - term: "RDMA"
+    expansion: "Remote Direct Memory Access"
+    definition: "A technology that lets a NIC read or write the memory of a remote host without involving either CPU on the data path. It provides kernel bypass, zero copy and transport offload."
+    lesson: why-rdma
+  - term: "RDMA CM"
+    expansion: "RDMA Connection Manager"
+    definition: "The librdmacm library and kernel service that set up RDMA connections using IP addresses, resolving routes and GIDs and exchanging QP parameters. Tools like rping use it."
+    lesson: rdma-on-linux
+  - term: "RDMA Read"
+    definition: "A one-sided RDMA operation in which the initiator fetches data from a remote memory region using its address and rkey. The remote CPU is not involved."
+    lesson: transport-types-operations
+  - term: "RDMA Write"
+    definition: "A one-sided RDMA operation that places data directly into a remote memory region identified by address and rkey, without consuming a receive buffer on the remote side (unless sent with immediate data)."
+    lesson: transport-types-operations
+  - term: "rdma-core"
+    definition: "The upstream Linux userspace RDMA package providing libibverbs, librdmacm, provider drivers and utilities such as ibv_devinfo and the rdma tool's companions."
+    lesson: rdma-on-linux
+  - term: "Reduce-scatter"
+    definition: "A collective that reduces buffers across ranks and leaves each rank with a different slice of the result. A ring all-reduce is a reduce-scatter followed by an all-gather."
+    lesson: collective-operations
+  - term: "Ring all-reduce"
+    definition: "An all-reduce algorithm that arranges ranks in a ring and passes chunks around in 2(n-1) steps. Each rank sends and receives about 2(n-1)/n times the buffer size, which makes it bandwidth-optimal but latency grows with n."
+    lesson: collective-algorithms
+  - term: "rkey"
+    expansion: "Remote key"
+    definition: "The key a remote peer must present to access a registered memory region with RDMA Read, Write or atomics. A wrong or stale rkey produces a remote access error completion."
+    lesson: verbs-qps-mrs
+  - term: "RNR"
+    expansion: "Receiver Not Ready"
+    definition: "An RC condition in which a Send arrives but no receive buffer is posted. The receiver returns an RNR NAK, and the sender retries according to rnr_retry; exhausting retries moves the QP to the error state."
+    lesson: rdma-connection-failures
+  - term: "RoCE"
+    expansion: "RDMA over Converged Ethernet"
+    definition: "Running the InfiniBand RDMA transport over Ethernet. RoCEv1 is a layer-2 protocol (Ethertype 0x8915); RoCEv2 is routable over IP/UDP."
+    lesson: rocev2-encapsulation
+  - term: "RoCEv2"
+    definition: "RoCE encapsulated in UDP/IP with destination UDP port 4791, so it can be routed over a layer-3 fabric. The UDP source port is varied to give ECMP entropy, and an invariant CRC (ICRC) protects the transport payload."
+    lesson: rocev2-encapsulation
+  - term: "RS-FEC"
+    expansion: "Reed-Solomon Forward Error Correction"
+    definition: "The block FEC family used on high-speed Ethernet and InfiniBand links, for example RS(528,514) for 25G NRZ lanes and RS(544,514) for PAM4 lanes. It adds latency in the order of 100 ns per hop in exchange for correcting burst errors."
+    lesson: link-layer-ber-fec
+  - term: "Scalable unit"
+    expansion: "SU"
+    definition: "The repeatable building block of a SuperPOD-style cluster: a group of servers with its own set of rail leaf switches. In the DGX H100 SuperPOD reference architecture an SU is 32 DGX systems (256 GPUs); check the reference architecture for your generation."
+    lesson: superpod-reference-architecture
+  - term: "Scale-out network"
+    definition: "The network that connects servers or racks to each other (InfiniBand or Ethernet), as opposed to the scale-up NVLink domain inside a server or rack. It has lower bandwidth per GPU than the scale-up domain."
+    lesson: scale-up-domains-nvl72
+  - term: "Scale-up domain"
+    definition: "The set of GPUs connected by NVLink/NVSwitch that can communicate with memory-like bandwidth, such as eight GPUs in an HGX server or 72 in an NVL72 rack. Tensor parallelism is kept inside it."
+    lesson: scale-up-domains-nvl72
+  - term: "SerDes"
+    expansion: "Serializer/Deserializer"
+    definition: "The high-speed circuits that convert parallel data to a serial lane and back. Lane rate (for example 50G, 100G or 200G per lane) defines link generations and the reach of copper cables."
+    lesson: ib-speeds-cables
+  - term: "Service Level"
+    expansion: "SL"
+    definition: "A 4-bit InfiniBand packet field expressing the class of service. Each switch maps SL to a virtual lane through its SL2VL table."
+    lesson: ib-flow-control-vls
+  - term: "Shared buffer"
+    definition: "Switch packet memory dynamically shared among ports and queues, usually with a per-queue dynamic threshold (alpha) limiting how much one queue can take. Its behavior decides how well a switch absorbs incast."
+    lesson: buffers-headroom-ets
+  - term: "SHARP"
+    expansion: "Scalable Hierarchical Aggregation and Reduction Protocol"
+    definition: "NVIDIA's in-network computing technology in which InfiniBand switches perform reductions for collectives, roughly halving the data each host sends for all-reduce. NCCL uses it through the CollNet/SHARP plugin."
+    lesson: sharp-in-network-computing
+  - term: "Soft-RoCE"
+    expansion: "rdma_rxe"
+    definition: "A software implementation of RoCEv2 in the Linux kernel that runs over any Ethernet NIC. It is useful for learning and functional testing, not for performance."
+    lesson: rdma-on-linux
+  - term: "Spectrum-X"
+    definition: "NVIDIA's Ethernet platform for AI combining Spectrum-4 switches and BlueField-3 or ConnectX-8 SuperNICs. It uses per-packet adaptive routing with NIC-side handling of out-of-order data and NVIDIA congestion control (check current NVIDIA documentation for details by release)."
+    lesson: spectrum-x-architecture
+  - term: "Spine switch"
+    definition: "A second-tier switch in a leaf-spine fabric that connects to every leaf. Spines carry all traffic between leaves and are typically interconnected only through the leaves."
+    lesson: clos-leaf-spine
+  - term: "SRQ"
+    expansion: "Shared Receive Queue"
+    definition: "A receive queue shared by many QPs so that receive buffers need not be posted per connection. It reduces memory use when a process talks to many peers."
+    lesson: verbs-qps-mrs
+  - term: "Store-and-forward"
+    definition: "A switching mode in which the whole frame is received and its FCS checked before forwarding. It adds serialization delay per hop but stops corrupted frames at the first switch."
+    lesson: switching-and-queues
+  - term: "Straggler"
+    definition: "A GPU, server or link that is slower than its peers. Because collectives are synchronous, one straggler slows every rank in the job."
+    lesson: slow-collectives-stragglers
+  - term: "Strict priority"
+    definition: "A scheduling mode in which a queue is always served before lower queues. It suits small control traffic such as CNPs but can starve other classes if used for bulk data."
+    lesson: buffers-headroom-ets
+  - term: "Subnet Manager"
+    expansion: "SM"
+    definition: "The InfiniBand control-plane entity that discovers the fabric, assigns LIDs, computes and programs forwarding tables and handles changes. One master SM is active, with standby SMs for failover."
+    lesson: subnet-manager-routing
+  - term: "SuperNIC"
+    definition: "NVIDIA's term for a network accelerator optimized for GPU-to-GPU traffic in AI Ethernet fabrics, such as BlueField-3 SuperNIC or ConnectX-8 SuperNIC. Compared with a DPU it focuses on high-speed RDMA rather than running host-offloaded services."
+    lesson: nics-dpus-supernics
+  - term: "SuperPOD"
+    definition: "NVIDIA's DGX SuperPOD reference architecture for large AI clusters, specifying servers, scalable units, rail-optimized compute fabric, storage, in-band and out-of-band networks."
+    lesson: superpod-reference-architecture
+  - term: "Symbol errors"
+    definition: "Errors in received line-code symbols reported by the physical layer, for example the InfiniBand SymbolErrorCounter. With FEC some are expected; a rapidly increasing count indicates a degrading link."
+    lesson: link-layer-ber-fec
+  - term: "Tail latency"
+    definition: "The latency of the slowest operations (for example the 99th percentile). In synchronous AI training the slowest flow of a collective sets the step time, so tail latency matters more than the mean."
+    lesson: ai-traffic-patterns
+  - term: "Telemetry"
+    definition: "Collected operational data such as interface, queue, PFC, ECN and error counters, link BER and GPU metrics. AI fabrics need it at high resolution and correlated with job events."
+    lesson: telemetry-counters
+  - term: "Tensor parallelism"
+    expansion: "TP"
+    definition: "Splitting individual layers' matrix operations across GPUs. It requires all-reduce or all-gather inside every layer, so it is kept within the NVLink scale-up domain."
+    lesson: parallelism-strategies
+  - term: "Traffic class"
+    expansion: "TC"
+    definition: "A switch or NIC internal class that maps to an egress queue with its own scheduling. Priorities (from PCP or DSCP) map to traffic classes."
+    lesson: switching-and-queues
+  - term: "Tree all-reduce"
+    definition: "An all-reduce algorithm that reduces up a tree and broadcasts down, giving logarithmic latency in the number of nodes. NCCL uses double binary trees so every node's links are used in both trees."
+    lesson: collective-algorithms
+  - term: "Trust mode"
+    definition: "The switch or NIC setting that decides which packet field (DSCP or PCP) assigns traffic to an internal priority. RoCEv2 fabrics typically use DSCP trust so priority survives layer-3 routing."
+    lesson: qos-trust-and-mapping
+  - term: "UC"
+    expansion: "Unreliable Connected"
+    definition: "An RDMA transport with connected QPs but no acknowledgements or retransmission. It supports Send and RDMA Write but not RDMA Read or atomics."
+    lesson: transport-types-operations
+  - term: "UD"
+    expansion: "Unreliable Datagram"
+    definition: "An RDMA transport in which one QP can send messages of at most one MTU to any other UD QP, with no reliability. It is used for management traffic, IPoIB and connection setup."
+    lesson: transport-types-operations
+  - term: "UEC"
+    expansion: "Ultra Ethernet Consortium"
+    definition: "An industry consortium defining an Ethernet-based transport stack for AI and HPC, including multipath packet spraying and new congestion control. Its 1.0 specification was published in 2025; check the consortium site for current status."
+    lesson: ultra-ethernet
+  - term: "UFM"
+    expansion: "Unified Fabric Manager"
+    definition: "NVIDIA's management platform for InfiniBand fabrics providing subnet management, monitoring, telemetry and fabric health analytics."
+    lesson: ufm-netq-management
+  - term: "Underlay"
+    definition: "The physical routed fabric (typically an eBGP Clos) that carries encapsulated overlay traffic such as VXLAN. The overlay provides tenant networks on top of it."
+    lesson: evpn-vxlan-frontend
+  - term: "Victim flow"
+    definition: "A flow that is slowed by PFC pause or congestion even though it does not contribute to the congestion. Victims are a key symptom of congestion spreading."
+    lesson: pfc-storms-deadlocks
+  - term: "Virtual Lane"
+    expansion: "VL"
+    definition: "An InfiniBand logical channel on a link with its own buffers and credits. Data VLs are separately flow-controlled; VL15 is reserved for subnet management packets and is not flow controlled."
+    lesson: ib-flow-control-vls
+  - term: "VLAN"
+    expansion: "Virtual LAN"
+    definition: "An 802.1Q tag with a 12-bit ID that separates broadcast domains on one physical network. The tag also carries the PCP priority bits."
+    lesson: osi-ethernet-frames
+  - term: "VNI"
+    expansion: "VXLAN Network Identifier"
+    definition: "The 24-bit segment ID in the VXLAN header, allowing about 16 million isolated overlay networks."
+    lesson: evpn-vxlan-frontend
+  - term: "VRF"
+    expansion: "Virtual Routing and Forwarding"
+    definition: "A separate routing table instance on a router or switch. VRFs isolate tenant IP traffic and are combined with EVPN for multi-tenant layer-3 networks."
+    lesson: multi-tenancy-isolation
+  - term: "VXLAN"
+    expansion: "Virtual Extensible LAN"
+    definition: "An overlay encapsulation (RFC 7348) that carries Ethernet frames in UDP (port 4789) across a routed underlay. It adds about 50 bytes of overhead, so underlay MTU must be raised accordingly."
+    lesson: evpn-vxlan-frontend
+  - term: "WQE"
+    expansion: "Work Queue Element"
+    definition: "The hardware descriptor for one work request posted to a send or receive queue. The application writes WQEs and rings a doorbell so the NIC processes them."
+    lesson: verbs-qps-mrs
+  - term: "WRED"
+    expansion: "Weighted Random Early Detection"
+    definition: "A queue management scheme that drops or ECN-marks packets with a probability that rises between a minimum and maximum queue threshold. On RoCE queues it is configured to mark rather than drop."
+    lesson: ecn-and-dcqcn
+  - term: "XDR"
+    expansion: "eXtended Data Rate"
+    definition: "The InfiniBand generation after NDR at 200 Gb/s per lane, giving 800 Gb/s per 4x port (check NVIDIA Quantum-X800 documentation for supported configurations)."
+    lesson: ib-speeds-cables
+  - term: "XOFF / XON"
+    definition: "The PFC buffer thresholds: when a priority group's occupancy crosses XOFF the switch sends pause frames upstream, and when it drains below XON it resumes the sender."
+    lesson: pfc-priority-flow-control
+  - term: "XRC"
+    expansion: "eXtended Reliable Connected"
+    definition: "An RDMA transport that lets one process receive on a shared receive queue for many senders, reducing the number of QPs required in large all-to-all communication."
+    lesson: transport-types-operations
+  - term: "Zero-touch provisioning"
+    expansion: "ZTP"
+    definition: "Automatic installation and configuration of a switch at first boot (via DHCP and a script or image). It is essential when deploying hundreds of fabric switches."
+    lesson: network-automation-for-ai

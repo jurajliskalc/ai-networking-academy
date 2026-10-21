@@ -1,0 +1,145 @@
+id: quiz-perftest-benchmarking
+title: "Knowledge check: Benchmarking RDMA with perftest"
+lesson: perftest-benchmarking
+pass_pct: 70
+questions:
+  - id: q1
+    type: single
+    prompt: On a RoCE fabric, which perftest option selects the GID index (and therefore RoCE version, source IP and VLAN)?
+    options:
+      - id: a
+        text: -x
+        correct: true
+        explanation: -x <index> sets the GID index; alternatively -R lets rdma_cm resolve it from the IP.
+      - id: b
+        text: -q
+        explanation: -q sets the number of QPs.
+      - id: c
+        text: -d
+        explanation: -d selects the RDMA device, not the GID.
+      - id: d
+        text: -s
+        explanation: -s sets the message size.
+    tags: [perftest, roce]
+  - id: q2
+    type: single
+    prompt: A colleague reports ib_write_bw shows "about 48000" on a 400 Gb/s link and is alarmed. What is the likely explanation?
+    options:
+      - id: a
+        text: The default unit is MB/s; 48,000 MB/s is about 384 Gb/s, which is healthy.
+        correct: true
+        explanation: Use --report_gbits to report in Gb/s and avoid this confusion.
+      - id: b
+        text: The link negotiated 48 Gb/s.
+        explanation: No IB or Ethernet speed corresponds to that; it is a unit misreading.
+      - id: c
+        text: perftest reports kilobits per second.
+        explanation: perftest defaults to MB/s, not kb/s.
+    tags: [perftest, units]
+  - id: q3
+    type: scenario
+    prompt: >
+      ib_write_bw between two 400G hosts tops out at about 215 Gb/s for every message size above 64 KiB,
+      in both directions and with any number of QPs. Link speed shows 400G on both ends. lspci -vv shows
+      the NIC's LnkSta as "Speed 16GT/s, Width x16". What is the most likely bottleneck?
+    options:
+      - id: a
+        text: The NIC is running at PCIe Gen4 x16, which cannot carry 400 Gb/s.
+        correct: true
+        explanation: 16 GT/s is Gen4; a 400G adapter needs Gen5 x16 (32 GT/s) or an equivalent arrangement.
+      - id: b
+        text: The fabric is oversubscribed.
+        explanation: A single pair test with a flat ceiling regardless of QPs points at the host, not fabric contention.
+      - id: c
+        text: The GID index is wrong.
+        explanation: A wrong GID would cause connection failures, not a stable lower bandwidth.
+      - id: d
+        text: The message size is too small.
+        explanation: The ceiling persists at large sizes, which rules out message-rate limits.
+    tags: [pcie, troubleshooting]
+  - id: q4
+    type: single
+    prompt: Why do ib_read_lat results typically look about twice as high as ib_write_lat for the same message size?
+    options:
+      - id: a
+        text: Write and send latency tests report half of a ping-pong round trip, while read latency reports the full time for the read to return.
+        correct: true
+        explanation: A read inherently needs a request and a response, and perftest reports that complete time.
+      - id: b
+        text: RDMA Read packets travel at half the link rate.
+        explanation: Read responses travel at full link rate.
+      - id: c
+        text: Reads always go through the remote CPU.
+        explanation: RDMA Read is one-sided; the remote CPU is not involved.
+    tags: [latency]
+  - id: q5
+    type: multi
+    prompt: Which actions make an ib_write_bw result more representative of what NCCL will see? (Select all that apply.)
+    options:
+      - id: a
+        text: Pinning the process to the NIC's NUMA node with numactl.
+        correct: true
+        explanation: NCCL also binds to the closest CPU, so cross-socket traffic would be unrepresentative.
+      - id: b
+        text: Using GPU buffers with --use_cuda (on a CUDA-enabled build) and a GPU close to the NIC.
+        correct: true
+        explanation: This tests the GPUDirect RDMA path that NCCL uses.
+      - id: c
+        text: Using large messages and running for a duration such as -D 10.
+        correct: true
+        explanation: Bulk collective traffic uses large messages; short runs are noisy.
+      - id: d
+        text: Using 2-byte messages so that more packets are sent.
+        explanation: Tiny messages measure message rate, not the bandwidth NCCL bulk transfers need.
+    tags: [methodology]
+  - id: q6
+    type: scenario
+    prompt: >
+      In a burn-in run, 63 of 64 host pairs on rail 3 show about 390 Gb/s with ib_write_bw. One pair
+      shows 290 Gb/s. Swapping the client to a different peer on the same rail keeps the low number, but
+      only when node17's mlx5_3 is involved. What should you do next?
+    options:
+      - id: a
+        text: Inspect node17's mlx5_3 link and host path - negotiated speed and width, cable/optics error counters, PCIe link status.
+        correct: true
+        explanation: The problem follows one NIC, so investigate that NIC's link, cable and PCIe before the fabric.
+      - id: b
+        text: Increase -q to 64 and rerun; ECMP collisions explain it.
+        explanation: A single pair through the fabric that is slow with any peer points at the endpoint, not at hashing.
+      - id: c
+        text: Accept the result; 290 Gb/s is within normal variation.
+        explanation: A 25 percent shortfall against identical peers is an outlier to fix before production.
+      - id: d
+        text: Change the GID index on all hosts.
+        explanation: The other 63 pairs work, and a wrong GID would cause failures, not lower bandwidth.
+    tags: [validation, burn-in]
+  - id: q7
+    type: single
+    prompt: What does the perftest -R option change?
+    options:
+      - id: a
+        text: The QPs are connected using the RDMA connection manager (rdma_cm) instead of exchanging details over a plain TCP socket.
+        correct: true
+        explanation: rdma_cm also resolves the GID from the IP address you give it.
+      - id: b
+        text: It reverses the direction of the test.
+        explanation: Use -b for bidirectional tests; -R does not reverse direction.
+      - id: c
+        text: It reports results in Gb/s.
+        explanation: That is --report_gbits.
+    tags: [perftest]
+  - id: q8
+    type: single
+    prompt: In ib_write_bw output, a 65536-byte test shows BW average 391.85 Gb/sec. Approximately what MsgRate should it report?
+    options:
+      - id: a
+        text: About 0.75 Mpps
+        correct: true
+        explanation: 391.85e9 / (65536 x 8) is about 747,000 messages per second.
+      - id: b
+        text: About 7.5 Mpps
+        explanation: That would require ten times the bandwidth at this message size.
+      - id: c
+        text: About 48 Mpps
+        explanation: That confuses MB/s with messages per second.
+    tags: [perftest, message-rate]

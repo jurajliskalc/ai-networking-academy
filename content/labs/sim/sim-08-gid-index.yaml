@@ -1,0 +1,45 @@
+id: sim-08-gid-index
+title: "Wrong GID index: a link-local GID in a routed fabric"
+level: 2
+estimated_minutes: 25
+lessons: [rocev2-encapsulation, rdma-connection-failures, nccl-debugging]
+summary: One node selects a link-local RoCE GID, so its QPs never connect across the routed rail fabric.
+start: node01
+ticket: |
+  **INC-4617 · Sev2 · NCCL init fails with ibv_modify_qp timeouts**
+
+  > New nodes were added from a different image. Any job that includes node02 fails at start-up with
+  > `ibv_modify_qp failed with 110 Connection timed out`. - ML platform team
+faults:
+  - { type: nccl_conf, node: node02, set: { NCCL_IB_GID_INDEX: "1" } }
+hints:
+  - "`show_gids mlx5_0` lists the GID table: index, GID, IPv4 address and RoCE version."
+  - "This fabric is routed (a /31 per host link). Which GIDs can be routed?"
+diagnosis:
+  prompt: Why does node02 fail to connect?
+  options:
+    - id: a
+      text: node02 sets NCCL_IB_GID_INDEX=1, a link-local (fe80::) GID that cannot be routed across the L3 rail fabric. Index 3 is the RoCE v2 GID of the IPv4 address.
+      correct: true
+      explanation: The GID selects the QP's source address and RoCE version. A link-local GID cannot reach a peer behind a router, so the RTR transition times out.
+    - id: b
+      text: node02 has PFC disabled.
+      explanation: PFC affects losses under congestion, not whether a QP can be brought up.
+    - id: c
+      text: The rail leaves block UDP port 4791.
+      explanation: Other nodes connect fine through the same leaves.
+    - id: d
+      text: NCCL_SOCKET_IFNAME points to the wrong interface.
+      explanation: That breaks bootstrap with a different error, before any QP is created.
+checks:
+  - { description: "node02 uses GID index 3", check: nccl_conf, args: { node: node02, key: NCCL_IB_GID_INDEX, value: "3" } }
+  - { description: "all_reduce bus bandwidth is above 360 GB/s", check: allreduce_min_busbw, args: { value: 360 } }
+solution: |
+  The NCCL WARN line names node02 and GID index 1. `show_gids` shows that index 1 is `fe80:...` (v2,
+  link-local) and index 3 is `::ffff:10.x.2.1` (v2). Fix it on node02 with `sed -i
+  's/^NCCL_IB_GID_INDEX=.*/NCCL_IB_GID_INDEX=3/' /etc/nccl.conf`.
+
+  Note: GID indexes are not the same on every system, and newer NCCL releases can select the GID
+  automatically. Check `show_gids` rather than assuming 3.
+fix:
+  - "node02: sed -i 's/^NCCL_IB_GID_INDEX=.*/NCCL_IB_GID_INDEX=3/' /etc/nccl.conf"

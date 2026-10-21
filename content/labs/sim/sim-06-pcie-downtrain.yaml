@@ -1,0 +1,47 @@
+id: sim-06-pcie-downtrain
+title: "Half a NIC: PCIe link training gone wrong"
+level: 3
+estimated_minutes: 30
+lessons: [pcie-numa-topology, slow-collectives-stragglers, reading-server-topology]
+summary: A NIC trained at x8 instead of x16 and cannot feed its 400G port.
+start: node01
+ticket: |
+  **INC-4588 · Sev3 · node04 is the straggler**
+
+  > Since node04 came back from a motherboard replacement, every job that includes it runs ~45 % slower.
+  > Links are up at 400G and there are no errors on any switch. - HPC operations
+
+  Find the bottleneck. The lab action `reseat-nic <node> <dev>` is available.
+faults:
+  - { type: pcie_downtrain, node: node04, rail: 6, width: 8, speed: 32 }
+hints:
+  - "From node04, run `ib_write_bw -d mlx5_<r> -x 3 --report_gbits node01` for each rail."
+  - "`dmesg` and `lspci -vv -s <bdf> | grep Lnk` show the negotiated PCIe link."
+diagnosis:
+  prompt: What limits node04?
+  options:
+    - id: a
+      text: mlx5_6 trained at PCIe Gen5 x8 (~252 Gb/s raw), which cannot sustain a 400 Gb/s port.
+      correct: true
+      explanation: lspci shows LnkSta Width x8 (downgraded), and the kernel logged the bandwidth limit at boot. Gen5 x8 delivers roughly 250 Gb/s before protocol overhead, so that rail runs at ~55 % and paces the collective.
+    - id: b
+      text: The leaf07 port runs at 200G.
+      explanation: nv show interface shows 400G on every port, and the host reports a 400000Mb/s link.
+    - id: c
+      text: The node's NUMA affinity is wrong for all NICs.
+      explanation: NUMA misplacement would affect several NICs and shows up as CPU-side overhead, not as a clean bandwidth cap on one NIC.
+    - id: d
+      text: The switch is sending PFC pause frames to node04.
+      explanation: Pause counters are normal, and the cap appears even in an unloaded single-flow test.
+checks:
+  - { description: "node04 mlx5_6 runs at PCIe Gen5 x16", check: pcie_ok, args: { node: node04, rail: 6 } }
+  - { description: "all_reduce bus bandwidth is above 360 GB/s", check: allreduce_min_busbw, args: { value: 360 } }
+solution: |
+  From node04, `ib_write_bw -d mlx5_6 ...` tops out around 222 Gb/s while the other rails reach ~392
+  Gb/s. `dmesg` contains `... Gb/s available PCIe bandwidth, limited by 32.0 GT/s PCIe x8 link ...`,
+  and `lspci -vv -s cc:00.0` shows `Width x8 (downgraded)`. Reseat the NIC (and check the riser and
+  slot): `reseat-nic node04 mlx5_6`.
+
+  Prevention: check LnkSta against LnkCap for every GPU and NIC in node acceptance tests.
+fix:
+  - "node01: reseat-nic node04 mlx5_6"

@@ -1,0 +1,163 @@
+id: quiz-optics-cabling-power
+title: "Knowledge check: Optics, cabling and power"
+lesson: optics-cabling-power
+pass_pct: 70
+questions:
+  - id: q1
+    type: scenario
+    prompt: >
+      A rail leaf sits in a network rack at the end of a row. The farthest GPU server in that row is
+      about 25 m of cable path away. Links run at 400G (4 x 100G lanes). Which media choice is
+      reasonable for these server-to-leaf links?
+    options:
+      - id: a
+        text: Optical transceivers with structured fiber, or AOCs.
+        correct: true
+        explanation: 25 m is beyond copper reach at 100G per lane; multimode/single-mode optics or AOCs reach tens of meters.
+      - id: b
+        text: Passive DAC.
+        explanation: Passive copper reaches only a few meters at this lane rate.
+      - id: c
+        text: AEC.
+        explanation: AECs extend copper to several meters, not 25 m.
+      - id: d
+        text: Any medium, since reach only matters above 100 m.
+        explanation: Copper media are limited to meters, so reach matters well below 100 m.
+    tags: [media, reach]
+  - id: q2
+    type: scenario
+    prompt: >
+      A fabric has 6,000 optical modules. Assume an average of 14 W per module. What is the total
+      optics power, and how much would it fall if LPO cut module power by 40% on half of the modules?
+    options:
+      - id: a
+        text: 84 kW total; LPO saves 16.8 kW.
+        correct: true
+        explanation: 6,000 x 14 W = 84,000 W; half is 3,000 modules x 14 W x 0.4 = 16,800 W saved.
+      - id: b
+        text: 84 kW total; LPO saves 33.6 kW.
+        explanation: 33.6 kW is a 40% saving on all 6,000 modules, not on half of them.
+      - id: c
+        text: 8.4 kW total; LPO saves 1.68 kW.
+        explanation: An order-of-magnitude slip; 6,000 x 14 W is 84 kW.
+      - id: d
+        text: 42 kW total; LPO saves 8.4 kW.
+        explanation: This halves the module count before computing the total.
+    tags: [power, lpo]
+  - id: q3
+    type: scenario
+    prompt: >
+      Your fabric has 12,000 modules and your field data shows an annualized failure rate of 0.4%.
+      Roughly how many module failures per week should operations plan for?
+    options:
+      - id: a
+        text: About 1 per week (48 per year).
+        correct: true
+        explanation: 12,000 x 0.004 = 48 per year; 48 / 52 is about 0.9 per week.
+      - id: b
+        text: About 9 per week.
+        explanation: That uses 4% instead of 0.4%.
+      - id: c
+        text: About 1 per year.
+        explanation: AFR applies to each module; with 12,000 modules failures are frequent.
+      - id: d
+        text: About 48 per week.
+        explanation: 48 is the yearly figure.
+    tags: [reliability, afr]
+  - id: q4
+    type: single
+    prompt: What does a twin-port 800G OSFP module on a Quantum-2 class switch provide?
+    options:
+      - id: a
+        text: Two independent 400G (4 x 100G) ports from one 8-lane cage, each with its own fiber connector.
+        correct: true
+        explanation: That is how 64 NDR ports are exposed through 32 OSFP cages.
+      - id: b
+        text: One 800G port that must connect to a single 800G peer.
+        explanation: Twin-port modules present two separate ports, not one.
+      - id: c
+        text: Redundant 400G paths where the second port is a standby.
+        explanation: Both ports are active and independent.
+      - id: d
+        text: An 800G port built from 16 lanes of 50G.
+        explanation: OSFP has 8 electrical lanes; 800G is 8 x 100G here.
+    tags: [osfp, twin-port]
+  - id: q5
+    type: single
+    prompt: What is the main operational trade-off of co-packaged optics (CPO) compared with pluggable transceivers?
+    options:
+      - id: a
+        text: Optical engines are fixed on the switch package, so an optical fault cannot be fixed by swapping one pluggable module (lasers are often still pluggable).
+        correct: true
+        explanation: CPO trades field replaceability and broad interoperability for lower power per bit.
+      - id: b
+        text: CPO requires copper cables between switches.
+        explanation: CPO is an optical technology; links are still fiber.
+      - id: c
+        text: CPO consumes more power per bit than DSP-based pluggables.
+        explanation: Lower power per bit is the main claimed benefit.
+      - id: d
+        text: CPO only works for host NICs, not switches.
+        explanation: The announced products (Quantum-X and Spectrum-X Photonics) are switches.
+    tags: [cpo]
+  - id: q6
+    type: scenario
+    prompt: >
+      After a rack move, one 400G link shows rising corrected FEC errors. ethtool -m shows lanes 1, 2
+      and 4 receiving about -0.1 dBm and lane 3 receiving about -6.8 dBm. What should you do first?
+    options:
+      - id: a
+        text: Inspect and clean both fiber connector ends, then recheck receive power and BER.
+        correct: true
+        explanation: One weak lane after handling is a typical contamination or damage signature; cleaning is cheap and often fixes it.
+      - id: b
+        text: Replace the switch.
+        explanation: A single lane on one link points at the optical path, not the switch.
+      - id: c
+        text: Disable FEC to reduce errors.
+        explanation: FEC is required at this lane rate; disabling it would turn corrected errors into packet loss.
+      - id: d
+        text: Lower the MTU.
+        explanation: MTU does not affect optical receive power or bit errors.
+    tags: [troubleshooting, cleaning]
+  - id: q7
+    type: multi
+    prompt: Which statements about lane math are correct? Select all that apply.
+    options:
+      - id: a
+        text: 800G is commonly 8 lanes of 100G PAM4.
+        correct: true
+        explanation: That is the dominant 800G implementation in OSFP and QSFP-DD800.
+      - id: b
+        text: 1.6T is commonly 8 lanes of 200G.
+        correct: true
+        explanation: 1.6T modules use 200G per lane electrical and optical interfaces.
+      - id: c
+        text: 400G QSFP112 uses 4 lanes of 100G.
+        correct: true
+        explanation: QSFP112 is named for its 112 Gb/s (raw) electrical lanes.
+      - id: d
+        text: 400G always requires 16 lanes of 25G.
+        explanation: 16 x 25G was an early 400G option (CDFP/CFP8 era); current modules use 4 x 100G or 8 x 50G.
+    tags: [lanes, form-factors]
+  - id: q8
+    type: scenario
+    prompt: >
+      Two designs serve the same 4,096 GPUs: Design A needs 14,336 modules, Design B 10,240. At an
+      assumed 15 W per module, how much optics power does Design B save, and what is its optics
+      power per GPU?
+    options:
+      - id: a
+        text: 61.44 kW saved; 37.5 W per GPU.
+        correct: true
+        explanation: (14,336 - 10,240) x 15 W = 4,096 x 15 = 61,440 W; 10,240 x 15 / 4,096 = 37.5 W.
+      - id: b
+        text: 153.6 kW saved; 15 W per GPU.
+        explanation: 153.6 kW is Design B's total, and 15 W is per module, not per GPU.
+      - id: c
+        text: 61.44 kW saved; 52.5 W per GPU.
+        explanation: 52.5 W per GPU is Design A (3.5 modules x 15 W).
+      - id: d
+        text: 4.1 kW saved; 2.5 W per GPU.
+        explanation: These are module counts (4,096 extra modules, 2.5 per GPU) misread as kilowatts and watts.
+    tags: [power, sizing]

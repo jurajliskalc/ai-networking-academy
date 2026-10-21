@@ -1,0 +1,165 @@
+id: quiz-superpod-reference-architecture
+title: "Knowledge check: DGX SuperPOD reference architecture"
+lesson: superpod-reference-architecture
+pass_pct: 70
+questions:
+  - id: q1
+    type: scenario
+    prompt: >
+      You connect 4 scalable units (each 32 nodes, 8 rail leaves, 32 uplinks per leaf) through a
+      two-tier spine layer built from 64-port 400G switches. How many spines do you need, and how
+      many parallel links join each leaf to each spine?
+    options:
+      - id: a
+        text: 16 spines, 2 links per leaf-spine pair.
+        correct: true
+        explanation: 32 leaves x 32 uplinks = 1,024 uplinks; 1,024 / 64 = 16 spines; 32 uplinks / 16 spines = 2 links each.
+      - id: b
+        text: 32 spines, 1 link per leaf-spine pair.
+        explanation: 32 spines with 64 ports would offer 2,048 ports for only 1,024 uplinks; half the spine ports would be idle.
+      - id: c
+        text: 8 spines, 4 links per leaf-spine pair.
+        explanation: 8 x 64 = 512 ports cannot terminate 1,024 uplinks.
+      - id: d
+        text: 4 spines, one per scalable unit.
+        explanation: Spines interconnect leaves across SUs; per-SU spines would not provide any-to-any connectivity.
+    tags: [superpod, sizing]
+  - id: q2
+    type: scenario
+    prompt: >
+      You will grow to 4 SUs eventually but deploy 1 SU (8 leaves) today, and you install the
+      end-state spine layer of 16 spines on day one so that no cable is ever moved. How many ports
+      of each 64-port spine are in use on day one?
+    options:
+      - id: a
+        text: 16 ports.
+        correct: true
+        explanation: Each leaf sends 32 / 16 = 2 links to every spine; 8 leaves x 2 = 16 ports per spine.
+      - id: b
+        text: 32 ports.
+        explanation: That would be the day-one usage with 2 SUs (16 leaves x 2).
+      - id: c
+        text: 64 ports.
+        explanation: A full spine is the end state with 32 leaves, not day one.
+      - id: d
+        text: 8 ports.
+        explanation: That assumes one link per leaf; with 16 spines each leaf needs 2 links per spine to place all 32 uplinks.
+    tags: [superpod, growth]
+  - id: q3
+    type: single
+    prompt: A node's operating system has hung and its data ports are down. Which network lets you power-cycle it and view its console?
+    options:
+      - id: a
+        text: The out-of-band management network, through the node's BMC.
+        correct: true
+        explanation: OOB reaches the BMC independently of the host OS and data NICs.
+      - id: b
+        text: The in-band management network.
+        explanation: In-band uses the host OS network stack, which is hung.
+      - id: c
+        text: The compute fabric, through the subnet manager.
+        explanation: The subnet manager configures fabric routing; it cannot control a host's power.
+      - id: d
+        text: The storage fabric.
+        explanation: Storage NICs are host-controlled data ports, down with the OS.
+    tags: [oob, management]
+  - id: q4
+    type: multi
+    prompt: Which are valid reasons the SuperPOD RAs keep storage traffic on a separate fabric from the compute fabric? Select all that apply.
+    options:
+      - id: a
+        text: Checkpoint writes are bursty and would compete with all-reduce for links and buffers.
+        correct: true
+        explanation: Storage bursts on shared links create congestion that slows synchronous collectives.
+      - id: b
+        text: Storage access patterns (many clients to few storage servers) do not follow the rail pattern the compute fabric is optimized for.
+        correct: true
+        explanation: Storage traffic is many-to-few, so on a rail fabric it would cross rails and load spines.
+      - id: c
+        text: RDMA cannot be used for storage traffic.
+        explanation: Storage commonly uses RDMA (NVMe-oF, parallel file systems, GPUDirect Storage).
+      - id: d
+        text: Separate fabrics allow storage to be sized and upgraded independently of the compute fabric.
+        correct: true
+        explanation: Storage bandwidth needs are typically a fraction of compute bandwidth and evolve on a different schedule.
+    tags: [storage, design]
+  - id: q5
+    type: scenario
+    prompt: >
+      On a DGX H100-class node, each compute OSFP cage carries two 400G NICs (GPU 0's and GPU 1's)
+      through a twin-port transceiver with two fiber connectors. A technician plugs both fibers from
+      that cage into the rail-0 leaf. What is the consequence?
+    options:
+      - id: a
+        text: GPU 1's NIC lands on rail 0, so the rail mapping is broken; same-index traffic for GPU 1 crosses the spine.
+        correct: true
+        explanation: The two halves of a twin-port cage belong to different rails and must go to different leaves.
+      - id: b
+        text: Nothing; a twin-port cage is one logical 800G port that must go to one leaf.
+        explanation: On the node, the cage presents two independent 400G NICs, not one 800G port.
+      - id: c
+        text: The links will not come up because a leaf cannot accept two cables from one transceiver.
+        explanation: The links come up normally, which is why this mistake is easy to miss.
+      - id: d
+        text: GPU 0 loses connectivity entirely.
+        explanation: GPU 0's NIC is on the correct leaf; the problem is GPU 1's placement.
+    tags: [cabling, twin-port, rail-optimized]
+  - id: q6
+    type: single
+    prompt: How does a GB200 NVL72-based SuperPOD change the unit of design compared with a DGX H100 SuperPOD?
+    options:
+      - id: a
+        text: The rack (72 GPUs in one NVLink domain) becomes the basic building block, and in-rack NVLink becomes an additional network to plan.
+        correct: true
+        explanation: NVIDIA's GB200 design treats the NVL72 rack as the system; scale-out still uses one NIC per GPU.
+      - id: b
+        text: The scale-out fabric is removed because NVLink connects all racks.
+        explanation: NVL72's NVLink domain is one rack; racks still connect through the scale-out compute fabric.
+      - id: c
+        text: Each rack uses a single 800G NIC shared by all 72 GPUs.
+        explanation: The design keeps one scale-out NIC per GPU.
+      - id: d
+        text: The storage fabric is merged into NVLink.
+        explanation: Storage remains on a separate network; NVLink is a GPU memory fabric.
+    tags: [gb200, nvl72, superpod]
+  - id: q7
+    type: scenario
+    prompt: >
+      Your data hall gives you 36 kW per rack (air-cooled), and each 8-GPU server is budgeted at
+      10 kW. How many compute racks does one 32-node scalable unit need?
+    options:
+      - id: a
+        text: 11 racks.
+        correct: true
+        explanation: floor(36 / 10) = 3 servers per rack; 32 / 3 = 10.67, rounded up to 11 racks.
+      - id: b
+        text: 8 racks.
+        explanation: That assumes 4 servers per rack, which needs 40 kW.
+      - id: c
+        text: 10 racks.
+        explanation: 10 racks x 3 servers = 30 servers, two short of the SU.
+      - id: d
+        text: 4 racks.
+        explanation: 8 servers per rack would need 80 kW.
+    tags: [power, racks]
+  - id: q8
+    type: scenario
+    prompt: >
+      For a 2-SU compute fabric (64 nodes, 16 leaves, 32 uplinks per leaf), all links optical, with
+      twin-port (2 x 400G) transceivers on nodes (4 per node), leaves and spines, how many
+      transceivers does the compute fabric need?
+    options:
+      - id: a
+        text: "1,024."
+        correct: true
+        explanation: Nodes 64 x 4 = 256; leaf node-facing ports 512 / 2 = 256; leaf-spine 512 links x 2 ends / 2 = 512; total 1,024.
+      - id: b
+        text: "512."
+        explanation: That counts only one side of the fabric (for example only leaf-spine modules).
+      - id: c
+        text: "2,048."
+        explanation: That is the 4-SU total from the lesson; 2 SUs need exactly half.
+      - id: d
+        text: "768."
+        explanation: That omits the node-side transceivers or the leaf-side node-facing ones.
+    tags: [optics, sizing]

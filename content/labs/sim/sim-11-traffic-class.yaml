@@ -1,0 +1,48 @@
+id: sim-11-traffic-class
+title: "RoCE in the wrong class: NCCL_IB_TC went missing"
+level: 3
+estimated_minutes: 40
+lessons: [qos-trust-and-mapping, ecn-and-dcqcn, nccl-configuration]
+summary: Without NCCL_IB_TC, RoCE packets leave with DSCP 0 and miss the lossless queue on every switch.
+start: node01
+ticket: |
+  **INC-4671 · Sev2 · New image, collectives 3x slower**
+
+  > We rolled out image v42 to all nodes. Links, MTUs, NIC QoS and switch QoS were all audited and are
+  > correct, yet bandwidth dropped to about a third. - HPC operations
+faults:
+  - { type: nccl_conf, node: all, set: { NCCL_IB_TC: null } }
+hints:
+  - "Run a test, then check which priority the RoCE traffic actually used: `ethtool -S <if> | grep -E 'prio(0|3)_packets'`."
+  - "DSCP is the upper six bits of the IP TOS byte, and NCCL sets it from NCCL_IB_TC. What does `cat /etc/nccl.conf` say?"
+diagnosis:
+  prompt: What is the root cause?
+  options:
+    - id: a
+      text: The new image's /etc/nccl.conf lacks NCCL_IB_TC=106, so RoCE traffic leaves with DSCP 0, lands in the lossy default priority on every switch, and is dropped under load.
+      correct: true
+      explanation: The switches and NICs map DSCP 26 to the lossless priority 3, and traffic class 106 is DSCP 26 shifted left by two bits with the ECT bit set. Without it, RoCE uses priority 0, which has neither PFC nor the RoCE ECN profile.
+    - id: b
+      text: PFC is disabled on priority 0.
+      explanation: PFC should not be enabled on the default class; the fix is to put RoCE into the lossless class.
+    - id: c
+      text: The NICs trust PCP instead of DSCP.
+      explanation: mlnx_qos shows trust dscp on every NIC.
+    - id: d
+      text: The new image ships a different NCCL version that defaults to the tree algorithm.
+      explanation: The counters show the traffic moved to priority 0; the algorithm has nothing to do with that.
+checks:
+  - { description: "Every node sets NCCL_IB_TC=106", check: nccl_conf, args: { node: all, key: NCCL_IB_TC, value: "106" } }
+  - { description: "all_reduce bus bandwidth is above 360 GB/s", check: allreduce_min_busbw, args: { value: 360 } }
+solution: |
+  After a run, `ethtool -S` shows almost all packets in `tx_prio0_packets`, and the leaves show drops
+  but no ECN marks. `/etc/nccl.conf` lacks `NCCL_IB_TC`. Add it on every node (`echo "NCCL_IB_TC=106"
+  >> /etc/nccl.conf`), ideally through configuration management.
+
+  Note: 106 is a common convention (DSCP 26 with ECT), not a standard. The value must match the fabric's
+  DSCP-to-priority map.
+fix:
+  - "node01: echo \"NCCL_IB_TC=106\" >> /etc/nccl.conf"
+  - "node02: echo \"NCCL_IB_TC=106\" >> /etc/nccl.conf"
+  - "node03: echo \"NCCL_IB_TC=106\" >> /etc/nccl.conf"
+  - "node04: echo \"NCCL_IB_TC=106\" >> /etc/nccl.conf"

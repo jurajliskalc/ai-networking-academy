@@ -1,0 +1,133 @@
+id: quiz-rocev2-configuration-end-to-end
+title: "Knowledge check: RoCEv2 end-to-end configuration"
+lesson: rocev2-configuration-end-to-end
+pass_pct: 70
+questions:
+  - id: q1
+    type: single
+    prompt: "What does mlnx_qos -i ens1f0np0 --pfc 0,0,0,1,0,0,0,0 configure?"
+    options:
+      - id: a
+        text: "PFC enabled on priority 3 only, on that interface"
+        correct: true
+        explanation: "The list is per priority, 0 to 7. Only the fourth entry (priority 3) is enabled."
+      - id: b
+        text: "PFC enabled on traffic class 4"
+        explanation: "The vector is indexed by priority starting at 0, and it configures priorities rather than TCs."
+      - id: c
+        text: "DSCP 3 mapped to priority 1"
+        explanation: "DSCP mapping uses trust and dscp2prio settings, not the --pfc vector."
+      - id: d
+        text: "ECN enabled on priority 3"
+        explanation: "ECN/DCQCN is configured separately, for example through the NIC congestion-control settings."
+    tags: [mlnx_qos, pfc]
+  - id: q2
+    type: scenario
+    prompt: "A cluster performed perfectly at acceptance. After a maintenance window with reboots, about 10 % of nodes show RoCE bytes in tx_prio0_bytes and no PFC configuration in mlnx_qos output. Nothing else changed. What is the most likely cause?"
+    options:
+      - id: a
+        text: "The host QoS settings were applied at runtime only and were not made persistent across reboots."
+        correct: true
+        explanation: "mlnx_qos, sysfs and ethtool settings are lost at reboot unless a boot-time mechanism reapplies them."
+      - id: b
+        text: "The switches lost their RoCE profile during the maintenance window."
+        explanation: "Host-side counters and mlnx_qos output show the hosts themselves are unconfigured."
+      - id: c
+        text: "NCCL_IB_TC was removed from the job template."
+        explanation: "That would not explain mlnx_qos showing no PFC configuration."
+      - id: d
+        text: "The NIC firmware automatically resets QoS every 30 days."
+        explanation: "There is no such behaviour. The reboot is the trigger."
+    tags: [persistence, operations]
+  - id: q3
+    type: single
+    prompt: "On Cumulus Linux with NVUE, which command sequence enables the NVIDIA RoCE QoS profile and displays the result?"
+    options:
+      - id: a
+        text: "nv set qos roce, then nv config apply, then nv show qos roce"
+        correct: true
+        explanation: "NVUE stages changes with nv set, applies them with nv config apply, and shows state with nv show. Check your release's reference for options such as mode lossy."
+      - id: b
+        text: "mlnx_qos -i swp1 --trust dscp, then nv show qos roce"
+        explanation: "mlnx_qos is a host NIC tool, not the switch configuration interface."
+      - id: c
+        text: "config qos reload, then show pfc counters"
+        explanation: "These are SONiC commands, not Cumulus NVUE."
+      - id: d
+        text: "nv set qos roce, then nv show qos roce, with no apply needed"
+        explanation: "NVUE changes are staged until applied with nv config apply."
+    tags: [cumulus, nvue]
+  - id: q4
+    type: scenario
+    prompt: "A fabric mixes SONiC leaves running community default QoS templates with NVIDIA-convention hosts (DSCP 26 to priority 3). PFC works on some links and not others. What is the best fix?"
+    options:
+      - id: a
+        text: "Define one QoS contract and explicitly configure every NOS and host to it, including DSCP maps and the pfc_enable list."
+        correct: true
+        explanation: "SONiC defaults have traditionally used different lossless priorities and DSCP maps. Mixed defaults cause inconsistent classification."
+      - id: b
+        text: "Disable PFC on all SONiC devices."
+        explanation: "That turns the class lossy on those hops without fixing the mapping inconsistency."
+      - id: c
+        text: "Change the hosts to trust PCP."
+        explanation: "That does not align switch maps and breaks classification on untagged routed links."
+      - id: d
+        text: "Increase the ECN thresholds on the SONiC leaves."
+        explanation: "Thresholds do not fix packets landing in the wrong priority."
+    tags: [sonic, consistency]
+  - id: q5
+    type: multi
+    prompt: "Which observations during a stage-2 incast test indicate a healthy RoCE configuration? (Select all that apply.)"
+    options:
+      - id: a
+        text: "Receiver np_ecn_marked_roce_packets and np_cnp_sent rise, and senders' rp_cnp_handled rises."
+        correct: true
+        explanation: "This shows the full DCQCN loop working: marking, notification and reaction."
+      - id: b
+        text: "RoCE bytes appear in rx_prio3_bytes on the receiver."
+        correct: true
+        explanation: "This confirms the traffic is classified into the lossless priority."
+      - id: c
+        text: "out_of_sequence and packet_seq_err stay flat."
+        correct: true
+        explanation: "Flat sequence-error counters indicate no loss."
+      - id: d
+        text: "The receiver's tx_prio3_pause rises steadily throughout the test."
+        explanation: "A host sending continuous pauses means its receive path cannot keep up, which is a problem."
+    tags: [validation, counters]
+  - id: q6
+    type: scenario
+    prompt: "In a server with eight back-end NICs, nccl-tests all-reduce bandwidth is low, and per-NIC counters show retransmissions and sequence errors only on mlx5_5. The other seven NICs are clean. What is the most likely cause?"
+    options:
+      - id: a
+        text: "Host QoS (trust, PFC or ECN) or MTU was not applied to mlx5_5, or its rail's switch port differs from the contract."
+        correct: true
+        explanation: "Configuration that misses one NIC or one rail is common. The collective then runs at the speed of the bad rail."
+      - id: b
+        text: "NCCL_IB_TC is set per NIC and is missing for mlx5_5."
+        explanation: "NCCL_IB_TC applies to all NCCL QPs in the process, not per NIC."
+      - id: c
+        text: "All-reduce always stresses one NIC more than the others."
+        explanation: "Rail-optimised all-reduce spreads traffic across NICs. Errors on one NIC indicate a fault there."
+      - id: d
+        text: "The GPUs attached to mlx5_5 are slower."
+        explanation: "Slower GPUs would not cause sequence errors on the NIC."
+    tags: [rails, validation]
+  - id: q7
+    type: single
+    prompt: "Why is a continuous static audit (stage 0) part of the validation plan rather than a one-time step?"
+    options:
+      - id: a
+        text: "Configuration drifts: reimaged hosts, replaced switches and firmware upgrades can silently revert settings."
+        correct: true
+        explanation: "Continuous auditing catches drift before a training job suffers."
+      - id: b
+        text: "PFC settings expire after a fixed time."
+        explanation: "PFC settings do not expire. They are lost on reboot or reset, or changed by drift."
+      - id: c
+        text: "Audits are required to compute headroom."
+        explanation: "Headroom comes from speed, cable length and MTU, which the switch calculates."
+      - id: d
+        text: "NCCL refuses to run without a recent audit."
+        explanation: "NCCL has no such dependency."
+    tags: [automation, operations]

@@ -1,0 +1,13 @@
+id: m01-ai-workloads
+order: 1
+title: "Why AI needs a different network"
+level: 1
+summary: >
+  How distributed training and inference work, which parallelism strategies generate which traffic, and why that traffic breaks assumptions of classic data center networks.
+lessons:
+  - ai-training-101
+  - parallelism-strategies
+  - collective-operations
+  - ai-traffic-patterns
+  - four-networks-of-an-ai-cluster
+  - inference-networking

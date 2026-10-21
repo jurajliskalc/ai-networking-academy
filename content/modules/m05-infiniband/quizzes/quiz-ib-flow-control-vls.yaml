@@ -1,0 +1,149 @@
+id: quiz-ib-flow-control-vls
+title: "Knowledge check: Credit-based flow control and virtual lanes"
+lesson: ib-flow-control-vls
+pass_pct: 70
+questions:
+  - id: q1
+    type: single
+    prompt: What fundamentally distinguishes InfiniBand link-level flow control from Ethernet PFC?
+    options:
+      - id: a
+        text: IB senders transmit only into buffer space the receiver has advertised (credits); PFC lets senders transmit until the receiver sends a pause.
+        correct: true
+        explanation: Credit flow is proactive; PFC is reactive and needs headroom for data in flight.
+      - id: b
+        text: IB pauses the whole link while PFC pauses one priority.
+        explanation: IB credits are per virtual lane, so IB is also per-class.
+      - id: c
+        text: IB drops packets early to avoid congestion, PFC never drops.
+        explanation: IB does not drop for lack of buffer; PFC can drop if headroom is insufficient.
+      - id: d
+        text: There is no difference; both are implementations of 802.1Qbb.
+        explanation: 802.1Qbb is Ethernet PFC only.
+    tags: [credits, pfc]
+  - id: q2
+    type: single
+    prompt: How many bytes of receive buffer does one InfiniBand flow-control credit represent?
+    options:
+      - id: a
+        text: 64 bytes
+        correct: true
+        explanation: Credits are counted in 64-byte blocks.
+      - id: b
+        text: One full 4096-byte MTU
+        explanation: Credits are finer-grained than an MTU.
+      - id: c
+        text: 512 bit times
+        explanation: That is the PFC pause quantum, not an IB credit.
+    tags: [credits]
+  - id: q3
+    type: multi
+    prompt: Which statements about SLs and VLs are correct? (Select all that apply.)
+    options:
+      - id: a
+        text: The SL is a 4-bit field in the LRH that stays constant end to end.
+        correct: true
+        explanation: SL expresses the class of service across the whole path.
+      - id: b
+        text: SL2VL tables map an SL to a VL for each hop, and on switches can depend on input and output port.
+        correct: true
+        explanation: The VL used can differ per hop.
+      - id: c
+        text: VL15 is reserved for subnet management packets and is not credit flow-controlled.
+        correct: true
+        explanation: VL15 isolates management from data lanes.
+      - id: d
+        text: Every IB port always supports exactly 16 data VLs.
+        explanation: Ports support 1, 2, 4, 8 or 15 data VLs; the SM sets the operational number.
+    tags: [sl, vl, sl2vl]
+  - id: q4
+    type: scenario
+    prompt: >
+      A spine port shows PortXmitWait increasing by billions of ticks per minute during training, with
+      PortXmitData also high. SymbolErrorCounter and LinkErrorRecoveryCounter are zero. What is the best
+      interpretation?
+    options:
+      - id: a
+        text: The link is healthy but congested; the downstream side is not returning credits fast enough. Look at downstream hot spots, routing balance and congestion control.
+        correct: true
+        explanation: PortXmitWait measures waiting for credits; with no error counters, this is congestion, not a link fault.
+      - id: b
+        text: The cable is failing and should be replaced.
+        explanation: Physical errors would show in symbol and link recovery counters.
+      - id: c
+        text: The port is dropping packets because of buffer overflow.
+        explanation: Credit flow prevents buffer-overflow drops; waiting is the symptom instead.
+      - id: d
+        text: PortXmitWait always grows on busy links and can be ignored.
+        explanation: Some wait is normal under load, but steady high growth on one port signals a congestion point.
+    tags: [portxmitwait, congestion]
+  - id: q5
+    type: scenario
+    prompt: >
+      A team wants to extend an InfiniBand fabric to a building 5 km away using standard data-center
+      switches and long-reach optics. Optics link up fine, but throughput over the link is a small
+      fraction of line rate. Why?
+    options:
+      - id: a
+        text: The receiver's buffer cannot advertise enough credits to cover the long round-trip time, so the sender spends most of its time waiting for credits.
+        correct: true
+        explanation: Full rate needs buffer of about rate x RTT; long-haul needs extension products with deep buffers.
+      - id: b
+        text: InfiniBand cannot run over single-mode fibre.
+        explanation: Single-mode optics are common for longer IB links.
+      - id: c
+        text: The SM does not support links longer than 100 m.
+        explanation: The limit is buffer versus round-trip time, not an SM rule.
+    tags: [credits, distance]
+  - id: q6
+    type: single
+    prompt: In InfiniBand Congestion Control, what is the role of FECN and BECN?
+    options:
+      - id: a
+        text: A congested switch marks FECN on packets; the destination returns BECN to the source, which reduces its injection rate.
+        correct: true
+        explanation: This end-to-end loop throttles sources so back-pressure does not spread.
+      - id: b
+        text: FECN pauses the link and BECN resumes it.
+        explanation: Pause/resume describes PFC-like behaviour, not IB congestion control.
+      - id: c
+        text: They are error flags that cause packets to be dropped.
+        explanation: They are congestion notifications, not drop signals.
+    tags: [congestion-control]
+  - id: q7
+    type: scenario
+    prompt: >
+      Storage traffic and NCCL traffic share one InfiniBand fabric. During checkpoints, collective
+      performance drops sharply. QoS is enabled in the SM with storage on SL 1 / VL 1 and compute on
+      SL 0 / VL 0, but nccl jobs were launched without NCCL_IB_SL and the storage client's SL setting
+      was never applied. What is happening?
+    options:
+      - id: a
+        text: Both classes are probably using the default SL, so they share one VL and storage bursts cause head-of-line blocking for collectives.
+        correct: true
+        explanation: The QoS design only works if applications actually mark the intended SLs.
+      - id: b
+        text: VL 1 has higher priority than VL 0 by definition.
+        explanation: VL priority is set by arbitration tables, not by VL number.
+      - id: c
+        text: Storage traffic is being dropped and retransmitted.
+        explanation: Credit flow prevents buffer-overflow drops; the issue is sharing a lane.
+      - id: d
+        text: The SM must be rebooted to apply QoS.
+        explanation: The SM programmed the tables; the applications are not using the SLs.
+    tags: [qos, sl]
+  - id: q8
+    type: single
+    prompt: Why do routing engines such as LASH and DFSSSP use virtual lanes?
+    options:
+      - id: a
+        text: To place potentially cyclic paths on separate buffers so credit-loop deadlocks cannot form.
+        correct: true
+        explanation: Separate VLs break cycles in buffer dependencies.
+      - id: b
+        text: To increase the link's raw bandwidth.
+        explanation: VLs share the link; they do not add bandwidth.
+      - id: c
+        text: To carry management packets.
+        explanation: Management uses VL15 regardless of routing engine.
+    tags: [deadlock, routing]

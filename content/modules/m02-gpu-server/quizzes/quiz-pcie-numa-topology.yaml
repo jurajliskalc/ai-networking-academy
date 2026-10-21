@@ -1,0 +1,130 @@
+id: quiz-pcie-numa-topology
+title: "Knowledge check: PCIe and NUMA topology"
+lesson: pcie-numa-topology
+pass_pct: 70
+questions:
+  - id: q1
+    type: single
+    prompt: Which is the smallest PCIe x16 link generation that can sustain a 400 Gb/s NIC at line rate in one direction?
+    options:
+      - id: a
+        text: PCIe 3.0 x16
+        explanation: About 16 GB/s (~126 Gb/s) per direction, roughly a third of what a 400G NIC needs.
+      - id: b
+        text: PCIe 4.0 x16
+        explanation: About 32 GB/s (~252 Gb/s) per direction; enough for 200G, not for 50 GB/s of 400G traffic.
+      - id: c
+        text: PCIe 5.0 x16
+        correct: true
+        explanation: About 63 GB/s raw per direction, enough for the 50 GB/s a 400G NIC moves, with modest headroom after TLP overhead.
+      - id: d
+        text: Only PCIe 6.0 x16
+        explanation: Gen6 is needed for 800G NICs on a single x16 link; it is more than 400G requires.
+    explanation: Convert 400 Gb/s to 50 GB/s and compare it to per-direction x16 bandwidth per generation.
+    tags: [pcie, bandwidth]
+  - id: q2
+    type: scenario
+    prompt: "One node in a 64-node job shows about half the all-reduce bus bandwidth of every other node. Switch port counters are clean. On that node, lspci reports the compute NIC as 'LnkCap: Speed 32GT/s, Width x16' and 'LnkSta: Speed 32GT/s (ok), Width x8 (downgraded)'. What is the most likely explanation?"
+    options:
+      - id: a
+        text: The NIC's PCIe link trained at half width, halving the bandwidth available to every transfer.
+        correct: true
+        explanation: A x8 Gen5 link carries roughly 32 GB/s per direction, far below the 50 GB/s a 400G NIC needs. Reseat, check the riser and BIOS bifurcation.
+      - id: b
+        text: The switch port is running at half speed and the lspci output is unrelated.
+        explanation: Clean switch counters and an explicit downgraded width on the host point inside the server first.
+      - id: c
+        text: PCIe lanes are hashed per flow, so only half the flows are slow, which is normal.
+        explanation: PCIe stripes every packet across all trained lanes; there is no per-flow hashing.
+      - id: d
+        text: The NIC is on the wrong NUMA node, which lspci reports as a width downgrade.
+        explanation: NUMA placement is not reported as link width; LnkSta reflects the physical link negotiation.
+    tags: [pcie, troubleshooting]
+  - id: q3
+    type: single
+    prompt: In a server where GPU0 and NIC0 sit under the same PCIe switch, where does GPUDirect RDMA traffic between them turn around (assuming ACS redirection is disabled)?
+    options:
+      - id: a
+        text: In the CPU root complex
+        explanation: That is where it turns if the devices are on different root ports, or if ACS redirects requests upward.
+      - id: b
+        text: Inside the PCIe switch
+        correct: true
+        explanation: Siblings below one switch can exchange TLPs directly, without touching the CPU.
+      - id: c
+        text: In system DRAM, where the data is staged
+        explanation: With GPUDirect RDMA there is no staging in host memory; the NIC reads GPU memory directly.
+      - id: d
+        text: In the top-of-rack switch
+        explanation: The ToR is outside the server; this is an in-server PCIe path.
+    tags: [pcie, p2p]
+  - id: q4
+    type: multi
+    prompt: Which statements about NUMA in a two-socket GPU server are true? Select all that apply.
+    options:
+      - id: a
+        text: Each PCIe device is attached to lanes from one specific socket and therefore belongs to one NUMA node.
+        correct: true
+        explanation: PCIe lanes come out of a particular CPU's root complex, which defines the device's local node.
+      - id: b
+        text: Traffic between a GPU on socket 0 and a NIC on socket 1 crosses the socket interconnect (UPI or Infinity Fabric).
+        correct: true
+        explanation: Cross-socket P2P must traverse the coherent link between CPUs, which costs bandwidth and adds latency.
+      - id: c
+        text: A numa_node value of -1 in sysfs means the device is equally close to all sockets.
+        explanation: It means the platform did not report affinity, which hides placement information from software.
+      - id: d
+        text: NUMA only matters for CPU memory access, never for GPU-to-NIC transfers.
+        explanation: Even with no CPU cores involved, GPU-NIC data physically flows through root complexes and possibly the socket link.
+    tags: [numa]
+  - id: q5
+    type: single
+    prompt: What does PCIe Access Control Services (ACS) request redirection do to peer-to-peer traffic?
+    options:
+      - id: a
+        text: It forces P2P requests up to the root complex so the IOMMU can validate them.
+        correct: true
+        explanation: Good for isolation between VMs, but on bare-metal training nodes it lengthens the GPU-NIC path and is commonly disabled per NCCL guidance.
+      - id: b
+        text: It encrypts P2P traffic between GPUs and NICs.
+        explanation: ACS is about routing and access checks, not encryption.
+      - id: c
+        text: It increases the PCIe link speed for P2P transfers.
+        explanation: Link speed is negotiated by link training; ACS does not change it.
+      - id: d
+        text: It enables NVLink between GPUs on different switches.
+        explanation: NVLink is a separate interconnect, unrelated to PCIe ACS.
+    tags: [pcie, acs]
+  - id: q6
+    type: scenario
+    prompt: "An engineer runs ib_write_bw between two nodes and gets inconsistent results, ranging from 300 to 390 Gb/s on a 400G link. The NIC is on NUMA node 1, but the benchmark is started without any CPU or memory binding. What is the best first change?"
+    options:
+      - id: a
+        text: Bind the benchmark to the NIC's NUMA node, for example with numactl --cpunodebind=1 --membind=1.
+        correct: true
+        explanation: Host-memory benchmarks need buffers and threads local to the NIC; otherwise DMA crosses the socket link and results vary run to run.
+      - id: b
+        text: Increase the switch buffer size on the ToR.
+        explanation: A two-node test with no congestion is not limited by switch buffers.
+      - id: c
+        text: Lower the MTU to reduce packet size.
+        explanation: Smaller MTU increases overhead and does not address cross-socket DMA.
+      - id: d
+        text: Disable the second CPU socket in BIOS.
+        explanation: Drastic and unnecessary; correct binding solves placement without losing half the machine.
+    tags: [numa, benchmarking]
+  - id: q7
+    type: single
+    prompt: Why do NIC speed generations tend to arrive together with PCIe generations (200G with Gen4, 400G with Gen5, 800G with Gen6)?
+    options:
+      - id: a
+        text: Because a NIC cannot move more data than its host PCIe link can carry, so each doubling of Ethernet or InfiniBand rate needs a doubling of PCIe bandwidth.
+        correct: true
+        explanation: The x16 PCIe link is the NIC's pipe into the server; it must match or exceed line rate.
+      - id: b
+        text: Because PCI-SIG and IEEE publish their standards on the same day.
+        explanation: The standards bodies are independent; the coupling is a bandwidth requirement, not a calendar.
+      - id: c
+        text: Because PCIe and Ethernet share the same SerDes encoding.
+        explanation: They use different encodings and FEC schemes; similar SerDes technology helps but is not the reason.
+    tags: [pcie, nic]

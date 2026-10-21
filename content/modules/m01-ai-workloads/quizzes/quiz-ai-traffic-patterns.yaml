@@ -1,0 +1,139 @@
+id: quiz-ai-traffic-patterns
+title: "Knowledge check: AI traffic patterns"
+lesson: ai-traffic-patterns
+pass_pct: 70
+questions:
+  - id: q1
+    type: multi
+    prompt: Which properties distinguish AI training back-end traffic from classic cloud traffic? Select all that apply.
+    options:
+      - id: a
+        text: A small number of very large, long-lived flows.
+        correct: true
+        explanation: Collectives stream MB to GB between a few peers over a few queue pairs.
+      - id: b
+        text: Synchronised bursts across thousands of GPUs at the same moment.
+        correct: true
+        explanation: All ranks run the same step in lock-step, so their communication phases align.
+      - id: c
+        text: Completion governed by the slowest flow of each collective.
+        correct: true
+        explanation: The collective is only done when the last byte arrives.
+      - id: d
+        text: High header entropy from millions of independent users.
+        explanation: AI traffic has low entropy, with the same GPU pairs and the same UDP destination port 4791.
+    tags: [traffic-patterns]
+  - id: q2
+    type: single
+    prompt: With ideal random hashing of 8 equal elephant flows onto 8 uplinks, what is the probability that every flow gets its own uplink?
+    options:
+      - id: a
+        text: About 0.24 %.
+        correct: true
+        explanation: 8!/8^8 = 40,320 / 16,777,216.
+      - id: b
+        text: About 50 %.
+        explanation: Far too optimistic; collisions are nearly certain.
+      - id: c
+        text: About 12.5 %.
+        explanation: That is 1/8, the probability for one specific flow to land on one specific uplink.
+      - id: d
+        text: 100 %, because ECMP balances load across equal-cost paths.
+        explanation: ECMP balances flows statistically by hashing, not by measuring load.
+    tags: [ecmp, collisions]
+  - id: q3
+    type: scenario
+    prompt: >
+      A non-blocking two-tier fabric shows 35 % average spine uplink utilisation over 60 seconds during training, yet
+      the job's all-reduce takes twice as long as benchmarks predict. Per-uplink byte counters on one leaf show four
+      uplinks carrying about twice the bytes of the others, and three carrying almost none. What is the most likely
+      cause?
+    options:
+      - id: a
+        text: ECMP hash collisions placing several elephant flows on the same uplinks, so the colliding flows run at about half speed and the collective waits for them.
+        correct: true
+        explanation: Uneven per-member bytes plus a ~2x collective slowdown is the classic collision fingerprint.
+      - id: b
+        text: The fabric is oversubscribed, so all uplinks are saturated.
+        explanation: The fabric is non-blocking and several uplinks are nearly idle.
+      - id: c
+        text: The 35 % average proves the network is not the bottleneck; look at the GPUs.
+        explanation: Averages hide bursts and uneven spreading; the per-uplink imbalance points at the network.
+      - id: d
+        text: The MTU is too small on the idle uplinks.
+        explanation: MTU problems cause drops or failures, not a pattern of hashed traffic avoiding certain links.
+    tags: [ecmp, troubleshooting]
+  - id: q4
+    type: single
+    prompt: Why does a single slow flow out of 1,000 matter so much in AI training?
+    options:
+      - id: a
+        text: The collective completes only when its slowest flow does, and the next step waits for the collective.
+        correct: true
+        explanation: Collective time is the maximum of flow completion times, not the average.
+      - id: b
+        text: The slow flow causes all other flows to retransmit.
+        explanation: Other flows are not affected directly; they simply finish and wait.
+      - id: c
+        text: The scheduler cancels the job if any flow is slower than average.
+        explanation: There is no such mechanism; the job just runs slower.
+      - id: d
+        text: It does not matter; 999 fast flows dominate the average.
+        explanation: Averages are the wrong metric for synchronous workloads.
+    tags: [tail-latency]
+  - id: q5
+    type: single
+    prompt: Which AI communication pattern most naturally produces incast at receivers?
+    options:
+      - id: a
+        text: All-to-all for mixture-of-experts token dispatch.
+        correct: true
+        explanation: Every GPU sends to every other GPU at once, so each receiver gets many simultaneous senders.
+      - id: b
+        text: Point-to-point pipeline sends between two neighbouring stages.
+        explanation: One sender to one receiver is not incast.
+      - id: c
+        text: A single ring all-reduce step where each rank sends to one neighbour.
+        explanation: In a ring each rank receives from exactly one neighbour per step.
+      - id: d
+        text: Loading the container image at job start from a registry over the front-end network.
+        explanation: That is front-end traffic and not a synchronised many-to-one pattern on the back-end fabric.
+    tags: [incast, all-to-all]
+  - id: q6
+    type: scenario
+    prompt: >
+      A RoCE back-end drops about 0.01 % of RDMA packets under load, which the team considers negligible. Yet
+      collective throughput falls far more than 0.01 %. What best explains the gap?
+    options:
+      - id: a
+        text: RDMA loss recovery (go-back-N style on many NICs, plus timeouts) multiplies the cost of each drop, and the stalled flow delays the whole collective.
+        correct: true
+        explanation: One drop can trigger retransmission of many packets or a timeout, and synchronous collectives amplify that.
+      - id: b
+        text: Each dropped packet must be recomputed by the GPU.
+        explanation: The NIC retransmits data; GPUs do not recompute dropped packets.
+      - id: c
+        text: The drop counter is wrong; RoCE packets cannot be dropped.
+        explanation: Without lossless configuration, RoCE packets are dropped like any other.
+      - id: d
+        text: Dropped packets cause the MTU to shrink automatically.
+        explanation: RDMA does not adapt its MTU in response to loss.
+    tags: [rdma, loss]
+  - id: q7
+    type: single
+    prompt: Why do AI fabric operators favour fine-grained telemetry (sub-second counters, buffer watermarks, ECN and PFC counts) over 1-minute utilisation averages?
+    options:
+      - id: a
+        text: AI traffic alternates between idle and line-rate bursts on microsecond-to-millisecond time scales, which long averages smooth away.
+        correct: true
+        explanation: A link can be saturated with a growing queue during every burst and still average 30-40 %.
+      - id: b
+        text: 1-minute averages are not supported by switches.
+        explanation: Switches support them; they just hide the relevant behaviour.
+      - id: c
+        text: Fine-grained telemetry reduces congestion.
+        explanation: Telemetry observes congestion; it does not reduce it.
+      - id: d
+        text: Averages overstate utilisation for AI traffic.
+        explanation: They understate how loaded links are during the bursts that matter.
+    tags: [telemetry, bursts]

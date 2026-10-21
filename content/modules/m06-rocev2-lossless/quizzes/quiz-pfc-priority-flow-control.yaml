@@ -1,0 +1,132 @@
+id: quiz-pfc-priority-flow-control
+title: "Knowledge check: Priority Flow Control"
+lesson: pfc-priority-flow-control
+pass_pct: 70
+questions:
+  - id: q1
+    type: single
+    prompt: "Which field of a PFC frame tells the receiver how long to pause a given priority?"
+    options:
+      - id: a
+        text: "One of the eight per-priority time fields, in quanta of 512 bit times"
+        correct: true
+        explanation: "Each priority has its own 16-bit timer. The class-enable vector says which timers are valid."
+      - id: b
+        text: "The DSCP field of the IP header"
+        explanation: "PFC is a MAC control frame. It has no IP header."
+      - id: c
+        text: "The MAC control opcode"
+        explanation: "The opcode (0x0101) identifies the frame as PFC. It carries no duration."
+      - id: d
+        text: "The class-enable vector"
+        explanation: "The vector selects which priorities the frame applies to. The durations are in the timer fields."
+    tags: [pfc, frame]
+  - id: q2
+    type: single
+    prompt: "A PFC frame pauses priority 3 with the maximum timer value (65 535 quanta) on a 400 Gb/s link. Roughly how long is that pause if no XON follows?"
+    options:
+      - id: a
+        text: "About 84 microseconds"
+        correct: true
+        explanation: "512 bits at 400 Gb/s = 1.28 ns. 65 535 × 1.28 ns ≈ 84 µs. That is why switches refresh pauses while congested."
+      - id: b
+        text: "About 335 microseconds"
+        explanation: "That is the figure for 100 Gb/s, where a quantum is 5.12 ns."
+      - id: c
+        text: "About 65 milliseconds"
+        explanation: "That would require a quantum of 1 µs. Quanta are 512 bit times, so they get shorter as speed rises."
+      - id: d
+        text: "Indefinitely, until an XON frame arrives"
+        explanation: "The timer expires on its own. Long pauses happen because the congested device keeps sending refresh PFC frames."
+    tags: [pfc, quanta]
+  - id: q3
+    type: scenario
+    prompt: "During an all-to-all job, a leaf shows a fast-rising Rx PFC count for priority 3 on the downlink to host H12, and H12's ethtool -S shows tx_prio3_pause climbing. Other hosts show only rx_prio3_pause. Where should you look first?"
+    options:
+      - id: a
+        text: "H12's receive path: PCIe, NUMA placement, a stalled process or NIC firmware"
+        correct: true
+        explanation: "H12 is sending pauses to the switch, so its NIC receive buffer is filling. The bottleneck is inside that host."
+      - id: b
+        text: "The leaf's uplinks to the spines, which are oversubscribed"
+        explanation: "Uplink congestion would make the leaf send pauses, not receive them from a host."
+      - id: c
+        text: "ECN thresholds on the spine"
+        explanation: "ECN tuning affects how the network signals congestion. It does not explain a host generating pauses."
+      - id: d
+        text: "The PFC configuration of the other hosts"
+        explanation: "The other hosts behave normally (receiving occasional pauses). The anomaly is the host that sends them."
+    tags: [pfc, troubleshooting]
+  - id: q4
+    type: single
+    prompt: "What triggers a switch to send a PFC frame for priority 3 out of port X?"
+    options:
+      - id: a
+        text: "The ingress priority group for priority 3 on port X crossing its XOFF threshold"
+        correct: true
+        explanation: "PFC is driven by ingress accounting: the switch pauses the neighbour that is filling its buffer."
+      - id: b
+        text: "The egress queue 3 on port X dropping a packet"
+        explanation: "PFC is meant to prevent drops in the lossless class. It is triggered by ingress occupancy before any drop."
+      - id: c
+        text: "Receiving an ECN-marked packet on port X"
+        explanation: "ECN marks are end-to-end signals for the receiver NIC. They do not trigger PFC."
+      - id: d
+        text: "Any priority on port X exceeding its ETS bandwidth share"
+        explanation: "ETS shares govern scheduling, not pausing, and they are minimums rather than limits."
+    tags: [pfc, xoff]
+  - id: q5
+    type: scenario
+    prompt: "RoCE throughput collapses under incast. Hosts show rising out_of_sequence and packet_seq_err counters, and neither hosts nor switches show any PFC frames on any priority. Hosts are configured with PFC on priority 3. What is the most likely cause?"
+    options:
+      - id: a
+        text: "The switches do not have PFC enabled on the priority RoCE is classified into, so they drop instead of pausing."
+        correct: true
+        explanation: "Sequence errors mean loss. No PFC anywhere means the lossless class does not exist on the switches for this traffic."
+      - id: b
+        text: "PFC is working perfectly, and the sequence errors are caused by ECN marks."
+        explanation: "ECN marks do not cause sequence errors. Loss does. And PFC would show counters under incast."
+      - id: c
+        text: "The PFC timers are too long."
+        explanation: "With no PFC frames at all, timer values cannot matter."
+      - id: d
+        text: "The UDP source port entropy is too low."
+        explanation: "Low entropy can cause hot spots, but that does not explain the absence of any PFC under incast."
+    tags: [pfc, misconfiguration]
+  - id: q6
+    type: multi
+    prompt: "Which statements correctly compare PFC with InfiniBand credit-based flow control? (Select all that apply.)"
+    options:
+      - id: a
+        text: "IB senders transmit only when they hold credit, while PFC senders transmit until they are paused."
+        correct: true
+        explanation: "Credits are proactive, and PFC is reactive."
+      - id: b
+        text: "Both need roughly a round trip of buffering per lossless class per port."
+        correct: true
+        explanation: "Credits must cover the round trip to keep the link busy, and PFC headroom must cover it to avoid drops."
+      - id: c
+        text: "PFC cannot cause head-of-line blocking because it operates per priority."
+        explanation: "PFC pauses every flow in the priority on that link, so victim flows are blocked."
+      - id: d
+        text: "Only PFC has deadlock risks, because credit loops are impossible."
+        explanation: "IB can also deadlock with cyclic credit dependencies. Routing and VL design avoid it."
+    tags: [pfc, infiniband]
+  - id: q7
+    type: single
+    prompt: "Why is 802.3x link-level PAUSE normally disabled on RoCE fabric ports?"
+    options:
+      - id: a
+        text: "It stops all traffic classes on the link, so congestion in one class stalls unrelated traffic."
+        correct: true
+        explanation: "802.3x has one timer for the whole link. PFC pauses only the affected priority."
+      - id: b
+        text: "802.3x frames are routed and can loop around the fabric."
+        explanation: "PAUSE frames are link-local MAC control frames, never forwarded."
+      - id: c
+        text: "802.3x uses a different destination MAC that switches cannot receive."
+        explanation: "Both 802.3x and PFC use 01-80-C2-00-00-01."
+      - id: d
+        text: "802.3x cannot be used on links faster than 10 Gb/s."
+        explanation: "There is no such speed limit. It is disabled because of its coarse scope."
+    tags: [pause, 802.3x]

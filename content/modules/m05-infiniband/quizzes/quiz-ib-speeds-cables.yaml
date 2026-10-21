@@ -1,0 +1,147 @@
+id: quiz-ib-speeds-cables
+title: "Knowledge check: InfiniBand speeds and cables"
+lesson: ib-speeds-cables
+pass_pct: 70
+questions:
+  - id: q1
+    type: single
+    prompt: What is the nominal data rate of a 4x NDR InfiniBand port?
+    options:
+      - id: a
+        text: 400 Gb/s
+        correct: true
+        explanation: Four lanes of about 100 Gb/s data each.
+      - id: b
+        text: 200 Gb/s
+        explanation: That is 4x HDR, or 2x NDR (NDR200).
+      - id: c
+        text: 425 Gb/s
+        explanation: 4 x 106.25 is the signalling rate including FEC and framing, not the data rate.
+      - id: d
+        text: 800 Gb/s
+        explanation: That is 4x XDR, or a twin-port OSFP cage carrying two NDR ports.
+    tags: [ndr, speeds]
+  - id: q2
+    type: single
+    prompt: Why do HDR and NDR links require forward error correction?
+    options:
+      - id: a
+        text: PAM4 signalling at these rates has a high raw bit error rate that must be corrected at the receiver.
+        correct: true
+        explanation: Four amplitude levels shrink the eye; RS-FEC keeps the post-FEC error rate very low.
+      - id: b
+        text: FEC replaces credit-based flow control at high speed.
+        explanation: FEC handles bit errors; credit flow control is a separate link-layer mechanism.
+      - id: c
+        text: FEC encrypts the data on the wire.
+        explanation: FEC adds redundancy for error correction, not confidentiality.
+    tags: [pam4, fec]
+  - id: q3
+    type: multi
+    prompt: Which statements about NVIDIA Quantum-2 twin-port OSFP cages are correct? (Select all that apply.)
+    options:
+      - id: a
+        text: Each cage carries two independent 4x NDR ports.
+        correct: true
+        explanation: Eight lanes per OSFP cage are split into two 400G ports.
+      - id: b
+        text: 32 cages provide the switch's 64 NDR ports.
+        correct: true
+        explanation: That is how a 1U Quantum-2 reaches 64 ports at 400G.
+      - id: c
+        text: Splitter cables can connect one cage to two 400G or four 200G endpoints.
+        correct: true
+        explanation: Breakouts are common for connecting servers and NDR200 adapters.
+      - id: d
+        text: Each cage can only carry a single 800G port to one host.
+        explanation: The cage carries two independent ports, not a single 800G NDR port.
+    tags: [osfp, connectors]
+  - id: q4
+    type: scenario
+    prompt: >
+      iblinkinfo on an NDR fabric shows one leaf port as "2X 106.25 Gbps Active/LinkUp" to node12. All
+      other host links show 4X. perftest from node12 on that NIC reaches about half the bandwidth of its
+      peers. What is the most likely cause and fix?
+    options:
+      - id: a
+        text: Two lanes failed to train (damaged or dirty cable or module); reseat, clean, or replace it and retrain the link.
+        correct: true
+        explanation: Reduced width with correct lane speed points at lane-level physical problems.
+      - id: b
+        text: The SM assigned the port to a slower partition.
+        explanation: Partitions do not change link width.
+      - id: c
+        text: The routing engine sends only half the traffic to this host.
+        explanation: Routing does not change negotiated link width.
+      - id: d
+        text: This is normal for NDR; links alternate between 2X and 4X.
+        explanation: A 4x port should train at 4X; 2X here is a fault.
+    tags: [link-width, troubleshooting]
+  - id: q5
+    type: scenario
+    prompt: >
+      You are cabling GPU servers to leaf switches in the same rack (about 2 m) and leaf switches to
+      spines three rows away (about 40 m) on an NDR fabric. Which choice is most sensible?
+    options:
+      - id: a
+        text: Passive copper (DAC) or splitter DACs in the rack, optics (transceivers with fibre, or AOCs) to the spines.
+        correct: true
+        explanation: Copper is cheapest and lowest power for short reach; 40 m is beyond copper reach at NDR.
+      - id: b
+        text: Passive copper for both, because copper has lower latency.
+        explanation: Passive copper does not reach tens of metres at NDR speeds.
+      - id: c
+        text: Single-mode long-reach optics for both, to standardise.
+        explanation: Possible but wasteful in cost and power for 2 m in-rack links.
+    tags: [cables, design]
+  - id: q6
+    type: single
+    prompt: Using radix k = 64 switches, how many host ports can a non-blocking two-tier fat tree support?
+    options:
+      - id: a
+        text: "2,048"
+        correct: true
+        explanation: k^2/2 = 64 x 64 / 2, using 64 leaves and 32 spines.
+      - id: b
+        text: "4,096"
+        explanation: That would ignore that half of each leaf's ports go up to spines.
+      - id: c
+        text: "65,536"
+        explanation: That is the three-tier figure, k^3/4.
+      - id: d
+        text: "1,024"
+        explanation: This underestimates; each of 64 leaves serves 32 hosts.
+    tags: [fabric-sizing]
+  - id: q7
+    type: scenario
+    prompt: >
+      A newly installed NDR host shows "Rate: 400" in ibstat, the link has no errors, but ib_write_bw
+      to any peer peaks around 200-220 Gb/s. Peers in the same rack reach about 390 Gb/s. What should you
+      check?
+    options:
+      - id: a
+        text: The adapter's PCIe link (generation and width) with lspci -vv; it is probably in a Gen4 slot or trained at reduced width.
+        correct: true
+        explanation: The IB link is fine; the host bus is the bottleneck.
+      - id: b
+        text: Replace the IB cable.
+        explanation: Rate 400 with no errors indicates the IB link is healthy.
+      - id: c
+        text: Change the SM routing engine.
+        explanation: Routing would not affect a single host across all peers this way.
+    tags: [pcie, troubleshooting]
+  - id: q8
+    type: single
+    prompt: Which statement about pre-FEC and post-FEC errors on PAM4 links is accurate?
+    options:
+      - id: a
+        text: A non-zero pre-FEC BER is expected; rising post-FEC errors indicate a real problem.
+        correct: true
+        explanation: Pre-FEC BER is an early warning signal; uncorrectable errors mean FEC is overwhelmed.
+      - id: b
+        text: Any pre-FEC error means the cable must be replaced immediately.
+        explanation: Some raw errors are normal with PAM4; compare against thresholds.
+      - id: c
+        text: Post-FEC errors are always zero, so only pre-FEC counters are useful.
+        explanation: Post-FEC errors can and do occur when links degrade.
+    tags: [ber, fec]

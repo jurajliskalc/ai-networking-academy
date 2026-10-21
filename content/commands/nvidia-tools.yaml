@@ -1,0 +1,205 @@
+id: nvidia-tools
+title: NVIDIA GPU and NIC tools (nvidia-smi, MFT, mlnx_qos, DCGM)
+description: Host-side NVIDIA tools for GPU topology, NVLink, ConnectX/BlueField firmware, link diagnostics, NIC QoS and GPU health checks; all example output is illustrative and trimmed.
+commands:
+  - cmd: nvidia-smi
+    platform: nvidia
+    summary: Show every GPU with driver and CUDA version, utilization, memory, power, temperature and running processes.
+    example: |
+      +-----------------------------------------------------------------------------+
+      | NVIDIA-SMI 550.xx      Driver Version: 550.xx      CUDA Version: 12.x        |
+      |  GPU  Name        Persistence-M | Bus-Id        Disp.A | Volatile Uncorr. ECC |
+      |   0  NVIDIA H100 80GB HBM3  On  | 00000000:18:00.0 Off |                    0 |
+      ...
+    notes: The first sanity check on any GPU node. Look for the expected GPU count, persistence mode on, zero uncorrectable ECC and no unexpected processes holding GPU memory. Output above is illustrative.
+    tags: [gpu, inventory, verify]
+
+  - cmd: nvidia-smi topo -m
+    platform: nvidia
+    summary: Print the GPU/NIC/CPU affinity matrix that shows how each GPU reaches each other GPU and each NIC (NV#, PIX, PXB, PHB, NODE, SYS).
+    example: |2
+              GPU0  GPU1  ...  NIC0  NIC1  CPU Affinity  NUMA Affinity
+      GPU0     X    NV18  ...  PIX   SYS   0-55          0
+      GPU1    NV18   X    ...  SYS   PIX   0-55          0
+      NIC0    PIX   SYS   ...   X    SYS
+      Legend: X = Self, SYS = crosses SMP interconnect (QPI/UPI), NODE = within a NUMA node across host bridges,
+              PHB = through a PCIe host bridge, PXB = multiple PCIe bridges, PIX = at most one PCIe bridge, NV# = # NVLinks
+    notes: For GPUDirect RDMA you want each GPU paired with a NIC at PIX (or PXB) behind the same PCIe switch. A GPU whose nearest NIC is NODE or SYS will move RDMA traffic across the CPU root complex or socket interconnect. The NIC legend at the bottom maps NIC0..N to mlx5_X device names. Output is illustrative.
+    tags: [gpu, topology, pcie, numa, gpudirect]
+
+  - cmd: nvidia-smi nvlink -s
+    platform: nvidia
+    summary: Show the state and per-link speed of every NVLink on every GPU (long form --status).
+    example: |
+      GPU 0: NVIDIA H100 80GB HBM3 (UUID: GPU-...)
+               Link 0: 26.562 GB/s
+               Link 1: 26.562 GB/s
+               ...
+    notes: Every link should report the same speed; a link shown as inactive or at a lower rate points at a hardware or NVSwitch problem worth a DCGM diagnostic and a vendor ticket. Add -i <gpu> to restrict to one GPU. Per-link speed values differ by GPU generation; output is illustrative.
+    tags: [nvlink, gpu, verify]
+
+  - cmd: nvidia-smi -q
+    platform: nvidia
+    summary: Dump the full per-GPU query report (clocks, power, ECC, retired/remapped pages, PCIe link generation and width, and more).
+    notes: "Narrow it with -d, for example nvidia-smi -q -d ECC or -d PCIE (check nvidia-smi -h for the display types your driver supports). The PCIe section shows current versus maximum link generation and width: a GPU that trained at a lower width or generation than its maximum under load will starve GPUDirect traffic."
+    tags: [gpu, ecc, pcie, inventory]
+
+  - cmd: nvidia-smi --query-gpu=index,name,pci.bus_id,temperature.gpu,power.draw --format=csv
+    platform: nvidia
+    summary: Print selected GPU fields as CSV, which is convenient for scripts and fleet-wide inventory.
+    example: |
+      index, name, pci.bus_id, temperature.gpu, power.draw [W]
+      0, NVIDIA H100 80GB HBM3, 00000000:18:00.0, 34, 71.20 W
+    notes: Run nvidia-smi --help-query-gpu for the list of valid field names in your driver version. Output is illustrative.
+    tags: [gpu, inventory, automation]
+
+  - cmd: mst start
+    platform: nvidia
+    summary: Load the NVIDIA Firmware Tools (MFT) kernel modules and create the /dev/mst device nodes used by mlxconfig, mlxlink, flint and friends.
+    notes: Part of the MFT package (also bundled with DOCA/OFED installs). Many MFT tools also accept a PCI address or an RDMA device name directly, so mst start is not always required on recent MFT versions; check the MFT user manual for your release.
+    tags: [mft, firmware, setup]
+
+  - cmd: mst status
+    platform: nvidia
+    summary: List the MST devices (one per ConnectX/BlueField function) that MFT tools can open.
+    example: |
+      MST modules:
+      ------------
+          MST PCI module is not loaded
+          MST PCI configuration module loaded
+      MST devices:
+      ------------
+      /dev/mst/mt4129_pciconf0         - PCI configuration cycles access.
+                                         domain:bus:dev.fn=0000:1a:00.0 ...
+    notes: The device ID in the name identifies the chip family (for example mt4129 corresponds to ConnectX-7). Output is illustrative.
+    tags: [mft, inventory]
+
+  - cmd: mst status -v
+    platform: nvidia
+    summary: Verbose MST listing that maps each MST device to its PCI address, RDMA device (mlx5_X), network interface and NUMA node.
+    example: |
+      DEVICE_TYPE      MST                           PCI       RDMA     NET                NUMA
+      ConnectX7(rev:0) /dev/mst/mt4129_pciconf0      1a:00.0   mlx5_0   net-ens1f0np0      0
+      ConnectX7(rev:0) /dev/mst/mt4129_pciconf1      40:00.0   mlx5_1   net-ens2f0np0      0
+    notes: The fastest way to answer "which netdev, which mlx5 device and which NUMA node is this NIC?" in one table. Output is illustrative.
+    tags: [mft, inventory, numa, mapping]
+
+  - cmd: mlxlink -d /dev/mst/mt4129_pciconf0
+    platform: nvidia
+    summary: Show the physical link state of a ConnectX port - operational status, speed, width, FEC mode, and troubleshooting recommendations.
+    example: |
+      Operational Info
+      ----------------
+      State                           : Active
+      Physical state                  : LinkUp
+      Speed                           : 400G
+      Width                           : 4x
+      FEC                             : Standard_RS-FEC - (544,514)
+      Troubleshooting Info
+      --------------------
+      Status Opcode                   : 0
+      Recommendation                  : No issue was observed
+    notes: The device can be given as an MST path or a PCI address. Field names and available sections vary by MFT version and by InfiniBand vs Ethernet mode. Output is illustrative.
+    tags: [mft, link, phy, troubleshooting]
+
+  - cmd: mlxlink -d /dev/mst/mt4129_pciconf0 -c
+    platform: nvidia
+    summary: Add physical-layer counters to the mlxlink output (long form --show_counters) - pre-FEC (raw) BER, effective BER, symbol errors and link-down counts.
+    notes: Use this when a link flaps or NCCL performance on one rail is low. A rising raw BER or any effective/symbol errors point to an optic, cable or dirty connector. Acceptable BER thresholds depend on speed and FEC; compare against healthy peer links rather than an absolute number you remember.
+    tags: [mft, ber, fec, counters, troubleshooting]
+
+  - cmd: mlxlink -d /dev/mst/mt4129_pciconf0 -m
+    platform: nvidia
+    summary: Show transceiver/cable module information (long form --show_module) - vendor, part number, cable type and length, temperature, and per-lane Rx/Tx power.
+    notes: Compare per-lane receive power across lanes and against the module's thresholds; one weak lane is a classic dirty-fiber or failing-optic signature. Available fields depend on the module type (DAC vs AOC vs transceiver).
+    tags: [mft, optics, cable, troubleshooting]
+
+  - cmd: mlxconfig -d /dev/mst/mt4129_pciconf0 query
+    platform: nvidia
+    summary: Show the NIC's non-volatile firmware configuration (link type per port, SR-IOV, number of VFs, PCIe settings, and so on), with current and next-boot values.
+    example: |
+      Device #1:
+      ----------
+      Device type:    ConnectX7
+      Configurations:                      Next Boot
+               LINK_TYPE_P1                ETH(2)
+               SRIOV_EN                    False(0)
+               NUM_OF_VFS                  0
+    notes: Parameter names and availability vary by adapter and firmware; query before you set. Output is illustrative.
+    tags: [mft, firmware, config]
+
+  - cmd: mlxconfig -d /dev/mst/mt4129_pciconf0 set LINK_TYPE_P1=2
+    platform: nvidia
+    summary: Change a firmware configuration parameter; this example sets port 1 of a VPI adapter to Ethernet (1 = InfiniBand, 2 = Ethernet).
+    notes: Changes apply on the next firmware reset or reboot, not immediately. Only VPI-capable adapters support changing the link type; confirm parameter names and values with mlxconfig query and the firmware release notes for your card. Treat this as a change-controlled operation on production nodes.
+    tags: [mft, firmware, config, infiniband, ethernet]
+
+  - cmd: mlxfwmanager --query
+    platform: nvidia
+    summary: List every NVIDIA adapter in the host with its PSID, current firmware version and (if a firmware image is available) the version it would update to.
+    example: |
+      Device #1:
+        Device Type:      ConnectX7
+        Part Number:      MCX75310AAS-NEAT
+        PSID:             MT_0000000838
+        PCI Device Name:  /dev/mst/mt4129_pciconf0
+        Versions:         Current        Available
+           FW             28.xx.xxxx     N/A
+    notes: Use it to confirm the whole fleet runs the firmware version your validated stack expects. Output is illustrative.
+    tags: [mft, firmware, inventory]
+
+  - cmd: flint -d /dev/mst/mt4129_pciconf0 q
+    platform: nvidia
+    summary: Query the firmware image burned on the adapter (firmware version, PSID, GUIDs/MACs).
+    notes: flint is also the low-level burning tool; never run burn operations on production nodes without the vendor-approved image for your exact PSID. For routine checks mlxfwmanager --query is friendlier.
+    tags: [mft, firmware]
+
+  - cmd: mlnx_qos -i ens1f0np0
+    platform: nvidia
+    summary: Show the NIC's QoS state for one interface - trust mode (pcp or dscp), PFC enabled per priority, ETS/TSA per traffic class, priority-to-TC mapping and DSCP-to-priority mapping.
+    example: |
+      DCBX mode: OS controlled
+      Priority trust state: dscp
+      Receive buffer size (bytes): ...
+      PFC configuration:
+              priority    0   1   2   3   4   5   6   7
+              enabled     0   0   0   1   0   0   0   0
+    notes: The tool is mlnx_qos (shipped with MLNX_OFED / DOCA host packages); "mlx_qos" is a common misspelling. Its output must agree with the switch - same trust mode, same lossless priority. Output is illustrative and its layout differs between releases.
+    tags: [roce, qos, pfc, verify]
+
+  - cmd: mlnx_qos -i ens1f0np0 --trust dscp
+    platform: nvidia
+    summary: Set the NIC to classify received traffic by DSCP rather than by the VLAN PCP bits.
+    notes: L3 (routed) RoCEv2 fabrics normally use DSCP trust because there is no VLAN tag on routed links. Not persistent across reboot on its own; apply it from your node configuration management or the vendor's recommended persistence mechanism.
+    tags: [roce, qos, dscp]
+
+  - cmd: mlnx_qos -i ens1f0np0 --pfc 0,0,0,1,0,0,0,0
+    platform: nvidia
+    summary: Enable PFC on priority 3 only (one comma-separated flag per priority 0..7).
+    notes: Priority 3 is a common RoCE convention, not a rule - use whatever priority your switch fabric treats as lossless, and make both ends agree. Enabling PFC on a priority the switch does not honour gives you a NIC that pauses a link that never pauses back. Not persistent across reboot by itself.
+    tags: [roce, pfc, lossless, config]
+
+  - cmd: dcgmi discovery -l
+    platform: nvidia
+    summary: List the GPUs (and, on supported systems, NVSwitches) that the DCGM host engine can see.
+    notes: Requires the DCGM host engine (nv-hostengine) to be running. A GPU missing here but present in lspci points at a driver or GPU-fallen-off-the-bus problem.
+    tags: [dcgm, gpu, inventory]
+
+  - cmd: dcgmi diag -r 3
+    platform: nvidia
+    summary: Run a DCGM diagnostic; level 1 is a quick deployment check (seconds), 2 a medium check (a few minutes) and 3 a long stress check including PCIe/NVLink bandwidth and memory tests.
+    example: |
+      +---------------------------+------------------------------------------------+
+      | Diagnostic                | Result                                         |
+      +===========================+================================================+
+      | Deployment                | Pass                                           |
+      | PCIe                      | Pass - All                                     |
+      | Memory                    | Pass - All                                     |
+    notes: Use -r 1 as a quick health gate in job prologs and -r 3 during burn-in or after hardware replacement. Exact test names, run times and additional levels (for example a level 4) depend on the DCGM version; check the DCGM documentation. Output is illustrative.
+    tags: [dcgm, gpu, burn-in, health]
+
+  - cmd: mlxfwreset -d /dev/mst/mt4129_pciconf0 reset
+    platform: nvidia
+    summary: Reset the adapter firmware so that new firmware or mlxconfig changes take effect without a full host reboot.
+    notes: Disrupts all traffic on that adapter and is not supported in every configuration (for example some multi-host or specific PCIe setups); check the MFT manual and query supported reset levels first (mlxfwreset -d <dev> query). Drain the node before running it.
+    tags: [mft, firmware, maintenance]

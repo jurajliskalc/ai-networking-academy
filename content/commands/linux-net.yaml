@@ -1,0 +1,207 @@
+id: linux-net
+title: Linux networking (iproute2, ethtool, lspci, tcpdump)
+description: The everyday Linux commands for checking interfaces, addressing, MTU, NIC counters, optics, offloads, pause settings and PCIe links on an AI server.
+commands:
+  - cmd: ip -br link show
+    platform: linux
+    summary: One line per interface with operational state and MAC address; the quickest "are my links up" check.
+    example: |
+      # illustrative output
+      lo               UNKNOWN        00:00:00:00:00:00 <LOOPBACK,UP,LOWER_UP>
+      eno1             UP             3c:ec:ef:12:34:56 <BROADCAST,MULTICAST,UP,LOWER_UP>
+      ens1f0np0        UP             b8:3f:d2:aa:bb:01 <BROADCAST,MULTICAST,UP,LOWER_UP>
+      ens2f0np0        DOWN           b8:3f:d2:aa:bb:11 <NO-CARRIER,BROADCAST,MULTICAST,UP>
+    notes: "-br (brief) works with link, addr and neigh. NO-CARRIER with UP means the interface is administratively up but has no physical link: check cable, optic and the switch port."
+    tags: [iproute2, link, verify]
+
+  - cmd: ip -br addr show
+    platform: linux
+    summary: One line per interface with state and IPv4/IPv6 addresses.
+    example: |
+      # illustrative output
+      ens1f0np0        UP             10.0.0.11/31 fe80::ba3f:d2ff:feaa:bb01/64
+      ens2f0np0        UP             10.0.1.11/31 fe80::ba3f:d2ff:feaa:bb11/64
+    notes: For RoCEv2 each IP address on the netdev also appears as a GID entry on the matching RDMA device, so a missing IP usually means a missing RoCEv2 GID.
+    tags: [iproute2, addressing, roce]
+
+  - cmd: ip -s -s link show dev ens1f0np0
+    platform: linux
+    summary: Kernel-level RX/TX packet, byte, error and drop counters for one interface; the doubled -s adds detailed error breakdowns.
+    example: |
+      # illustrative output
+      4: ens1f0np0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 9000 qdisc mq state UP mode DEFAULT group default qlen 1000
+          link/ether b8:3f:d2:aa:bb:01 brd ff:ff:ff:ff:ff:ff
+          RX:  bytes packets errors dropped  missed   mcast
+          9182736455  8812734      0       0       0     112
+          RX errors:  length    crc   frame    fifo overrun
+                           0      0       0       0       0
+          TX:  bytes packets errors dropped carrier collsns
+          8273645512  7712345      0       0       0       0
+    notes: RDMA traffic bypasses the kernel stack, so these counters mostly reflect TCP/IP traffic. Use ethtool -S and the RDMA hw_counters for RoCE traffic.
+    tags: [iproute2, counters]
+
+  - cmd: ip link set dev ens1f0np0 mtu 9000
+    platform: linux
+    summary: Set the interface MTU (non-persistent; use your distribution's network config to persist it).
+    notes: "For RoCE the netdev MTU caps the RDMA path MTU: RoCE uses the largest IB MTU (256-4096) that fits within the Ethernet MTU, so a 9000-byte netdev MTU allows a 4096 active_mtu. Every switch port in the path needs an MTU at least as large."
+    tags: [iproute2, mtu, config]
+
+  - cmd: ip route get 10.0.1.21
+    platform: linux
+    summary: Show which route, egress interface and source address the kernel would use to reach a destination.
+    example: |
+      # illustrative output
+      10.0.1.21 via 10.0.1.10 dev ens2f0np0 src 10.0.1.11 uid 0
+          cache
+    notes: Essential on multi-rail hosts where each NIC has its own subnet. If the egress dev is not the NIC you expect, RDMA CM connections (which resolve routes the same way) may use the wrong rail or fail; fix with per-interface routes or policy routing.
+    tags: [iproute2, routing, multi-rail]
+
+  - cmd: ip route show
+    platform: linux
+    summary: Print the main routing table.
+    tags: [iproute2, routing]
+
+  - cmd: ip neigh show dev ens1f0np0
+    platform: linux
+    summary: Show the ARP/ND neighbor table for one interface (REACHABLE, STALE, FAILED entries).
+    notes: RoCEv2 needs the next-hop MAC; a FAILED neighbor entry for the gateway is a common cause of RDMA CM address resolution errors.
+    tags: [iproute2, arp, troubleshooting]
+
+  - cmd: ethtool ens1f0np0
+    platform: linux
+    summary: Show link speed, duplex, autonegotiation, supported/advertised link modes and whether a link is detected.
+    example: |
+      # illustrative output (trimmed)
+      Settings for ens1f0np0:
+              Supported link modes:   400000baseCR4/Full ...
+              Speed: 400000Mb/s
+              Duplex: Full
+              Auto-negotiation: on
+              Port: Direct Attach Copper
+              Link detected: yes
+    notes: A port that came up at a lower speed than expected (for example 200000Mb/s on a 400G link) is a classic cause of one slow rank in a collective.
+    tags: [ethtool, link, speed]
+
+  - cmd: ethtool -i ens1f0np0
+    platform: linux
+    summary: Show driver name, driver version, firmware version and PCIe bus address of the NIC.
+    example: |
+      # illustrative output
+      driver: mlx5_core
+      version: 6.8.0-45-generic
+      firmware-version: 28.41.1000 (MT_0000000838)
+      bus-info: 0000:3b:00.0
+    notes: Use bus-info with lspci and nvidia-smi topo to map the NIC to its NUMA node and GPU. Keep firmware consistent across the fleet.
+    tags: [ethtool, driver, firmware, inventory]
+
+  - cmd: ethtool -S ens1f0np0
+    platform: linux
+    summary: Dump the driver's extended NIC statistics, including per-priority PFC pause, physical-layer errors and discards.
+    example: |
+      # illustrative output from an mlx5 NIC, filtered
+      $ ethtool -S ens1f0np0 | grep -E 'prio3_pause|discards_phy|crc_errors_phy|out_of_buffer|symbol_err'
+           rx_out_of_buffer: 0
+           rx_discards_phy: 1834
+           rx_crc_errors_phy: 0
+           rx_symbol_err_phy: 0
+           rx_prio3_pause: 551203
+           tx_prio3_pause: 12
+    notes: "Counter names are driver-specific; the examples are mlx5 names (see the kernel mlx5 counters documentation). Growing rx_prioN_pause means the switch is pausing you; growing tx_prioN_pause means your NIC is pausing the switch (receiver cannot keep up). rx_discards_phy indicates the NIC dropped packets for lack of buffer. Always read counters as deltas over time."
+    tags: [ethtool, counters, pfc, troubleshooting]
+
+  - cmd: ethtool -m ens1f0np0
+    platform: linux
+    summary: Read the transceiver EEPROM/DOM - vendor, part number, cable type and length, and on optics the per-lane temperature, voltage, TX/RX power.
+    example: |
+      # illustrative output (trimmed)
+      Identifier                                : 0x18 (QSFP-DD Double Density 8X Pluggable Transceiver)
+      Vendor name                               : EXAMPLE
+      Module temperature                        : 41.20 degrees C
+      Rx loss of signal                         : None
+      Laser rx power (lane 1)                   : 0.9120 mW / -0.40 dBm
+    notes: Which fields appear depends on the module type and the ethtool/kernel version. A lane with RX power far below its siblings points to a dirty or damaged fiber. On NVIDIA NICs mlxlink gives a richer view.
+    tags: [ethtool, optics, dom, physical]
+
+  - cmd: ethtool --show-fec ens1f0np0
+    platform: linux
+    summary: Show the configured and active Forward Error Correction mode (for example RS) on the port.
+    notes: FEC must agree with the link partner; a mismatch typically prevents link-up. High-speed PAM4 links (for example 200G/400G) depend on RS-FEC.
+    tags: [ethtool, fec, physical]
+
+  - cmd: ethtool -k ens1f0np0
+    platform: linux
+    summary: List stateless offload features (checksum, TSO, GRO, LRO, scatter-gather) and whether each is on, off or fixed.
+    notes: Offloads affect TCP/IP traffic, not RDMA. Use lowercase -k to show and uppercase -K to change, for example "ethtool -K ens1f0np0 gro on".
+    tags: [ethtool, offload]
+
+  - cmd: ethtool --show-pause ens1f0np0
+    platform: linux
+    summary: Show global (802.3x) link-level pause settings; -a is the short form.
+    example: |
+      # illustrative output
+      Pause parameters for ens1f0np0:
+      Autonegotiate:  off
+      RX:             off
+      TX:             off
+    notes: For RoCE with PFC you normally want global pause OFF and PFC enabled on the RoCE priority only. PFC is configured separately (mlnx_qos on NVIDIA NICs, or DCB tooling such as dcb/lldpad). Global pause and PFC are mutually exclusive on most NICs. Set with "ethtool -A <dev> rx off tx off".
+    tags: [ethtool, pause, pfc, lossless]
+
+  - cmd: ethtool -g ens1f0np0
+    platform: linux
+    summary: Show current and maximum RX/TX ring sizes.
+    notes: Ring sizing affects kernel-path traffic (storage over TCP, front-end), not RDMA queues. Change with -G.
+    tags: [ethtool, rings, tuning]
+
+  - cmd: ethtool -l ens1f0np0
+    platform: linux
+    summary: Show current and maximum channel (queue) counts used by the kernel network stack.
+    notes: Change with -L. Relevant for TCP/IP throughput and IRQ affinity tuning.
+    tags: [ethtool, channels, tuning]
+
+  - cmd: lspci -vv -s 3b:00.0
+    platform: linux
+    summary: Verbose PCIe details for one device, including LnkCap (what the slot/device can do) and LnkSta (what it negotiated).
+    example: |
+      # illustrative output (trimmed)
+      3b:00.0 Ethernet controller: Mellanox Technologies MT2910 Family [ConnectX-7]
+              NUMA node: 0
+              LnkCap: Port #0, Speed 32GT/s, Width x16, ASPM not supported
+              LnkSta: Speed 32GT/s, Width x16
+    notes: "Compare LnkSta with LnkCap: a Gen5 x16 NIC that trained at x8 or 16GT/s cannot reach line rate (look for '(downgraded)' on newer lspci). Run as root to see all capability fields. 32GT/s is PCIe Gen5, 16GT/s is Gen4."
+    tags: [pcie, lspci, topology, troubleshooting]
+
+  - cmd: lspci -tv
+    platform: linux
+    summary: Print the PCIe hierarchy as a tree, showing which devices share a switch or root port.
+    notes: Use to see whether a GPU and NIC sit under the same PCIe switch, which is what GPUDirect RDMA prefers. nvidia-smi topo -m summarizes the same relationship.
+    tags: [pcie, lspci, topology]
+
+  - cmd: tcpdump -i ens1f0np0 -nn -c 20 udp port 4791
+    platform: linux
+    summary: Capture RoCEv2 packets (UDP destination port 4791) on an interface without name resolution.
+    notes: "RDMA traffic is offloaded and normally bypasses the kernel, so a plain tcpdump on the netdev usually sees only RDMA CM/control traffic or nothing. Capturing offloaded RoCE requires NIC/driver sniffer support (for example a recent libpcap with mlx5 RDMA capture via the RDMA device name, or a switch port mirror). Check your driver documentation."
+    tags: [tcpdump, roce, capture]
+
+  - cmd: tcpdump -i ens1f0np0 -nn -e ether proto 0x8808
+    platform: linux
+    summary: Capture MAC control frames (EtherType 0x8808), which include 802.3x PAUSE and PFC frames, when the NIC passes them to the host.
+    notes: Many NICs consume pause frames in hardware so they never reach tcpdump; prefer NIC pause counters (ethtool -S) or switch counters. A port mirror on the switch is the reliable way to see PFC on the wire.
+    tags: [tcpdump, pfc, capture]
+
+  - cmd: ss -tinp
+    platform: linux
+    summary: List TCP sockets with internal TCP info (cwnd, rtt, retransmits) and owning process.
+    notes: Useful for the TCP-based parts of an AI cluster (NCCL bootstrap, storage over TCP, the front-end network, NCCL's socket transport fallback). Retransmits climbing on a training job's sockets can mean NCCL fell back to TCP.
+    tags: [ss, tcp, troubleshooting]
+
+  - cmd: sysctl net.ipv4.conf.all.arp_ignore net.ipv4.conf.all.arp_announce
+    platform: linux
+    summary: Read kernel parameters; here the ARP behavior settings that matter on multi-NIC hosts with addresses in different subnets.
+    notes: "On multi-rail hosts, arp_ignore=1 and arp_announce=2 are commonly set so each NIC answers ARP only for its own address. Use 'sysctl -w key=value' to change at runtime and a file under /etc/sysctl.d/ to persist. Verify against your platform's reference deployment guide."
+    tags: [sysctl, arp, multi-rail]
+
+  - cmd: ping -M do -s 8972 -c 3 10.0.0.10
+    platform: linux
+    summary: Test the path MTU by sending non-fragmentable ICMP packets; 8972 bytes of payload + 28 bytes of IP/ICMP headers = 9000-byte IP packets.
+    notes: If this fails while smaller sizes work, some hop in the path has a smaller MTU. Tests the IP path only; it does not prove the RDMA active_mtu.
+    tags: [mtu, verify]

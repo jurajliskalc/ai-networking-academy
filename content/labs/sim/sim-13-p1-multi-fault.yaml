@@ -1,0 +1,52 @@
+id: sim-13-p1-multi-fault
+title: "P1 at 3 a.m.: two faults and a red herring"
+level: 4
+estimated_minutes: 60
+lessons: [troubleshooting-methodology, case-studies, slow-collectives-stragglers, link-layer-ber-fec]
+summary: A raw ticket with no hints. Separate the real faults from the alarm that does not matter.
+start: node01
+ticket: |
+  **INC-4700 · Sev1 · Flagship training run at ~35 % throughput**
+
+  > Throughput collapsed around 01:40. Monitoring shows a red alarm: "spine02 swp3 DOWN". The network
+  > on-call wants to escalate to the spine vendor, and the training lead wants the job back at full
+  > speed within the hour. - Incident commander
+
+  Work it like a real incident: scope, evidence, root causes, fix, verification. There are no hints.
+faults:
+  - { type: cable_unplugged, switch: spine02, port: swp3 }
+  - { type: cable_unplugged, switch: leaf03, port: swp32 }
+  - { type: bad_cable, switch: leaf02, port: swp4, ber: 1.0e-5 }
+  - { type: host_pfc, node: node02, rail: 6, prios: [] }
+hints: []
+diagnosis:
+  prompt: Which statement is correct?
+  options:
+    - id: a
+      text: "Two independent faults cause the slowdown: a bad optic on leaf02 swp4 (node04, rail 1) and PFC disabled on node02 mlx5_6. The spine02-leaf03 link is down but does not carry rail-local collective traffic."
+      correct: true
+      explanation: In a rail-optimized fabric NCCL keeps traffic on the same rail, one leaf hop away, so a single spine uplink barely matters for this job. The rail with drops (no PFC) paces the job, and after that is fixed the high-BER rail would still pace it.
+    - id: b
+      text: The failure of the spine02 swp3 link halves the bisection bandwidth of rail 2, which explains the slowdown.
+      explanation: Rail-local traffic never crosses the spines here. The alarm is real but it is not the cause.
+    - id: c
+      text: Only the PFC issue matters; the leaf02 swp4 errors are within normal range.
+      explanation: A raw BER of 3E-05 with post-FEC errors and flaps is far outside the normal range, and that rail would still cap the job after the PFC fix.
+    - id: d
+      text: The NCCL configuration drifted on node02.
+      explanation: /etc/nccl.conf is identical on all nodes.
+checks:
+  - { description: "leaf02 swp4 link is clean", check: link_clean, args: { switch: leaf02, port: swp4 } }
+  - { description: "node02 mlx5_6 enables PFC on priority 3 only", check: host_pfc_only, args: { node: node02, rail: 6, prio: 3 } }
+  - { description: "all_reduce bus bandwidth is above 360 GB/s", check: allreduce_min_busbw, args: { value: 360 } }
+solution: |
+  1. Scope: `all_reduce_perf` runs, but slowly, and all nodes are involved, so look for the slowest rail.
+  2. Counters after a run: node02 `mlx5_6` shows `out_of_sequence` growth and leaf07 swp2 shows TX
+     drops. On node02, `mlnx_qos -i enp204s0np0` shows PFC disabled on all priorities.
+  3. node04 `enp41s0np0` shows symbol and CRC errors, and `mlxlink -d mlx5_1 -c` shows a raw BER of 3E-05.
+  4. spine02 swp3 is down, but rail-local collectives stay on the leaves. Ticket it for the morning.
+  5. Fix: run `mlnx_qos -i enp204s0np0 --pfc 0,0,0,1,0,0,0,0` on node02 and `replace-cable leaf02 swp4`.
+     Verify with all_reduce_perf. Fixing only one of the two still leaves the job slow.
+fix:
+  - "node02: mlnx_qos -i enp204s0np0 --pfc 0,0,0,1,0,0,0,0"
+  - "node01: replace-cable leaf02 swp4"

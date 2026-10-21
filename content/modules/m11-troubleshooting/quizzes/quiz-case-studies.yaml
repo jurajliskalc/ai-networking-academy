@@ -1,0 +1,163 @@
+id: quiz-case-studies
+title: "Knowledge check: AI fabric case studies"
+lesson: case-studies
+pass_pct: 70
+questions:
+  - id: q1
+    type: scenario
+    prompt: |
+      A large InfiniBand training job has been 15% slower for a day. An error sweep shows one spine port with:
+        SymbolErrorCounter rising by thousands per minute, PortRcvErrors rising, LinkDownedCounter = 2
+      All other ports are near zero. A leaf port shows a few PortXmitDiscards. What is the root cause and best mitigation?
+    options:
+      - id: a
+        text: A degrading optic or connector on the spine link; save the counters, disable the link so traffic is rerouted, then replace the optic and clean the fibre.
+        correct: true
+        explanation: Rising symbol and receive errors plus flaps on a single port point to the physical layer. The leaf discards are a side effect of the flaps.
+      - id: b
+        text: Congestion on the leaf; raise its buffer allocation to stop the PortXmitDiscards.
+        explanation: The discards are few and follow from the failing link; buffer tuning would not stop the physical errors.
+      - id: c
+        text: The Subnet Manager is computing bad routes; restart it.
+        explanation: Routing does not create symbol errors. Restarting the SM would add churn without fixing the link.
+      - id: d
+        text: Clear all counters fabric-wide and watch for a day to confirm.
+        explanation: Clearing first destroys evidence, and the job keeps suffering meanwhile; the pattern is already clear.
+    tags: [infiniband, optics, ber]
+  - id: q2
+    type: scenario
+    prompt: >
+      Right after a QoS template push, MoE jobs lose 40% throughput while dense jobs are barely affected.
+      Switch PFC counters for the RoCE priority dropped to zero at the push time, ECN marks continue, and
+      receivers show out_of_sequence climbing. What happened?
+    options:
+      - id: a
+        text: PFC is now enabled on a priority that RoCE traffic does not use, so RoCE runs lossy; incast-heavy all-to-all overflows buffers before ECN can react.
+        correct: true
+        explanation: Zero pauses on the RoCE priority, continued ECN, and receiver sequence gaps after a change point to a PFC priority mismatch.
+      - id: b
+        text: The push triggered a PFC storm that is pausing the whole fabric.
+        explanation: A storm would show very high pause counts, not zero.
+      - id: c
+        text: ECMP polarization started because of the template change.
+        explanation: Polarization causes uneven utilisation, not a sudden disappearance of PFC pauses or a link to the QoS template.
+      - id: d
+        text: The MoE jobs have a software regression.
+        explanation: The timing matches the push, and the fabric counters changed in a way that explains the symptom.
+    tags: [pfc, change-correlation]
+  - id: q3
+    type: single
+    prompt: In Case 2, why did dense-model jobs suffer much less than MoE jobs?
+    options:
+      - id: a
+        text: Their traffic created less incast, so ECN/DCQCN rate control usually kept queues short enough to avoid overflow even without PFC.
+        correct: true
+        explanation: ECN reacts after a round trip; it can manage gentle congestion but not fast-filling incast bursts like all-to-all.
+      - id: b
+        text: Dense models do not use RDMA.
+        explanation: They use the same NCCL RDMA transports.
+      - id: c
+        text: Dense models use a different DSCP that still had PFC enabled.
+        explanation: Both job types used the same RoCE configuration; the difference was the traffic pattern.
+    tags: [ecn, incast]
+  - id: q4
+    type: scenario
+    prompt: >
+      nccl-tests busbw on a RoCE fabric varies between 55% and 95% of baseline across reruns, with no
+      errors or drops. Telemetry shows that for each spine-leaf pair one of two parallel links is near
+      95% utilised and the other near 20%. Which combination best explains this?
+    options:
+      - id: a
+        text: Too few large flows for static hashing (low entropy) plus hash polarization because leaf and spine use the same hash function and seed.
+        correct: true
+        explanation: Few elephants collide, and identical hashing across tiers makes the spine's choice depend on bits the leaf already fixed.
+      - id: b
+        text: A bad optic on the busy links causing retransmissions.
+        explanation: Bad optics produce error counters and retransmissions; here there are no errors.
+      - id: c
+        text: PFC is disabled, so traffic is lost and retransmitted.
+        explanation: There are no drops; the issue is distribution, not loss.
+      - id: d
+        text: The NICs' PCIe links are downtrained.
+        explanation: Downtraining would show as a node-dependent persistent drop, not as uneven switch link utilisation that changes between reruns.
+    tags: [ecmp, polarization]
+  - id: q5
+    type: multi
+    prompt: Which actions address the root cause of the ECMP problem in Case 3? (Select all that apply.)
+    options:
+      - id: a
+        text: Use a different hash seed (or function) per switching tier.
+        correct: true
+        explanation: This removes the correlation between the leaf's and the spine's choices, which is the polarization mechanism.
+      - id: b
+        text: Increase the number of QPs per connection (for example NCCL_IB_QPS_PER_CONNECTION) to raise flow entropy.
+        correct: true
+        explanation: More QPs means more distinct UDP source ports, giving the hash more flows to spread; measure the resource cost.
+      - id: c
+        text: Evaluate adaptive routing or packet spraying on platforms that support it.
+        correct: true
+        explanation: Load-aware path selection avoids the limits of static hashing for elephant flows.
+      - id: d
+        text: Lower the PFC XOFF threshold on the hot links.
+        explanation: This changes when pauses are sent but does nothing about how flows are distributed.
+    tags: [ecmp, remediation]
+  - id: q6
+    type: scenario
+    prompt: >
+      A node returned after a GPU tray replacement passes DCGM diagnostics. A 32-node job including it is
+      22% slower. Parallel bisection isolates the node; per-rail ib_write_bw to a golden node shows one rail
+      at about half of line rate. What is the next command, and what do you expect to see?
+    options:
+      - id: a
+        text: lspci -vv on that rail's NIC under load, expecting LnkSta below LnkCap (for example Width x8 downgraded instead of x16).
+        correct: true
+        explanation: A single rail at about half bandwidth after hardware work is the classic signature of a NIC PCIe link trained at half width.
+      - id: b
+        text: nvidia-smi -q -d PERFORMANCE, expecting thermal throttling.
+        explanation: Throttling would slow compute, not one NIC rail in a network bandwidth test.
+      - id: c
+        text: ibv_devinfo -v, expecting a RoCE v1 GID.
+        explanation: A GID problem would cause connection failures, not half bandwidth.
+      - id: d
+        text: perfquery on the leaf port, expecting PortXmitWait to be zero.
+        explanation: That would not explain a host-side bandwidth limit found by a per-rail test from this node.
+    tags: [pcie, admission]
+  - id: q7
+    type: scenario
+    prompt: >
+      After a host network change that is applied at reboot, about 60% of new jobs fail with NCCL
+      "status=12" errors, while running jobs are fine. Every failing job includes at least one node
+      rebooted since the change. What should you compare first?
+    options:
+      - id: a
+        text: The GID entry (type and address) at the configured GID index on a rebooted versus a non-rebooted node.
+        correct: true
+        explanation: The partial-reboot pattern plus retry-exceeded errors points to GID table drift on rebooted nodes.
+      - id: b
+        text: Switch PFC configuration on the racks of the failing nodes.
+        explanation: Nothing changed on the switches, and a PFC problem would not correlate with host reboots.
+      - id: c
+        text: GPU clock throttle reasons on the failing nodes.
+        explanation: Throttling makes jobs slow, not fail with transport errors.
+      - id: d
+        text: The NCCL version on the failing nodes.
+        explanation: The change was to host networking; the reboot correlation points at addressing, not at the library.
+    tags: [gid, change-correlation]
+  - id: q8
+    type: single
+    prompt: Which prevention item is the strongest outcome of an incident report?
+    options:
+      - id: a
+        text: An owned, dated automated check (alert, admission test or CI guardrail) that would have caught this incident earlier.
+        correct: true
+        explanation: Automated checks prevent recurrence regardless of who is on call.
+      - id: b
+        text: A reminder to engineers to be more careful with config pushes.
+        explanation: Exhortations do not change the system and rarely prevent recurrence.
+      - id: c
+        text: Identifying which engineer made the change.
+        explanation: Blameless reports focus on how the system allowed the failure, not on individuals.
+      - id: d
+        text: Raising NCCL timeouts so failures take longer to surface.
+        explanation: This hides symptoms and slows detection; it prevents nothing.
+    tags: [postmortem]

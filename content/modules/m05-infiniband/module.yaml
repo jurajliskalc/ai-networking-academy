@@ -1,0 +1,13 @@
+id: m05-infiniband
+order: 5
+title: "InfiniBand"
+level: 3
+summary: >
+  The InfiniBand architecture: subnet manager and routing, credit-based flow control and virtual lanes, speeds and cables, SHARP, and the diagnostic toolchain.
+lessons:
+  - ib-architecture
+  - subnet-manager-routing
+  - ib-flow-control-vls
+  - ib-speeds-cables
+  - sharp-in-network-computing
+  - ib-tools-diagnostics

@@ -1,0 +1,42 @@
+id: sim-10-host-mtu
+title: "A 1500-byte host on a jumbo fabric"
+level: 2
+estimated_minutes: 25
+lessons: [mtu-jumbo-frames, perftest-benchmarking, rocev2-encapsulation]
+summary: One NIC lost its jumbo MTU, so RoCE negotiates 1024-byte packets on that rail.
+start: node01
+ticket: |
+  **INC-4644 · Sev4 · Bandwidth ~18 % below baseline**
+
+  > After a NetworkManager profile change on node04, all_reduce is consistently ~18 % slower. There are
+  > no errors or drops anywhere. - HPC operations
+faults:
+  - { type: host_mtu, node: node04, rail: 1, mtu: 1500 }
+hints:
+  - "`ib_write_bw` prints the RoCE MTU it uses (`Mtu : ...[B]`). Compare the rails."
+  - "`ibv_devinfo -d mlx5_1` shows max_mtu and active_mtu, and `ip link show enp41s0np0` shows the netdev MTU."
+diagnosis:
+  prompt: What is the root cause?
+  options:
+    - id: a
+      text: node04 enp41s0np0 has a netdev MTU of 1500, so the RoCE active MTU drops to 1024 bytes on rail 1 and every message needs four times as many packets.
+      correct: true
+      explanation: ConnectX NICs derive the RoCE active MTU from the netdev MTU, and a connection's path MTU is the minimum of both ends. All rail-1 connections with node04 therefore use 1024-byte packets, which costs efficiency.
+    - id: b
+      text: The leaf02 port MTU is 1500, so jumbo frames are dropped.
+      explanation: A switch-side MTU problem drops full-size packets and makes jobs fail; here nothing fails.
+    - id: c
+      text: PFC is misconfigured on node04.
+      explanation: There are no drops and no abnormal pause counters, and the slowdown is visible in unloaded tests.
+    - id: d
+      text: The NIC is limited by PCIe.
+      explanation: lspci shows a Gen5 x16 link.
+checks:
+  - { description: "node04 enp41s0np0 MTU is 9000", check: host_mtu, args: { node: node04, rail: 1, value: 9000 } }
+  - { description: "all_reduce bus bandwidth is above 360 GB/s", check: allreduce_min_busbw, args: { value: 360 } }
+solution: |
+  `ib_write_bw -d mlx5_1 ... node04` reports `Mtu : 1024[B]`. On node04, `ibv_devinfo -d mlx5_1` shows
+  `active_mtu: 1024 (3)` and `ip link show enp41s0np0` shows `mtu 1500`. Fix it with `ip link set dev
+  enp41s0np0 mtu 9000`, and fix the persistent network profile too.
+fix:
+  - "node04: ip link set dev enp41s0np0 mtu 9000"

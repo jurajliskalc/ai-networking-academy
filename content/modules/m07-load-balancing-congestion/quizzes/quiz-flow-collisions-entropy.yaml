@@ -1,0 +1,133 @@
+id: quiz-flow-collisions-entropy
+title: "Knowledge check: flow collisions and entropy"
+lesson: flow-collisions-entropy
+pass_pct: 70
+questions:
+  - id: q1
+    type: single
+    prompt: "In a RoCEv2 packet, which 5-tuple field normally provides the entropy that lets ECMP separate two connections between the same pair of NICs?"
+    options:
+      - id: a
+        text: "The UDP source port, which the NIC chooses per QP."
+        correct: true
+        explanation: "Source and destination IP, protocol (UDP) and destination port 4791 are identical for both connections; only the source port differs."
+      - id: b
+        text: "The UDP destination port, which differs per application."
+        explanation: "RoCEv2 always uses destination port 4791, so it adds no entropy."
+      - id: c
+        text: "The IP protocol number, which differs between RDMA operations."
+        explanation: "The IP protocol is always 17 (UDP) for RoCEv2."
+      - id: d
+        text: "The destination IP address, which changes per QP."
+        explanation: "Both connections terminate on the same peer NIC address."
+    tags: [entropy, rocev2]
+  - id: q2
+    type: single
+    prompt: "Eight equal elephant flows are hashed uniformly at random onto eight equal uplinks. Approximately what fraction of uplinks do you expect to carry no flow?"
+    options:
+      - id: a
+        text: "About one third (roughly 34-37 %)."
+        correct: true
+        explanation: "The probability a link gets nothing is (7/8)^8 ≈ 0.34, approaching 1/e ≈ 0.37 for large N."
+      - id: b
+        text: "None, because ECMP spreads flows evenly."
+        explanation: "ECMP spreads flows randomly, not evenly; with few flows imbalance is the norm."
+      - id: c
+        text: "About 12.5 %, one link out of eight."
+        explanation: "This underestimates the effect; on average close to three of eight links are idle."
+      - id: d
+        text: "About 75 %, because most flows collide."
+        explanation: "That would require far more collisions than random hashing produces on average."
+    tags: [ecmp, math]
+  - id: q3
+    type: scenario
+    prompt: "A 400G RoCE job shows bus bandwidth that alternates between ~380 GB/s and ~200 GB/s from one job restart to the next, with no configuration change. Leaf uplink counters during slow runs show three uplinks near idle and others at line rate. What is the most likely cause?"
+    options:
+      - id: a
+        text: "Static ECMP hash collisions that change whenever QPs (and their source ports) are re-created."
+        correct: true
+        explanation: "Uneven member utilization plus run-to-run variance is the fingerprint of per-flow hashing of a few elephant flows."
+      - id: b
+        text: "A PFC storm caused by a faulty NIC."
+        explanation: "A PFC storm would show pause counters and stalls, not idle ECMP members with others at line rate."
+      - id: c
+        text: "An MTU mismatch between leaf and spine."
+        explanation: "An MTU mismatch causes drops or failures consistently, not a restart-dependent pattern."
+      - id: d
+        text: "Insufficient GPU memory bandwidth on some nodes."
+        explanation: "This would not produce idle uplinks next to saturated ones in the same ECMP group."
+    tags: [ecmp, troubleshooting]
+  - id: q4
+    type: single
+    prompt: "What is hash polarization?"
+    options:
+      - id: a
+        text: "Successive tiers using the same hash function and seed, so flows already sorted by one tier all pick the same member at the next."
+        correct: true
+        explanation: "The first tier consumes the entropy; the second tier sees flows with identical hash bits and cannot spread them."
+      - id: b
+        text: "A hash that prefers even-numbered ports over odd-numbered ones."
+        explanation: "That is a biased hash, not polarization; polarization is about correlation between tiers."
+      - id: c
+        text: "Traffic flowing only in one direction across an ECMP group."
+        explanation: "Direction of traffic is unrelated to polarization."
+      - id: d
+        text: "The change of hash results when an ECMP member fails."
+        explanation: "That is rehashing on membership change, addressed by resilient hashing."
+    tags: [polarization]
+  - id: q5
+    type: multi
+    prompt: "Which actions increase the entropy available to ECMP for RoCE traffic or prevent it from being lost? (Select all that apply.)"
+    options:
+      - id: a
+        text: "Including UDP source and destination ports in the switch hash."
+        correct: true
+        explanation: "Without L4 fields, all QPs between a NIC pair hash identically."
+      - id: b
+        text: "Raising NCCL_IB_QPS_PER_CONNECTION so each connection uses more QPs."
+        correct: true
+        explanation: "More QPs means more distinct source ports and more independent hash inputs."
+      - id: c
+        text: "Using different hash seeds on leaf and spine tiers."
+        correct: true
+        explanation: "This prevents polarization, so entropy is not consumed by the first tier."
+      - id: d
+        text: "Increasing the MTU from 4096 to 9000 bytes on RoCE interfaces."
+        explanation: "MTU changes per-packet efficiency, not the number of distinct flows."
+    tags: [entropy, tuning]
+  - id: q6
+    type: scenario
+    prompt: "Your team raised NCCL_IB_QPS_PER_CONNECTION from 1 to 8. Average all-reduce bandwidth rose a little, run-to-run variance fell, but job start-up got slower and small-message latency got slightly worse. How should you interpret this?"
+    options:
+      - id: a
+        text: "Expected trade-off: more QPs improve hash odds but add QP state, setup time and message splitting; tune to a measured sweet spot or move to adaptive routing."
+        correct: true
+        explanation: "Entropy improves the statistics of hashing but has costs; it is not a structural fix."
+      - id: b
+        text: "The change is broken; more QPs should always improve every metric."
+        explanation: "More QPs carry overhead in NIC resources and per-QP message size, so trade-offs are normal."
+      - id: c
+        text: "It proves the fabric is oversubscribed."
+        explanation: "Oversubscription would cap throughput even with perfect balancing; the observations point to hashing statistics."
+      - id: d
+        text: "It means PFC is misconfigured on the spine."
+        explanation: "Nothing in the observations points to pause behaviour."
+    tags: [nccl, entropy]
+  - id: q7
+    type: single
+    prompt: "Why do hash collisions hurt AI training much more than typical enterprise traffic?"
+    options:
+      - id: a
+        text: "Training uses few, large, synchronized flows and the collective completes at the speed of its slowest flow."
+        correct: true
+        explanation: "One flow at half speed slows the whole collective and all GPUs waiting on it."
+      - id: b
+        text: "AI traffic uses TCP, which reacts badly to collisions."
+        explanation: "Collective traffic in AI fabrics is predominantly RDMA (RoCE or InfiniBand), and the problem is about flow counts, not TCP."
+      - id: c
+        text: "Enterprise switches use a better hash function than AI switches."
+        explanation: "The hash functions are similar; the traffic mix is what differs."
+      - id: d
+        text: "AI clusters always run oversubscribed fabrics."
+        explanation: "Many AI back-end fabrics are non-blocking; collisions hurt even there."
+    tags: [ai-traffic]

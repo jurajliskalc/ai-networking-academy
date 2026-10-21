@@ -1,0 +1,15 @@
+# Local toolchains
+.tools/
+node_modules/
+.idea/
+.vscode/
+
+# Build output (content JSON is generated from content/ by scripts/build-content.mjs)
+frontend/dist/
+frontend/public/content/
+*.tsbuildinfo
+
+# Test and OS artifacts
+coverage/
+.DS_Store
+Thumbs.db

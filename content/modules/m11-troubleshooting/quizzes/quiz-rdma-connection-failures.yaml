@@ -1,0 +1,164 @@
+id: quiz-rdma-connection-failures
+title: "Knowledge check: RDMA connection failures"
+lesson: rdma-connection-failures
+pass_pct: 70
+questions:
+  - id: q1
+    type: scenario
+    prompt: |
+      After a netplan change that re-applied the addresses and added IPv6 addresses on the RoCE interfaces, every multi-node NCCL
+      job fails with "error 12" after about 30 seconds. Job templates set NCCL_IB_GID_INDEX=3.
+      On a node, the sysfs file /sys/class/infiniband/mlx5_0/ports/1/gid_attrs/types/3 now reads
+      "IB/RoCE v1". What is the root cause?
+    options:
+      - id: a
+        text: The re-applied and new addresses reordered the GID table, so index 3 now refers to a RoCE v1 entry that is not routable across the fabric.
+        correct: true
+        explanation: GID indices follow the order addresses were added. A hard-coded index silently changed meaning, and v1 frames cannot be routed.
+      - id: b
+        text: IPv6 addresses disable RoCE v2 on mlx5 NICs.
+        explanation: IPv6 addresses add GID entries (v1 and v2); they do not disable RoCE v2.
+      - id: c
+        text: NCCL_IB_TIMEOUT is too low for the new configuration.
+        explanation: Retry exceeded is a symptom of packets not being acknowledged; a longer timeout only delays the failure.
+      - id: d
+        text: The PFC priority changed with the netplan update.
+        explanation: Netplan does not configure PFC, and a lossless misconfiguration would cause drops under load, not failure of every connection.
+    tags: [gid, rocev2]
+  - id: q2
+    type: scenario
+    prompt: >
+      ib_write_bw -a between two nodes succeeds for message sizes up to 2048 bytes and fails with
+      "Failed status 12" at 4096 bytes. ping between the hosts works. What is the most likely cause?
+    options:
+      - id: a
+        text: A hop in the path has an MTU too small for 4096-byte RoCE payloads plus headers, and RDMA has no PMTUD to recover.
+        correct: true
+        explanation: Small-OK, large-fail is the signature of an MTU black hole; a switch port at MTU 4096 or lower would drop these packets.
+      - id: b
+        text: The rkey is invalid for buffers larger than 2048 bytes.
+        explanation: An invalid rkey produces IBV_WC_REM_ACCESS_ERR (10), not a retry-exceeded error, and is not size-dependent this way.
+      - id: c
+        text: The receiver ran out of receive WQEs.
+        explanation: RDMA WRITE does not consume receive WQEs, and RNR problems produce status 13, not 12.
+      - id: d
+        text: The NIC's PCIe link is downtrained.
+        explanation: Downtraining reduces bandwidth but does not cause transport errors at a size threshold.
+    tags: [mtu, retry-exceeded]
+  - id: q3
+    type: scenario
+    prompt: |
+      During a failing RoCE test you snapshot RDMA hw counters before and after:
+        sender:   local_ack_timeout_err +9, packet_seq_err +0
+        receiver: out_of_sequence +0
+      What does this pattern suggest?
+    options:
+      - id: a
+        text: The requester's packets are not reaching the receiver at all, pointing to addressing, routing, ACL or MTU problems rather than congestion drops.
+        correct: true
+        explanation: Timeouts with no sequence errors at the receiver means nothing (or nothing usable) arrives; partial drops would raise out_of_sequence.
+      - id: b
+        text: The fabric is dropping a small fraction of packets because of congestion.
+        explanation: Partial drops with a live receiver would show out_of_sequence on the receiver and sequence-error NAKs at the sender.
+      - id: c
+        text: The receiver is overloaded and sending RNR NAKs.
+        explanation: RNR conditions show in RNR counters and as status 13, not as pure ACK timeouts.
+      - id: d
+        text: Everything is normal; local_ack_timeout_err always increments slowly.
+        explanation: On a healthy fabric this counter should be at or near zero; nine timeouts in one test is a real fault.
+    tags: [counters, mlx5]
+  - id: q4
+    type: single
+    prompt: A log contains one IBV_WC_RETRY_EXC_ERR followed by 400 IBV_WC_WR_FLUSH_ERR completions. How should you read it?
+    options:
+      - id: a
+        text: The retry-exceeded error is the root symptom; the flush errors are outstanding work requests drained after the QP entered the error state.
+        correct: true
+        explanation: Once a QP is in error, all posted work requests complete with flush status. Focus on the first non-flush error.
+      - id: b
+        text: The flush errors indicate 400 separate network faults.
+        explanation: They are all consequences of a single QP transition to error.
+      - id: c
+        text: Flush errors mean the receiver's buffers were full.
+        explanation: Receiver-not-ready conditions produce RNR NAKs and status 13, not flush errors.
+    tags: [ibv_wc_status]
+  - id: q5
+    type: scenario
+    prompt: >
+      On an InfiniBand cluster, compute nodes A and B can each reach the storage server, but A and B
+      cannot communicate with each other over RDMA. Their P_Key tables contain 0x0012, and the
+      storage server's contains 0x8012. What is wrong?
+    options:
+      - id: a
+        text: A and B are limited members of partition 0x0012, and two limited members cannot communicate; only the full-member server can reach both.
+        correct: true
+        explanation: The high bit marks full membership. Limited-limited communication is not allowed by design.
+      - id: b
+        text: A and B are in different partitions.
+        explanation: Both use partition 0x0012; the membership type, not the partition, is the issue.
+      - id: c
+        text: The Subnet Manager is down.
+        explanation: With the SM down, new paths would fail broadly, including to the storage server.
+      - id: d
+        text: A and B have the wrong GID index.
+        explanation: GID index selection is the RoCE failure mode; on IB with working server connectivity, P_Key membership explains the pattern.
+    tags: [pkey, infiniband]
+  - id: q6
+    type: scenario
+    prompt: >
+      An NCCL job on a newly built rack hangs at initialisation. NCCL_DEBUG=INFO output stops during
+      bootstrap and no NET/IB errors are printed. ib_write_bw between the same nodes works. What is the
+      most likely issue?
+    options:
+      - id: a
+        text: The TCP bootstrap channel is blocked or uses the wrong interface (check NCCL_SOCKET_IFNAME and host firewall rules).
+        correct: true
+        explanation: NCCL bootstraps over TCP before any RDMA traffic. The RDMA data path is proven by ib_write_bw, so the side channel is the suspect.
+      - id: b
+        text: Host iptables rules drop UDP 4791, blocking hardware RoCE traffic.
+        explanation: Hardware-offloaded RoCE usually bypasses host packet filters, and ib_write_bw works, so the data path is fine.
+      - id: c
+        text: The GID index points at an IPv6 link-local entry.
+        explanation: A GID problem would surface as transport errors after bootstrap, and ib_write_bw with the same GID would fail too.
+      - id: d
+        text: PFC is disabled on the new rack's leaf switches.
+        explanation: Missing PFC causes drops under load, not a hang during bootstrap.
+    tags: [nccl, bootstrap, firewall]
+  - id: q7
+    type: single
+    prompt: With QP attribute timeout = 20 and retry_cnt = 7, roughly how long does a requester wait before reporting retry exceeded on a dead path?
+    options:
+      - id: a
+        text: About half a minute (roughly 4.3 seconds per timeout, repeated over the retries).
+        correct: true
+        explanation: The local ACK timeout is 4.096 microseconds x 2^timeout, about 4.3 s at 20; with up to 7 retries that adds up to around 30 seconds.
+      - id: b
+        text: About 20 milliseconds.
+        explanation: The timeout field is an exponent, not a value in milliseconds.
+      - id: c
+        text: It waits forever because retry_cnt = 7 means infinite.
+        explanation: Seven means infinite for rnr_retry, not for retry_cnt; retry_cnt 7 is simply the maximum finite count.
+      - id: d
+        text: About 140 microseconds.
+        explanation: That would correspond to a much smaller timeout exponent.
+    tags: [qp, timeout]
+  - id: q8
+    type: multi
+    prompt: Which checks belong in a node admission script to prevent RoCE connection failures? (Select all that apply.)
+    options:
+      - id: a
+        text: Assert that the GID index used by jobs resolves to RoCE v2 on the expected subnet for every RDMA NIC.
+        correct: true
+        explanation: This catches the most common configuration-drift failure before a job runs.
+      - id: b
+        text: Run a perftest bandwidth test across a range of message sizes to a known-good peer.
+        correct: true
+        explanation: A size sweep catches MTU black holes and proves the data path end to end.
+      - id: c
+        text: Verify port state and active_mtu with ibv_devinfo.
+        correct: true
+        explanation: A port that is down or has an unexpected active MTU is an early indicator of misconfiguration.
+      - id: d
+        text: Set NCCL_IB_TIMEOUT to its maximum so connections never fail.
+        explanation: Larger timeouts only delay failures and slow recovery; they prevent nothing.
+    tags: [operations, admission]

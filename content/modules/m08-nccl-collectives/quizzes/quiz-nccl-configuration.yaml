@@ -1,0 +1,151 @@
+id: quiz-nccl-configuration
+title: "Knowledge check: configuring NCCL"
+lesson: nccl-configuration
+pass_pct: 70
+questions:
+  - id: q1
+    type: scenario
+    prompt: "A server has RDMA devices mlx5_0 to mlx5_11. Someone sets NCCL_IB_HCA=mlx5_1 to restrict NCCL to one NIC for a test, but logs show NCCL using mlx5_1, mlx5_10 and mlx5_11. Why?"
+    options:
+      - id: a
+        text: "NCCL_IB_HCA uses prefix matching by default, so mlx5_1 also matches mlx5_10 and mlx5_11; use =mlx5_1 for an exact match."
+        correct: true
+        explanation: "A leading '=' requests exact matching; '^' excludes."
+      - id: b
+        text: "NCCL ignores NCCL_IB_HCA when more than ten devices exist."
+        explanation: "The variable is honored; the matching rule causes this behaviour."
+      - id: c
+        text: "The environment variable was not forwarded to the rank."
+        explanation: "If it were not forwarded, NCCL would use all devices, not this specific subset."
+      - id: d
+        text: "mlx5_10 and mlx5_11 are bonded with mlx5_1."
+        explanation: "Bonding is not implied; this is the prefix rule."
+    tags: [nccl-ib-hca]
+  - id: q2
+    type: single
+    prompt: "Your RoCE fabric classifies DSCP 26 into the lossless, ECN-enabled queue. What value should NCCL_IB_TC have?"
+    options:
+      - id: a
+        text: "104, because the traffic class byte is DSCP shifted left by two bits."
+        correct: true
+        explanation: "26 x 4 = 104; the low two bits are the ECN field."
+      - id: b
+        text: "26, the DSCP value itself."
+        explanation: "That would yield DSCP 6 on the wire."
+      - id: c
+        text: "3, the PFC priority number."
+        explanation: "NCCL_IB_TC is a traffic class byte, not a PFC priority."
+      - id: d
+        text: "0, because switches classify RoCE by UDP port."
+        explanation: "The described fabric classifies by DSCP, so the DSCP must be set."
+    tags: [roce, qos]
+  - id: q3
+    type: single
+    prompt: "What does NCCL_IB_GID_INDEX select on a RoCE port?"
+    options:
+      - id: a
+        text: "Which GID table entry (and thus IP address and RoCE version) NCCL uses; it must be a RoCEv2 entry on the back-end network."
+        correct: true
+        explanation: "show_gids or sysfs shows each index's IP and version."
+      - id: b
+        text: "The InfiniBand service level of NCCL traffic."
+        explanation: "That is NCCL_IB_SL."
+      - id: c
+        text: "Which GPU is attached to the NIC."
+        explanation: "GPU-NIC affinity comes from topology detection."
+      - id: d
+        text: "The PFC priority used for pause frames."
+        explanation: "PFC priority is determined by switch and NIC QoS mapping."
+    tags: [gid]
+  - id: q4
+    type: scenario
+    prompt: "In a rail-optimized fabric, spine utilization is unexpectedly high during all-reduce. NCCL INFO shows inter-node hops such as 'NIC 2 on node A to NIC 5 on node B'. Which setting is most relevant?"
+    options:
+      - id: a
+        text: "NCCL_CROSS_NIC=0, so rings use the same NIC index on both sides and stay rail-aligned."
+        correct: true
+        explanation: "Crossing NIC indices forces traffic between rails through the spine."
+      - id: b
+        text: "NCCL_IB_DISABLE=1."
+        explanation: "That would disable RDMA entirely and cripple performance."
+      - id: c
+        text: "NCCL_MAX_NCHANNELS=1."
+        explanation: "Reducing channels lowers bandwidth and does not fix rail alignment."
+      - id: d
+        text: "NCCL_IB_RETRY_CNT=1."
+        explanation: "Retry count is unrelated to NIC selection."
+    tags: [rail, cross-nic]
+  - id: q5
+    type: multi
+    prompt: "Which settings should be treated as diagnostic or temporary rather than standard production configuration? (Select all that apply.)"
+    options:
+      - id: a
+        text: "NCCL_IB_DISABLE=1"
+        correct: true
+        explanation: "It forces socket transport and costs a large fraction of performance."
+      - id: b
+        text: "NCCL_P2P_DISABLE=1"
+        correct: true
+        explanation: "It removes NVLink/PCIe P2P inside the node."
+      - id: c
+        text: "A forced NCCL_ALGO or NCCL_PROTO"
+        correct: true
+        explanation: "Overrides the tuner for all sizes; use for comparison or documented workarounds."
+      - id: d
+        text: "NCCL_IB_HCA listing the compute NICs"
+        explanation: "Selecting the right NICs is a legitimate, design-driven setting."
+    tags: [best-practice]
+  - id: q6
+    type: single
+    prompt: "In PyTorch, which variable controls how ProcessGroupNCCL reacts to failed or timed-out collectives in current versions?"
+    options:
+      - id: a
+        text: "TORCH_NCCL_ASYNC_ERROR_HANDLING"
+        correct: true
+        explanation: "It is a PyTorch variable; the older name NCCL_ASYNC_ERROR_HANDLING is deprecated."
+      - id: b
+        text: "NCCL_IB_TIMEOUT"
+        explanation: "That is the IB verbs ACK timeout exponent, not PyTorch error handling."
+      - id: c
+        text: "NCCL_DEBUG"
+        explanation: "NCCL_DEBUG controls logging only."
+      - id: d
+        text: "NCCL_IB_RETRY_CNT"
+        explanation: "That sets the NIC transport retry count."
+    tags: [pytorch]
+  - id: q7
+    type: scenario
+    prompt: "A containerized job fails during NCCL init with shared-memory related errors on a single node, while the same image works with --ipc=host. What is the most likely cause?"
+    options:
+      - id: a
+        text: "The container's /dev/shm is too small (Docker defaults to 64 MB); increase --shm-size or use --ipc=host."
+        correct: true
+        explanation: "NCCL uses shared memory for SHM transport and buffers."
+      - id: b
+        text: "The RoCE GID index is wrong."
+        explanation: "A GID problem affects RDMA connections, not single-node shared memory."
+      - id: c
+        text: "PFC is disabled on the switch."
+        explanation: "A single-node shared-memory failure does not involve the switch."
+      - id: d
+        text: "NCCL_IB_TC is set to 104."
+        explanation: "Traffic class does not affect shared memory allocation."
+    tags: [containers]
+  - id: q8
+    type: single
+    prompt: "What is the effect of raising NCCL_IB_TIMEOUT from 18 to 22?"
+    options:
+      - id: a
+        text: "The per-attempt ACK timeout grows from about 1 s to about 17 s (4.096 us x 2^value), so failures surface later; it does not improve speed."
+        correct: true
+        explanation: "Larger timeouts tolerate longer stalls but can mask link problems."
+      - id: b
+        text: "Bandwidth increases because fewer ACKs are needed."
+        explanation: "The timeout does not change ACK frequency or bandwidth."
+      - id: c
+        text: "It shortens recovery from link flaps."
+        explanation: "It lengthens the time before the NIC gives up, not recovery."
+      - id: d
+        text: "It changes the PFC pause quanta."
+        explanation: "PFC timing is unrelated to the verbs timeout."
+    tags: [timeouts]

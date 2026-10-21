@@ -1,0 +1,139 @@
+id: quiz-collective-operations
+title: "Knowledge check: collective operations"
+lesson: collective-operations
+pass_pct: 70
+questions:
+  - id: q1
+    type: single
+    prompt: Which pair of collectives, executed in sequence, produces the same result as an all-reduce?
+    options:
+      - id: a
+        text: Reduce-scatter followed by all-gather.
+        correct: true
+        explanation: Reduce-scatter leaves each rank with one reduced chunk; all-gather distributes all chunks to everyone.
+      - id: b
+        text: Broadcast followed by all-to-all.
+        explanation: Neither operation performs a reduction across all ranks' data.
+      - id: c
+        text: All-gather followed by broadcast.
+        explanation: Without a reduction step, nobody computes the sum.
+      - id: d
+        text: Send followed by recv.
+        explanation: Point-to-point operations between two ranks cannot reduce data from N ranks by themselves.
+    tags: [all-reduce]
+  - id: q2
+    type: single
+    prompt: In a ring all-reduce over N ranks of a buffer of S bytes, how many bytes does each rank send?
+    options:
+      - id: a
+        text: "2(N-1)/N x S, approaching 2S for large N."
+        correct: true
+        explanation: 2(N-1) steps, each sending one S/N chunk.
+      - id: b
+        text: "N x S"
+        explanation: That would be sending the whole buffer to every rank, which the ring avoids.
+      - id: c
+        text: "S/N"
+        explanation: That is the size of one chunk in one step, not the total.
+      - id: d
+        text: "log2(N) x S"
+        explanation: The ring's volume does not grow with N at all; it approaches 2S.
+    tags: [ring, all-reduce]
+  - id: q3
+    type: scenario
+    prompt: >
+      Using the alpha-beta model with alpha = 5 us and 50 GB/s per link, a flat ring all-reduce of 1 MB over 1,024
+      ranks takes about 10 ms, while the same operation over 8 ranks takes about 0.1 ms. What explains most of the
+      difference?
+    options:
+      - id: a
+        text: The latency term 2(N-1) x alpha grows linearly with the number of ranks; at 1 MB the bandwidth term is tiny.
+        correct: true
+        explanation: 2 x 1023 x 5 us is about 10 ms, while the bandwidth term is only about 0.04 ms.
+      - id: b
+        text: Each rank sends 128 times more data with 1,024 ranks.
+        explanation: Data per rank approaches 2S for any large N; it barely changes.
+      - id: c
+        text: Links become slower when more GPUs are attached.
+        explanation: Link bandwidth is fixed in the model; latency steps are what grow.
+      - id: d
+        text: The 1 MB buffer no longer fits in GPU memory.
+        explanation: 1 MB is tiny relative to GPU memory.
+    tags: [alpha-beta, latency]
+  - id: q4
+    type: single
+    prompt: For an all-reduce, how is nccl-tests bus bandwidth (busbw) derived from algorithm bandwidth (algbw)?
+    options:
+      - id: a
+        text: "busbw = algbw x 2(N-1)/N"
+        correct: true
+        explanation: The factor accounts for the data each rank actually moves, making results comparable to link bandwidth.
+      - id: b
+        text: "busbw = algbw / N"
+        explanation: Dividing by N would make the number shrink with scale, the opposite of the intent.
+      - id: c
+        text: "busbw = algbw x N"
+        explanation: That would sum all ranks, not describe per-rank link usage.
+      - id: d
+        text: busbw and algbw are always equal for all-reduce.
+        explanation: They are equal for broadcast and reduce, not all-reduce.
+    tags: [nccl-tests, busbw]
+  - id: q5
+    type: multi
+    prompt: Which techniques do collective libraries use to reduce the latency cost of all-reduce at large scale? Select all that apply.
+    options:
+      - id: a
+        text: Tree algorithms whose latency term grows with log2(N) instead of N.
+        correct: true
+        explanation: NCCL's double binary tree is an example.
+      - id: b
+        text: Hierarchical algorithms that reduce inside a server over NVLink before the inter-node phase.
+        correct: true
+        explanation: Fewer ranks participate in the slow inter-node phase.
+      - id: c
+        text: In-network reduction such as SHARP, where switches perform the summation.
+        correct: true
+        explanation: Data is reduced on its way up a switch tree, cutting both latency and per-GPU volume.
+      - id: d
+        text: Sending every rank's full buffer to every other rank directly.
+        explanation: That multiplies traffic by N and is not used for all-reduce.
+    tags: [algorithms]
+  - id: q6
+    type: scenario
+    prompt: >
+      An engineer runs all_reduce_perf with one rank on each of two servers (one GPU per server), each server having
+      8 x 400 Gb/s NICs. Large-message busbw is about 46 GB/s. The engineer says "the server has 3.2 Tb/s of
+      networking, so the fabric is badly underperforming". What is the best response?
+    options:
+      - id: a
+        text: With one rank per server, all traffic crosses a single 400 Gb/s (about 50 GB/s) NIC, so about 46 GB/s is close to expected.
+        correct: true
+        explanation: The bottleneck for this test shape is one NIC; using all eight NICs needs ranks on all eight GPUs.
+      - id: b
+        text: Agree; busbw should reach about 400 GB/s in this test.
+        explanation: A single rank per server only uses its own nearby NIC, so the server total is not the right comparison.
+      - id: c
+        text: The result is meaningless because nccl-tests cannot measure inter-node bandwidth.
+        explanation: nccl-tests is the standard tool for exactly this purpose.
+      - id: d
+        text: busbw must be multiplied by 8 to get the real server figure.
+        explanation: busbw is not a per-NIC share of a hidden total; with one rank only one NIC carries traffic.
+    tags: [busbw, interpretation]
+  - id: q7
+    type: single
+    prompt: Why is all-to-all considered the most demanding collective for a network fabric?
+    options:
+      - id: a
+        text: Every rank simultaneously sends a distinct piece to every other rank, creating full-mesh bursts and incast.
+        correct: true
+        explanation: Many concurrent flows converge on each receiver, stressing buffers and congestion control.
+      - id: b
+        text: It requires each rank to send N times the buffer size.
+        explanation: Each rank sends about (N-1)/N of its buffer in total, split across peers.
+      - id: c
+        text: It can only run on InfiniBand.
+        explanation: All-to-all runs on any transport NCCL supports.
+      - id: d
+        text: It performs reductions inside the switches.
+        explanation: All-to-all involves no reduction at all.
+    tags: [all-to-all]

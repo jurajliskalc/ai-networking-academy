@@ -1,0 +1,150 @@
+id: quiz-ib-tools-diagnostics
+title: "Knowledge check: InfiniBand tools and diagnostics"
+lesson: ib-tools-diagnostics
+pass_pct: 70
+questions:
+  - id: q1
+    type: scenario
+    prompt: >
+      ibqueryerrors reports PortRcvErrors and SymbolErrorCounter increasing on leaf05 port 12, and
+      PortRcvRemotePhysicalErrors on three spine ports and two other leaf ports. Which link should you
+      fix first?
+    options:
+      - id: a
+        text: The link into leaf05 port 12, where the local receive and symbol errors occur.
+        correct: true
+        explanation: Remote physical errors downstream are victims of cut-through forwarding of packets corrupted on that link.
+      - id: b
+        text: The three spine links, because they show the most ports with errors.
+        explanation: Remote physical errors mean the corruption happened upstream, not on those links.
+      - id: c
+        text: All six links, because any error counter means a bad cable.
+        explanation: Only the link with local physical errors is faulty; replacing victims wastes time.
+      - id: d
+        text: None; remote physical errors are normal under load.
+        explanation: Any physical error growth deserves attention; here the source is clearly identified.
+    tags: [counters, localisation]
+  - id: q2
+    type: single
+    prompt: Which counter indicates congestion (waiting for credits) rather than a physical fault?
+    options:
+      - id: a
+        text: PortXmitWait
+        correct: true
+        explanation: It counts time with data to send but no credits available.
+      - id: b
+        text: SymbolErrorCounter
+        explanation: Symbol errors are physical-layer errors.
+      - id: c
+        text: LinkDownedCounter
+        explanation: This counts links that failed recovery and went down.
+      - id: d
+        text: PortRcvConstraintErrors
+        explanation: This counts packets dropped by partition or filtering enforcement.
+    tags: [counters, congestion]
+  - id: q3
+    type: multi
+    prompt: Which counters most directly point to a physical link problem? (Select all that apply.)
+    options:
+      - id: a
+        text: SymbolErrorCounter
+        correct: true
+        explanation: Detected physical-layer errors on the link.
+      - id: b
+        text: LinkErrorRecoveryCounter
+        correct: true
+        explanation: The link had to retrain after errors.
+      - id: c
+        text: LinkDownedCounter
+        correct: true
+        explanation: The link failed recovery and went down.
+      - id: d
+        text: PortRcvSwitchRelayErrors
+        explanation: Relay errors indicate the switch could not forward a packet, usually a routing or configuration issue.
+    tags: [counters, physical]
+  - id: q4
+    type: scenario
+    prompt: >
+      A switch port shows PortRcvSwitchRelayErrors increasing whenever a particular job runs. Links are
+      clean (no symbol or receive errors). What is the most likely category of problem?
+    options:
+      - id: a
+        text: Routing or configuration - for example packets addressed to a DLID with no LFT entry or an invalid VL mapping.
+        correct: true
+        explanation: Relay errors mean the switch received a packet it could not forward.
+      - id: b
+        text: A dirty optic on that port.
+        explanation: Physical problems show as symbol and receive errors, which are clean here.
+      - id: c
+        text: Normal congestion.
+        explanation: Congestion shows as PortXmitWait, not relay errors.
+    tags: [counters, routing]
+  - id: q5
+    type: single
+    prompt: Why should you prefer perfquery -x when measuring traffic volume?
+    options:
+      - id: a
+        text: It reads the 64-bit extended data and packet counters; the classic 32-bit counters saturate quickly at modern speeds.
+        correct: true
+        explanation: A saturated counter stuck at its maximum value gives no rate information.
+      - id: b
+        text: It resets all counters fabric-wide.
+        explanation: -x selects extended counters; resetting is a separate option.
+      - id: c
+        text: It converts the data counters from bytes to bits.
+        explanation: Data counters are in units of 4 bytes; -x does not change units.
+    tags: [perfquery]
+  - id: q6
+    type: scenario
+    prompt: >
+      After a weekend of recabling, collective bandwidth dropped and routing dumps show some spines
+      carrying far more destinations than others. All links are Active at 4X NDR with no errors. What is
+      the most effective next diagnostic step?
+    options:
+      - id: a
+        text: Run ibnetdiscover and compare the discovered topology against the cabling plan to find swapped or missing cables.
+        correct: true
+        explanation: Miscabling breaks fat-tree symmetry and ftree balance without causing any errors.
+      - id: b
+        text: Replace all cables touched over the weekend.
+        explanation: Without evidence of physical errors, this wastes time and may introduce new faults.
+      - id: c
+        text: Clear all counters and wait a week.
+        explanation: Counters are clean already; the problem is topology, not errors.
+      - id: d
+        text: Increase the SM sweep interval.
+        explanation: Sweep timing does not fix an imbalanced topology.
+    tags: [topology, miscabling]
+  - id: q7
+    type: single
+    prompt: What does ibping verify?
+    options:
+      - id: a
+        text: MAD-level reachability between two InfiniBand ports over the IB path, independent of IP and the application.
+        correct: true
+        explanation: The target runs ibping -S; the client pings it by LID or GUID.
+      - id: b
+        text: ICMP reachability over IPoIB.
+        explanation: That is ordinary ping over an ib0 interface, not ibping.
+      - id: c
+        text: RDMA Write bandwidth.
+        explanation: Use perftest for bandwidth.
+    tags: [ibping]
+  - id: q8
+    type: scenario
+    prompt: >
+      Users report brief stalls across the whole fabric every 20-30 minutes. No single port shows large
+      error totals, but the timestamps line up with the stalls. Which source of evidence is most likely to
+      explain the pattern?
+    options:
+      - id: a
+        text: The Subnet Manager log (or UFM events), which will show topology changes and heavy sweeps, for example from a flapping link.
+        correct: true
+        explanation: Fabric-wide periodic hiccups often correlate with heavy sweeps; the SM log tells you when and why.
+      - id: b
+        text: perftest results from one pair of hosts.
+        explanation: A single pair test does not reveal fabric-wide periodic events.
+      - id: c
+        text: The HCA firmware version string.
+        explanation: Version information alone does not explain periodic stalls.
+    tags: [subnet-manager, troubleshooting]

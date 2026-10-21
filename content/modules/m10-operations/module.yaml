@@ -1,0 +1,12 @@
+id: m10-operations
+order: 10
+title: "Operations, telemetry and automation"
+level: 4
+summary: >
+  Counters that matter, streaming telemetry, fabric validation and burn-in, automation, and fabric management platforms.
+lessons:
+  - telemetry-counters
+  - streaming-telemetry-gnmi
+  - fabric-validation-burn-in
+  - network-automation-for-ai
+  - ufm-netq-management

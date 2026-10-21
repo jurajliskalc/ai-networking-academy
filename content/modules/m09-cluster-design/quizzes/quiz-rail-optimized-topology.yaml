@@ -1,0 +1,162 @@
+id: quiz-rail-optimized-topology
+title: "Knowledge check: Rail-optimized topology"
+lesson: rail-optimized-topology
+pass_pct: 70
+questions:
+  - id: q1
+    type: scenario
+    prompt: >
+      You build a rail-optimized scalable unit from 64-port 400G leaf switches, non-blocking
+      (half the ports down, half up). Each server has 8 GPUs, each with its own 400G NIC. How many
+      servers and GPUs fit in one scalable unit, and how many leaves does it use?
+    options:
+      - id: a
+        text: 32 servers, 256 GPUs, 8 leaves (one per rail).
+        correct: true
+        explanation: 64 ports / 2 = 32 down-ports per leaf, so 32 servers per rail leaf; 8 rails means 8 leaves; 32 x 8 = 256 GPUs.
+      - id: b
+        text: 64 servers, 512 GPUs, 8 leaves.
+        explanation: That uses all 64 ports downward, leaving no uplinks; it is a rail-only (spineless) sizing, not a non-blocking leaf.
+      - id: c
+        text: 4 servers, 32 GPUs, 1 leaf.
+        explanation: That is the top-of-rack layout where all 8 NICs of a server go to the same leaf (32 / 8 = 4 servers).
+      - id: d
+        text: 32 servers, 256 GPUs, 32 leaves (one per server).
+        explanation: Rails are per GPU index, not per server; the number of leaves equals the number of NICs per server.
+    explanation: Servers per rail leaf = down-ports; leaves per SU = NICs per server.
+    tags: [rail-optimized, sizing]
+  - id: q2
+    type: single
+    prompt: Why does most inter-node collective traffic in LLM training flow between GPUs with the same local index?
+    options:
+      - id: a
+        text: TP stays on NVLink inside the server, and DP/FSDP/PP peers are the corresponding GPUs of other servers, which NCCL connects through their local NICs.
+        correct: true
+        explanation: Parallelism layout plus NIC-local channel selection makes GPU i talk mostly to GPU i elsewhere.
+      - id: b
+        text: InfiniBand subnet managers forbid traffic between different GPU indices.
+        explanation: Routing does not know about GPU indices; any NIC can reach any other NIC.
+      - id: c
+        text: RDMA queue pairs can only be created between NICs with the same device name.
+        explanation: QPs connect any two RDMA endpoints; device names are local labels.
+      - id: d
+        text: GPUs with different indices use different MTUs and cannot interoperate.
+        explanation: MTU is a property of the path and port configuration, not of the GPU index.
+    tags: [rail-optimized, parallelism]
+  - id: q3
+    type: scenario
+    prompt: >
+      A data-parallel job runs entirely on 16 servers of one scalable unit. Spine uplink counters
+      show steady traffic, and a two-node nccl-tests run between node017 and node020 is about 25%
+      slower than other pairs. PXN is enabled. What is the most likely cause?
+    options:
+      - id: a
+        text: Two of node017's (or node020's) NIC cables are swapped between rail leaves, creating cross-rail traffic.
+        correct: true
+        explanation: A crossed rail turns same-index traffic into leaf-spine-leaf traffic; links still come up, so only an audit against the plan finds it.
+      - id: b
+        text: The spine switches are oversubscribed 2:1.
+        explanation: An intra-SU DP job should not use the spine at all; oversubscription would not explain why traffic is there in the first place.
+      - id: c
+        text: The job is using tensor parallelism across servers.
+        explanation: Possible in principle, but it would affect all pairs equally, not one specific node pair.
+      - id: d
+        text: PXN always sends traffic over the spine, so this is expected.
+        explanation: PXN does the opposite; it moves cross-rail traffic onto NVLink to keep it off the spine.
+    tags: [rail-optimized, troubleshooting]
+  - id: q4
+    type: multi
+    prompt: In a rail-optimized two-tier fabric with PXN disabled, which flows traverse a spine switch? Select all that apply.
+    options:
+      - id: a
+        text: GPU 3 in scalable unit 1 to GPU 3 in scalable unit 2.
+        correct: true
+        explanation: Same rail but different rail leaves, so the path is leaf, spine, leaf.
+      - id: b
+        text: GPU 3 on server A to GPU 5 on server B in the same scalable unit.
+        correct: true
+        explanation: Cross-rail without PXN goes leaf 3, spine, leaf 5.
+      - id: c
+        text: GPU 3 on server A to GPU 3 on server B in the same scalable unit.
+        explanation: Both NICs sit on the same rail leaf; one switch hop.
+      - id: d
+        text: GPU 3 to GPU 5 on the same server.
+        explanation: Intra-server traffic uses NVLink and never reaches the network.
+    tags: [rail-optimized, spine]
+  - id: q5
+    type: single
+    prompt: What does NCCL PXN do for a message from GPU 3 on server A to GPU 5 on server B?
+    options:
+      - id: a
+        text: Copies the data over NVLink to GPU 5 on server A, which sends it through NIC 5 on rail 5 to server B.
+        correct: true
+        explanation: The cross-rail hop happens on NVLink, so the network path is a single rail leaf, and messages to the same NIC can be aggregated.
+      - id: b
+        text: Splits the message across all 8 NICs of server A to use more bandwidth.
+        explanation: That describes multi-rail striping of one flow, not PXN.
+      - id: c
+        text: Sends the message over PCIe peer-to-peer to server B without using the network.
+        explanation: PCIe does not span servers in this design; the network is still needed.
+      - id: d
+        text: Forces the message through the spine with adaptive routing enabled.
+        explanation: PXN's purpose is to avoid the spine for cross-rail traffic.
+    tags: [pxn, nccl]
+  - id: q6
+    type: scenario
+    prompt: >
+      A research team proposes a rail-only cluster: each of 8 rails is a single 64-port 400G switch
+      with no uplinks, and servers have 8 GPUs with one NIC each. What is the maximum cluster size?
+    options:
+      - id: a
+        text: 64 servers, 512 GPUs.
+        correct: true
+        explanation: With no uplinks all 64 ports face servers, so each rail switch serves 64 servers; 64 x 8 = 512 GPUs.
+      - id: b
+        text: 32 servers, 256 GPUs.
+        explanation: That assumes half the ports are reserved for uplinks, which a rail-only design removes.
+      - id: c
+        text: 2,048 servers, 16,384 GPUs.
+        explanation: That requires each rail to be its own two-tier Clos (64^2 / 2 = 2,048 servers), not a single switch.
+      - id: d
+        text: 8 servers, 64 GPUs.
+        explanation: This confuses switches with servers; each switch connects one NIC from many servers.
+    tags: [rail-only, sizing]
+  - id: q7
+    type: scenario
+    prompt: >
+      Your cluster will mostly train mixture-of-experts models with expert parallelism spanning
+      servers, and jobs are placed by a scheduler that does not know about rails. A vendor proposes
+      a rail-only design to save cost. What is the strongest objection?
+    options:
+      - id: a
+        text: MoE all-to-all is dominated by cross-rail traffic, which must all be relayed over NVLink, and arbitrary placement removes the rail-local assumption the savings rely on.
+        correct: true
+        explanation: Rail-only works best when traffic is mostly same-index (DP/PP); all-to-all and topology-blind placement are its weak spots.
+      - id: b
+        text: Rail-only designs cannot run RDMA.
+        explanation: Each rail is an ordinary RDMA fabric; RDMA works fine.
+      - id: c
+        text: Rail-only needs more optics than a rail-optimized fabric.
+        explanation: Removing the spine removes optics; cost reduction is the whole point of the design.
+      - id: d
+        text: NVLink cannot carry traffic destined for another server.
+        explanation: NVLink can stage data on a peer GPU, which then sends it; that is exactly what PXN and rail-only forwarding do.
+    tags: [rail-only, moe, design]
+  - id: q8
+    type: single
+    prompt: Using 64-port switches in a non-blocking two-tier rail-optimized fabric with 8-GPU servers, what is the largest cluster and how many spines does it need?
+    options:
+      - id: a
+        text: 2,048 GPUs (8 scalable units) with 32 spines.
+        correct: true
+        explanation: k^2 / 2 = 64^2 / 2 = 2,048 endpoints; 64 leaves x 32 uplinks / 64 ports = 32 spines.
+      - id: b
+        text: 4,096 GPUs with 64 spines.
+        explanation: k^2 = 4,096 double counts; each leaf can only give half its ports to endpoints at 1:1.
+      - id: c
+        text: 1,024 GPUs with 16 spines.
+        explanation: That is half the true limit; the spine has 64 ports, so it can reach 64 leaves.
+      - id: d
+        text: 65,536 GPUs with 1,024 spines.
+        explanation: That is the three-tier limit k^3 / 4 and the core switch count, not a two-tier fabric.
+    tags: [sizing, fat-tree]

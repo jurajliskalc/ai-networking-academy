@@ -1,0 +1,137 @@
+id: quiz-mtu-jumbo-frames
+title: "Knowledge check: MTU and jumbo frames"
+lesson: mtu-jumbo-frames
+pass_pct: 70
+questions:
+  - id: q1
+    type: single
+    prompt: A Linux interface has an MTU of 9000. What ICMP payload size should a do-not-fragment IPv4 ping use to test the full MTU?
+    options:
+      - id: a
+        text: 8972 bytes (9000 minus 20 for IPv4 and 8 for ICMP).
+        correct: true
+        explanation: ping -s sets the ICMP payload; IP and ICMP headers bring the packet to exactly 9000.
+      - id: b
+        text: 9000 bytes.
+        explanation: That would produce a 9028-byte IP packet, which exceeds the MTU and fails locally.
+      - id: c
+        text: 8986 bytes (9000 minus the 14-byte Ethernet header).
+        explanation: The Linux MTU already excludes the Ethernet header; you subtract IP and ICMP headers instead.
+      - id: d
+        text: 8952 bytes.
+        explanation: 8952 is the correct value for IPv6, whose base header is 40 bytes.
+    tags: [mtu, ping]
+  - id: q2
+    type: single
+    prompt: A RoCE NIC's netdev is set to MTU 9000. Which active RDMA MTU will ibv_devinfo typically report?
+    options:
+      - id: a
+        text: "4096"
+        correct: true
+        explanation: RDMA MTU values are 256-4096; the NIC picks the largest that fits, and 4096 is the maximum.
+      - id: b
+        text: "9000"
+        explanation: RDMA MTU is not the Ethernet MTU; the IB transport does not define 9000.
+      - id: c
+        text: "8192"
+        explanation: 8192 is not a valid InfiniBand/RoCE MTU value.
+      - id: d
+        text: "1024"
+        explanation: 1024 is what you typically get with the default 1500-byte Ethernet MTU.
+    tags: [rocev2, mtu]
+  - id: q3
+    type: multi
+    prompt: Which are genuine benefits of moving RoCE traffic from RDMA MTU 1024 to 4096? Select all that apply.
+    options:
+      - id: a
+        text: Higher payload efficiency, because the fixed per-packet header cost is amortised over more data.
+        correct: true
+        explanation: Efficiency rises from about 92.6 % to about 98 % for RoCEv2 over IPv4.
+      - id: b
+        text: Roughly four times fewer packets per second for the same throughput.
+        correct: true
+        explanation: Lower packet rate reduces per-packet work in NICs and switches.
+      - id: c
+        text: Elimination of the need for consistent MTU across the fabric.
+        explanation: Larger MTU makes consistency more important, not less.
+      - id: d
+        text: Lower serialisation delay of each individual packet.
+        explanation: Larger packets take longer to serialise; the gain is in efficiency and packet rate, not per-packet latency.
+    tags: [efficiency]
+  - id: q4
+    type: scenario
+    prompt: >
+      After a maintenance window, a training job starts normally (all ranks connect) but hangs at the first large
+      all-reduce. Small pings between all hosts succeed. A ping with -M do -s 8972 from rail-4 NICs to their peers
+      gets no reply, while it works on other rails. What is the most likely cause?
+    options:
+      - id: a
+        text: An interface on the rail-4 path (a host, leaf or spine port) has a smaller MTU, creating a black hole for large packets.
+        correct: true
+        explanation: Small control packets fit, large data packets are dropped; the DF ping isolates the rail with the problem.
+      - id: b
+        text: ECMP hashing is placing rail-4 traffic on too many paths.
+        explanation: Spreading traffic does not drop large packets selectively.
+      - id: c
+        text: The GPUs on rail 4 have insufficient memory.
+        explanation: GPU memory has nothing to do with whether a large ICMP packet crosses the network.
+      - id: d
+        text: The TTL on rail-4 packets is too low.
+        explanation: TTL problems affect packets of all sizes equally.
+    tags: [mtu, troubleshooting]
+  - id: q5
+    type: single
+    prompt: Why does the MTU have to be consistent end to end for RDMA, even more strictly than for TCP?
+    options:
+      - id: a
+        text: RoCE does not perform Path MTU Discovery; the path MTU is fixed when the queue pair is configured, so oversize packets are just dropped.
+        correct: true
+        explanation: TCP can adapt via PMTUD (when ICMP works); RDMA cannot, so a smaller link anywhere breaks it.
+      - id: b
+        text: RDMA packets cannot be larger than 1500 bytes.
+        explanation: RDMA MTU commonly reaches 4096 bytes with jumbo frames.
+      - id: c
+        text: RDMA uses IP fragmentation, which requires identical MTUs.
+        explanation: RDMA traffic is not fragmented; that is the problem.
+      - id: d
+        text: InfiniBand MTU values change dynamically per packet.
+        explanation: The path MTU is a fixed attribute of the connection, not a per-packet value.
+    tags: [rdma, pmtud]
+  - id: q6
+    type: scenario
+    prompt: >
+      A switch vendor's documentation says its MTU setting counts the full Ethernet frame. The switch ports are set to
+      9000 and hosts to 9000. Full-size DF pings between hosts fail, while 8900-byte pings work. What is the best fix?
+    options:
+      - id: a
+        text: Raise the switch MTU to leave headroom for Ethernet headers (for example 9216 where supported), keeping hosts at 9000.
+        correct: true
+        explanation: A frame-size MTU of 9000 cannot carry a 9000-byte IP packet plus 14-18 bytes of Ethernet header.
+      - id: b
+        text: Lower the hosts to 1500.
+        explanation: That would fix the symptom but throw away jumbo frames and drop RoCE to MTU 1024.
+      - id: c
+        text: Enable IP fragmentation on the switches.
+        explanation: Data center switches generally do not fragment in hardware, and RDMA must not be fragmented anyway.
+      - id: d
+        text: Disable the FCS check.
+        explanation: The FCS has nothing to do with size limits and disabling error detection would be harmful.
+    tags: [mtu, switches]
+  - id: q7
+    type: single
+    prompt: At 400 Gb/s, roughly how many RoCEv2 packets per second does a port carry with a 4096-byte RDMA MTU (about 4178 bytes on the wire per packet)?
+    options:
+      - id: a
+        text: About 12 million.
+        correct: true
+        explanation: 400e9 / 8 / 4178 is approximately 12 million packets per second.
+      - id: b
+        text: About 120 thousand.
+        explanation: This is two orders of magnitude too low.
+      - id: c
+        text: About 45 million.
+        explanation: That is the rate for a 1024-byte RDMA MTU.
+      - id: d
+        text: About 1 billion.
+        explanation: That would require packets of only about 50 bytes, smaller than the minimum Ethernet frame.
+    tags: [efficiency, packet-rate]

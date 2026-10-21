@@ -1,0 +1,149 @@
+id: quiz-ib-architecture
+title: "Knowledge check: InfiniBand architecture"
+lesson: ib-architecture
+pass_pct: 70
+questions:
+  - id: q1
+    type: single
+    prompt: Which identifier does an InfiniBand switch use to forward a unicast packet within a subnet?
+    options:
+      - id: a
+        text: The 16-bit destination LID in the Local Route Header.
+        correct: true
+        explanation: The switch indexes its linear forwarding table with the DLID.
+      - id: b
+        text: The 64-bit destination port GUID.
+        explanation: GUIDs identify devices; they are not carried in the LRH for forwarding.
+      - id: c
+        text: The destination GID in the GRH.
+        explanation: GIDs are used by routers between subnets; switches forward on LID.
+      - id: d
+        text: A learned MAC address table.
+        explanation: InfiniBand switches do not learn addresses; the SM programs their tables.
+    tags: [lid, forwarding]
+  - id: q2
+    type: multi
+    prompt: Which statements about InfiniBand identifiers are correct? (Select all that apply.)
+    options:
+      - id: a
+        text: GUIDs are 64-bit identifiers assigned by the manufacturer.
+        correct: true
+        explanation: Node, port and system image GUIDs are burned in.
+      - id: b
+        text: LIDs are assigned by the Subnet Manager and may change if the SM reassigns them.
+        correct: true
+        explanation: That is why inventories should key on GUIDs.
+      - id: c
+        text: A port's default GID is the subnet prefix followed by its port GUID.
+        correct: true
+        explanation: The default prefix is fe80:0000:0000:0000.
+      - id: d
+        text: Every port on a switch receives its own LID.
+        explanation: On a switch only management port 0 has a LID; HCA ports each have one.
+    tags: [guid, lid, gid]
+  - id: q3
+    type: scenario
+    prompt: >
+      After racking a new GPU server, ibstat on its HCA shows "State: Initializing" and "Physical
+      state: LinkUp". The rest of the fabric works. What is the most likely explanation?
+    options:
+      - id: a
+        text: The Subnet Manager has not yet configured this port (no LID assigned, not moved to Active), for example because no SM sweep reached it.
+        correct: true
+        explanation: Physical training succeeded; the logical state waits on the SM.
+      - id: b
+        text: The cable is faulty.
+        explanation: A faulty cable would usually prevent LinkUp or cause errors; LinkUp means training succeeded.
+      - id: c
+        text: The port's P_Key table is empty, which keeps the physical link down.
+        explanation: P_Keys affect which partitions it can use, not its physical or logical bring-up in this way.
+      - id: d
+        text: The host's IP address is not configured.
+        explanation: Native IB ports do not need an IP address to become Active.
+    tags: [port-state, subnet-manager]
+  - id: q4
+    type: single
+    prompt: Why do Subnet Management Packets travel on VL15?
+    options:
+      - id: a
+        text: VL15 is a dedicated management lane outside data-lane flow control, so the SM can manage the fabric even when data lanes are congested or misconfigured.
+        correct: true
+        explanation: VL15 is not subject to credit flow control and is reserved for SMPs.
+      - id: b
+        text: VL15 has the highest bandwidth of all lanes.
+        explanation: VLs do not have different link bandwidths; VL15 is about isolation and priority.
+      - id: c
+        text: VL15 carries all RDMA traffic by default.
+        explanation: Data traffic uses VL0-VL14; VL15 is management only.
+    tags: [vl15, management]
+  - id: q5
+    type: scenario
+    prompt: >
+      Hosts A and B are on the same IB fabric and both ports are Active, but RDMA between them fails
+      while each can reach other hosts. A's P_Key table contains 0x7fff and 0x8002; B's contains 0x7fff
+      and 0x0002. The application uses partition 0x0002. A colleague blames the partition setup. Is
+      the partition configuration the cause?
+    options:
+      - id: a
+        text: No - A is a full member (0x8002) and B a limited member (0x0002), so look elsewhere for the problem.
+        correct: true
+        explanation: Communication requires a shared partition with at least one full member, which is satisfied here. Note that 0x7fff on both is a limited default membership.
+      - id: b
+        text: Yes - both are limited members of partition 0x0002.
+        explanation: A has 0x8002, whose top bit marks full membership.
+      - id: c
+        text: Yes - the keys must match exactly, including the membership bit.
+        explanation: Only the low 15 bits identify the partition; the top bit is the membership type.
+      - id: d
+        text: No - P_Keys only apply to UD traffic, so they cannot matter here.
+        explanation: P_Keys are carried in every BTH and checked for all transports.
+    explanation: Partition checks compare the low 15 bits; at least one side must be a full member.
+    tags: [partitions, pkey]
+  - id: q6
+    type: single
+    prompt: What does an LMC (LID Mask Control) value of 2 give a port?
+    options:
+      - id: a
+        text: Four consecutive LIDs, which the SM can route over different paths.
+        correct: true
+        explanation: 2^LMC LIDs are assigned; each can have different routes.
+      - id: b
+        text: Two GUIDs.
+        explanation: GUIDs are burned in; LMC affects LIDs.
+      - id: c
+        text: Two virtual lanes.
+        explanation: VLs are configured separately and are unrelated to LMC.
+    tags: [lmc]
+  - id: q7
+    type: single
+    prompt: Which CRC is recomputed at every InfiniBand switch hop?
+    options:
+      - id: a
+        text: VCRC (variant CRC)
+        correct: true
+        explanation: VCRC covers fields that can change per hop, such as the VL, so each link recomputes it.
+      - id: b
+        text: ICRC (invariant CRC)
+        explanation: ICRC is end to end and covers only invariant fields.
+      - id: c
+        text: Neither; InfiniBand has no per-hop integrity check.
+        explanation: VCRC is exactly that per-hop check.
+    tags: [packet-format]
+  - id: q8
+    type: scenario
+    prompt: >
+      An operator's inventory database keys switches by LID. After the master SM failed over to a
+      standby without a shared cache, half the entries no longer match reality. What design change
+      prevents this?
+    options:
+      - id: a
+        text: Key inventory on node and port GUIDs (plus node descriptions) and treat LIDs as runtime attributes.
+        correct: true
+        explanation: GUIDs are permanent; LIDs are assigned by whichever SM is master.
+      - id: b
+        text: Disable the standby SM so LIDs never change.
+        explanation: Removing redundancy is not a fix, and LIDs can change for other reasons.
+      - id: c
+        text: Use IPoIB IP addresses as the key.
+        explanation: Switches do not have IPoIB data addresses, and IPs are also configurable rather than permanent.
+    tags: [operations]

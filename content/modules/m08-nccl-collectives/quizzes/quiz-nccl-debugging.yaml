@@ -1,0 +1,133 @@
+id: quiz-nccl-debugging
+title: "Knowledge check: debugging NCCL"
+lesson: nccl-debugging
+pass_pct: 70
+questions:
+  - id: q1
+    type: single
+    prompt: "Which combination gives targeted, per-process NCCL logs for an initialization and network-selection problem?"
+    options:
+      - id: a
+        text: "NCCL_DEBUG=INFO, NCCL_DEBUG_SUBSYS=INIT,NET,ENV and NCCL_DEBUG_FILE with %h and %p."
+        correct: true
+        explanation: "INFO level, filtered subsystems and one file per process keep logs readable at scale."
+      - id: b
+        text: "NCCL_DEBUG=TRACE on all ranks to stdout."
+        explanation: "TRACE requires a tracing build and produces enormous interleaved output."
+      - id: c
+        text: "NCCL_DEBUG=WARN with NCCL_DEBUG_SUBSYS=ALL."
+        explanation: "WARN suppresses the INFO lines that show network and transport selection."
+      - id: d
+        text: "TORCH_NCCL_ASYNC_ERROR_HANDLING=1 only."
+        explanation: "That controls PyTorch error handling, not NCCL logging."
+    tags: [logging]
+  - id: q2
+    type: scenario
+    prompt: "A job fails. Rank 37 logs 'Got completion ... status=12 ... hca mlx5_3 remoteGid ::ffff:10.0.1.23' at 10:02:11; 200 other ranks log status=5 errors from 10:02:12 onward. Where do you focus?"
+    options:
+      - id: a
+        text: "On the first error: rank 37's mlx5_3 and the path to 10.0.1.23 (retry exceeded); the status=5 flush errors are the cascade."
+        correct: true
+        explanation: "Status 12 is transport retry exceeded; status 5 means work requests were flushed from QPs already in error."
+      - id: b
+        text: "On the 200 ranks with status=5, since they are the majority."
+        explanation: "Flush errors are consequences of an earlier failure."
+      - id: c
+        text: "On raising NCCL_IB_RETRY_CNT on all ranks."
+        explanation: "Retry count is already at its usual maximum; find the cause first."
+      - id: d
+        text: "On the PyTorch version, since NCCL errors are always framework bugs."
+        explanation: "A retry-exceeded error points to the transport path between two specific endpoints."
+    tags: [transport-errors]
+  - id: q3
+    type: scenario
+    prompt: "A 256-GPU job hangs. Every rank eventually reports a watchdog timeout. Rank 113's last collective shows SeqNum 9120 while all others show 9121, and there are no link or switch events. What is the most likely cause?"
+    options:
+      - id: a
+        text: "Rank 113 diverged or stalled before issuing the next collective (code path, data-dependent control flow, or a local problem), so the others wait for it."
+        correct: true
+        explanation: "A rank behind in sequence numbers is the one that is different; no network fault is indicated."
+      - id: b
+        text: "A spine switch is dropping RoCE packets."
+        explanation: "No network events were observed, and the sequence mismatch points at one rank."
+      - id: c
+        text: "NCCL_IB_TC is set incorrectly on all ranks."
+        explanation: "A QoS mistake would affect performance broadly, not cause one rank to lag by one collective."
+      - id: d
+        text: "The ring algorithm cannot handle 256 GPUs."
+        explanation: "NCCL handles far larger jobs; this is a rank-level divergence."
+    tags: [hangs]
+  - id: q4
+    type: single
+    prompt: "Compared with last week's baseline, today's NCCL INFO shows inter-node hops 'via NET/IB/7' instead of 'via NET/IB/7/GDRDMA'. What changed?"
+    options:
+      - id: a
+        text: "GPUDirect RDMA is no longer used; data is staged through host memory, often due to driver or peer-memory support changes."
+        correct: true
+        explanation: "The GDRDMA suffix indicates direct NIC access to GPU memory."
+      - id: b
+        text: "NCCL switched from InfiniBand to sockets."
+        explanation: "The hops still use NET/IB."
+      - id: c
+        text: "The job now uses fewer channels."
+        explanation: "Channel count is shown elsewhere; the suffix is about GDR."
+      - id: d
+        text: "Adaptive routing was disabled on the fabric."
+        explanation: "NCCL's GDR decision is independent of switch AR."
+    tags: [gdr]
+  - id: q5
+    type: multi
+    prompt: "Which are valid diagnostic experiments to localize an NCCL problem? (Select all that apply.)"
+    options:
+      - id: a
+        text: "Run nccl-tests on a single node, then node pairs, then full scale."
+        correct: true
+        explanation: "Bisection separates intra-node, per-node and fabric-wide issues."
+      - id: b
+        text: "Temporarily set NCCL_P2P_DISABLE=1 on a single node to test whether the intra-node P2P path is at fault."
+        correct: true
+        explanation: "If the issue disappears, NVLink/PCIe P2P or ACS/IOMMU settings are suspect."
+      - id: c
+        text: "Temporarily set NCCL_IB_DISABLE=1 to see whether a hang disappears without RDMA."
+        correct: true
+        explanation: "This implicates the RDMA path if the hang disappears, at much lower speed."
+      - id: d
+        text: "Permanently ship NCCL_ALGO=Ring in the production image once the hang stops."
+        explanation: "That hides the fault and can cost performance; it is not a diagnostic step."
+    tags: [methodology]
+  - id: q6
+    type: single
+    prompt: "Which verbs completion status usually indicates a receiver-not-ready condition rather than an unreachable peer?"
+    options:
+      - id: a
+        text: "13 (IBV_WC_RNR_RETRY_EXC_ERR)"
+        correct: true
+        explanation: "RNR retries exceeded means the receiver did not post receive buffers in time."
+      - id: b
+        text: "12 (IBV_WC_RETRY_EXC_ERR)"
+        explanation: "Status 12 is transport retry exceeded, typically an unreachable or stalled path."
+      - id: c
+        text: "5 (IBV_WC_WR_FLUSH_ERR)"
+        explanation: "Status 5 is a flush after a QP entered the error state."
+      - id: d
+        text: "0 (IBV_WC_SUCCESS)"
+        explanation: "Status 0 is success."
+    tags: [verbs]
+  - id: q7
+    type: scenario
+    prompt: "New servers show 30 % lower single-node all-reduce bandwidth than older ones. NCCL INFO shows intra-node hops 'via SHM' on the new servers, 'via P2P' on the old. NCCL_P2P_DISABLE is not set. What do you check first?"
+    options:
+      - id: a
+        text: "PCIe ACS/IOMMU settings and GPU peer access on the new servers, which can prevent P2P and force SHM."
+        correct: true
+        explanation: "When peer access is unavailable, NCCL falls back to SHM staging through host memory."
+      - id: b
+        text: "The spine switch ECMP hash seeds."
+        explanation: "Single-node traffic does not cross the fabric."
+      - id: c
+        text: "NCCL_IB_GID_INDEX on the new servers."
+        explanation: "GID selection affects RoCE connections, not intra-node transport."
+      - id: d
+        text: "The PFC watchdog configuration."
+        explanation: "PFC is a fabric feature and irrelevant to intra-node P2P."
+    tags: [p2p, shm]

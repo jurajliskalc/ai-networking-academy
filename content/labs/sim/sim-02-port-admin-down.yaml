@@ -1,0 +1,47 @@
+id: sim-02-port-admin-down
+title: "One dark rail: a port left shut after maintenance"
+level: 1
+estimated_minutes: 20
+lessons: [linux-networking-toolkit, rdma-on-linux, troubleshooting-methodology]
+summary: A leaf port was shut for an optic swap and never brought back.
+start: node01
+ticket: |
+  **INC-4502 · Sev2 · Jobs fail when they include node02**
+
+  > Facilities swapped a "faulty optic" on one of the rail leaves this morning. Since then every job
+  > that includes node02 fails during NCCL initialization. node02 itself looks healthy: the GPUs are
+  > fine and the DCGM diagnostics pass.
+
+  Find the broken link, fix it, and verify.
+faults:
+  - { type: switch_port_admin_down, switch: leaf08, port: swp2 }
+hints:
+  - On node02, `ibdev2netdev` and `rdma link` show the state of every RDMA port.
+  - "mlx5_7 is rail 7: which leaf, which port? Try `ssh leaf08` and `nv show interface`."
+diagnosis:
+  prompt: Why is node02's mlx5_7 down?
+  options:
+    - id: a
+      text: leaf08 swp2 is administratively down, so the NIC sees no link partner.
+      correct: true
+      explanation: "nv show interface lists swp2 as down with 'Admin down'. The optic swap shut the port and nobody re-enabled it."
+    - id: b
+      text: The new optic is faulty and the link cannot train.
+      explanation: A bad optic would leave the port admin up but operationally down or flapping, typically with low RX power. Here the port is disabled in the configuration.
+    - id: c
+      text: The NIC firmware on node02 crashed.
+      explanation: ibv_devinfo still works and the device is present; only the physical link is down.
+    - id: d
+      text: NCCL excludes mlx5_7 via NCCL_IB_HCA.
+      explanation: NCCL_IB_HCA would not change the RDMA port state that rdma link shows.
+checks:
+  - { description: "leaf08 swp2 is up", check: port_up, args: { switch: leaf08, port: swp2 } }
+  - { description: "No uncommitted NVUE changes on leaf08", check: no_pending, args: { switch: leaf08 } }
+  - { description: "all_reduce bus bandwidth is above 360 GB/s", check: allreduce_min_busbw, args: { value: 360 } }
+solution: |
+  `ssh node02`, then `rdma link`, shows `mlx5_7/1 state DOWN`. Rail 7 lands on leaf08 port swp2, and
+  there `nv show interface` shows the port admin down. Fix it with `nv set interface swp2 link state up`
+  and `nv config apply`, then re-run `all_reduce_perf`.
+fix:
+  - "leaf08: nv set interface swp2 link state up"
+  - "leaf08: nv config apply -y"

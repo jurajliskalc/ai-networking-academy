@@ -1,0 +1,133 @@
+id: quiz-incast-and-congestion-hotspots
+title: "Knowledge check: incast and congestion hotspots"
+lesson: incast-and-congestion-hotspots
+pass_pct: 70
+questions:
+  - id: q1
+    type: single
+    prompt: "Eight senders at 400 Gb/s each send simultaneously to one 400 Gb/s receiver port. How fast does the egress queue grow?"
+    options:
+      - id: a
+        text: "About 350 KB per microsecond (2.8 Tb/s of excess)."
+        correct: true
+        explanation: "Excess = (8-1) x 400 Gb/s = 2.8 Tb/s = 350 GB/s = 350 KB per microsecond."
+      - id: b
+        text: "About 400 KB per microsecond (3.2 Tb/s of excess)."
+        explanation: "This forgets that the port drains at 400 Gb/s while it fills."
+      - id: c
+        text: "About 50 KB per microsecond."
+        explanation: "That is the excess for only two senders."
+      - id: d
+        text: "It does not grow because ECN prevents queue build-up."
+        explanation: "ECN-based congestion control needs at least one RTT to react; the queue grows first."
+    tags: [incast, math]
+  - id: q2
+    type: single
+    prompt: "Which statement best distinguishes endpoint (last-hop) congestion from fabric congestion?"
+    options:
+      - id: a
+        text: "Endpoint congestion occurs when total demand toward one destination port exceeds its rate, so no choice of path can fix it."
+        correct: true
+        explanation: "Load balancing redistributes traffic among paths; it cannot add capacity to the last link."
+      - id: b
+        text: "Endpoint congestion only happens on InfiniBand fabrics."
+        explanation: "Incast affects any fabric technology."
+      - id: c
+        text: "Fabric congestion always happens on host-facing ports."
+        explanation: "Fabric congestion happens on uplinks and spine links; host-facing ports are the last hop."
+      - id: d
+        text: "Endpoint congestion is solved by adaptive routing."
+        explanation: "Adaptive routing solves fabric hotspots, not incast."
+    tags: [congestion]
+  - id: q3
+    type: scenario
+    prompt: "Host H on leaf 2 sends only to receiver Q, which is idle. During another job's incast toward receiver R on leaf 1, H's traffic stalls and H's NIC counts many received pause frames on the RoCE priority. What is happening?"
+    options:
+      - id: a
+        text: "PFC pauses propagated back from R's congested port form a congestion tree, and H's flow is a victim sharing the paused priority."
+        correct: true
+        explanation: "PFC pauses a whole priority on a link, so unrelated flows on that priority stop too (head-of-line blocking)."
+      - id: b
+        text: "Q is sending pause frames because it is overloaded."
+        explanation: "Q is idle; the pauses originate from the congestion near R."
+      - id: c
+        text: "H's NIC is faulty and generating pauses."
+        explanation: "H is receiving pauses, not transmitting them, so it is a victim, not the source."
+      - id: d
+        text: "ECMP polarization placed H's flow on the same link as R's traffic."
+        explanation: "Sharing a link alone would only reduce bandwidth; the stall and received pauses point to PFC propagation."
+    tags: [pfc, victim-flows]
+  - id: q4
+    type: scenario
+    prompt: "During incast tests you see frequent PFC pauses, almost no ECN-marked packets and DCQCN CNP counters near zero. What is the most likely misconfiguration?"
+    options:
+      - id: a
+        text: "ECN marking thresholds are set above the PFC XOFF point, so PFC fires before marking starts."
+        correct: true
+        explanation: "Marking must begin well below XOFF so congestion control engages before pauses."
+      - id: b
+        text: "The PFC watchdog is disabled."
+        explanation: "The watchdog handles storms; it does not explain why ECN never marks."
+      - id: c
+        text: "ECMP hashing excludes the UDP source port."
+        explanation: "Hash fields affect path selection, not the ordering of ECN and PFC thresholds."
+      - id: d
+        text: "The MTU is set to 9000 bytes."
+        explanation: "MTU does not determine whether ECN marks before PFC triggers."
+    tags: [ecn, pfc, tuning]
+  - id: q5
+    type: multi
+    prompt: "Which AI workload phases are prone to incast? (Select all that apply.)"
+    options:
+      - id: a
+        text: "MoE expert-parallel all-to-all with uneven token routing."
+        correct: true
+        explanation: "Hot experts receive from many ranks at once."
+      - id: b
+        text: "Checkpoint writes from many GPUs to a few storage nodes."
+        correct: true
+        explanation: "Storage nodes often have far less network bandwidth than the compute side sending to them."
+      - id: c
+        text: "Ring all-reduce, where each rank receives from one neighbour."
+        explanation: "Ring is incast-free by construction: one sender per receiver."
+      - id: d
+        text: "Fan-in at tree levels of a reduce operation."
+        correct: true
+        explanation: "Several children send to one parent, a bounded form of incast."
+    tags: [workloads, incast]
+  - id: q6
+    type: scenario
+    prompt: "One server's NIC transmits large numbers of PFC pause frames toward its leaf, while other servers in the same job transmit almost none. Switch queues toward that server are not unusually deep. Where do you look first?"
+    options:
+      - id: a
+        text: "Inside the server: GPU-NIC PCIe placement, PCIe/IOMMU settings, or anything limiting how fast the NIC can write to memory."
+        correct: true
+        explanation: "A NIC sends pauses when its own receive buffers fill, which points to a host-side bottleneck."
+      - id: b
+        text: "The spine ECMP hash configuration."
+        explanation: "Hashing would not make a NIC itself emit pauses."
+      - id: c
+        text: "The ECN thresholds on the spine switches."
+        explanation: "The bottleneck is at the receiving host, not in the fabric queues."
+      - id: d
+        text: "The leaf's routing table."
+        explanation: "Routing issues cause reachability problems, not NIC-originated pauses."
+    tags: [troubleshooting, host]
+  - id: q7
+    type: single
+    prompt: "Why do lossless RoCE fabrics still need PFC even with well-tuned ECN-based congestion control?"
+    options:
+      - id: a
+        text: "A large incast can fill the available buffer faster than one RTT, before senders react to ECN feedback."
+        correct: true
+        explanation: "PFC is the backstop that prevents drops during the reaction delay of end-to-end congestion control."
+      - id: b
+        text: "ECN only works on InfiniBand."
+        explanation: "ECN is an IP mechanism (RFC 3168) used by DCQCN on Ethernet."
+      - id: c
+        text: "PFC improves load balancing across spines."
+        explanation: "PFC does not influence path selection."
+      - id: d
+        text: "RoCEv2 forbids ECN marking."
+        explanation: "RoCEv2 congestion control (e.g. DCQCN) depends on ECN marks."
+    tags: [pfc, ecn]

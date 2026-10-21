@@ -1,0 +1,52 @@
+id: sim-01-mtu-blackhole
+title: "MTU black hole: the job that dies only with big messages"
+level: 2
+estimated_minutes: 30
+lessons: [mtu-jumbo-frames, rocev2-encapsulation, rdma-connection-failures]
+summary: A switch port with a 1500-byte MTU silently drops every full-size RoCE packet.
+start: node01
+ticket: |
+  **INC-4471 · Sev2 · Training job crashes at start-up**
+
+  > After last night's change window the nightly `all_reduce_perf` smoke test fails on the `aurora`
+  > cluster. The change record says "leaf03: replaced a failed line card, restored config from
+  > backup". - On-call ML engineer
+
+  Find the root cause, fix it, and prove the cluster is back to full bandwidth.
+faults:
+  - { type: switch_port_mtu, switch: leaf03, port: swp2, mtu: 1500 }
+hints:
+  - Run `all_reduce_perf -b 8 -e 8G -f 2 -g 1` and read the NCCL WARN line. Which rail, which peer?
+  - "status=12 is a transport retry counter exceeded error: the packets never arrived. Think size."
+  - "Compare `ping -M do -s 8972 10.2.2.1` with `ping -M do -s 1400 10.2.2.1` from node01. Then look at leaf03."
+diagnosis:
+  prompt: What is the root cause?
+  options:
+    - id: a
+      text: leaf03 swp2 (node02, rail 2) has an MTU of 1500, so every full-size 4096-byte RoCE packet is dropped.
+      correct: true
+      explanation: The restored config lost the jumbo MTU on one port. RoCE takes its 4096-byte path MTU from the hosts and never learns about the smaller switch MTU, so large transfers time out and retry until the QP goes to the error state.
+    - id: b
+      text: node02's mlx5_2 negotiated a RoCE MTU of 1024, which NCCL does not support.
+      explanation: NCCL works with any RoCE MTU; a 1024-byte path MTU costs efficiency, not correctness. Here the host MTU is still 9000.
+    - id: c
+      text: PFC is disabled on leaf03, so packets are dropped under congestion.
+      explanation: A lossless misconfiguration costs bandwidth under load; it does not make every large packet disappear, and ping with DF set shows a pure size problem.
+    - id: d
+      text: The GID index is wrong on node02.
+      explanation: A wrong GID index fails during connection setup (ibv_modify_qp), regardless of packet size.
+checks:
+  - { description: "leaf03 swp2 carries jumbo frames again (MTU 9216)", check: port_mtu_min, args: { switch: leaf03, port: swp2, value: 9216 } }
+  - { description: "No uncommitted NVUE changes on leaf03", check: no_pending, args: { switch: leaf03 } }
+  - { description: "all_reduce bus bandwidth is back above 360 GB/s", check: allreduce_min_busbw, args: { value: 360 } }
+solution: |
+  1. `all_reduce_perf` fails with `status=12` (retry exceeded) between node01 and node02 on `mlx5_2`.
+  2. `ping -M do -s 8972 10.2.2.1` from node01 gets no reply, while `-s 1400` works: a path MTU problem.
+  3. On leaf03, `nv show interface` shows `swp2` at MTU 1500 while every other port is at 9216.
+  4. Fix: `nv set interface swp2 link mtu 9216` then `nv config apply`. Re-run the test.
+
+  Prevention: render switch config from a source of truth, and add an MTU check (all fabric ports at
+  9216) to post-change validation.
+fix:
+  - "leaf03: nv set interface swp2 link mtu 9216"
+  - "leaf03: nv config apply -y"

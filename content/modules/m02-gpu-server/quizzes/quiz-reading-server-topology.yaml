@@ -1,0 +1,130 @@
+id: quiz-reading-server-topology
+title: "Knowledge check: Reading server topology"
+lesson: reading-server-topology
+pass_pct: 70
+questions:
+  - id: q1
+    type: single
+    prompt: Which ordering of nvidia-smi topo -m PCIe codes runs from the closest path to the farthest?
+    options:
+      - id: a
+        text: PIX, PXB, PHB, NODE, SYS
+        correct: true
+        explanation: Single switch, multiple switches, CPU host bridge, between host bridges in a socket, across sockets.
+      - id: b
+        text: SYS, NODE, PHB, PXB, PIX
+        explanation: This is the reverse order.
+      - id: c
+        text: PHB, PIX, PXB, SYS, NODE
+        explanation: PHB crosses the CPU host bridge, so it is farther than PIX and PXB; NODE is closer than SYS.
+      - id: d
+        text: PXB, PIX, NODE, PHB, SYS
+        explanation: PIX (at most one bridge) is closer than PXB, and PHB is closer than NODE.
+    tags: [topology, legend]
+  - id: q2
+    type: single
+    prompt: "In a topology matrix, the entry between GPU0 and NIC5 is SYS. What does it mean?"
+    options:
+      - id: a
+        text: The path crosses PCIe and the interconnect between CPU sockets (NUMA nodes).
+        correct: true
+        explanation: SYS is the farthest category; GPU0 should not use NIC5 for bulk traffic.
+      - id: b
+        text: The NIC is a system management NIC.
+        explanation: SYS describes a path, not the role of a device.
+      - id: c
+        text: The two devices share a PCIe switch.
+        explanation: That would be PIX.
+      - id: d
+        text: They are connected by NVLink.
+        explanation: NVLink connections appear as NV#.
+    tags: [topology, numa]
+  - id: q3
+    type: scenario
+    prompt: "On a new node, the GPU-NIC block shows GPU2 with NODE to every compute NIC and GPU3 with PIX to both NIC2 and NIC3. All other GPUs have exactly one PIX NIC. What is the most likely issue and response?"
+    options:
+      - id: a
+        text: A NIC is in the wrong slot or a riser is cabled to the wrong PCIe switch; fix the hardware placement and re-check against the golden topology.
+        correct: true
+        explanation: GPU2 has lost its local NIC and GPU3 has gained one, which is a physical placement problem.
+      - id: b
+        text: Nothing; NCCL will balance the load automatically with no performance impact.
+        explanation: GPU2's traffic would take a NODE path through the CPU, making the node a likely straggler.
+      - id: c
+        text: Set NCCL_NET_GDR_LEVEL=SYS so GPU2 can use GPUDirect RDMA.
+        explanation: That treats the symptom and still leaves GPU2 on a poor path; fix placement instead.
+      - id: d
+        text: The NVLink fabric is degraded.
+        explanation: NVLink health appears in the GPU-GPU block, not in GPU-NIC entries.
+    tags: [topology, troubleshooting]
+  - id: q4
+    type: scenario
+    prompt: "A team's launch wrapper sets NCCL_IB_HCA per local rank to mlx5_<local rank>, assuming GPU i uses mlx5_i. After an OS upgrade on some nodes, those nodes are slower. The NIC Legend now shows NIC2: mlx5_3 and NIC3: mlx5_2, while PIX pairing is still GPU2-NIC2 and GPU3-NIC3. What is the best fix?"
+    options:
+      - id: a
+        text: Stop relying on name-based assumptions; let NCCL select NICs by topology (or derive lists from topology) and update any name-based tooling.
+        correct: true
+        explanation: Device names can be reordered by enumeration; topology is the source of truth.
+      - id: b
+        text: Swap the cables of rails 2 and 3 on every affected node.
+        explanation: Physical placement is unchanged; only names moved, so recabling would break correct wiring.
+      - id: c
+        text: Downgrade the OS on the affected nodes.
+        explanation: That avoids the symptom but keeps a fragile assumption in place.
+      - id: d
+        text: Disable NIC2 and NIC3.
+        explanation: That removes bandwidth for two GPUs.
+    tags: [topology, nccl]
+  - id: q5
+    type: single
+    prompt: On an NVSwitch-based 8-GPU server, one GPU pair shows NV12 while all other pairs show NV18. What should you conclude?
+    options:
+      - id: a
+        text: Some NVLinks of one of those GPUs are down or not trained; verify with nvidia-smi nvlink --status and open a hardware ticket.
+        correct: true
+        explanation: On NVSwitch systems every pair should show the same NV# value.
+      - id: b
+        text: The two GPUs are on different NUMA nodes, which reduces NV# automatically.
+        explanation: NUMA placement does not change the NVLink count.
+      - id: c
+        text: This is how NVSwitch shows lower priority pairs.
+        explanation: NVSwitch provides uniform all-to-all connectivity; there is no priority encoded in NV#.
+    tags: [nvlink, topology]
+  - id: q6
+    type: multi
+    prompt: Which checks belong in a topology acceptance test for a new GPU node? Select all that apply.
+    options:
+      - id: a
+        text: Diff nvidia-smi topo -m against a golden file for the same hardware model.
+        correct: true
+        explanation: It catches slot, BIOS and NVLink differences quickly.
+      - id: b
+        text: Confirm each compute NIC's NUMA node matches its PIX GPU's NUMA affinity.
+        correct: true
+        explanation: Mismatches indicate placement or firmware reporting problems.
+      - id: c
+        text: Use LLDP (or subnet manager tools on InfiniBand) to verify NIC i connects to a rail i leaf.
+        correct: true
+        explanation: Server topology and cabling must both be correct for rail-optimized traffic to stay on its rail.
+      - id: d
+        text: Check that every GPU-NIC entry is PIX, including NICs on the other socket.
+        explanation: Only one compute NIC per GPU is expected to be PIX; others are NODE or SYS by design.
+    tags: [validation, topology]
+  - id: q7
+    type: single
+    prompt: Which setting makes NCCL write the topology it detected to an XML file for inspection?
+    options:
+      - id: a
+        text: NCCL_TOPO_DUMP_FILE
+        correct: true
+        explanation: Point it at a path; combine with NCCL_DEBUG=INFO and NCCL_DEBUG_SUBSYS including GRAPH to see the resulting rings and trees.
+      - id: b
+        text: NCCL_NET_GDR_LEVEL
+        explanation: That sets the GPUDirect RDMA distance threshold; it does not dump topology.
+      - id: c
+        text: NCCL_IB_HCA
+        explanation: That selects which RDMA devices NCCL may use.
+      - id: d
+        text: NCCL_NVLS_ENABLE
+        explanation: That controls the NVLink SHARP algorithm.
+    tags: [nccl, topology]

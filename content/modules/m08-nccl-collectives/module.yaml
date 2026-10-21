@@ -1,0 +1,12 @@
+id: m08-nccl-collectives
+order: 8
+title: "Collective communication and NCCL"
+level: 3
+summary: >
+  Collective algorithms and their cost models, how NCCL builds rings and trees across NVLink and the network, how to configure it, read nccl-tests, and debug it.
+lessons:
+  - collective-algorithms
+  - nccl-architecture
+  - nccl-configuration
+  - nccl-tests-interpretation
+  - nccl-debugging

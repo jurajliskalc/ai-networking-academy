@@ -1,0 +1,130 @@
+id: quiz-nvlink-nvswitch
+title: "Knowledge check: NVLink and NVSwitch"
+lesson: nvlink-nvswitch
+pass_pct: 70
+questions:
+  - id: q1
+    type: single
+    prompt: NVIDIA quotes about 900 GB/s of NVLink bandwidth for an H100 GPU. Roughly how much is that per direction?
+    options:
+      - id: a
+        text: About 450 GB/s
+        correct: true
+        explanation: The headline figure is the bidirectional total over 18 links, so about half flows each way.
+      - id: b
+        text: About 900 GB/s
+        explanation: That would treat a bidirectional total as one direction.
+      - id: c
+        text: About 112 GB/s
+        explanation: That is closer to a 900 Gb/s figure converted from bits; NVLink numbers are already in bytes.
+      - id: d
+        text: About 50 GB/s
+        explanation: That is roughly what a 400G NIC carries per direction.
+    tags: [nvlink, bandwidth]
+  - id: q2
+    type: single
+    prompt: What problem does NVSwitch solve compared with directly wired NVLink meshes?
+    options:
+      - id: a
+        text: It provides non-blocking all-to-all connectivity, so every GPU pair gets full NVLink bandwidth without multi-hop paths.
+        correct: true
+        explanation: Direct meshes left some pairs without a direct link and made bandwidth uneven.
+      - id: b
+        text: It converts NVLink to Ethernet for the scale-out fabric.
+        explanation: NVSwitch switches NVLink traffic; scale-out traffic leaves via NICs over PCIe.
+      - id: c
+        text: It replaces PCIe as the connection to NICs.
+        explanation: NICs are still attached over PCIe in these designs.
+      - id: d
+        text: It adds RDMA reliability to NVLink.
+        explanation: NVLink has its own link-level reliability; NVSwitch is about connectivity and in-switch reduction.
+    tags: [nvswitch]
+  - id: q3
+    type: scenario
+    prompt: "After a driver upgrade on an HGX H100 node, nvidia-smi lists all eight GPUs, but every CUDA application fails at initialization with a 'system not yet initialized' style error. Other nodes are fine. What should you check first?"
+    options:
+      - id: a
+        text: Whether the NVIDIA Fabric Manager service is running and its version matches the new driver.
+        correct: true
+        explanation: On NVSwitch systems Fabric Manager must configure the NVLink fabric before CUDA can use the GPUs.
+      - id: b
+        text: Whether PFC is enabled on the ToR switch.
+        explanation: A CUDA initialization failure on a single node is not a fabric QoS issue.
+      - id: c
+        text: Whether nvidia-peermem is loaded.
+        explanation: Missing peermem silently disables GPUDirect RDMA; it does not prevent CUDA initialization.
+      - id: d
+        text: Whether the NIC firmware is current.
+        explanation: NIC firmware does not affect CUDA initialization on the GPUs.
+    tags: [fabric-manager, troubleshooting]
+  - id: q4
+    type: single
+    prompt: Why is tensor parallelism normally kept inside the NVLink domain?
+    options:
+      - id: a
+        text: It exchanges activations within every layer and needs bandwidth roughly an order of magnitude beyond what a scale-out NIC provides.
+        correct: true
+        explanation: On H100, NVLink offers about 9x the per-direction bandwidth of a 400G NIC, at lower latency.
+      - id: b
+        text: NCCL cannot run tensor parallelism over RDMA.
+        explanation: NCCL can communicate over any transport; the issue is performance, not capability.
+      - id: c
+        text: Tensor parallelism generates no traffic at all.
+        explanation: It is one of the most communication-intensive forms of parallelism.
+    tags: [parallelism, nvlink]
+  - id: q5
+    type: scenario
+    prompt: "A 32-node job is slower than expected. Fabric counters are clean. Single-node nccl-tests show one node at about 70 % of the all-reduce bus bandwidth of the others. nvidia-smi nvlink --status on that node shows GPU 5 with several links inactive. What is going on?"
+    options:
+      - id: a
+        text: GPU 5 has degraded NVLink connectivity, lowering intra-node bandwidth on that node and making it a straggler for the whole job.
+        correct: true
+        explanation: Collectives move at the pace of the slowest participant; this is a hardware ticket for that node.
+      - id: b
+        text: The scale-out fabric is congested.
+        explanation: Clean fabric counters and a single-node test reproducing the issue point inside the server.
+      - id: c
+        text: Inactive links are normal power saving and do not affect performance.
+        explanation: Healthy GPUs in the same system show all links active at the same speed.
+      - id: d
+        text: NVLink SHARP is disabled, which shows links as inactive.
+        explanation: NVLS is a collective algorithm feature; it does not change link state.
+    tags: [nvlink, troubleshooting]
+  - id: q6
+    type: multi
+    prompt: Which statements about GB200 NVL72-style rack-scale systems are correct? Select all that apply.
+    options:
+      - id: a
+        text: 72 GPUs form a single NVLink domain through NVLink switch trays in the rack.
+        correct: true
+        explanation: The NVSwitch chips move out of the servers into dedicated trays connected by a copper backplane.
+      - id: b
+        text: The scale-out fabric is no longer needed.
+        explanation: Each GPU still has a scale-out NIC; jobs larger than one rack and data parallelism use it.
+      - id: c
+        text: Larger tensor and expert parallel groups can stay inside the scale-up domain than on an 8-GPU HGX board.
+        correct: true
+        explanation: The domain is nine times larger than an 8-GPU board.
+      - id: d
+        text: A failure in the NVLink switch layer can affect the whole rack-scale domain.
+        correct: true
+        explanation: Failure domains grow with the scale-up domain, which affects scheduling and spares planning.
+    tags: [nvl72, scale-up]
+  - id: q7
+    type: single
+    prompt: In nvidia-smi topo -m output, what does NV18 between GPU0 and GPU1 mean?
+    options:
+      - id: a
+        text: The pair is connected through a bonded set of 18 NVLinks.
+        correct: true
+        explanation: NV# counts the NVLinks bonded between the pair, here through NVSwitch.
+      - id: b
+        text: The GPUs are 18 PCIe hops apart.
+        explanation: PCIe distances use PIX, PXB, PHB, NODE and SYS.
+      - id: c
+        text: NVLink generation 18.
+        explanation: The number is a link count, not a generation.
+      - id: d
+        text: 18 GB/s of bandwidth between the GPUs.
+        explanation: It is a link count; bandwidth depends on per-link speed and generation.
+    tags: [nvlink, topology]

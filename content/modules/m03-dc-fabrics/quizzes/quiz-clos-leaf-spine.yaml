@@ -1,0 +1,127 @@
+id: quiz-clos-leaf-spine
+title: "Knowledge check: Clos and leaf-spine"
+lesson: clos-leaf-spine
+pass_pct: 70
+questions:
+  - id: q1
+    type: single
+    prompt: In a correctly built two-tier leaf-spine fabric, how many switches does traffic traverse from a server on leaf 3 to a server on leaf 17?
+    options:
+      - id: a
+        text: Three switches (leaf, spine, leaf)
+        correct: true
+        explanation: Every inter-leaf path is leaf to spine to leaf, which gives uniform latency.
+      - id: b
+        text: It depends on how far apart the leaves are numbered.
+        explanation: Every leaf connects to every spine, so there is no notion of distance between leaves.
+      - id: c
+        text: Two switches (leaf, leaf)
+        explanation: Leaves do not connect to each other in a leaf-spine fabric.
+      - id: d
+        text: Five switches (leaf, aggregation, core, aggregation, leaf)
+        explanation: That describes the older three-tier design.
+    tags: [leaf-spine]
+  - id: q2
+    type: single
+    prompt: Using switches with radix k, what is the maximum number of endpoints a non-blocking two-tier leaf-spine fabric can connect?
+    options:
+      - id: a
+        text: k squared divided by 2
+        correct: true
+        explanation: k leaves (one per spine port) each with k/2 downlinks.
+      - id: b
+        text: k cubed divided by 4
+        explanation: That is the three-tier fat-tree maximum.
+      - id: c
+        text: 2k
+        explanation: That grossly underestimates the fabric; every spine port adds a whole leaf.
+      - id: d
+        text: k squared
+        explanation: Non-blocking leaves must reserve half their ports for uplinks, which halves this.
+    tags: [sizing]
+  - id: q3
+    type: scenario
+    prompt: "A fabric has 8 spines. One spine fails completely. Assuming routing converges and traffic is evenly spread, what happens to leaf-to-leaf capacity?"
+    options:
+      - id: a
+        text: It drops by about one eighth, and all leaves stay connected.
+        correct: true
+        explanation: Each spine carries 1/N of inter-leaf capacity, so the fabric degrades gracefully.
+      - id: b
+        text: It drops by half, as with a core switch failure.
+        explanation: Halving is the behaviour of a two-core three-tier design.
+      - id: c
+        text: The leaves attached to that spine lose connectivity.
+        explanation: Every leaf connects to every spine, so all leaves keep seven paths.
+      - id: d
+        text: Nothing, because spines carry no traffic in normal operation.
+        explanation: Spines carry all inter-leaf traffic.
+    tags: [resilience]
+  - id: q4
+    type: scenario
+    prompt: "You need 4,096 400G GPU NICs connected non-blocking. Your switches are 51.2 Tb/s and can run as 64 x 800G or 128 x 400G. What is the most economical topology?"
+    options:
+      - id: a
+        text: Two tiers with the switches configured as 128 x 400G, since 128 squared over 2 is 8,192 endpoints.
+        correct: true
+        explanation: Doubling the radix by running 400G ports keeps the fabric at two tiers, saving a layer of optics and switches.
+      - id: b
+        text: Three tiers with 64 x 800G, because two tiers only reach 2,048 endpoints.
+        explanation: True at radix 64, but running the switches at 400G avoids the third tier entirely.
+      - id: c
+        text: A single giant chassis switch.
+        explanation: No single switch has 4,096 400G ports; that is exactly why Clos fabrics exist.
+      - id: d
+        text: A three-tier design with STP to block loops.
+        explanation: Routed Clos fabrics do not use STP, and three tiers are unnecessary here.
+    tags: [sizing, radix]
+  - id: q5
+    type: multi
+    prompt: Why did data centers move from the three-tier access/aggregation/core design to leaf-spine? Select all that apply.
+    options:
+      - id: a
+        text: STP in the three-tier design blocked redundant links, wasting bandwidth.
+        correct: true
+        explanation: Routed leaf-spine fabrics use all links with ECMP.
+      - id: b
+        text: East-west traffic between servers came to dominate, and three-tier designs were built for north-south traffic.
+        correct: true
+        explanation: Leaf-spine gives uniform any-to-any bandwidth.
+      - id: c
+        text: Leaf-spine scales out with many identical small switches instead of ever-bigger core boxes.
+        correct: true
+        explanation: Adding spines adds bandwidth; adding leaves adds ports.
+      - id: d
+        text: Leaf-spine eliminates the need for any routing protocol.
+        explanation: Leaf-spine fabrics are usually fully routed, often with BGP.
+    tags: [design-history]
+  - id: q6
+    type: scenario
+    prompt: "On a leaf with four uplinks to four spines, the route to a remote leaf's prefix shows only three next hops. All four links are physically up. What is the most plausible cause?"
+    options:
+      - id: a
+        text: The routing session (or route acceptance) on one uplink is missing, so that spine's path is not installed.
+        correct: true
+        explanation: Each spine should contribute one equal-cost next hop; check the BGP session and multipath settings on the missing link.
+      - id: b
+        text: ECMP is limited to three paths by the IEEE standard.
+        explanation: There is no such limit; switches support many more ECMP members.
+      - id: c
+        text: Spines never advertise routes for leaves.
+        explanation: Spines relay leaf routes to the other leaves; that is their job.
+    tags: [ecmp, verification]
+  - id: q7
+    type: single
+    prompt: How does a rail-optimized AI back-end fabric relate to leaf-spine?
+    options:
+      - id: a
+        text: It is a leaf-spine Clos in which NIC i of every server connects to the leaf of rail i.
+        correct: true
+        explanation: Same topology; only the assignment of server ports to leaves changes, so same-index GPUs are one leaf apart.
+      - id: b
+        text: It replaces spines with NVLink switches.
+        explanation: NVLink is the scale-up network inside the domain; the rail fabric is scale-out.
+      - id: c
+        text: It is a ring topology with no spines.
+        explanation: Rails still need spines for cross-rail traffic.
+    tags: [rail-optimized]

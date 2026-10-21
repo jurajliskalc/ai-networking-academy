@@ -1,0 +1,150 @@
+id: quiz-streaming-telemetry-gnmi
+title: "Knowledge check: streaming telemetry and gNMI"
+lesson: streaming-telemetry-gnmi
+pass_pct: 70
+questions:
+  - id: q1
+    type: single
+    prompt: Which gNMI subscription choice best fits interface oper-status?
+    options:
+      - id: a
+        text: STREAM with ON_CHANGE, ideally with a heartbeat.
+        correct: true
+        explanation: Oper status is discrete state; you want the change immediately and nothing in between. A heartbeat guards against silently missed updates.
+      - id: b
+        text: STREAM with SAMPLE every 10 minutes.
+        explanation: A flap that lasts a few seconds would be missed entirely or reported late.
+      - id: c
+        text: ONCE, repeated by cron every minute.
+        explanation: This rebuilds polling with extra session overhead and still misses short events.
+    tags: [gnmi]
+  - id: q2
+    type: scenario
+    prompt: >
+      Your Grafana panel of switch buffer occupancy (sampled every 10 s) is always near 0 %, yet PFC pause
+      counters on the same ports increase by thousands per minute. What is the best explanation and fix?
+    options:
+      - id: a
+        text: Instantaneous samples miss short bursts; export peak-occupancy watermarks or histograms instead.
+        correct: true
+        explanation: Bursts that fill the buffer for microseconds to milliseconds are almost never caught by a 10 s point sample. A watermark reports the worst moment in each interval.
+      - id: b
+        text: The pause counters are wrong because the buffer is empty; ignore them.
+        explanation: Pauses are generated only when ingress buffers cross XOFF; they prove the buffer filled at some point.
+      - id: c
+        text: The switch is lying; replace it.
+        explanation: Nothing indicates a hardware fault; this is a sampling artefact.
+      - id: d
+        text: Switch to SNMP polling at 5 minutes for accuracy.
+        explanation: Longer intervals make the averaging problem worse.
+    tags: [buffers, sampling]
+  - id: q3
+    type: scenario
+    prompt: >
+      During an outage the fabric dashboard showed all ports green. Afterwards you find the gNMI collector lost
+      its sessions to half the leaves two hours earlier. What should you add?
+    options:
+      - id: a
+        text: Alerts on collector and target health (scrape up, stale series, subscription resets) plus gNMI heartbeats.
+        correct: true
+        explanation: A silent pipeline looks identical to a quiet fabric. Monitoring the monitoring is mandatory.
+      - id: b
+        text: A higher sample interval so the collector has less load.
+        explanation: May reduce load but does not detect lost sessions.
+      - id: c
+        text: More dashboards per leaf.
+        explanation: Dashboards built on missing data still show nothing.
+      - id: d
+        text: ON_CHANGE subscriptions for all counters.
+        explanation: Counters change continuously; ON_CHANGE is for state and does not solve session loss detection.
+    tags: [pipeline, alerting]
+  - id: q4
+    type: single
+    prompt: In gNMI notifications, why should rate calculations use the device timestamp?
+    options:
+      - id: a
+        text: Collector receive time can drift when the collector or network is backlogged, creating false spikes and dips.
+        correct: true
+        explanation: The device timestamp marks when the value was read, so deltas divided by device time are accurate.
+      - id: b
+        text: gNMI notifications do not carry any timestamp, so the collector must invent one.
+        explanation: Each Notification carries a timestamp in nanoseconds since the epoch.
+      - id: c
+        text: Device timestamps are in SNMP TimeTicks, which Prometheus requires.
+        explanation: gNMI uses nanoseconds since the epoch; TimeTicks are an SNMP concept.
+    tags: [gnmi]
+  - id: q5
+    type: scenario
+    prompt: >
+      You plan to stream all 300+ ethtool -S counters from 8,000 NIC ports, labelled with job_id, every second.
+      What is the main risk?
+    options:
+      - id: a
+        text: Cardinality and ingest volume explode, overwhelming the TSDB; curate counters and keep job_id out of raw series.
+        correct: true
+        explanation: Millions of series at 1 s, multiplied by a churning job_id label, is a classic way to take down Prometheus.
+      - id: b
+        text: The NICs will drop RoCE traffic while counters are read.
+        explanation: Reading counters does not drop data-plane traffic; the cost is on the monitoring side.
+      - id: c
+        text: gNMI cannot transport integer values.
+        explanation: gNMI supports integer, float, string and other typed values.
+      - id: d
+        text: There is no risk; more data is always better.
+        explanation: Uncurated high-cardinality data costs money and reliability and slows queries during incidents.
+    tags: [cardinality]
+  - id: q6
+    type: scenario
+    prompt: >
+      In a symmetric rail-optimized fabric, normal PFC pause rates vary a lot between workloads. Which alert
+      design is most robust?
+    options:
+      - id: a
+        text: Alert when a port's pause rate exceeds a multiple of the median of comparable ports, sustained for some minutes.
+        correct: true
+        explanation: Peer-relative outlier detection adapts to workload, and symmetry makes outliers meaningful.
+      - id: b
+        text: Alert whenever the cumulative pause counter exceeds 1,000,000.
+        explanation: Cumulative values reflect uptime, not current behaviour.
+      - id: c
+        text: Alert on any pause frame at all.
+        explanation: Some pauses are normal under incast; this alert would fire constantly.
+      - id: d
+        text: Disable pause alerting and rely on job failures.
+        explanation: Slowdowns rarely cause failures; you would miss the most common harm.
+    tags: [alerting, pfc]
+  - id: q7
+    type: multi
+    prompt: Which statements about OpenConfig and gNMI are correct? (Select all that apply.)
+    options:
+      - id: a
+        text: The Capabilities RPC lists the models and encodings a target supports.
+        correct: true
+        explanation: Start with capabilities to see what you can subscribe to.
+      - id: b
+        text: Coverage of PFC, ECN and buffer data often requires vendor-native models.
+        correct: true
+        explanation: OpenConfig coverage of lossless Ethernet details varies by NOS and release.
+      - id: c
+        text: gNMI always runs on TCP port 161.
+        explanation: Port 161 is SNMP. gNMI ports vary by NOS (57400 and 9339 are common).
+      - id: d
+        text: gNMI runs over gRPC, normally protected with TLS.
+        correct: true
+        explanation: gNMI is a gRPC service over HTTP/2, typically with TLS or mTLS.
+    tags: [openconfig, gnmi]
+  - id: q8
+    type: single
+    prompt: Where does high-frequency (sub-second) switch telemetry fit best?
+    options:
+      - id: a
+        text: As a targeted diagnostic on a few ports during an investigation, such as microbursts during a collective.
+        correct: true
+        explanation: Its data volume is orders of magnitude higher than normal sampling, so it is a microscope, not a fleet-wide default.
+      - id: b
+        text: As the default for every counter on every port forever.
+        explanation: The volume and cost would be enormous for little added value.
+      - id: c
+        text: Only for optics temperature.
+        explanation: Optics temperature moves slowly; 60 s sampling is enough.
+    tags: [high-frequency]

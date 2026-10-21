@@ -1,0 +1,133 @@
+id: quiz-adaptive-routing-packet-spraying
+title: "Knowledge check: adaptive routing and packet spraying"
+lesson: adaptive-routing-packet-spraying
+pass_pct: 70
+questions:
+  - id: q1
+    type: single
+    prompt: "What condition allows a flowlet to be moved to a different path without causing reordering?"
+    options:
+      - id: a
+        text: "The idle gap before the flowlet is larger than the maximum delay difference between the candidate paths."
+        correct: true
+        explanation: "If the gap exceeds the path delay skew, the last packet on the old path arrives before the first packet on the new one."
+      - id: b
+        text: "The flowlet is smaller than one MTU."
+        explanation: "Size does not prevent reordering; timing relative to path delay does."
+      - id: c
+        text: "Both paths have the same number of hops."
+        explanation: "Equal hop counts do not mean equal queueing delay."
+      - id: d
+        text: "The switch uses the same hash seed on all tiers."
+        explanation: "Hash seeds are unrelated to flowlet safety."
+    tags: [flowlets]
+  - id: q2
+    type: single
+    prompt: "Why does flowlet switching often give limited benefit for large RDMA collectives?"
+    options:
+      - id: a
+        text: "A line-rate RDMA sender rarely leaves idle gaps, so the transfer behaves like one long flowlet."
+        correct: true
+        explanation: "Without gaps larger than the threshold, the switch never gets a safe point to move the flow."
+      - id: b
+        text: "RDMA packets do not carry a UDP header that switches can hash."
+        explanation: "RoCEv2 packets do carry UDP headers; the issue is timing, not headers."
+      - id: c
+        text: "Flowlet switching only works on InfiniBand."
+        explanation: "Flowlet switching was designed for Ethernet/IP data centers (e.g. CONGA, LetFlow)."
+      - id: d
+        text: "RDMA requires every packet to take a different path."
+        explanation: "Classic RDMA prefers a single path; it is spraying that needs special support."
+    tags: [flowlets, rdma]
+  - id: q3
+    type: scenario
+    prompt: "After enabling per-packet adaptive routing on a RoCE fabric, uplink utilization becomes perfectly even, but nccl-tests bandwidth drops and the NICs' out_of_sequence and packet_seq_err counters climb fast. What is the best explanation?"
+    options:
+      - id: a
+        text: "The receiving NICs do not tolerate reordering, so PSN gaps trigger NAKs and go-back-N retransmissions."
+        correct: true
+        explanation: "Spraying reorders packets; without out-of-order placement support, goodput collapses despite a balanced fabric."
+      - id: b
+        text: "Adaptive routing created a routing loop."
+        explanation: "AR chooses among valid equal-cost ports; a loop would cause TTL expiry and drops, not sequence errors with balanced links."
+      - id: c
+        text: "The ECN thresholds are too high."
+        explanation: "ECN thresholds affect congestion response, not sequence errors."
+      - id: d
+        text: "The MTU on the spine is too small."
+        explanation: "An MTU problem would cause drops and failed connections, not reordering counters."
+    tags: [reordering, troubleshooting]
+  - id: q4
+    type: multi
+    prompt: "Which receiver capabilities make packet spraying safe for RDMA traffic? (Select all that apply.)"
+    options:
+      - id: a
+        text: "Placing each packet's payload directly at its final memory location regardless of arrival order."
+        correct: true
+        explanation: "Direct data placement removes the need for packets to arrive in order."
+      - id: b
+        text: "Tracking received PSNs in a window or bitmap rather than a single expected PSN."
+        correct: true
+        explanation: "The receiver must know what has arrived to detect true loss and complete messages."
+      - id: c
+        text: "Generating the completion only when all packets of a message have arrived."
+        correct: true
+        explanation: "Software keeps message-level semantics even though packets were reordered."
+      - id: d
+        text: "Sending a PFC pause whenever a packet arrives out of order."
+        explanation: "PFC is congestion flow control; pausing would not fix ordering and would harm throughput."
+    tags: [ddp, reordering]
+  - id: q5
+    type: single
+    prompt: "On an NVIDIA InfiniBand fabric, which component programs the adaptive routing groups that switches use?"
+    options:
+      - id: a
+        text: "The Subnet Manager (OpenSM or UFM) using an AR-capable routing engine."
+        correct: true
+        explanation: "InfiniBand is centrally managed; the SM computes and programs forwarding, including AR groups."
+      - id: b
+        text: "Each HCA, by negotiating paths with BGP."
+        explanation: "InfiniBand does not use BGP; forwarding is programmed by the SM."
+      - id: c
+        text: "NCCL, by writing switch tables at job start."
+        explanation: "NCCL can use AR-friendly transfer modes but does not program switches."
+      - id: d
+        text: "The spine switches autonomously with no configuration."
+        explanation: "AR must be enabled and groups computed by the SM."
+    tags: [infiniband, adaptive-routing]
+  - id: q6
+    type: scenario
+    prompt: "A fabric already uses per-packet adaptive routing with NIC reordering support. An MoE job still shows PFC pauses on host-facing leaf ports during all-to-all. What does this tell you?"
+    options:
+      - id: a
+        text: "The congestion is at the endpoints (incast); load balancing cannot remove it, congestion control and scheduling must."
+        correct: true
+        explanation: "Many senders to one receiver exceed that port's rate no matter which paths they take."
+      - id: b
+        text: "Adaptive routing is misconfigured and should be replaced by static ECMP."
+        explanation: "Static ECMP would add fabric collisions on top of the incast."
+      - id: c
+        text: "The spine is oversubscribed and needs more uplinks."
+        explanation: "Pauses on host-facing ports point to last-hop congestion, not spine capacity."
+      - id: d
+        text: "The NICs are reordering too aggressively."
+        explanation: "Reordering tolerance does not create pause frames on host-facing ports."
+    tags: [incast, adaptive-routing]
+  - id: q7
+    type: single
+    prompt: "What was the key observation of LetFlow compared with CONGA?"
+    options:
+      - id: a
+        text: "Choosing a random path at each flowlet boundary already balances well, because flowlets adapt their size to path congestion."
+        correct: true
+        explanation: "Flowlets on congested paths end sooner (senders back off and create gaps) and get re-placed, while those on uncongested paths grow longer and stick, without explicit congestion feedback."
+      - id: b
+        text: "Per-packet spraying never causes reordering in data centers."
+        explanation: "Spraying does reorder packets; LetFlow works at flowlet granularity to avoid it."
+      - id: c
+        text: "ECMP should hash on the IPv6 flow label only."
+        explanation: "LetFlow is about flowlet path selection, not hash fields."
+      - id: d
+        text: "Load balancing must be done by the end hosts, not switches."
+        explanation: "LetFlow is a switch-based scheme."
+    tags: [letflow, conga]

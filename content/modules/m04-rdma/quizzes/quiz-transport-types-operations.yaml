@@ -1,0 +1,150 @@
+id: quiz-transport-types-operations
+title: "Knowledge check: Transport types and operations"
+lesson: transport-types-operations
+pass_pct: 70
+questions:
+  - id: q1
+    type: single
+    prompt: Which transport supports RDMA Read and atomic operations?
+    options:
+      - id: a
+        text: RC (and the reliable variants XRC and DC).
+        correct: true
+        explanation: Reads and atomics need responses and reliability, which only reliable transports provide.
+      - id: b
+        text: UC
+        explanation: UC supports Send and RDMA Write only, without reliability.
+      - id: c
+        text: UD
+        explanation: UD supports only Send/Receive of at most one MTU.
+      - id: d
+        text: Any transport, as long as the MR has remote read permission.
+        explanation: Permissions matter, but the transport must support the operation in the first place.
+    tags: [transports, operations]
+  - id: q2
+    type: single
+    prompt: What is the main purpose of RDMA Write with Immediate?
+    options:
+      - id: a
+        text: Place data directly into remote memory and also generate a receive completion carrying 32 bits of immediate data at the target.
+        correct: true
+        explanation: It combines one-sided placement with a notification, consuming one receive WR at the target.
+      - id: b
+        text: Send data without needing any remote memory registration.
+        explanation: The target buffer must still be registered and the initiator needs its rkey.
+      - id: c
+        text: Make the write faster by skipping acknowledgements.
+        explanation: On RC it is acknowledged like any other operation.
+    tags: [operations, write-with-imm]
+  - id: q3
+    type: multi
+    prompt: Which statements about UD (Unreliable Datagram) are correct? (Select all that apply.)
+    options:
+      - id: a
+        text: A single UD QP can send to many destinations using one address handle per destination.
+        correct: true
+        explanation: Each send WR names an address handle, remote QPN and Q_Key.
+      - id: b
+        text: Messages are limited to one path MTU.
+        correct: true
+        explanation: UD does not segment messages.
+      - id: c
+        text: UD supports multicast.
+        correct: true
+        explanation: UD QPs can be attached to multicast groups.
+      - id: d
+        text: UD supports RDMA Write into remote memory.
+        explanation: UD supports Send/Receive only.
+    tags: [ud]
+  - id: q4
+    type: single
+    prompt: Which statement about DC (Dynamically Connected) transport is accurate?
+    options:
+      - id: a
+        text: It is an NVIDIA (Mellanox) extension, exposed through mlx5 direct verbs, where a few initiators reach many targets reliably.
+        correct: true
+        explanation: DC is not in the base IB specification and is specific to ConnectX adapters.
+      - id: b
+        text: It is a standard IBTA transport supported by every RDMA vendor.
+        explanation: XRC is standard; DC is vendor-specific.
+      - id: c
+        text: It is an unreliable transport similar to UD.
+        explanation: DC provides reliable delivery like RC.
+      - id: d
+        text: It is the RoCEv2 equivalent of RC.
+        explanation: RoCEv2 carries the same RC transport as InfiniBand; DC is a different, NVIDIA-specific transport.
+    tags: [dc]
+  - id: q5
+    type: scenario
+    prompt: >
+      A packet capture on an RC connection shows PSNs 500, 501, 503, then a NAK from the responder
+      and retransmission starting at 502, followed by 503 again. What happened?
+    options:
+      - id: a
+        text: PSN 502 was lost; the responder detected a sequence gap, sent a NAK, and the requester retransmitted from the missing PSN.
+        correct: true
+        explanation: This is the PSN sequence error NAK path. Resending 503 as well is the go-back-N style behaviour of classic implementations.
+      - id: b
+        text: The receiver had no receive WRs posted and issued an RNR NAK.
+        explanation: An RNR NAK is a different syndrome and does not involve a PSN gap.
+      - id: c
+        text: The ACK timer expired because the responder was slow.
+        explanation: A timeout would not need a NAK; the NAK shows the responder explicitly reported the gap.
+      - id: d
+        text: The requester duplicated packets because of a misconfigured ECMP hash.
+        explanation: Duplicates caused by the network would not be preceded by a NAK and a deliberate restart at 502.
+    tags: [reliability, psn]
+  - id: q6
+    type: scenario
+    prompt: >
+      An MPI application doing all-to-all among 4,096 processes on 512 nodes performs much worse than
+      expected as the job grows, with no link errors. It uses one RC QP per peer process. What change is
+      most likely to help?
+    options:
+      - id: a
+        text: Use a transport that reduces connection count, such as DC (on ConnectX via UCX) or XRC, so QP state fits better in NIC caches.
+        correct: true
+        explanation: Thousands of RC QPs per process cause NIC context cache misses; DC/XRC reduce the working set.
+      - id: b
+        text: Switch to UC to avoid acknowledgements.
+        explanation: UC still needs one QP per peer and loses reliability.
+      - id: c
+        text: Increase retry_cnt to 7.
+        explanation: Retries only matter on loss or timeouts, which are not the problem here.
+      - id: d
+        text: Increase the path MTU beyond 4096.
+        explanation: The IB transport MTU maxes out at 4096 bytes, and MTU is not the bottleneck described.
+    tags: [scalability, xrc, dc]
+  - id: q7
+    type: single
+    prompt: A responder keeps returning RNR NAKs. Which operation types could be causing them?
+    options:
+      - id: a
+        text: Send and RDMA Write with Immediate, because they consume a posted receive WR.
+        correct: true
+        explanation: RNR happens when a message needs a receive WR and none is posted.
+      - id: b
+        text: Plain RDMA Write and RDMA Read.
+        explanation: These do not consume receive WRs and cannot cause RNR.
+      - id: c
+        text: Atomic Fetch and Add only.
+        explanation: Atomics do not consume receive WRs.
+    tags: [rnr]
+  - id: q8
+    type: single
+    prompt: Which header in an RDMA Write's first packet carries the remote virtual address and rkey?
+    options:
+      - id: a
+        text: RETH (RDMA Extended Transport Header)
+        correct: true
+        explanation: RETH holds the 64-bit virtual address, 32-bit rkey and 32-bit DMA length.
+      - id: b
+        text: AETH
+        explanation: AETH is the ACK extended header carrying ACK/NAK syndromes.
+      - id: c
+        text: DETH
+        explanation: DETH carries the Q_Key and source QPN for datagram transports.
+      - id: d
+        text: BTH
+        explanation: BTH carries opcode, destination QPN, PSN and P_Key, but not the remote address.
+    tags: [headers]

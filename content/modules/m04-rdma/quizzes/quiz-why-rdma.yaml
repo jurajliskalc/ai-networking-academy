@@ -1,0 +1,149 @@
+id: quiz-why-rdma
+title: "Knowledge check: Why RDMA"
+lesson: why-rdma
+pass_pct: 70
+questions:
+  - id: q1
+    type: single
+    prompt: Which statement best describes what "kernel bypass" means in RDMA?
+    options:
+      - id: a
+        text: After setup, the application posts work to the NIC through memory-mapped queues without a system call per message.
+        correct: true
+        explanation: The data path goes straight from user space to the NIC (work queue plus doorbell); the kernel is only used for setup.
+      - id: b
+        text: The kernel is never involved at any point, including device open and memory registration.
+        explanation: The control path (opening devices, registering memory, creating queues) still uses system calls so the kernel can enforce security.
+      - id: c
+        text: The NIC runs a copy of the Linux TCP stack in firmware.
+        explanation: That describes a TCP offload engine (or iWARP's TCP offload), not kernel bypass in general.
+      - id: d
+        text: Packets bypass the switch and go directly between NICs.
+        explanation: Kernel bypass is a host-side concept; packets still traverse the fabric normally.
+    tags: [kernel-bypass]
+  - id: q2
+    type: multi
+    prompt: Which of the following steps of a kernel TCP send are removed or offloaded by RDMA? (Select all that apply.)
+    options:
+      - id: a
+        text: Copying the user buffer into kernel socket buffers.
+        correct: true
+        explanation: Zero copy - the NIC DMAs directly from the registered application buffer.
+      - id: b
+        text: Per-packet sequencing, acknowledgement and retransmission in software.
+        correct: true
+        explanation: Transport offload puts this logic in NIC hardware.
+      - id: c
+        text: A system call for each message on the data path.
+        correct: true
+        explanation: Work requests are posted to user-space mapped queues and a doorbell register is written directly.
+      - id: d
+        text: Serializing bits onto the physical link at the link rate.
+        explanation: Physics still applies; RDMA does not change link speed or serialization.
+    tags: [zero-copy, offload]
+  - id: q3
+    type: single
+    prompt: During an RDMA Write, what does the target host's CPU do to receive the data?
+    options:
+      - id: a
+        text: Nothing for that transfer; the target NIC validates the rkey and DMAs the data into the registered buffer.
+        correct: true
+        explanation: RDMA Write is one-sided. The remote CPU is not notified unless Write-with-Immediate is used.
+      - id: b
+        text: It must have posted a receive work request that the data is copied into.
+        explanation: That describes two-sided Send/Receive, not RDMA Write.
+      - id: c
+        text: It takes an interrupt per packet and copies the payload from a kernel buffer.
+        explanation: That is the traditional socket receive path RDMA avoids.
+    tags: [one-sided]
+  - id: q4
+    type: single
+    prompt: What is the key difference between RoCE v1 and RoCEv2?
+    options:
+      - id: a
+        text: RoCEv2 carries the InfiniBand transport inside UDP/IP, so it is routable across IP subnets and ECMP-hashable.
+        correct: true
+        explanation: RoCE v1 used its own EtherType (0x8915) and stayed within a layer-2 domain; RoCEv2 uses UDP destination port 4791.
+      - id: b
+        text: RoCEv2 replaces the InfiniBand transport with TCP.
+        explanation: That is iWARP. RoCEv2 keeps the IB transport (BTH and friends).
+      - id: c
+        text: RoCEv2 requires InfiniBand switches.
+        explanation: RoCE of any version runs over Ethernet switches.
+      - id: d
+        text: RoCEv2 no longer supports RDMA Read.
+        explanation: Both versions support the full RC operation set.
+    tags: [rocev2, transports]
+  - id: q5
+    type: scenario
+    prompt: >
+      A team reports that their 64-GPU training job runs at a fraction of the expected speed. The NCCL
+      log shows lines with "NET/Socket" instead of "NET/IB". The hosts have ConnectX adapters and
+      ibv_devices on the bare-metal host lists mlx5_0..mlx5_7. Training runs in containers. What is the
+      most likely explanation?
+    options:
+      - id: a
+        text: The RDMA devices are not exposed inside the containers, so NCCL fell back to kernel TCP sockets.
+        correct: true
+        explanation: NET/Socket means NCCL could not use verbs. A common cause is missing /dev/infiniband devices or libraries inside the container.
+      - id: b
+        text: The fabric is InfiniBand, and NCCL always uses sockets on InfiniBand.
+        explanation: On InfiniBand NCCL uses its IB (verbs) transport; NET/IB is expected.
+      - id: c
+        text: The links negotiated a lower speed, which forces NCCL to sockets.
+        explanation: Link speed does not change the transport NCCL selects; it would still use NET/IB at the lower rate.
+      - id: d
+        text: GPUDirect RDMA is disabled, which makes NCCL use sockets for everything.
+        explanation: Without GPUDirect RDMA NCCL can still use NET/IB with host memory staging; it does not switch to sockets for that reason.
+    tags: [nccl, troubleshooting]
+  - id: q6
+    type: scenario
+    prompt: >
+      You run iperf3 with 8 streams and ib_write_bw with one connection between the same two 400 Gb/s
+      hosts. Both reach roughly 370-390 Gb/s. A colleague concludes "RDMA gives no benefit here". What is
+      the best response?
+    options:
+      - id: a
+        text: Compare CPU usage and latency too; RDMA reaches line rate with far less CPU, notably almost none on the target, and with lower latency.
+        correct: true
+        explanation: Both are bounded by the link. RDMA's advantage is efficiency, latency and direct placement (including into GPU memory).
+      - id: b
+        text: The test is invalid because ib_write_bw cannot run on Ethernet.
+        explanation: perftest tools run over RoCE as well as InfiniBand.
+      - id: c
+        text: RDMA should reach about twice the TCP number, so the NIC must be faulty.
+        explanation: Neither can exceed the link rate; doubling is impossible.
+      - id: d
+        text: The colleague is right; RDMA only matters for storage traffic.
+        explanation: RDMA is central to AI collectives, not just storage.
+    tags: [benchmarking]
+  - id: q7
+    type: single
+    prompt: What makes it safe to let user-space applications drive the NIC directly?
+    options:
+      - id: a
+        text: Memory registration with keys and access flags, protection domains, and connection binding, all enforced by the NIC.
+        correct: true
+        explanation: The NIC checks lkey/rkey, permissions and PD membership on every access and reports errors instead of performing illegal accesses.
+      - id: b
+        text: The switch inspects every RDMA packet and drops unauthorized ones.
+        explanation: Switches do not validate rkeys; protection is enforced by the endpoints.
+      - id: c
+        text: RDMA traffic is always encrypted.
+        explanation: Standard RDMA traffic is not encrypted by default; some NICs offer optional encryption features.
+    tags: [security, memory-registration]
+  - id: q8
+    type: single
+    prompt: What does GPUDirect RDMA add on top of ordinary RDMA?
+    options:
+      - id: a
+        text: The NIC reads and writes GPU memory directly over PCIe, avoiding a staging copy through host memory.
+        correct: true
+        explanation: GPU memory is registered with the NIC (via nvidia-peermem or dma-buf), so data goes GPU to NIC to wire.
+      - id: b
+        text: It lets GPUs send packets without any NIC.
+        explanation: Scale-out traffic still needs a NIC; NVLink is a separate scale-up interconnect.
+      - id: c
+        text: It doubles the link speed by using NVLink and the NIC together.
+        explanation: GPUDirect RDMA changes the data path inside the host, not the link rate.
+    tags: [gpudirect]

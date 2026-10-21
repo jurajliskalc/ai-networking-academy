@@ -1,0 +1,130 @@
+id: quiz-oversubscription-and-blocking
+title: "Knowledge check: Oversubscription and blocking"
+lesson: oversubscription-and-blocking
+pass_pct: 70
+questions:
+  - id: q1
+    type: single
+    prompt: A leaf has 48 x 100G server ports and 6 x 400G uplinks. What is its oversubscription ratio?
+    options:
+      - id: a
+        text: 2:1
+        correct: true
+        explanation: 4,800G down divided by 2,400G up.
+      - id: b
+        text: 8:1
+        explanation: That compares port counts (48 vs 6) and ignores the uplinks' higher speed.
+      - id: c
+        text: 1:1
+        explanation: Uplink bandwidth is only half the downlink bandwidth.
+      - id: d
+        text: 4:1
+        explanation: Recompute with bandwidth; 4,800 over 2,400 is 2.
+    tags: [oversubscription, math]
+  - id: q2
+    type: single
+    prompt: A path crosses a leaf at 3:1 and a pod spine tier at 2:1 before reaching the super-spine. What is the end-to-end oversubscription for traffic between pods?
+    options:
+      - id: a
+        text: 6:1
+        correct: true
+        explanation: Ratios multiply along the path.
+      - id: b
+        text: 5:1
+        explanation: Ratios multiply, they do not add.
+      - id: c
+        text: 3:1
+        explanation: That takes only the worst tier, ignoring the compounding effect.
+      - id: d
+        text: 1.5:1
+        explanation: Dividing the ratios has no physical meaning here.
+    tags: [oversubscription]
+  - id: q3
+    type: scenario
+    prompt: "A leaf connects 32 GPU NICs at 400G and is built 4:1 oversubscribed. During a cluster-wide all-reduce, all 32 GPUs need to send cross-leaf at the same time. Roughly what rate does each GPU get on that leaf's uplinks?"
+    options:
+      - id: a
+        text: About 100 Gb/s per GPU
+        correct: true
+        explanation: 12.8 Tb/s of demand over 3.2 Tb/s of uplink gives each GPU a quarter of 400G.
+      - id: b
+        text: About 400 Gb/s per GPU, because traffic is bursty and multiplexes well
+        explanation: All-reduce traffic is synchronized and full-rate, so statistical multiplexing does not help.
+      - id: c
+        text: About 300 Gb/s per GPU
+        explanation: That assumes only a quarter of the capacity is lost rather than three quarters.
+      - id: d
+        text: Zero; oversubscribed leaves drop all cross-leaf traffic
+        explanation: Oversubscription limits throughput; it does not block traffic entirely.
+    tags: [oversubscription, ai-traffic]
+  - id: q4
+    type: single
+    prompt: A 1:1 leaf-spine fabric with ECMP still shows some uplinks at 100 % while others are lightly loaded. Which statement explains this?
+    options:
+      - id: a
+        text: The fabric is non-blocking in capacity only; per-flow hashing can place several large flows on one uplink.
+        correct: true
+        explanation: Nobody rearranges flows as in a circuit-switched Clos, so collisions occur.
+      - id: b
+        text: The fabric must actually be oversubscribed, because a non-blocking fabric cannot have hot links.
+        explanation: Even with 1:1 capacity, hashing can concentrate load.
+      - id: c
+        text: The spines are strict-sense non-blocking, which forces traffic onto a single uplink.
+        explanation: Strict-sense non-blocking concerns connection setup in circuit switches; it does not force traffic onto one link.
+    tags: [blocking, ecmp]
+  - id: q5
+    type: multi
+    prompt: Which properties of AI training traffic defeat the statistical-multiplexing assumption behind oversubscription? Select all that apply.
+    options:
+      - id: a
+        text: Ranks start collectives at nearly the same time.
+        correct: true
+        explanation: Synchrony means peaks coincide instead of averaging out.
+      - id: b
+        text: Each NIC sends at or near line rate during a collective.
+        correct: true
+        explanation: Full-rate flows leave no idle capacity to share.
+      - id: c
+        text: The step completes only when the slowest rank completes.
+        correct: true
+        explanation: Barrier semantics make the minimum throughput, not the average, decisive.
+      - id: d
+        text: Training traffic consists mainly of tiny DNS queries.
+        explanation: Training traffic is dominated by large collective transfers.
+    tags: [ai-traffic]
+  - id: q6
+    type: scenario
+    prompt: "A 1:1 leaf with 16 x 800G uplinks loses two uplinks to bad optics. Jobs on that leaf are now consistently a few percent slower, and the remaining uplinks run hotter. What is the best operational response?"
+    options:
+      - id: a
+        text: Treat it as raised effective oversubscription (16:14); repair the optics promptly, and alarm on effective ratio per leaf in future.
+        correct: true
+        explanation: Failures silently change the ratio and ECMP concentrates flows on the remaining links.
+      - id: b
+        text: Ignore it; with ECMP the remaining links absorb the traffic at no cost.
+        explanation: The remaining links have less total capacity, so synchronized jobs slow down.
+      - id: c
+        text: Shut down the leaf's downlinks to restore 1:1.
+        explanation: That disconnects GPUs and is far worse than a small slowdown.
+      - id: d
+        text: Increase the MTU on the remaining uplinks.
+        explanation: MTU does not add capacity lost with the failed links.
+    tags: [operations, oversubscription]
+  - id: q7
+    type: single
+    prompt: What is the bisection bandwidth of a non-blocking fabric with 1,024 endpoints at 400 Gb/s?
+    options:
+      - id: a
+        text: About 204.8 Tb/s
+        correct: true
+        explanation: N times r divided by 2, that is 1,024 x 400G / 2.
+      - id: b
+        text: About 409.6 Tb/s
+        explanation: That is the total endpoint bandwidth, not the capacity across the half-half cut.
+      - id: c
+        text: About 102.4 Tb/s
+        explanation: That corresponds to a 2:1 oversubscribed fabric.
+      - id: d
+        text: 400 Gb/s
+        explanation: That is a single endpoint's rate.
+    tags: [bisection]

@@ -1,0 +1,50 @@
+id: sim-03-pfc-priority-mismatch
+title: "PFC on the wrong priority: fast in isolation, slow in a job"
+level: 3
+estimated_minutes: 40
+lessons: [pfc-priority-flow-control, qos-trust-and-mapping, lossless-misconfigurations]
+summary: One NIC enables PFC on priority 4 while the fabric uses priority 3 for RoCE.
+start: node01
+ticket: |
+  **INC-4519 · Sev3 · Training throughput down 65 %**
+
+  > Since node03 was re-imaged, multi-node jobs run at about a third of normal speed. We ran
+  > `ib_write_bw` between node03 and its neighbours on every rail, and all eight report ~392 Gb/s. So the
+  > network is fine, right? - ML platform team
+
+  Explain why point-to-point tests pass while the collective is slow, then fix it.
+faults:
+  - { type: host_pfc, node: node03, rail: 5, prios: [4] }
+hints:
+  - A single ib_write_bw flow never congests the fabric, so it never needs PFC. A collective does.
+  - "Run all_reduce_perf once, then compare `ethtool -S <if> | grep prio3_pause` across node03's interfaces."
+  - "`mlnx_qos -i <if>` shows a NIC's per-priority PFC configuration."
+diagnosis:
+  prompt: What is the root cause?
+  options:
+    - id: a
+      text: node03 enp170s0np0 (mlx5_5) has PFC enabled on priority 4 instead of 3, so it ignores the switch's pause frames for RoCE traffic and the switch drops packets.
+      correct: true
+      explanation: RoCE is classified to priority 3 (DSCP 26). The NIC receives PFC pause frames for priority 3 but has PFC disabled there, so it keeps transmitting. The leaf buffer overflows, packets drop, and go-back-N retransmissions collapse throughput for every rank on that ring.
+    - id: b
+      text: ECN is disabled on leaf06.
+      explanation: The leaf shows RoCE lossless mode with ECN congestion control, and ECN marks and CNPs appear on all other ports.
+    - id: c
+      text: The re-image installed slower NIC firmware.
+      explanation: ib_write_bw reaches line rate, so the NIC data path itself is fine.
+    - id: d
+      text: NCCL is using the ring algorithm and should use tree instead.
+      explanation: The choice of algorithm cannot explain a 65 % drop that appears on only one node, together with drop and out-of-sequence counters.
+checks:
+  - { description: "node03 mlx5_5 enables PFC on priority 3 only", check: host_pfc_only, args: { node: node03, rail: 5, prio: 3 } }
+  - { description: "all_reduce bus bandwidth is above 360 GB/s", check: allreduce_min_busbw, args: { value: 360 } }
+solution: |
+  After one `all_reduce_perf` run, `ethtool -S enp170s0np0 | grep prio3_pause` on node03 shows hundreds
+  of thousands of received pause frames. `rdma statistic show link mlx5_5/1` shows `out_of_sequence` and
+  `packet_seq_err` climbing, and on leaf06 `nv show interface swp3 counters` shows TX drops. `mlnx_qos -i
+  enp170s0np0` reveals PFC enabled on priority 4. Fix: `mlnx_qos -i enp170s0np0 --pfc 0,0,0,1,0,0,0,0`.
+
+  Lesson: point-to-point tests at low fan-in prove the data path, not the lossless configuration. Add a
+  per-NIC QoS audit (trust, PFC vector, DSCP map) to node provisioning.
+fix:
+  - "node03: mlnx_qos -i enp170s0np0 --pfc 0,0,0,1,0,0,0,0"

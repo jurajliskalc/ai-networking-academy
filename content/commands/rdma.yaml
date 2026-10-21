@@ -1,0 +1,165 @@
+id: rdma
+title: RDMA and rdma-core
+description: rdma-core, iproute2 rdma and NVIDIA OFED/DOCA helper commands for checking RDMA devices, ports, GIDs, counters and basic connectivity.
+commands:
+  - cmd: ibv_devices
+    platform: rdma
+    summary: List RDMA devices visible to user space with their node GUIDs.
+    example: |
+      # illustrative output
+          device                 node GUID
+          ------              ----------------
+          mlx5_0              b83fd20300aabb01
+          mlx5_1              b83fd20300aabb11
+    notes: If a device is missing, check that the kernel driver (for example mlx5_ib) is loaded and that rdma-core user-space providers are installed.
+    tags: [rdma-core, inventory]
+
+  - cmd: ibv_devinfo
+    platform: rdma
+    summary: Show each RDMA device's firmware, port state, active MTU, link layer and LID.
+    example: |
+      # illustrative output (trimmed)
+      hca_id: mlx5_0
+              transport:                      InfiniBand (0)
+              fw_ver:                         28.41.1000
+              port:   1
+                      state:                  PORT_ACTIVE (4)
+                      max_mtu:                4096 (5)
+                      active_mtu:             4096 (5)
+                      sm_lid:                 0
+                      port_lid:               0
+                      link_layer:             Ethernet
+    notes: "link_layer tells you RoCE (Ethernet) vs InfiniBand. On IB, port_lid 0 or state PORT_INIT usually means no subnet manager has configured the port. On RoCE, active_mtu below 4096 usually means the netdev MTU is too small. 'transport: InfiniBand' is printed for RoCE devices too: it refers to the IB transport layer."
+    tags: [rdma-core, verify, mtu]
+
+  - cmd: ibv_devinfo -d mlx5_0 -v
+    platform: rdma
+    summary: Verbose capabilities for one device, including max QPs, max MR size, atomic support, and on RoCE the GID table.
+    notes: Long output; pipe to less or grep. Useful when an application fails because it requests more QPs, CQ entries or MR size than the device supports.
+    tags: [rdma-core, capabilities]
+
+  - cmd: ibdev2netdev -v
+    platform: rdma
+    summary: NVIDIA OFED/DOCA helper script that maps RDMA devices to network interfaces and shows link state.
+    example: |
+      # illustrative output
+      0000:3b:00.0 mlx5_0 (MT4129 - ...) ConnectX-7 fw 28.41.1000 port 1 (ACTIVE) ==> ens1f0np0 (Up)
+    notes: Shipped with MLNX_OFED/DOCA-Host, not with upstream rdma-core. The upstream equivalent is "rdma link show", which prints the netdev for each RDMA port.
+    tags: [ofed, doca, inventory, mapping]
+
+  - cmd: rdma link show
+    platform: rdma
+    summary: iproute2 view of every RDMA port with state, physical state and the associated netdev.
+    example: |
+      # illustrative output
+      link mlx5_0/1 state ACTIVE physical_state LINK_UP netdev ens1f0np0
+      link mlx5_1/1 state DOWN physical_state DISABLED netdev ens2f0np0
+    notes: Available without OFED. state ACTIVE plus physical_state LINK_UP is what you want; physical_state POLLING means the port is trying to train (cable/peer issue).
+    tags: [iproute2, rdma, verify, mapping]
+
+  - cmd: rdma dev show
+    platform: rdma
+    summary: List RDMA devices with node type, firmware version and GUIDs.
+    tags: [iproute2, rdma, inventory]
+
+  - cmd: rdma resource show qp
+    platform: rdma
+    summary: List RDMA queue pairs currently allocated, with their state, type, owning process and peer QP number.
+    example: |
+      # illustrative output
+      link mlx5_0/1 lqpn 1234 rqpn 5678 type RC state RTS sq-psn 7731 comm all_reduce_perf pid 41022
+    notes: "'rdma resource show' (no object) gives per-device totals of PDs, CQs, QPs, MRs. A QP stuck in ERR or a growing QP count across job restarts can reveal leaks or failed connections. Requires a kernel and iproute2 recent enough to support resource tracking."
+    tags: [iproute2, rdma, qp, troubleshooting]
+
+  - cmd: rdma statistic show link mlx5_0/1
+    platform: rdma
+    summary: Show the port's RDMA hardware counters (on mlx5 these include out_of_buffer, out_of_sequence, packet_seq_err, local_ack_timeout_err, np_cnp_sent, rp_cnp_handled, np_ecn_marked_roce_packets).
+    example: |
+      # illustrative output (trimmed, values made up)
+      link mlx5_0/1 rx_write_requests 0 rx_read_requests 0 out_of_buffer 0 out_of_sequence 12
+        packet_seq_err 0 local_ack_timeout_err 0 rnr_nak_retry_err 0 np_ecn_marked_roce_packets 88412
+        np_cnp_sent 88019 rp_cnp_handled 90233
+    notes: "Counter names are driver-specific (these are mlx5). Read as deltas. np_* counters are the receiver ('notification point') side of DCQCN, rp_* the sender ('reaction point'). Rising out_of_sequence or local_ack_timeout_err on RoCE usually means packet loss in the fabric; rising CNP counters mean ECN congestion control is active."
+    tags: [iproute2, counters, dcqcn, roce, troubleshooting]
+
+  - cmd: ls /sys/class/infiniband/mlx5_0/ports/1/hw_counters/
+    platform: rdma
+    summary: The same driver hardware counters exposed as sysfs files; the standard IB port counters live in ../counters/.
+    example: |
+      # read one counter
+      $ cat /sys/class/infiniband/mlx5_0/ports/1/hw_counters/out_of_sequence
+      12
+    notes: Handy for scripts and exporters. ports/1/counters/ holds the IB PortCounters (port_xmit_data, port_rcv_data in 4-byte units, symbol_error, link_downed, port_rcv_errors, port_xmit_discards, ...). Exact file sets depend on driver and kernel.
+    tags: [sysfs, counters, telemetry]
+
+  - cmd: cat /sys/class/infiniband/mlx5_0/ports/1/gid_attrs/types/3
+    platform: rdma
+    summary: Show the RoCE version of one GID table entry (index 3 here); the sibling gid_attrs/ndevs/3 shows its netdev and gids/3 the GID value.
+    example: |
+      # illustrative output
+      RoCE v2
+    notes: This is what show_gids reads under the hood. Reading an unpopulated index returns an error, which is normal.
+    tags: [sysfs, gid, roce]
+
+  - cmd: show_gids
+    platform: rdma
+    summary: NVIDIA OFED/DOCA helper script that prints the GID table of every RDMA port with index, GID, IPv4 address, RoCE version and netdev.
+    example: |
+      # illustrative output
+      DEV     PORT    INDEX   GID                                     IPv4            VER     DEV
+      ---     ----    -----   ---                                     ------------    ---     ---
+      mlx5_0  1       0       fe80:0000:0000:0000:ba3f:d2ff:feaa:bb01                 v1      ens1f0np0
+      mlx5_0  1       1       fe80:0000:0000:0000:ba3f:d2ff:feaa:bb01                 v2      ens1f0np0
+      mlx5_0  1       2       0000:0000:0000:0000:0000:ffff:0a00:000b 10.0.0.11       v1      ens1f0np0
+      mlx5_0  1       3       0000:0000:0000:0000:0000:ffff:0a00:000b 10.0.0.11       v2      ens1f0np0
+    notes: "Pick the index whose VER is v2 and whose IPv4 is the routable address; that is the value for NCCL_IB_GID_INDEX or perftest -x. The index is commonly 3 on a single-IP interface but is not guaranteed: it changes if addresses, VLANs or IPv6 addresses are added. Not part of upstream rdma-core; if absent, read gid_attrs in sysfs."
+    tags: [ofed, doca, gid, roce]
+
+  - cmd: cma_roce_mode -d mlx5_0 -p 1 -m 2
+    platform: rdma
+    summary: NVIDIA OFED/DOCA script that sets the default RoCE version used by RDMA CM connections on a port (-m 2 = RoCEv2); without -m it shows the current mode.
+    notes: Affects only connections set up through RDMA CM (librdmacm), not applications that pick a GID index themselves (NCCL, perftest without -R). The setting is held in configfs and is not persistent across reboot unless your provisioning reapplies it. Check the script's help on your OFED/DOCA version for exact options.
+    tags: [ofed, doca, rdma-cm, roce]
+
+  - cmd: cma_roce_tos -d mlx5_0 -t 106
+    platform: rdma
+    summary: NVIDIA OFED/DOCA script that sets the default IP ToS byte for RDMA CM connections on a device (106 = DSCP 26 with ECN-capable bits set).
+    notes: "ToS is DSCP shifted left 2 bits plus the 2 ECN bits: DSCP 26 << 2 = 104, +2 for ECT(0) = 106. Only RDMA CM traffic picks this up; NCCL sets its own traffic class via NCCL_IB_TC. Options vary by version; check the script's usage text."
+    tags: [ofed, doca, rdma-cm, qos, dscp]
+
+  - cmd: ibv_rc_pingpong -d mlx5_0 -g 3
+    platform: rdma
+    summary: Minimal RC QP ping-pong test from rdma-core examples. Run with no host on the server and with the server's address on the client.
+    example: |
+      # server:  ibv_rc_pingpong -d mlx5_0 -g 3
+      # client:  ibv_rc_pingpong -d mlx5_0 -g 3 10.0.0.11
+      # illustrative client output
+        local address:  LID 0x0000, QPN 0x00011a, PSN 0x5c1e2a, GID ::ffff:10.0.0.12
+        remote address: LID 0x0000, QPN 0x00021b, PSN 0x8a1f03, GID ::ffff:10.0.0.11
+      8192000 bytes in 0.01 seconds = 6213.11 Mbit/sec
+      1000 iters in 0.01 seconds = 10.55 usec/iter
+    notes: "Proves end-to-end RC connectivity. -d device, -i IB port, -g GID index (required on RoCE), -s message size, -n iterations, -m path MTU. The QP information is exchanged over a TCP socket (default port 18515), so that port must be reachable. Not a performance tool; use perftest for that."
+    tags: [rdma-core, connectivity, verify]
+
+  - cmd: rping -s -a 0.0.0.0 -v -C 5
+    platform: rdma
+    summary: librdmacm ping test server; pair it with a client "rping -c -a <server-ip> -v -C 5". Exercises RDMA CM address and route resolution.
+    example: |
+      # client: rping -c -a 10.0.0.11 -v -C 5
+      # illustrative output
+      ping data: rdma-ping-0: ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqr
+      ping data: rdma-ping-1: BCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqrs
+    notes: "-s server, -c client, -a address, -v print ping data, -C count. Because it uses RDMA CM it validates IP routing, ARP and GID selection; if ibv_rc_pingpong works but rping fails, suspect routing/ARP or the RDMA CM RoCE mode."
+    tags: [librdmacm, rdma-cm, connectivity]
+
+  - cmd: rdma system show
+    platform: rdma
+    summary: Show system-wide RDMA settings such as the network namespace mode (shared or exclusive).
+    notes: In exclusive mode RDMA devices must be moved into a container's network namespace (rdma dev set <dev> netns <ns>); relevant to Kubernetes and multi-tenant setups.
+    tags: [iproute2, namespaces, containers]
+
+  - cmd: rdma link add rxe0 type rxe netdev eth0
+    platform: rdma
+    summary: Create a Soft-RoCE (rdma_rxe) device on top of an ordinary Ethernet interface, for labs without RDMA hardware.
+    notes: Load the module first with "modprobe rdma_rxe". Remove with "rdma link delete rxe0". Soft-RoCE is for learning and functional testing; performance is limited by the CPU.
+    tags: [soft-roce, rxe, lab]

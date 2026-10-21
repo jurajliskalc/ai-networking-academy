@@ -1,0 +1,133 @@
+id: quiz-nccl-architecture
+title: "Knowledge check: NCCL architecture"
+lesson: nccl-architecture
+pass_pct: 70
+questions:
+  - id: q1
+    type: single
+    prompt: "What network traffic does NCCL's bootstrap phase use?"
+    options:
+      - id: a
+        text: "TCP sockets over an IP interface (selectable with NCCL_SOCKET_IFNAME) to exchange addresses and metadata."
+        correct: true
+        explanation: "Bootstrap is control traffic over sockets; the data path is set up afterwards."
+      - id: b
+        text: "RDMA writes over the back-end fabric."
+        explanation: "RDMA connections are created after bootstrap, using information exchanged during it."
+      - id: c
+        text: "NVLink messages between nodes."
+        explanation: "NVLink does not connect separate nodes in typical clusters (outside NVLink-domain systems), and bootstrap uses sockets."
+      - id: d
+        text: "SHARP aggregation trees."
+        explanation: "SHARP is for in-network reduction, not for bootstrap."
+    tags: [bootstrap]
+  - id: q2
+    type: single
+    prompt: "Why does NCCL create multiple channels for a collective?"
+    options:
+      - id: a
+        text: "To run several rings or trees in parallel over different links and NICs, so all available bandwidth is used."
+        correct: true
+        explanation: "One ring would use one NIC per node per direction; channels spread the work."
+      - id: b
+        text: "To provide a backup path when a NIC fails."
+        explanation: "Channels are for parallelism, not failover."
+      - id: c
+        text: "To separate different tenants' traffic."
+        explanation: "Channels belong to one communicator and are not an isolation mechanism."
+      - id: d
+        text: "Because each GPU can only send to one peer per channel per job."
+        explanation: "This is not the reason; channels exist to use multiple paths concurrently."
+    tags: [channels]
+  - id: q3
+    type: scenario
+    prompt: "NCCL INFO output on a multi-node job shows 'Using network Socket' and inter-node hops 'via NET/Socket'. The cluster has working ConnectX NICs. What is the most likely cause?"
+    options:
+      - id: a
+        text: "The IB verbs transport failed to initialize, for example because RDMA devices are not visible in the container or NCCL_IB_HCA matched no device."
+        correct: true
+        explanation: "NCCL falls back to TCP sockets when the IB transport cannot be used, with a large performance loss."
+      - id: b
+        text: "NCCL always uses sockets for inter-node traffic."
+        explanation: "With RDMA NICs NCCL normally uses its IB verbs transport."
+      - id: c
+        text: "The job uses too many channels."
+        explanation: "Channel count does not change the transport selection."
+      - id: d
+        text: "PXN is enabled."
+        explanation: "PXN changes which NIC sends data, not whether RDMA is used."
+    tags: [transports, troubleshooting]
+  - id: q4
+    type: single
+    prompt: "What is the role of the NCCL proxy thread?"
+    options:
+      - id: a
+        text: "A CPU thread that posts network operations to the NIC and polls completions on behalf of the GPU kernels."
+        correct: true
+        explanation: "GPU kernels fill buffers and set flags; the proxy drives the RDMA NIC."
+      - id: b
+        text: "A thread that compresses gradients before sending."
+        explanation: "NCCL does not compress data."
+      - id: c
+        text: "A web proxy used to download topology files."
+        explanation: "Topology is detected locally from sysfs and NVML."
+      - id: d
+        text: "A GPU warp that performs reductions."
+        explanation: "Reductions run in GPU thread blocks; the proxy runs on the CPU."
+    tags: [proxy]
+  - id: q5
+    type: scenario
+    prompt: "In a rail-optimized cluster, GPU 2 on node A sends to GPU 5 on node B. With PXN enabled, what path does NCCL typically use?"
+    options:
+      - id: a
+        text: "NVLink from GPU 2 to GPU 5 on node A, then out of GPU 5's NIC on rail 5 to node B, staying on one rail."
+        correct: true
+        explanation: "PXN moves data over NVLink to the GPU sharing the destination's rail, avoiding spine crossings."
+      - id: b
+        text: "Out of GPU 2's NIC on rail 2, across the spine to rail 5."
+        explanation: "That is the non-PXN path that PXN avoids."
+      - id: c
+        text: "Through host shared memory and a TCP socket."
+        explanation: "PXN uses NVLink and RDMA, not SHM and sockets."
+      - id: d
+        text: "Via a SHARP switch that reduces the data."
+        explanation: "PXN is about routing point-to-point data, not in-network reduction."
+    tags: [pxn, rail]
+  - id: q6
+    type: single
+    prompt: "Which statement about NCCL's protocols is correct?"
+    options:
+      - id: a
+        text: "LL packs 4 bytes of data with a 4-byte flag (about 50 % efficiency, lowest latency); LL128 uses 120 of 128 bytes for data; Simple uses large chunks with fences for full bandwidth."
+        correct: true
+        explanation: "The protocols trade payload efficiency against synchronization latency."
+      - id: b
+        text: "Simple has the lowest latency because it has no flags."
+        explanation: "Simple uses separate flags after memory fences, which costs latency per step."
+      - id: c
+        text: "LL128 is always used on every platform."
+        explanation: "LL128 depends on hardware guarantees and is enabled only on supported platforms."
+      - id: d
+        text: "The protocol is chosen once per job and cannot vary by message size."
+        explanation: "NCCL picks algorithm and protocol per collective and size."
+    tags: [protocols]
+  - id: q7
+    type: multi
+    prompt: "Which of these are NCCL transports or transport-level mechanisms? (Select all that apply.)"
+    options:
+      - id: a
+        text: "P2P over NVLink or PCIe between GPUs in the same node."
+        correct: true
+        explanation: "P2P is the intra-node transport when peer access is available."
+      - id: b
+        text: "SHM staging through host shared memory."
+        correct: true
+        explanation: "Used when P2P is unavailable or disabled."
+      - id: c
+        text: "NET using the built-in IB verbs implementation or an external plugin."
+        correct: true
+        explanation: "NET carries inter-node traffic; plugins (e.g. aws-ofi-nccl) implement the same interface."
+      - id: d
+        text: "VXLAN tunnels created by NCCL between GPUs."
+        explanation: "NCCL does not create overlay tunnels."
+    tags: [transports]

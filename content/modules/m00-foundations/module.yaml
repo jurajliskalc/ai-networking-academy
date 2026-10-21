@@ -1,0 +1,12 @@
+id: m00-foundations
+order: 0
+title: "Networking foundations for AI engineers"
+level: 1
+summary: >
+  Frames, addressing, MTU, queues and the Linux tools you will use every day: the vocabulary every later module assumes.
+lessons:
+  - osi-ethernet-frames
+  - ip-addressing-routing
+  - mtu-jumbo-frames
+  - linux-networking-toolkit
+  - switching-and-queues

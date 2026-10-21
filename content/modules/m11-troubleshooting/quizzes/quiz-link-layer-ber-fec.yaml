@@ -1,0 +1,165 @@
+id: quiz-link-layer-ber-fec
+title: "Knowledge check: link-layer BER, FEC and flaps"
+lesson: link-layer-ber-fec
+pass_pct: 70
+questions:
+  - id: q1
+    type: scenario
+    prompt: >
+      A 400G PAM4 link reports millions of corrected FEC errors per minute, a raw BER of 3E-9,
+      balanced across all lanes, zero effective errors, and no CRC errors on either end for a week.
+      What is the right action?
+    options:
+      - id: a
+        text: No action; keep monitoring raw BER trend and lane balance.
+        correct: true
+        explanation: Corrected errors are normal on PAM4. Low raw BER, balanced lanes and zero escaped errors mean healthy margin.
+      - id: b
+        text: Replace the optics because any FEC correction indicates a failing link.
+        explanation: FEC is designed to correct continuously on PAM4; replacing healthy optics wastes money and risks new faults.
+      - id: c
+        text: Disable FEC to measure the true error rate in production.
+        explanation: Running PAM4 without FEC would corrupt traffic; raw BER is already reported with FEC on.
+      - id: d
+        text: Drain the link because millions of errors per minute will cause RDMA retransmissions.
+        explanation: Only errors that escape FEC cause packet loss; there are none here.
+    tags: [fec, ber]
+  - id: q2
+    type: scenario
+    prompt: >
+      mlxlink shows per-lane raw errors of 1.1M, 1.2M, 1.0M and 96M on a 4-lane link. ethtool -m on
+      the same end shows receive power around -1 dBm on three channels and -6 dBm on the fourth.
+      Effective errors are still zero. What is the most likely cause and next step?
+    options:
+      - id: a
+        text: A dirty or damaged fibre position or connector on that lane; schedule inspect-and-clean on both ends.
+        correct: true
+        explanation: One lane with about 5 dB less light and far more raw errors is the classic contamination signature. Effective errors are zero, so it is planned work, not an emergency.
+      - id: b
+        text: A switch ASIC fault; replace the switch line card.
+        explanation: An ASIC fault would not normally present as low optical power on a single lane.
+      - id: c
+        text: Congestion on that lane because ECMP hashes flows to it.
+        explanation: Lanes are a physical-layer construct within one port; ECMP does not hash to lanes and congestion does not create bit errors.
+      - id: d
+        text: FEC mode mismatch between the two ends.
+        explanation: A FEC mismatch usually prevents the link from coming up or affects all lanes, not one lane with low Rx power.
+    tags: [optics, ddm, lanes]
+  - id: q3
+    type: single
+    prompt: Approximately how often does an errored bit escape FEC on a 400 Gb/s link with an effective BER of 1e-12?
+    options:
+      - id: a
+        text: About every 2.5 seconds.
+        correct: true
+        explanation: 4e11 bits/s x 1e-12 = 0.4 errors per second, roughly one every 2.5 s.
+      - id: b
+        text: About every 42 minutes.
+        explanation: That corresponds to an effective BER around 1e-15.
+      - id: c
+        text: About every 2.5 milliseconds.
+        explanation: That corresponds to an effective BER around 1e-9.
+      - id: d
+        text: About once a day.
+        explanation: That would require an effective BER of roughly 3e-17.
+    tags: [ber, math]
+  - id: q4
+    type: scenario
+    prompt: >
+      On an InfiniBand fabric, perfquery on a leaf port shows PortXmitWait rising quickly, while
+      SymbolErrorCounter, PortRcvErrors and LinkDownedCounter are unchanged over the same interval.
+      A colleague wants to RMA the cable. What do you say?
+    options:
+      - id: a
+        text: The counters indicate congestion (credit starvation), not a physical-layer fault; investigate traffic and routing instead.
+        correct: true
+        explanation: PortXmitWait counts time the port had data to send but no credits. Physical errors would show in symbol and receive error counters.
+      - id: b
+        text: Agree; PortXmitWait is the primary bit-error counter on InfiniBand.
+        explanation: PortXmitWait is a congestion indicator, not a bit-error counter.
+      - id: c
+        text: Reset all counters and wait for the next flap.
+        explanation: Resetting loses evidence, and there is no indication of flaps.
+      - id: d
+        text: Force the link to a lower speed to reduce errors.
+        explanation: There are no errors to reduce; downshifting would only lower capacity.
+    tags: [infiniband, perfquery, congestion]
+  - id: q5
+    type: scenario
+    prompt: >
+      After replacing a NIC-side transceiver, rx_crc_errors_phy on the NIC keeps rising at the same
+      rate. What should you check next?
+    options:
+      - id: a
+        text: The switch end (its transmitter, transceiver and port counters) and the fibre path, since receive errors at the NIC are caused by the far-end transmitter or the channel.
+        correct: true
+        explanation: Errors are detected at the receiver. If they did not follow the NIC-side optic, the switch-side optic or the cable is next.
+      - id: b
+        text: Replace the NIC, because the errors stayed with it.
+        explanation: Possible later, but the far-end optic and fibre are far more common causes and must be ruled out first.
+      - id: c
+        text: Increase the NIC receive ring size.
+        explanation: Ring size affects host buffer drops, not CRC errors on the wire.
+      - id: d
+        text: Enable PFC on more priorities to stop the drops.
+        explanation: CRC errors are corruption, not congestion; PFC does not help.
+    tags: [isolation, crc]
+  - id: q6
+    type: multi
+    prompt: Which of these are link faults even though the link reports as up? (Select all that apply.)
+    options:
+      - id: a
+        text: A 400G port that retrained and now runs at 200G.
+        correct: true
+        explanation: A speed or width downshift silently halves capacity and creates stragglers.
+      - id: b
+        text: A link whose LinkErrorRecoveryCounter increments several times a day.
+        correct: true
+        explanation: Each error recovery retrains the link and briefly stops traffic.
+      - id: c
+        text: A link with non-zero uncorrectable FEC blocks.
+        correct: true
+        explanation: Uncorrectable blocks mean corrupted data reaching upper layers.
+      - id: d
+        text: A link with corrected FEC errors and a stable, low raw BER.
+        explanation: That is normal PAM4 operation.
+    tags: [flaps, speed, fec]
+  - id: q7
+    type: single
+    prompt: How many 10-bit symbol errors per codeword can RS(544,514) "KP4" FEC correct?
+    options:
+      - id: a
+        text: "15"
+        correct: true
+        explanation: 544 - 514 = 30 parity symbols, which correct up to 15 symbol errors.
+      - id: b
+        text: "7"
+        explanation: That is RS(528,514) KR4 FEC, with 14 parity symbols.
+      - id: c
+        text: "30"
+        explanation: 30 is the number of parity symbols; a Reed-Solomon code corrects half that many errors.
+      - id: d
+        text: "1"
+        explanation: Single-error correction describes simple Hamming-style codes, not RS FEC.
+    tags: [fec]
+  - id: q8
+    type: scenario
+    prompt: >
+      A newly installed link will not come up. Both ends see light (receive power is normal on all
+      lanes), the optics are the correct type, and one end is configured with FEC off while the other
+      is set to RS. What is the fix?
+    options:
+      - id: a
+        text: Configure the same FEC mode on both ends, as the vendor specifies for that speed and media.
+        correct: true
+        explanation: FEC is part of the PHY; mismatched FEC usually prevents the link from coming up.
+      - id: b
+        text: Clean the connectors; normal Rx power can hide contamination.
+        explanation: Cleaning is good practice, but here a clear configuration mismatch explains the symptom.
+      - id: c
+        text: Turn FEC off on both ends so that the configuration matches.
+        explanation: It may come up, but PAM4 without FEC will have unacceptable post-FEC errors; match the vendor-required mode instead.
+      - id: d
+        text: Swap the cable for a shorter one.
+        explanation: Power levels are normal; length is not the problem.
+    tags: [fec, config]

@@ -1,0 +1,139 @@
+id: quiz-inference-networking
+title: "Knowledge check: inference networking"
+lesson: inference-networking
+pass_pct: 70
+questions:
+  - id: q1
+    type: single
+    prompt: Which statement correctly contrasts the prefill and decode phases of LLM inference?
+    options:
+      - id: a
+        text: Prefill processes the whole prompt in parallel and is compute-bound; decode generates one token per step and is bound by memory bandwidth and per-step latency.
+        correct: true
+        explanation: This difference drives separate optimisation, and sometimes separate GPU pools.
+      - id: b
+        text: Prefill computes gradients; decode applies them to the weights.
+        explanation: Inference has no gradients or weight updates.
+      - id: c
+        text: Prefill happens on the front-end network; decode on the storage network.
+        explanation: Both phases run on GPUs; the phases are computational, not network names.
+      - id: d
+        text: Decode processes the prompt; prefill generates the output tokens.
+        explanation: The roles are reversed.
+    tags: [prefill, decode]
+  - id: q2
+    type: single
+    prompt: A model has 80 layers, 8 KV heads, head dimension 128 and stores the KV cache in BF16. About how large is the KV cache for an 8,192-token prompt?
+    options:
+      - id: a
+        text: About 2.7 GB.
+        correct: true
+        explanation: 2 x 80 x 8 x 128 x 2 bytes = 327,680 bytes per token; times 8,192 tokens is about 2.7 GB.
+      - id: b
+        text: About 2.7 MB.
+        explanation: That is a thousand times too small; the per-token cost alone is about 320 KiB.
+      - id: c
+        text: About 140 GB.
+        explanation: That is the size of the BF16 weights of a 70B model, not the KV cache of one prompt.
+      - id: d
+        text: About 320 KB.
+        explanation: That is the per-token size, not the total for 8,192 tokens.
+    tags: [kv-cache]
+  - id: q3
+    type: scenario
+    prompt: >
+      A team moves a 70B model from 8-way tensor parallelism within one server to 16-way tensor parallelism across two
+      servers connected by a 400 Gb/s RoCE fabric. Throughput is similar, but inter-token latency gets much worse.
+      Why?
+    options:
+      - id: a
+        text: Decode-phase TP all-reduces are small and latency-bound, occur several times per layer on every token, and now cross the slower, higher-latency scale-out fabric.
+        correct: true
+        explanation: Per-collective latency is multiplied by the number of all-reduces per token, so each microsecond matters.
+      - id: b
+        text: The KV cache no longer fits on the GPUs.
+        explanation: More GPUs means more total memory, not less.
+      - id: c
+        text: The front-end load balancer cannot handle two servers.
+        explanation: The front-end is not involved in intra-replica collectives.
+      - id: d
+        text: RoCE cannot carry all-reduce traffic.
+        explanation: RoCE carries collectives routinely; the issue is latency per operation.
+    tags: [tensor-parallel, latency]
+  - id: q4
+    type: single
+    prompt: In disaggregated serving, what must move over the network between the prefill and decode GPU pools?
+    options:
+      - id: a
+        text: The KV cache produced by prefill for each request.
+        correct: true
+        explanation: The decode workers need the prompt's keys and values to continue generating tokens.
+      - id: b
+        text: The model gradients.
+        explanation: Inference computes no gradients.
+      - id: c
+        text: Nothing; both pools recompute the prompt independently.
+        explanation: Recomputing would waste the point of a separate prefill pool.
+      - id: d
+        text: The full model weights on every request.
+        explanation: Weights stay resident on each pool's GPUs.
+    tags: [disaggregated-serving]
+  - id: q5
+    type: scenario
+    prompt: >
+      After enabling disaggregated serving, median TTFT increased by about 60 ms for 8k-token prompts. Each prefill
+      node has 400 Gb/s per GPU to the compute fabric, and the KV cache is sent only after prefill completes. What is
+      the most effective change?
+    options:
+      - id: a
+        text: Overlap the transfer by streaming each layer's KV cache as soon as it is computed, and keep prefill and decode pools close on a fast RDMA path.
+        correct: true
+        explanation: A 2.7 GB transfer at 50 GB/s is about 54 ms; overlapping hides most of it behind prefill compute.
+      - id: b
+        text: Send the KV cache over the front-end network using HTTP.
+        explanation: That path is usually slower and adds protocol overhead.
+      - id: c
+        text: Reduce the MTU to 1500 to lower latency.
+        explanation: Smaller packets reduce efficiency for a bulk transfer and do not address the serialised design.
+      - id: d
+        text: Disable prefix caching.
+        explanation: Prefix caching reduces work; disabling it would make TTFT worse.
+    tags: [kv-transfer, ttft]
+  - id: q6
+    type: multi
+    prompt: Which are valid reasons the front-end network matters more for inference than for training? Select all that apply.
+    options:
+      - id: a
+        text: User requests and streamed token responses arrive and leave through it.
+        correct: true
+        explanation: For inference the front-end is the product's delivery path.
+      - id: b
+        text: Routing must consider KV cache locality and per-worker load, not just round-robin.
+        correct: true
+        explanation: KV-aware routing increases cache hits and reduces TTFT.
+      - id: c
+        text: Model weights may be loaded over it (or the storage path) during autoscaling cold starts.
+        correct: true
+        explanation: Hundreds of GB per replica make cold-start bandwidth significant.
+      - id: d
+        text: Gradient all-reduce for inference runs over the front-end.
+        explanation: Inference has no gradients.
+    tags: [front-end]
+  - id: q7
+    type: single
+    prompt: Why is all-to-all latency particularly important when serving large mixture-of-experts models?
+    options:
+      - id: a
+        text: Every decode step performs expert dispatch and combine all-to-alls, so their latency adds to every generated token.
+        correct: true
+        explanation: Small, uneven, latency-bound all-to-alls on every token make fabric latency and congestion visible to users.
+      - id: b
+        text: MoE models do not use any other communication.
+        explanation: They may also use TP and other collectives; all-to-all is the distinctive one.
+      - id: c
+        text: All-to-all is only used during model loading.
+        explanation: It is used in every forward pass through MoE layers.
+      - id: d
+        text: Experts must be retrained after each request.
+        explanation: Inference does not retrain experts.
+    tags: [moe, all-to-all]
