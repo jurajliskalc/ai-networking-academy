@@ -11,7 +11,7 @@ objectives:
   - Design a repeatable test plan that isolates host problems (NUMA, PCIe, GID) from fabric problems.
 prerequisites: [rdma-on-linux, transport-types-operations]
 quiz: quiz-perftest-benchmarking
-widgets: []
+widgets: [perftest-explorer]
 labs: []
 tags: [rdma, perftest, ib_write_bw, ib_read_lat, benchmarking, validation]
 further_reading:
@@ -64,7 +64,7 @@ Every test has a **server** (started without a peer address) and a **client** (g
 | `-b` | Bidirectional bandwidth test |
 | `-c <type>` | Connection (transport) type such as `RC`, `UC`, `UD`, where the operation supports it |
 | `-m <mtu>` | Path MTU to use (256-4096) |
-| `--report_gbits` | Report bandwidth in Gb/s instead of the default MB/s |
+| `--report_gbits` | Report bandwidth in Gb/s instead of the default MiB/s (labelled `MB/sec` in older releases) |
 | `-F` | Suppress the CPU-frequency-scaling check (current perftest only prints a "Conflicting CPU frequency values" warning without it; some older releases refused to produce a report) |
 | `-R` | Connect using rdma_cm |
 | `-p <port>` | TCP port for the out-of-band exchange (run several tests in parallel) |
@@ -133,6 +133,12 @@ Running with `-a` produces bandwidth for every message size. A healthy curve ris
 | 64 KiB and above | Flat at near line rate |
 
 If the curve never flattens, or flattens well below line rate, suspect the host (PCIe, NUMA, power-saving states) or the path (lower negotiated link speed, errors, congestion).
+
+Try it in the explorer below: change the message-rate ceiling and the MTU to see where the curve reaches half its ceiling, then paste a `BW average` from your own run into the converter to turn MiB/s into Gb/s and a percentage of line rate.
+
+```widget
+perftest-explorer
+```
 
 ### Reading latency output
 
@@ -216,7 +222,7 @@ Record results per NIC and per pair in a table and compare against peers. Outlie
 
 ## Common pitfalls
 
-- **Misreading units.** Symptom: "only 46,000 — something is badly wrong". Cause: default output is MB/s (perftest uses 2^20-byte megabytes, so 46,000 is about 386 Gb/s). Fix: use `--report_gbits`.
+- **Misreading units.** Symptom: "only 46,000 — something is badly wrong". Cause: default output is in 2^20-byte units (labelled `MB/sec` in older perftest releases and `MiB/sec` in current ones), so 46,000 is about 386 Gb/s. Fix: use `--report_gbits`.
 - **Wrong or missing GID index on RoCE.** Symptom: the client hangs or the test fails with a completion error. Cause: default GID index is not RoCEv2 with the fabric IP. Fix: pass `-x` with the right index or use `-R`.
 - **CPU frequency warnings.** Symptom: perftest prints "Conflicting CPU frequency values detected" (older releases could also abort without a report). Cause: frequency scaling makes the cycle-counter conversion unreliable. Fix: use `-F` to suppress the check (and consider setting a performance governor for repeatable latency).
 - **Testing the wrong path.** Symptom: excellent results that do not match production. Cause: both NICs on the same leaf switch, or the test used the management network's IP for the out-of-band exchange and an unexpected device. Fix: name the device with `-d`, check address lines, and test across the spine as well.

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Pill } from '../components/ui';
+import NumInput from '../components/NumInput';
 
 // ---------- Pure model ----------
 
@@ -181,10 +182,10 @@ export default function CollectiveExplorer() {
         <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.14em] text-muted">What-if: size and bandwidth</div>
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="text-xs text-muted">S = buffer size (nccl-tests "size"), MB
-            <input type="number" min={1} max={65536} value={sMB} onChange={(e) => setS(Math.max(1, Number(e.target.value) || 1))} className="mt-1 w-full rounded-md border border-line bg-panel px-2 py-1 font-mono text-sm text-fg" />
+            <NumInput min={1} max={65536} value={sMB} onValue={setS} className="mt-1 w-full rounded-md border border-line bg-panel px-2 py-1 font-mono text-sm text-fg" />
           </label>
           <label className="text-xs text-muted">Bottleneck link bandwidth per rank, GB/s (400G NIC ≈ 50)
-            <input type="number" min={1} max={2000} value={bw} onChange={(e) => setBw(Math.max(1, Number(e.target.value) || 1))} className="mt-1 w-full rounded-md border border-line bg-panel px-2 py-1 font-mono text-sm text-fg" />
+            <NumInput min={1} max={2000} value={bw} onValue={setBw} className="mt-1 w-full rounded-md border border-line bg-panel px-2 py-1 font-mono text-sm text-fg" />
           </label>
         </div>
         <div className="mt-2 flex flex-wrap gap-2" aria-live="polite">

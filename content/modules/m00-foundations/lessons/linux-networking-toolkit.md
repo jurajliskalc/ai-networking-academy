@@ -11,7 +11,7 @@ objectives:
   - Apply a bottom-up (physical to application) checklist to a host network problem.
 prerequisites: [osi-ethernet-frames, ip-addressing-routing, mtu-jumbo-frames]
 quiz: quiz-linux-networking-toolkit
-widgets: []
+widgets: [host-stack-paths]
 labs: []
 tags: [linux, iproute2, ethtool, tcpdump, iperf3, lldp, rdma, troubleshooting, foundations]
 further_reading:
@@ -183,6 +183,12 @@ ESTAB  0      0           10.0.0.11:51544      10.4.7.25:5201
 ### Seeing packets: `tcpdump`
 
 `tcpdump -i X -e -n` prints frames with MAC addresses; filters such as `udp port 4791`, `arp`, or `icmp` narrow it down; `-w file.pcap` saves for Wireshark. As covered in `osi-ethernet-frames`, kernel-bypass RDMA traffic is typically invisible to a host capture without vendor support.
+
+To see why, step through a send on the kernel TCP/IP path and on the RDMA path below, and use the tool lens to check which of this lesson's tools can observe RDMA traffic at all.
+
+```widget
+host-stack-paths
+```
 
 ### RDMA devices: `rdma` and `ibv_devinfo`
 

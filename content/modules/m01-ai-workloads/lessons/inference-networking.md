@@ -11,7 +11,7 @@ objectives:
   - Explain disaggregated prefill/decode serving, KV cache transfer and KV-aware routing, and their network requirements.
 prerequisites: [ai-training-101, parallelism-strategies, collective-operations, four-networks-of-an-ai-cluster]
 quiz: quiz-inference-networking
-widgets: [parallelism-map]
+widgets: [parallelism-map, kv-cache-transfer]
 labs: []
 tags: [inference, prefill, decode, kv-cache, disaggregated-serving, ttft, latency, moe, ai-workloads]
 further_reading:
@@ -118,6 +118,12 @@ The network cost is the **KV cache transfer** from the prefill GPU to the decode
 ```
 2.7 GB at 400 Gb/s (50 GB/s)   ->  about 54 ms
 2.7 GB at 800 Gb/s (100 GB/s)  ->  about 27 ms
+```
+
+Try it with the calculator below: start from Llama 3.1 70B at 8,192 tokens on one 400G NIC to reproduce these numbers, then switch to the MHA model, FP8 and longer prompts and watch the transfer time move against the TTFT budget.
+
+```widget
+kv-cache-transfer
 ```
 
 That transfer adds directly to time to first token unless it is overlapped, for example by streaming each layer's KV cache as soon as prefill finishes that layer. It is large, bursty, point-to-point RDMA traffic, GPU memory to GPU memory, often between nodes, so it usually rides the compute fabric (or, within a rack-scale system, NVLink). Transfer libraries such as NVIDIA's NIXL abstract the transport (RDMA, NVLink, storage) for this purpose.

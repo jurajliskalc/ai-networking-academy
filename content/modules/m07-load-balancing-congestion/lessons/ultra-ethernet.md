@@ -11,7 +11,7 @@ objectives:
   - Summarize UET's congestion-management approach (sender-based and receiver credit-based) and link-layer options such as packet trimming and link-level retry.
 prerequisites: [adaptive-routing-packet-spraying, ecn-and-dcqcn, incast-and-congestion-hotspots]
 quiz: quiz-ultra-ethernet
-widgets: [ecmp-collision]
+widgets: [ecmp-collision, spray-reorder]
 labs: []
 tags: [ultra-ethernet, uec, uet, packet-spraying, libfabric, congestion-control]
 further_reading:
@@ -112,6 +112,12 @@ needs per operation type:
 The key insight: **most AI payload traffic does not need packet ordering**, only message
 completion. Picking RUD (or RUDI, where the profile offers it) for that traffic is what makes packet spraying safe by design
 rather than by NIC-specific tricks.
+
+See the difference for yourself: spray a message and compare a classic go-back-N receiver with direct placement, which is what an unordered mode such as RUD lets the receiver do:
+
+```widget
+spray-reorder
+```
 
 ### Packet delivery contexts
 

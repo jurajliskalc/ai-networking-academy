@@ -12,7 +12,7 @@ objectives:
   - Verify a rail cabling plan from host topology and switch neighbour data.
 prerequisites: [clos-leaf-spine, reading-server-topology, nccl-architecture]
 quiz: quiz-rail-optimized-topology
-widgets: [fabric-sizer, parallelism-map, pcie-topo]
+widgets: [fabric-sizer, parallelism-map, pcie-topo, rail-path-explorer]
 labs: []
 tags: [rail-optimized, topology, pxn, nccl, design, rail-only]
 further_reading:
@@ -193,6 +193,12 @@ sequenceDiagram
 > is an order of magnitude higher than NIC bandwidth (for example 900 GB/s per direction on
 > 5th-generation NVLink versus 50 GB/s per direction for a 400G NIC), the trade is usually very
 > favourable.
+
+Pick GPU 2 on node A and GPU 5 on node B, then switch PXN, the spine layer and the number of scalable units to see which switches the data crosses in each case.
+
+```widget
+rail-path-explorer
+```
 
 ### The rail-only proposal
 

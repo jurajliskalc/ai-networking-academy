@@ -11,7 +11,7 @@ objectives:
   - Explain why tensor parallelism stays inside the NVLink domain while data and pipeline parallelism cross the scale-out fabric.
 prerequisites: [ai-training-101]
 quiz: quiz-parallelism-strategies
-widgets: [parallelism-map]
+widgets: [parallelism-map, pipeline-schedule]
 labs: []
 tags: [parallelism, data-parallel, fsdp, zero, tensor-parallel, pipeline-parallel, moe, expert-parallel, ai-workloads]
 further_reading:
@@ -100,7 +100,7 @@ Sequence parallelism, used together with TP, replaces each all-reduce with a red
 Pipeline parallelism splits the model by layers: stage 1 holds layers 1-10, stage 2 layers 11-20, and so on. Each stage sends its output activations to the next stage (**forward**) and receives gradients back (**backward**). This is **point-to-point** traffic between neighbouring stages, not a collective.
 
 - **Message size**: one activation tensor per micro-batch per stage boundary, the same `micro-batch x sequence x hidden x 2 bytes` as above (134 MB in the example).
-- **Bubbles**: the first stage is idle while it waits for the last stage to finish the first micro-batch's backward pass. Splitting the batch into many micro-batches shrinks the idle fraction; with the common 1F1B schedule the bubble is roughly `(p-1)/m` of the ideal time for p stages and m micro-batches. Interleaved schedules reduce it further at the cost of more communication.
+- **Bubbles**: the first stage is idle while it waits for the last stage to finish the first micro-batch's backward pass. Splitting the batch into many micro-batches shrinks the idle fraction; the bubble is roughly `(p-1)/m` of the ideal time for p stages and m micro-batches. The common 1F1B schedule has the same bubble as GPipe; its gain is memory, since each stage holds at most p micro-batches of activations instead of m. Interleaved schedules reduce it further at the cost of more communication.
 - **Network**: PP traffic is modest in volume compared with TP and runs between nodes, so it crosses the scale-out fabric. It is latency-sensitive because stages wait on each other.
 
 ```mermaid
@@ -109,6 +109,12 @@ flowchart LR
   S2 -- "activations" --> S3["Stage 3: layers 41-60 (node C)"]
   S3 -- "gradients" --> S2
   S2 -- "gradients" --> S1
+```
+
+Run GPipe and 1F1B with 4 stages, then raise the number of micro-batches: watch the idle bubble shrink, see that both schedules share it while 1F1B holds far fewer activations, and read off the traffic each stage boundary sends.
+
+```widget
+pipeline-schedule
 ```
 
 ### Expert parallelism (EP) and mixture-of-experts

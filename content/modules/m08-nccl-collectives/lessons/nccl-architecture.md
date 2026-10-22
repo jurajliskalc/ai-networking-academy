@@ -11,7 +11,7 @@ objectives:
   - Explain the proxy thread, GPUDirect RDMA, PXN and the LL, LL128 and Simple protocols.
 prerequisites: [collective-algorithms, nvlink-nvswitch, gpudirect-rdma-storage]
 quiz: quiz-nccl-architecture
-widgets: [allreduce-sim, pcie-topo]
+widgets: [allreduce-sim, pcie-topo, rail-path-explorer]
 labs: []
 tags: [nccl, channels, transports, proxy, pxn, gpudirect, protocols, topology]
 further_reading:
@@ -177,6 +177,12 @@ flowchart LR
   A2["Node A GPU2"] -->|"NVLink"| A5["Node A GPU5"]
   A5 -->|"NIC on rail 5"| R5["Rail-5 leaf"]
   R5 --> B5["Node B GPU5"]
+```
+
+Try the GPU 2 to GPU 5 example in the widget with PXN on and off and compare the switch hops, the spine use and the NIC the data leaves through.
+
+```widget
+rail-path-explorer
 ```
 
 ### Protocols: LL, LL128 and Simple

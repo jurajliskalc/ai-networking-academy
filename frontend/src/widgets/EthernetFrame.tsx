@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { Pill } from '../components/ui';
+import NumInput from '../components/NumInput';
 
 // ---------- Pure calculation (unit-testable) ----------
 
@@ -171,8 +172,7 @@ export default function EthernetFrame() {
         <div className="sm:col-span-2">
           <div className="mb-1 flex items-baseline justify-between font-mono text-[10px] uppercase tracking-[0.14em] text-muted">
             <label htmlFor="ef-payload">Application payload (bytes)</label>
-            <input id="ef-payload" type="number" min={0} max={9000} value={payload}
-              onChange={(e) => setPayload(Math.max(0, Math.min(9000, Math.floor(Number(e.target.value) || 0))))}
+            <NumInput id="ef-payload" integer min={0} max={9000} value={payload} onValue={setPayload}
               className="w-24 rounded-md border border-line bg-panel px-2 py-0.5 text-right text-sm text-fg" />
           </div>
           <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Payload presets">

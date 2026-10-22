@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { Pill } from '../components/ui';
+import NumInput from '../components/NumInput';
 
 // ---------- Pure calculation (unit-testable) ----------
 
@@ -72,7 +73,6 @@ function Out({ label, value, sub, tone = 'text-fg' }: { label: string; value: Re
   );
 }
 
-const clampInt = (v: string, lo: number, hi: number) => Math.max(lo, Math.min(hi, Math.floor(Number(v) || lo)));
 
 export default function MtuCalculator() {
   const [netdev, setNetdev] = useState(9000);
@@ -98,7 +98,7 @@ export default function MtuCalculator() {
         <div>
           <label htmlFor="mtu-netdev" className="mb-1 block font-mono text-[10px] uppercase tracking-[0.14em] text-muted">Host netdev MTU (ip link)</label>
           <div className="flex flex-wrap items-center gap-1">
-            <input id="mtu-netdev" type="number" min={576} max={9216} value={netdev} onChange={(e) => setNetdev(clampInt(e.target.value, 576, 9216))}
+            <NumInput id="mtu-netdev" integer min={576} max={9216} value={netdev} onValue={setNetdev}
               className="w-24 rounded-md border border-line bg-panel px-2 py-1 font-mono text-sm" />
             {[1500, 2500, 4200, 9000].map((m) => (
               <button key={m} type="button" aria-pressed={m === netdev} onClick={() => setNetdev(m)}
@@ -134,7 +134,7 @@ export default function MtuCalculator() {
                 <tr key={i} className="border-t border-line">
                   <td className="py-1 pr-3 font-mono">{['leaf (ingress)', 'spine', 'leaf (egress)'][hops.length === 2 && i === 1 ? 2 : i]}</td>
                   <td className="py-1 pr-3">
-                    <input aria-label={`MTU of hop ${i + 1}`} type="number" min={576} max={10240} value={hops[i]} onChange={(e) => setHop(i, clampInt(e.target.value, 576, 10240))}
+                    <NumInput aria-label={`MTU of hop ${i + 1}`} integer min={576} max={10240} value={hops[i]} onValue={(v) => setHop(i, v)}
                       className="min-h-6 w-20 rounded-md border border-line bg-panel px-1.5 py-0.5 font-mono text-xs" />
                   </td>
                   <td className={`py-1 pr-3 text-right font-mono ${active && !v.roceFits ? 'text-danger' : ''}`}>{active ? fmt(v.roceSize) : '—'}</td>

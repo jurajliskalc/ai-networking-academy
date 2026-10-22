@@ -12,7 +12,7 @@ objectives:
   - Design the front-end routing layer (prefix-cache and load-aware routing) and the isolation between inference traffic classes.
 prerequisites: [inference-networking, scale-up-domains-nvl72, rail-optimized-topology, storage-and-frontend-networks]
 quiz: quiz-inference-cluster-design
-widgets: []
+widgets: [kv-cache-transfer]
 labs: []
 tags: [inference, disaggregated-serving, kv-cache, nixl, mooncake, deepep, expert-parallelism, moe, design]
 further_reading:
@@ -143,6 +143,12 @@ can start, so step 5, not step 4, is the TTFT cost. Two design consequences foll
 
 Change one assumption and redo the math: models with compressed KV (for example multi-head latent
 attention) cut step 1 by a large factor, and longer prompts raise it linearly.
+
+Redo steps 1 and 5 in the calculator: set Llama 3.1 70B, 4,096 tokens and compare one 400G NIC with 8 × 400G, then lower the efficiency and change the model to see which assumption moves the TTFT cost most.
+
+```widget
+kv-cache-transfer
+```
 
 ### Rail alignment for KV transfers
 

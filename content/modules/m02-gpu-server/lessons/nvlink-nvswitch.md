@@ -11,7 +11,7 @@ objectives:
   - Verify NVLink health and Fabric Manager state with nvidia-smi and related tools.
 prerequisites: [pcie-numa-topology, parallelism-strategies]
 quiz: quiz-nvlink-nvswitch
-widgets: [parallelism-map, pcie-topo, nvlink-generations]
+widgets: [parallelism-map, pcie-topo, nvlink-generations, bandwidth-ladder]
 labs: []
 tags: [nvlink, nvswitch, scale-up, nvl72, fabric-manager]
 further_reading:
@@ -48,6 +48,12 @@ of the scale-out network around it.
 | PCIe Gen5 x16 | ~64 GB/s per direction | GPU ↔ CPU, NIC, NVMe | Load/store and DMA, but limited |
 | Scale-out NIC | 400-800 Gb/s = 50-100 GB/s per direction | GPU ↔ GPUs in other servers | RDMA messages |
 | NVLink | Hundreds of GB/s to ~1 TB/s per direction | GPU ↔ GPUs in the NVLink domain | Memory semantics: load, store, atomics |
+
+Put these side by side for a real platform: switch between GB/s and Gb/s and between per-direction and both-direction figures, and watch how long the same 10 GB takes on each link.
+
+```widget
+bandwidth-ladder
+```
 
 The NVLink domain is the **scale-up** network; the InfiniBand or Ethernet fabric is the **scale-out**
 network. The rule of thumb in AI cluster design: put the most communication-intensive parallelism

@@ -11,7 +11,7 @@ objectives:
   - Explain why packet spraying requires out-of-order tolerance at the receiver, and how direct data placement provides it.
 prerequisites: [flow-collisions-entropy]
 quiz: quiz-adaptive-routing-packet-spraying
-widgets: [ecmp-collision]
+widgets: [ecmp-collision, spray-reorder]
 labs: []
 tags: [adaptive-routing, flowlets, packet-spraying, conga, letflow, reordering, infiniband, spectrum-x]
 further_reading:
@@ -139,6 +139,12 @@ spray packets of a flow across all available paths. Treat this as a vendor descr
 platform capability rather than a standard: the implementation details are not public in full, and
 the feature requires both the switch and NIC sides to be configured for it (check NVIDIA's
 Spectrum-X documentation for your software release).
+
+Spray one message over paths with different delays and compare what a go-back-N receiver, a reorder buffer and direct data placement each make of the same arrival order:
+
+```widget
+spray-reorder
+```
 
 > [!WARNING]
 > Never enable per-packet adaptive routing for RoCE traffic toward NICs that do not tolerate

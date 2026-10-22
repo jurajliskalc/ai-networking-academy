@@ -1,5 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { Pill } from '../components/ui';
+import NumInput from '../components/NumInput';
 
 // ---------- Pure IPv4 math (unit-testable). Addresses are unsigned 32-bit numbers. ----------
 
@@ -99,8 +100,7 @@ function NumIn({ id, label, value, onChange, min, max }: { id: string; label: st
   return (
     <div>
       <label htmlFor={id} className="mb-1 block font-mono text-[10px] uppercase tracking-[0.14em] text-muted">{label}</label>
-      <input id={id} type="number" min={min} max={max} value={value}
-        onChange={(e) => onChange(Math.max(min, Math.min(max, Math.floor(Number(e.target.value) || min))))}
+      <NumInput id={id} integer min={min} max={max} value={value} onValue={onChange}
         className="w-full rounded-md border border-line bg-panel px-2 py-1 font-mono text-sm" />
     </div>
   );

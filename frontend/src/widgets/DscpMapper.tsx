@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Pill } from '../components/ui';
+import NumInput from '../components/NumInput';
 
 export const ECN_NAMES = ['Not-ECT', 'ECT(1)', 'ECT(0)', 'CE'] as const; // RFC 3168 codepoints 00, 01, 10, 11
 
@@ -82,7 +83,7 @@ function NumIn({ label, value, max, set }: { label: string; value: number; max: 
   return (
     <label className="block">
       <span className="mb-1 block font-mono text-[10px] uppercase tracking-[0.14em] text-muted">{label}</span>
-      <input type="number" min={0} max={max} value={value} onChange={(e) => set(Math.max(0, Math.min(max, Math.round(Number(e.target.value) || 0))))}
+      <NumInput integer min={0} max={max} value={value} onValue={set}
         className="w-full rounded-md border border-line bg-panel px-2 py-1 font-mono text-sm" />
     </label>
   );

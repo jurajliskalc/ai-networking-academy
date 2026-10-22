@@ -38,6 +38,18 @@ const WIDGETS = ['rocev2-packet', 'allreduce-sim', 'pfc-ecn-sim', 'ecmp-collisio
   'troubleshooting-tree',
   'counter-decoder',
   'telemetry-sampling',
+  'rail-path-explorer',
+  'pipeline-schedule',
+  'kv-cache-transfer',
+  'pkey-membership',
+  'perftest-explorer',
+  'sharp-aggregation',
+  'straggler-tail',
+  'cabling-validator',
+  'ib-tools-map',
+  'host-stack-paths',
+  'bandwidth-ladder',
+  'spray-reorder',
 ];
 const SECTIONS = ['Why this matters', 'Concepts', 'How it works', 'In practice', 'Common pitfalls', 'Key takeaways'];
 const QTYPES = ['single', 'multi', 'scenario'];

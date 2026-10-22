@@ -12,7 +12,7 @@ objectives:
   - Prepare a host or container for RDMA (packages, device files, memlock, Soft-RoCE for labs).
 prerequisites: [verbs-qps-mrs, linux-networking-toolkit]
 quiz: quiz-rdma-on-linux
-widgets: []
+widgets: [host-stack-paths]
 labs: []
 tags: [rdma, linux, rdma-core, iproute2, gid, roce, soft-roce, sysfs]
 further_reading:
@@ -57,6 +57,12 @@ flowchart TB
 | Tools | `ibv_devinfo`, `rdma`, `infiniband-diags`, `perftest` | Inspection and testing |
 
 Device files under `/dev/infiniband/` are the doors into the kernel: `uverbsN` for verbs, `rdma_cm` for the connection manager, and `umadN` for management datagrams (used by InfiniBand diagnostic tools and the Subnet Manager). If a container does not have these files, RDMA cannot work inside it, regardless of what the host can do.
+
+Step through a send on both paths below, then switch the RDMA column to the control path: the kernel does the setup, the provider rings the NIC's doorbell for the data. Click a layer to see which tools can observe it and which cannot.
+
+```widget
+host-stack-paths
+```
 
 ### Inbox versus vendor stacks
 

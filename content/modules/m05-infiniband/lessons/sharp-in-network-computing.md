@@ -11,7 +11,7 @@ objectives:
   - Validate whether a job is actually using SHARP and interpret the performance difference with nccl-tests.
 prerequisites: [collective-operations, ib-architecture, subnet-manager-routing]
 quiz: quiz-sharp-in-network-computing
-widgets: [allreduce-sim]
+widgets: [allreduce-sim, sharp-aggregation]
 labs: []
 tags: [infiniband, sharp, in-network-computing, allreduce, nccl, collnet, quantum]
 further_reading:
@@ -75,6 +75,12 @@ flowchart TB
 4. The result is sent back down the same tree to every participant.
 
 Every link carries the data once up and once down, regardless of how many hosts sit below it.
+
+Step through the tree below to watch partial sums form on the way up, then scale it to a few hundred hosts and compare the bytes per host, the number of sequential steps and the busbw that nccl-tests would report against a ring.
+
+```widget
+sharp-aggregation
+```
 
 ### SHARP generations
 

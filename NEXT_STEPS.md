@@ -19,9 +19,10 @@ Ordered by value. See IMPLEMENTATION_STATUS.md for what is done and how it was v
    failure rather than a clear missing-tool FAIL; confirm `ethtool -m` works unprivileged on older
    ethtool (hw-05) and that `show_gids`/`nv show interface <port> qos roce counters` exist on the
    versions used.
-4. **Widen the browser tests** (`frontend/e2e/`, Playwright; the core flows are covered): drive more
-   widgets than the MTU checker, the free-play Fabric Simulator page and `?run=` links, the hardware-lab
-   result import, and a phone-width viewport. Confirm the e2e CI step goes green on the first push.
+4. **Widen the browser tests** (`frontend/e2e/`, Playwright; the core flows are covered): every widget page
+   already renders in a test; drive the interactions of more widgets (only the MTU checker and number-field
+   editing are driven), the free-play Fabric Simulator page and `?run=` links, the hardware-lab result
+   import, and a phone-width viewport.
 5. **Screen reader pass**: axe is clean, but walk the quiz, exam, a simulator lab and three widgets with
    NVDA (Windows) and VoiceOver (macOS/iOS); tune live-region chattiness on hover-driven widget readouts
    (ParallelismMap, QpStateMachine). (An axe check on every page kind already runs in `npm run e2e`.)

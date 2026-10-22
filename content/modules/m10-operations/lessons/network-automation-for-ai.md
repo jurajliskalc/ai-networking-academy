@@ -11,7 +11,7 @@ objectives:
   - Identify AI-specific invariants (lossless QoS, MTU, rail alignment, ECMP settings) that automation must enforce fleet-wide.
 prerequisites: [rocev2-configuration-end-to-end, rail-optimized-topology, fabric-validation-burn-in]
 quiz: quiz-network-automation-for-ai
-widgets: []
+widgets: [cabling-validator]
 labs: []
 tags: [automation, ansible, nvue, netbox, nautobot, ci, gnmi, python]
 further_reading:
@@ -195,6 +195,12 @@ CHECK lldp-vs-sot  rail=3  leaves=8  ports=256
 ```
 
 The swapped pair may still forward if both nodes sit in a shared rail subnet, but it breaks per-port addressing (for example /31 point-to-point links to each NIC) and your telemetry joins, so fix it too; the wrong-rail entry breaks rail alignment and must be fixed before acceptance.
+
+Inject miswires into a small rail-optimized pod and watch the LLDP-versus-plan check classify each one, with what it would do to a running job:
+
+```widget
+cabling-validator
+```
 
 ### Applying a change with NVUE
 

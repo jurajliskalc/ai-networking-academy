@@ -11,7 +11,7 @@ objectives:
   - Recognise from NCCL logs when NCCL has fallen back to sockets or lost GPUDirect RDMA, and name the usual causes.
 prerequisites: [troubleshooting-methodology, nccl-debugging, pcie-numa-topology, nccl-tests-interpretation]
 quiz: quiz-slow-collectives-stragglers
-widgets: [allreduce-sim, pcie-topo, training-step-timeline]
+widgets: [allreduce-sim, pcie-topo, training-step-timeline, straggler-tail]
 labs: []
 tags: [nccl, stragglers, pcie, numa, acs, gpudirect, troubleshooting]
 further_reading:
@@ -41,7 +41,7 @@ In a ring all-reduce over *n* ranks, each rank sends and receives 2(*n*−1) chu
 allreduce-sim
 ```
 
-Use the simulator to change the per-link bandwidth of one hop and watch the total time: degrade one link to half bandwidth and the whole ring takes roughly twice as long in the bandwidth-dominated regime, even though 99% of the hardware is perfect.
+A ring runs at the speed of its slowest link, so one link at half bandwidth slows the whole collective as much as halving every link. Try it in the simulator: halve the bandwidth and, with a large message (the bandwidth-dominated regime), the time roughly doubles. In a real cluster that is what a single degraded link does, even though 99% of the hardware is perfect.
 
 ### Two kinds of slow
 
@@ -49,6 +49,12 @@ Use the simulator to change the per-link bandwidth of one hop and watch the tota
 |---|---|---|
 | **Persistent straggler** | Step time permanently higher; nccl-tests busbw consistently low at large message sizes whenever a specific node is included | PCIe downtraining, NIC at lower link speed, GDR disabled, socket fallback, wrong NUMA binding, ACS redirect, bad cable with high corrected-error rate |
 | **Intermittent straggler** | Step-time jitter, p99 step time far above p50, occasional NCCL timeouts | Thermal or power throttling, link flaps or BER bursts causing retransmissions, congestion hotspots, noisy neighbours on shared storage or frontend, host CPU contention (proxy thread starved) |
+
+Intermittent stragglers get worse with scale even when each node is just as healthy as before. Grow the job in the widget below and watch a one-in-a-thousand event per GPU become something that hits almost every step, while each GPU's own average barely moves.
+
+```widget
+straggler-tail
+```
 
 ### The component chain of one rank
 

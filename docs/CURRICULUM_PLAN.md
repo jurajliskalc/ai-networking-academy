@@ -67,3 +67,15 @@ Levels: **L1 beginner** (no prior knowledge assumed) → **L2 practitioner** →
 | `troubleshooting-tree` | An interactive decision tree from "the job is slow" to the evidence and command that confirms each root cause. |
 | `counter-decoder` | Tick the counters that are rising on a NIC or switch port and see the likely causes, ranked, with the next check to run. |
 | `telemetry-sampling` | A bursty queue sampled at different polling intervals: see what averages hide and why streaming and watermarks matter. |
+| `rail-path-explorer` | Pick two GPUs in a rail-optimized cluster and see the path traffic takes: same rail through one leaf, other rails through the spines or over NVLink with PXN. |
+| `pipeline-schedule` | GPipe and 1F1B schedules across pipeline stages: the bubble, how micro-batches shrink it, and the activation traffic each stage boundary sends. |
+| `kv-cache-transfer` | Model shape, prompt length and link speed to the KV cache size a disaggregated prefill node must ship to decode, and how long it takes. |
+| `pkey-membership` | InfiniBand partitions with full and limited members: which ports can talk, and how tenants and shared storage are isolated. |
+| `perftest-explorer` | Latency and bandwidth across message sizes, MiB/s to Gb/s, header overhead and the half-bandwidth point, as ib_write_bw and ib_write_lat show them. |
+| `sharp-aggregation` | Bytes each host sends and receives for an all-reduce with a ring versus a switch reduction tree, and the steps each takes. |
+| `straggler-tail` | Why one slow GPU in a thousand sets the pace: the odds that a synchronous step waits on a straggler as the job grows. |
+| `cabling-validator` | Compare the intended cabling plan with LLDP neighbors, inject miswires and see how an automated check finds each one. |
+| `ib-tools-map` | What each InfiniBand tool reads, from which part of the subnet and through which management interface (SMP, PMA, SA). |
+| `host-stack-paths` | Follow a send through the Linux TCP/IP stack and through RDMA kernel bypass, and see which tools can observe each layer. |
+| `bandwidth-ladder` | HBM, NVLink, PCIe and the scale-out NIC side by side for one GPU: bandwidth and the time to move the same data over each. |
+| `spray-reorder` | Spray one message over paths with different delays and watch packets arrive out of order, and how the receiver copes. |

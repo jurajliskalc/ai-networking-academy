@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Pill } from '../components/ui';
+import NumInput from '../components/NumInput';
 
 // ---------- Data (NVIDIA headline figures) and pure helpers ----------
 
@@ -130,7 +131,7 @@ export default function NvlinkGenerations() {
             </div>
           </div>
           <label className="text-xs text-muted">X (GB)
-            <input type="number" min={0.001} max={10000} step={0.1} value={gb} onChange={(e) => setGb(Math.max(0.001, Number(e.target.value) || 0.001))}
+            <NumInput min={0.001} max={10000} step={0.1} value={gb} onValue={setGb}
               className="ml-2 w-24 rounded-md border border-line bg-panel px-2 py-1 font-mono text-sm text-fg" />
           </label>
         </div>

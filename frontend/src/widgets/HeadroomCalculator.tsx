@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Pill } from '../components/ui';
+import NumInput from '../components/NumInput';
 
 export type MarginMode = 'none' | 'percent' | 'cells';
 export interface HeadroomInput {
@@ -76,8 +77,7 @@ function Num({ label, value, set, min, max, step = 1 }: { label: string; value: 
   return (
     <label className="block">
       <span className="mb-1 block font-mono text-[10px] uppercase tracking-[0.14em] text-muted">{label}</span>
-      <input type="number" value={value} min={min} max={max} step={step}
-        onChange={(e) => { const v = Number(e.target.value); if (Number.isFinite(v)) set(Math.max(min, Math.min(max, v))); }}
+      <NumInput value={value} min={min} max={max} step={step} onValue={set}
         className="w-full rounded-md border border-line bg-panel px-2 py-1 font-mono text-sm" />
     </label>
   );

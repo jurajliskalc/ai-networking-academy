@@ -12,7 +12,7 @@ objectives:
   - Run a structured, bottom-up troubleshooting workflow that ends in a fabric-wide ibdiagnet check.
 prerequisites: [subnet-manager-routing, ib-flow-control-vls, perftest-benchmarking]
 quiz: quiz-ib-tools-diagnostics
-widgets: []
+widgets: [ib-tools-map]
 labs: []
 tags: [infiniband, diagnostics, infiniband-diags, perfquery, ibdiagnet, iblinkinfo, counters, troubleshooting]
 further_reading:
@@ -54,6 +54,12 @@ This lesson turns the tools you met in earlier lessons into a systematic workflo
 | Central monitoring, telemetry, alerts | NVIDIA UFM | NVIDIA |
 
 Most of these tools send MADs from the local HCA (they need access to `/dev/infiniband/umad*`, usually root). They address remote ports by **LID** by default; many accept a GUID with `-G` or a directed route with `-D` for ports that have no LID yet. Check each tool's man page for the exact options in your version.
+
+Pick a symptom or a tool in the map below to see what the tool reads, how far into the subnet it reaches and through which management interface; then turn the Subnet Manager off to see which tools still answer.
+
+```widget
+ib-tools-map
+```
 
 ### Counters: errors, congestion, and traffic
 

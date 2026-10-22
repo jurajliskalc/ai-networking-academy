@@ -11,7 +11,7 @@ objectives:
   - Identify which interface on a GPU server belongs to which network, and explain the trade-offs of converged designs.
 prerequisites: [parallelism-strategies, ai-traffic-patterns]
 quiz: quiz-four-networks-of-an-ai-cluster
-widgets: [parallelism-map]
+widgets: [parallelism-map, bandwidth-ladder]
 labs: []
 tags: [cluster-architecture, back-end, front-end, storage, oob, management, nvlink, scale-up, scale-out, ai-workloads]
 further_reading:
@@ -66,6 +66,12 @@ Two words you will hear constantly:
 
 - **Scale-up**: making one "node" bigger. The GPUs inside an 8-GPU server, or inside a rack-scale system such as a 72-GPU NVL72 rack, are joined by NVLink switches into one high-bandwidth, memory-semantic domain. Communication there is load/store or copy at hundreds of GB/s per GPU (`nvlink-nvswitch`, `scale-up-domains-nvl72`).
 - **Scale-out**: connecting many such nodes with a network, the compute fabric. Communication there is RDMA over NICs at 400-800 Gb/s per GPU, roughly an order of magnitude less bandwidth than NVLink per GPU.
+
+To see that order of magnitude for one GPU, pick a platform below and compare HBM, NVLink, the host link (PCIe, or NVLink-C2C on GB200), the scale-out NIC and the front-end share, per direction and in the same units.
+
+```widget
+bandwidth-ladder
+```
 
 The parallelism mapping from `parallelism-strategies` follows directly: the most communication-intensive groups (TP, often EP) go into the scale-up domain, the rest (PP, DP) onto the scale-out fabric.
 

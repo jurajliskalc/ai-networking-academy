@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Pill } from '../components/ui';
+import NumInput from '../components/NumInput';
 
 export type Speed = 100 | 200 | 400 | 800 | 1600;
 export const SPEEDS: Speed[] = [100, 200, 400, 800, 1600];
@@ -143,7 +144,7 @@ export default function OpticsPlanner() {
       <div className="rounded-lg border border-line bg-panel-2 p-3">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted">Fabric optics power</div>
-          <label className="flex items-center gap-2 text-xs text-muted">GPUs <input type="number" min={1} value={gpus} onChange={(e) => setGpus(Math.max(1, Number(e.target.value) || 1))} className="w-24 rounded-md border border-line bg-panel px-2 py-1 font-mono text-xs text-fg" /></label>
+          <label className="flex items-center gap-2 text-xs text-muted">GPUs <NumInput integer min={1} value={gpus} onValue={setGpus} className="w-24 rounded-md border border-line bg-panel px-2 py-1 font-mono text-xs text-fg" /></label>
         </div>
         <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Fabric optics power by link class">
           <table className="w-full min-w-[680px] text-left text-xs">
@@ -152,7 +153,7 @@ export default function OpticsPlanner() {
               {rows.map((r, i) => { const p = per[i]; return (
                 <tr key={r.name} className="border-t border-line">
                   <td className="py-1 pr-2">{r.name}</td>
-                  <td className="pr-2"><input type="number" min={0} value={r.links} aria-label={`${r.name} links`} onChange={(e) => upd(i, { links: Math.max(0, Number(e.target.value) || 0) })} className="w-20 rounded border border-line bg-panel px-1 py-0.5 font-mono" /></td>
+                  <td className="pr-2"><NumInput integer min={0} value={r.links} aria-label={`${r.name} links`} onValue={(v) => upd(i, { links: v })} className="w-20 rounded border border-line bg-panel px-1 py-0.5 font-mono" /></td>
                   <td className="pr-2"><select value={r.speed} aria-label={`${r.name} speed`} onChange={(e) => upd(i, { speed: Number(e.target.value) as Speed, wOverride: null })} className="rounded border border-line bg-panel px-1 py-0.5 font-mono">{SPEEDS.map((s) => <option key={s} value={s}>{sp(s)}</option>)}</select></td>
                   <td className="pr-2"><select value={r.media} aria-label={`${r.name} medium`} onChange={(e) => upd(i, { media: e.target.value as MediaId, wOverride: null })} className="rounded border border-line bg-panel px-1 py-0.5">{MEDIA.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</select></td>
                   <td className="pr-2"><select value={r.perModule} aria-label={`${r.name} ports per module`} onChange={(e) => upd(i, { perModule: Number(e.target.value) as 1 | 2, wOverride: null })} className="rounded border border-line bg-panel px-1 py-0.5 font-mono"><option value={1}>1</option><option value={2}>2 (twin-port)</option></select></td>

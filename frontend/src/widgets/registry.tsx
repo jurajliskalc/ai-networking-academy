@@ -39,9 +39,33 @@ export const WIDGETS: WidgetInfo[] = [
   { id: 'troubleshooting-tree', title: 'Slow-job triage tree', summary: 'An interactive decision tree from "the job is slow" to the evidence and command that confirms each root cause.', component: lazy(() => import('./TroubleshootingTree')) },
   { id: 'counter-decoder', title: 'Counter decoder', summary: 'Tick the counters that are rising on a NIC or switch port and see the likely causes, ranked, with the next check to run.', component: lazy(() => import('./CounterDecoder')) },
   { id: 'telemetry-sampling', title: 'Telemetry sampling and microbursts', summary: 'A bursty queue sampled at different polling intervals: see what averages hide and why streaming and watermarks matter.', component: lazy(() => import('./TelemetrySampling')) },
+  { id: 'rail-path-explorer', title: 'Rail-optimized path explorer', summary: 'Pick two GPUs in a rail-optimized cluster and see the path traffic takes: same rail through one leaf, other rails through the spines or over NVLink with PXN.', component: lazy(() => import('./RailPathExplorer')) },
+  { id: 'pipeline-schedule', title: 'Pipeline parallel schedules', summary: 'GPipe and 1F1B schedules across pipeline stages: the bubble, how micro-batches shrink it, and the activation traffic each stage boundary sends.', component: lazy(() => import('./PipelineSchedule')) },
+  { id: 'kv-cache-transfer', title: 'KV cache transfer calculator', summary: 'Model shape, prompt length and link speed to the KV cache size a disaggregated prefill node must ship to decode, and how long it takes.', component: lazy(() => import('./KvCacheTransfer')) },
+  { id: 'pkey-membership', title: 'P_Key membership matrix', summary: 'InfiniBand partitions with full and limited members: which ports can talk, and how tenants and shared storage are isolated.', component: lazy(() => import('./PkeyMembership')) },
+  { id: 'perftest-explorer', title: 'perftest message-size explorer', summary: 'Latency and bandwidth across message sizes, MiB/s to Gb/s, header overhead and the half-bandwidth point, as ib_write_bw and ib_write_lat show them.', component: lazy(() => import('./PerftestExplorer')) },
+  { id: 'sharp-aggregation', title: 'In-network reduction (SHARP)', summary: 'Bytes each host sends and receives for an all-reduce with a ring versus a switch reduction tree, and the steps each takes.', component: lazy(() => import('./SharpAggregation')) },
+  { id: 'straggler-tail', title: 'Straggler and tail amplification', summary: 'Why one slow GPU in a thousand sets the pace: the odds that a synchronous step waits on a straggler as the job grows.', component: lazy(() => import('./StragglerTail')) },
+  { id: 'cabling-validator', title: 'Cabling plan validator', summary: 'Compare the intended cabling plan with LLDP neighbors, inject miswires and see how an automated check finds each one.', component: lazy(() => import('./CablingValidator')) },
+  { id: 'ib-tools-map', title: 'InfiniBand diagnostic tools map', summary: 'What each InfiniBand tool reads, from which part of the subnet and through which management interface (SMP, PMA, SA).', component: lazy(() => import('./IbToolsMap')) },
+  { id: 'host-stack-paths', title: 'Kernel TCP/IP vs RDMA data path', summary: 'Follow a send through the Linux TCP/IP stack and through RDMA kernel bypass, and see which tools can observe each layer.', component: lazy(() => import('./HostStackPaths')) },
+  { id: 'bandwidth-ladder', title: 'GPU bandwidth ladder', summary: 'HBM, NVLink, PCIe and the scale-out NIC side by side for one GPU: bandwidth and the time to move the same data over each.', component: lazy(() => import('./BandwidthLadder')) },
+  { id: 'spray-reorder', title: 'Packet spraying and reordering', summary: 'Spray one message over paths with different delays and watch packets arrive out of order, and how the receiver copes.', component: lazy(() => import('./SprayReorder')) },
 ];
 
 export const widgetById = (id: string) => WIDGETS.find((w) => w.id === id);
+
+/** Groups for the Visualizations page, in curriculum order. Every widget belongs to exactly one (unit-tested). */
+export const TOPICS: { name: string; ids: string[] }[] = [
+  { name: 'Networking foundations', ids: ['ethernet-frame', 'subnet-calculator', 'mtu-calculator', 'queue-latency', 'host-stack-paths'] },
+  { name: 'AI workloads', ids: ['parallelism-map', 'training-step-timeline', 'pipeline-schedule', 'kv-cache-transfer', 'straggler-tail'] },
+  { name: 'GPU server and scale-up', ids: ['pcie-topo', 'pcie-bandwidth', 'nvlink-generations', 'bandwidth-ladder'] },
+  { name: 'Fabric design and routing', ids: ['fabric-sizer', 'rail-path-explorer', 'bgp-path-sim', 'evpn-route-explorer', 'ecmp-collision', 'spray-reorder', 'optics-planner'] },
+  { name: 'RDMA and InfiniBand', ids: ['rocev2-packet', 'verbs-flow', 'qp-state-machine', 'transport-matrix', 'perftest-explorer', 'ib-addressing', 'ib-speeds', 'ib-credit-flow', 'ib-tools-map', 'pkey-membership'] },
+  { name: 'Lossless Ethernet', ids: ['pfc-ecn-sim', 'headroom-calculator', 'dscp-mapper', 'pfc-deadlock'] },
+  { name: 'Collectives and NCCL', ids: ['collective-explorer', 'allreduce-sim', 'sharp-aggregation', 'nccl-env-explorer', 'nccl-tests-reader'] },
+  { name: 'Operations and troubleshooting', ids: ['cabling-validator', 'telemetry-sampling', 'counter-decoder', 'ber-fec', 'troubleshooting-tree'] },
+];
 
 export function WidgetFrame({ id, standalone = false }: { id: string; standalone?: boolean }) {
   const w = widgetById(id);

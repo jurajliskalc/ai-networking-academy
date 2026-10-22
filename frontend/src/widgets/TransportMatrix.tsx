@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Pill } from '../components/ui';
+import NumInput from '../components/NumInput';
 
 export type Transport = 'RC' | 'UC' | 'UD' | 'XRC' | 'DC';
 export const TRANSPORTS: Transport[] = ['RC', 'UC', 'UD', 'XRC', 'DC'];
@@ -80,7 +81,7 @@ function NumIn({ label, value, set, min, max }: { label: string; value: number; 
   return (
     <label className="block">
       <span className="mb-1 block font-mono text-[10px] uppercase tracking-[0.14em] text-muted">{label}</span>
-      <input type="number" min={min} max={max} value={value} onChange={(e) => set(Math.max(min, Math.min(max, Math.round(Number(e.target.value) || min))))}
+      <NumInput integer min={min} max={max} value={value} onValue={set}
         className="w-full rounded-md border border-line bg-panel px-2 py-1 font-mono text-sm" />
     </label>
   );

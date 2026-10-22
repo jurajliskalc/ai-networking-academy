@@ -11,7 +11,7 @@ objectives:
   - Define measurable acceptance criteria and a burn-in procedure that catches infant-mortality failures.
 prerequisites: [perftest-benchmarking, nccl-tests-interpretation, optics-cabling-power, telemetry-counters]
 quiz: quiz-fabric-validation-burn-in
-widgets: [allreduce-sim, ecmp-collision, nccl-tests-reader]
+widgets: [allreduce-sim, ecmp-collision, nccl-tests-reader, cabling-validator]
 labs: []
 tags: [validation, burn-in, acceptance, nccl-tests, perftest, cabling]
 further_reading:
@@ -78,6 +78,12 @@ Every test needs an expected value. Derive it from the hardware, then confirm it
 - On InfiniBand, `ibnetdiscover` produces the discovered topology and `ibdiagnet` can compare against a reference topology file and report mismatches, as can UFM's topology comparison features (check the version documentation for the exact options).
 
 Typical defects are swapped cables between two ports on the same switch (easy to miss: both links are up), a node plugged into the wrong rail's leaf (breaks rail alignment and shows up later as poor all-reduce bandwidth), and links that came up at a lower speed or width.
+
+Try each defect on a small pod and see how the cabling diff reports it, including the two that look identical from the switch (a missing cable and a NIC that is down):
+
+```widget
+cabling-validator
+```
 
 **Speed, width and FEC.** Every link must be at its designed speed (for example 400G or NDR), designed lane count and FEC mode. Check `ethtool <netdev>` (Speed, Duplex) and `ethtool --show-fec <netdev>` on hosts, the NOS's interface view on switches, and `ibstat`/`iblinkinfo` on InfiniBand.
 

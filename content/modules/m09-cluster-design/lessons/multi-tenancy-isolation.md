@@ -12,7 +12,7 @@ objectives:
   - Allocate tenants to a rail-optimized cluster so that shared links, and therefore interference, are minimized.
 prerequisites: [evpn-vxlan-frontend, subnet-manager-routing, spectrum-x-architecture]
 quiz: quiz-multi-tenancy-isolation
-widgets: [parallelism-map, evpn-route-explorer]
+widgets: [parallelism-map, evpn-route-explorer, pkey-membership]
 labs: []
 tags: [multi-tenancy, pkey, vxlan, evpn, vrf, bluefield, isolation]
 further_reading:
@@ -71,6 +71,12 @@ carried in the Base Transport Header of every packet:
   host that ignores its own table.
 
 Because the P_Key is checked in hardware per packet, partitioning has no throughput cost.
+
+Assign tenant nodes, shared storage, UFM and the SM to partitions as full or limited members and watch which pairs can talk; compare the shared storage partition with the variant where tenants were made full members:
+
+```widget
+pkey-membership
+```
 
 ### Ethernet: VRFs and VXLAN/EVPN
 

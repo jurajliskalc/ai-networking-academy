@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { Pill } from '../components/ui';
+import NumInput from '../components/NumInput';
 
 // ---------- Pure calculation (unit-testable). Decimal units: 1 KB = 1e3 B, 1 MB = 1e6 B. ----------
 
@@ -111,7 +112,6 @@ function Chart({ r, buffer }: { r: IncastResult; buffer: number }) {
   );
 }
 
-const num = (v: string, lo: number, hi: number) => Math.max(lo, Math.min(hi, Number(v) || lo));
 
 export default function QueueLatency() {
   const [gbps, setGbps] = useState(400);
@@ -141,7 +141,7 @@ export default function QueueLatency() {
         <div>
           <label htmlFor="ql-frame" className="mb-1 block font-mono text-[10px] uppercase tracking-[0.14em] text-muted">Frame size (B, without preamble/IPG)</label>
           <div className="flex flex-wrap items-center gap-1">
-            <input id="ql-frame" type="number" min={64} max={9216} value={frame} onChange={(e) => setFrame(Math.floor(num(e.target.value, 64, 9216)))}
+            <NumInput id="ql-frame" integer min={64} max={9216} value={frame} onValue={setFrame}
               className="w-20 rounded-md border border-line bg-panel px-2 py-1 font-mono text-sm" />
             {[64, 1518, 4158, 9018].map((f) => (
               <button key={f} type="button" aria-pressed={f === frame} onClick={() => setFrame(f)} aria-label={`${f} byte frame`}
@@ -152,7 +152,7 @@ export default function QueueLatency() {
         <div>
           <label htmlFor="ql-depth" className="mb-1 block font-mono text-[10px] uppercase tracking-[0.14em] text-muted">Current queue depth</label>
           <div className="flex items-center gap-1">
-            <input id="ql-depth" type="number" min={0} max={1e6} value={depth} onChange={(e) => setDepth(num(e.target.value, 0, 1e6))}
+            <NumInput id="ql-depth" min={0} max={1e6} value={depth} onValue={setDepth}
               className="w-24 rounded-md border border-line bg-panel px-2 py-1 font-mono text-sm" />
             {(['KB', 'packets'] as const).map((u) => (
               <button key={u} type="button" aria-pressed={u === depthUnit} onClick={() => setDepthUnit(u)}
@@ -163,7 +163,7 @@ export default function QueueLatency() {
         <div>
           <label htmlFor="ql-buf" className="mb-1 block font-mono text-[10px] uppercase tracking-[0.14em] text-muted">Buffer for this queue (MB)</label>
           <div className="flex flex-wrap items-center gap-1">
-            <input id="ql-buf" type="number" min={0.01} max={500} step={0.5} value={bufferMB} onChange={(e) => setBufferMB(num(e.target.value, 0.01, 500))}
+            <NumInput id="ql-buf" min={0.01} max={500} step={0.5} value={bufferMB} onValue={setBufferMB}
               className="w-20 rounded-md border border-line bg-panel px-2 py-1 font-mono text-sm" />
             {[1, 2, 10, 32].map((b) => (
               <button key={b} type="button" aria-pressed={b === bufferMB} onClick={() => setBufferMB(b)} aria-label={`${b} MB buffer`}
@@ -180,7 +180,7 @@ export default function QueueLatency() {
         <div>
           <label htmlFor="ql-burst" className="mb-1 block font-mono text-[10px] uppercase tracking-[0.14em] text-muted">Burst per sender (KB)</label>
           <div className="flex flex-wrap items-center gap-1">
-            <input id="ql-burst" type="number" min={1} max={100000} value={burstKB} onChange={(e) => setBurstKB(num(e.target.value, 1, 100000))}
+            <NumInput id="ql-burst" min={1} max={100000} value={burstKB} onValue={setBurstKB}
               className="w-24 rounded-md border border-line bg-panel px-2 py-1 font-mono text-sm" />
             {[64, 256, 1000, 4000].map((b) => (
               <button key={b} type="button" aria-pressed={b === burstKB} onClick={() => setBurstKB(b)} aria-label={`${b} KB burst`}

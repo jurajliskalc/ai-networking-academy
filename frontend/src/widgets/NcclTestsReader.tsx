@@ -1,4 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react';
+import NumInput from '../components/NumInput';
 
 export type Coll = 'all_reduce' | 'all_gather' | 'reduce_scatter' | 'broadcast' | 'reduce' | 'alltoall';
 export const COLLS: Coll[] = ['all_reduce', 'all_gather', 'reduce_scatter', 'broadcast', 'reduce', 'alltoall'];
@@ -97,7 +98,7 @@ function Seg<T extends string | number>({ label, value, options, onChange, rende
 function Num({ label, value, set, min = 1 }: { label: string; value: number; set: (v: number) => void; min?: number }) {
   return (
     <label className="block"><span className="mb-1 block font-mono text-[10px] uppercase tracking-[0.14em] text-muted">{label}</span>
-      <input type="number" min={min} value={value} onChange={(e) => set(Math.max(min, Number(e.target.value) || min))} className="w-full rounded-md border border-line bg-panel px-2 py-1 font-mono text-sm" /></label>
+      <NumInput min={min} value={value} onValue={set} className="w-full rounded-md border border-line bg-panel px-2 py-1 font-mono text-sm" /></label>
   );
 }
 function Out({ label, value, tone = 'text-fg' }: { label: string; value: ReactNode; tone?: string }) {

@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Pill } from '../components/ui';
+import NumInput from '../components/NumInput';
 
 type ColorBy = 'tp' | 'pp' | 'dp' | 'ep';
 const TOTALS = [64, 128, 256];
@@ -286,9 +287,9 @@ export default function ParallelismMap() {
           <Seg label="Micro-batches / step" value={mb} options={[1, 4, 8, 16, 32]} onChange={setMb} />
           <div className="grid grid-cols-2 gap-2">
             <label className="text-xs"><span className="mb-1 block font-mono text-[10px] uppercase tracking-[0.12em] text-muted">NVLink GB/s/dir</span>
-              <input type="number" min={50} max={2000} value={nvl} onChange={(e) => setNvl(Math.max(1, Number(e.target.value) || 1))} className="w-full rounded-md border border-line bg-panel px-2 py-1 font-mono text-xs" /></label>
+              <NumInput min={1} max={2000} value={nvl} onValue={setNvl} className="w-full rounded-md border border-line bg-panel px-2 py-1 font-mono text-xs" /></label>
             <label className="text-xs"><span className="mb-1 block font-mono text-[10px] uppercase tracking-[0.12em] text-muted">NIC GB/s/dir</span>
-              <input type="number" min={5} max={400} value={nic} onChange={(e) => setNic(Math.max(1, Number(e.target.value) || 1))} className="w-full rounded-md border border-line bg-panel px-2 py-1 font-mono text-xs" /></label>
+              <NumInput min={1} max={400} value={nic} onValue={setNic} className="w-full rounded-md border border-line bg-panel px-2 py-1 font-mono text-xs" /></label>
           </div>
         </div>
         {moe && model.topk === 0 && <p className="mt-2 text-xs text-warn">The selected model is dense; pick the MoE model to see expert-parallel traffic.</p>}

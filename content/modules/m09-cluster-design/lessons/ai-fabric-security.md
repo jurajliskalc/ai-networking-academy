@@ -12,7 +12,7 @@ objectives:
   - Detect isolation violations from partition-enforcement counters and fabric-manager events.
 prerequisites: [multi-tenancy-isolation, why-rdma, subnet-manager-routing]
 quiz: quiz-ai-fabric-security
-widgets: []
+widgets: [pkey-membership]
 labs: []
 tags: [security, rdma, infiniband, pkey, mkey, ipsec, macsec, psp, uec, dpu, multi-tenancy]
 further_reading:
@@ -149,6 +149,12 @@ Three of these deserve emphasis:
 > secrets at all: partitions hold only because switches enforce them. A management key that leaks
 > (for example, read from a compromised host or captured on a mirror port) can be replayed. Randomize
 > the management keys and use the subnet manager's periodic key update rather than static values.
+
+Pick the tenant design, then let host B1 forge tenant A's P_Key with switch enforcement on and off: the key value is no secret, and only the switch port stops the forged packet.
+
+```widget
+pkey-membership
+```
 
 ### RoCEv2 and Ethernet: isolation without fabric keys
 
