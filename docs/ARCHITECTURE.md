@@ -121,7 +121,7 @@ solved only when the diagnosis is right *and* the fabric passes every check.
 `npm run validate` (content rules), `npm test` (progress logic plus every simulator lab: broken before
 the fix, clean after it), `npm run build` (type check and bundle), `npm run e2e` (browser interaction
 tests) and `bash -n` on every lab script. CI runs all of them on each push and pull request; the Pages
-workflow deploys `main`.
+workflow deploys `main` once it is enabled (it is disabled while the repository is private).
 
 `npm run e2e` runs Playwright against `vite preview` of `dist/` (run `npm run build` first) on a free
 port. It drives the installed Google Chrome (`channel: 'chrome'`; set `CHROME_PATH` to use another

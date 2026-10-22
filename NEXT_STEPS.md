@@ -2,8 +2,10 @@
 
 Ordered by value. See IMPLEMENTATION_STATUS.md for what is done and how it was verified.
 
-1. **Publish.** Create the GitHub repository `jurajliskalc/ai-networking-academy`, push `main`, enable
-   Pages (Settings → Pages → Source: GitHub Actions), and confirm both workflows go green.
+1. **Publish (when ready).** The repository `jurajliskalc/ai-networking-academy` exists, is private, and CI
+   is green. To publish the site: `gh workflow enable pages.yml`, enable Pages (Settings → Pages → Source:
+   GitHub Actions), run the workflow, then restore the Pages badge and the "Open the academy" link in
+   README.md. A Pages site is public even while the repository stays private.
 2. **Finish the Tier 0 lab runs.** Five labs were run end to end and verified on Ubuntu 24.04 under WSL2
    (see `labs/README.md`, Verification record). Still open: `hol-soft-roce-perftest` and the real two-VM
    capture of `hol-rocev2-wireshark` need a VM with Ubuntu's generic kernel (`rdma_rxe`); WSL2 lacks it.

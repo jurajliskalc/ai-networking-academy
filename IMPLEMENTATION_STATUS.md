@@ -8,7 +8,7 @@ stated as what it is.
 | Area | Status | Evidence |
 |---|---|---|
 | Content compiler and validator | Done | `npm run validate` prints `Content OK`. It enforces IDs, required sections and keys, quiz option rules (correct-count, explanations, correct option at most 1.25x the longest distractor), string types, cross-references, widget IDs and table cell counts. |
-| Static SPA (21 routes) | Done | `npm run build` passes `tsc` (strict) and Vite. All 220 routes, including all 33 widget pages and the 106 widget embeds in lessons, render in headless Chrome without uncaught errors (crawl on 2026-10-22). |
+| Static SPA (21 routes) | Done | `npm run build` passes `tsc` (strict) and Vite. All 260 routes, including all 33 widget pages and the 106 widget embeds in lessons, render in headless Chrome at desktop and phone width without uncaught errors, broken internal links, unfilled placeholders or horizontal scrolling (crawl on 2026-10-22). |
 | All 74 mermaid diagrams render | Done | Same headless crawl; no `data-mermaid-error` fallbacks. |
 | Progress store (localStorage, export/import, SM-2, streaks) | Done | `tests/progress.test.ts` |
 | Fabric Simulator engine + shell | Done | `tests/sim-labs.test.ts`: healthy baseline, every lab broken before and fixed after its `fix` replay, key symptoms (MTU black hole, PFC mismatch, PCIe cap, socket fallback, NVUE staging, pipes); `tests/sim-scenarios.test.ts`: evidence for sim-14 onward and the healthy InfiniBand baseline (ibstat, iblinkinfo, perfquery, sminfo, ibqueryerrors formats from the rdma-core sources). 227 unit tests pass in total (simulator labs and scenarios, progress logic, widget math, hardware profile and report, search). |
@@ -17,7 +17,7 @@ stated as what it is.
 | Site-wide search | Done | `/`, Ctrl/Cmd+K or the header button. Index built at content-build time (`scripts/search-index.mjs` → `search.json`, ~0.9 MB raw / ~330 KB gzipped, loaded on first open) over lesson sections, quizzes, simulator, hands-on and hardware labs, hardware guides, commands, glossary, widgets, modules and exams; results grouped by type with highlights and deep links to lesson sections (`?s=<heading>`). Builder and ranking unit-tested (`tests/search.test.ts`); keyboard flow (open, type, arrows, Enter, deep link focus, Esc) and phone width driven in headless Chrome. |
 | Accessibility (WCAG 2.2 AA target) | Done | axe-core (wcag2a/aa, 2.1, 2.2, best-practice) on every route (about 185) in light and dark theme, 2026-10-22: 5,700+ violation nodes before, 0 after. Fixed: light-theme contrast tokens, landmarks, skip link, one `h1` per page, per-route titles, focus ring, focus management, reduced motion, labelled progress bars and form fields, radio/checkbox quiz semantics with announced verdicts, terminal keyboard trap, keyboard-scrollable regions, mermaid names, and a pass over all 33 widgets (state, SVG text alternatives, live results, target size). `e2e/a11y.spec.ts` keeps it that way in CI: axe on 22 representative pages (every page kind) in light and dark. Not tested with a real screen reader. |
 | Responsive layout | Done | Checked at 500 px (the narrowest width headless Chrome allows) and 1440 px. |
-| CI (validate, test, build, e2e, `bash -n`) and Pages deploy workflows | Written | Will run on the first push; not yet executed on GitHub. |
+| CI (validate, test, build, e2e, `bash -n`, toolkit tests) | Done | Runs on every push to the private GitHub repository; green since the first push (2026-10-22). The Pages deploy workflow is disabled until the site is published (a Pages site is public even for a private repo). |
 | Real HW section (`/hw`, Connect page, hardware lab pages) | Done | Lab profile, `{{VAR}}` substitution, generated files, health review rules, readiness and check-result import are unit-tested (`tests/hw.test.ts`, including a test that `hardware.yaml`, `lib.sh` and `lab.env.example` defaults agree). Pages rendered in headless Chrome with the demo report, no console errors. A page on the academy origin fetched status and checks from a running `aina-hw serve` (cross-origin path verified in Chrome). |
 | `aina-hw` toolkit | Done | `labs/hw-toolkit/tests` (10 tests: parsers, collector against fake sysfs trees, redaction, origin allow-list). Smoke-tested in WSL Ubuntu 24.04: `env`, `collect`, `check`, `serve` (status/report/checks, OPTIONS preflight, foreign origin gets no CORS headers, POST rejected). `collect-all` over SSH and every collector path that needs a real RDMA NIC are **not yet run on hardware**. |
 | Windows launcher (`start-academy.bat` + `scripts/start.ps1`) | Written | The build path it runs (`npm run build`, `vite preview`) is used daily during development; the batch file itself has not been double-clicked on a clean machine. |
@@ -34,7 +34,7 @@ stated as what it is.
 | Real hardware labs, Tier 1-3 | 9 (`hw-01` … `hw-09`) | Written against the fact-checked command reference with vendor-specific items hedged; every script passes `bash -n`. **Not executed on RDMA hardware** (`verified: false`); `hw-02`'s check was run on a host without RDMA (WSL) and fails cleanly at the right step. Uncertain items are listed in the labs themselves (mlx5 counter names, `dcb` and NVUE syntax per release, NCCL log strings). |
 | Real hardware guides | 7 | Overview, requirements, host setup, network setup, toolkit, safety, troubleshooting. Prices and reach figures are orders of magnitude. |
 | Commands / glossary | 158 / 241 | Validated for structure; reviewed for accuracy. |
-| Further-reading links | 154 unique URLs | Checked with curl on 2026-10-22. Three dead NVIDIA links were fixed. ACM DL and doi.org return 403 to scripts (bot protection), not dead links. |
+| Further-reading links | 186 external links | Checked with curl on 2026-10-22. Three dead NVIDIA links were fixed. ACM DL and doi.org return 403 to scripts (bot protection), not dead links; rdmamojo.com answers scripts with HTTP 500 but serves its page. |
 
 ## Correctness verification (second pass, 2026-10-22)
 
@@ -48,8 +48,8 @@ stated as what it is.
 | Answer-length bias | Found by the third pass: the correct option was the longest in 82% of 575 single-answer questions (often 2-4x longer). | Distractors rewritten with plausible but wrong mechanisms in all quizzes, exams and lab diagnoses; now 27%, none over 1.25x. The validator rejects a correct option over 1.25x the longest distractor. |
 | Fourth pass (2026-10-22, new material) | New lessons fact-checked by a reviewer who did not write them (about 400 claims); every number in the new lessons, quizzes, exam questions and simulator labs recomputed in Python (about 140 quantities); new simulator labs solved through the shell from the evidence alone and their tool output compared with the rdma-core, perftest, NCCL and Cumulus sources. | About 45 corrections, among them a 10x bandwidth-delay-product slip (400 Gb/s x 10 us is 500,000 bytes), P_Keys wrongly described as secrets to rotate, RoCE wrongly said to fall back to software IPsec, an unlimited `maxParallelUpgrades` example, and a LinkDownedCounter red herring counted on only one end of a link. |
 
-What this does not cover: text a source could not confirm is hedged or labelled illustrative, and the
-hands-on labs are still not executed on a VM.
+What this does not cover: text a source could not confirm is hedged or labelled illustrative; two Tier 0
+labs (Soft-RoCE, real RoCEv2 capture) and all real-hardware labs are not yet executed.
 
 ## Known limitations
 

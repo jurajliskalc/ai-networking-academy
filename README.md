@@ -6,13 +6,12 @@
 RDMA · InfiniBand · RoCEv2 · lossless Ethernet · NCCL · rail-optimized fabrics · troubleshooting
 
 [![CI](https://github.com/jurajliskalc/ai-networking-academy/actions/workflows/ci.yml/badge.svg)](https://github.com/jurajliskalc/ai-networking-academy/actions/workflows/ci.yml)
-[![Pages](https://github.com/jurajliskalc/ai-networking-academy/actions/workflows/pages.yml/badge.svg)](https://jurajliskalc.github.io/ai-networking-academy/)
 ![Lessons](https://img.shields.io/badge/lessons-76-4ade80)
-![Questions](https://img.shields.io/badge/questions-660-22d3ee)
+![Questions](https://img.shields.io/badge/questions-723-22d3ee)
 ![Labs](https://img.shields.io/badge/labs-35-fbbf24)
 ![License](https://img.shields.io/badge/code-PolyForm%20Noncommercial-blue) ![License](https://img.shields.io/badge/content-CC%20BY--NC--SA%204.0-lightgrey)
 
-**[▶ Open the academy](https://jurajliskalc.github.io/ai-networking-academy/)** · runs entirely in your browser, no account, no backend
+**[▶ Run it locally](#run-it-locally)** · runs entirely in your browser, no account, no backend
 
 <img src="docs/screenshots/dashboard.png" alt="Dashboard" width="900" />
 
@@ -137,7 +136,8 @@ Tier 0 labs need an Ubuntu 24.04 VM; Tier 1-3 labs need your own RDMA hosts (see
 
 A static single-page app (React 19, TypeScript, Vite, Tailwind CSS v4) with no backend. All learning
 content is plain Markdown and YAML under [`content/`](content), validated and compiled to JSON at build
-time. GitHub Actions validates, tests and builds every push, and deploys `main` to GitHub Pages. See
+time. GitHub Actions validates, tests, builds and browser-tests every push. A GitHub Pages deploy workflow is
+included but disabled until the site is published. See
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ```
@@ -154,7 +154,11 @@ Content is written for engineers who will act on it, so accuracy comes first:
 * No invented CLI flags, counters, environment variables or APIs.
 * Vendor- and generation-specific facts are hedged and point to the authoritative documentation.
 * Sample command output is labelled illustrative unless it is a real capture.
-* Every lesson, quiz and exam was reviewed twice after it was written: once by expert read-through and once by a source-based fact-check of about 2,400 claims, plus a blind re-answering of all 674 questions with shuffled options. The hands-on and hardware labs are
+* Every lesson, quiz and exam was reviewed after it was written, then went through a source-based
+  fact-check (about 2,800 claims checked against RFCs, specifications, tool source code and vendor
+  documentation, over 200 corrections), a blind re-answering of the questions with shuffled options,
+  and a recomputation of every number in the newer material. Details in
+  [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md). The hands-on and hardware labs are
   syntax-checked (`bash -n`; the original Tier 0 labs also with ShellCheck) and are marked `verified: false`
   until they have been run end to end on a reference VM or reference hardware. Five Tier 0 labs have been
   run end to end and are marked verified (see `labs/README.md`).
