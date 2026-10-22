@@ -10,7 +10,7 @@ RDMA · InfiniBand · RoCEv2 · lossless Ethernet · NCCL · rail-optimized fabr
 ![Lessons](https://img.shields.io/badge/lessons-76-4ade80)
 ![Questions](https://img.shields.io/badge/questions-660-22d3ee)
 ![Labs](https://img.shields.io/badge/labs-35-fbbf24)
-![License](https://img.shields.io/badge/code-MIT-blue) ![License](https://img.shields.io/badge/content-CC%20BY--SA%204.0-lightgrey)
+![License](https://img.shields.io/badge/code-PolyForm%20Noncommercial-blue) ![License](https://img.shields.io/badge/content-CC%20BY--NC--SA%204.0-lightgrey)
 
 **[▶ Open the academy](https://jurajliskalc.github.io/ai-networking-academy/)** · runs entirely in your browser, no account, no backend
 
@@ -164,6 +164,9 @@ with a source. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
-Code: MIT. Learning content: CC BY-SA 4.0. See [LICENSE](LICENSE). This is an independent, unofficial
+Free for noncommercial use: personal study, teaching, research, and use by educational and other
+noncommercial organisations. Code: PolyForm Noncommercial 1.0.0. Learning content: CC BY-NC-SA 4.0.
+Commercial use (for example company training, hosting it as a service, or including it in a paid
+product or course) needs a separate license from the copyright holder. See [LICENSE](LICENSE). This is an independent, unofficial
 study resource. Product names belong to their owners, and nothing here is endorsed by any vendor or
 certification body.

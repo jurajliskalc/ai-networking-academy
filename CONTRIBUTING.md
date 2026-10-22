@@ -28,5 +28,7 @@ Read [docs/AUTHORING.md](docs/AUTHORING.md) first; simulator labs are described 
 * Every simulator lab must pass `tests/sim-labs.test.ts`; every hands-on lab ships a `check.sh` that
   passes `bash -n`.
 
-Code is MIT licensed and content is CC BY-SA 4.0 (see [LICENSE](LICENSE)). By contributing you agree
-to license your contribution under the same terms.
+Code is licensed under PolyForm Noncommercial 1.0.0 and content under CC BY-NC-SA 4.0 (see
+[LICENSE](LICENSE)). By contributing you agree to license your contribution under the same terms, and
+you grant the copyright holder the right to also license it under other terms, including commercial
+licenses.
