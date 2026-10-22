@@ -11,7 +11,7 @@ objectives:
   - Explain where firewalls and ACLs can break RDMA connection setup (TCP side channels, rdma_cm, UDP 4791) and how to prove it.
 prerequisites: [troubleshooting-methodology, rdma-on-linux, verbs-qps-mrs, perftest-benchmarking]
 quiz: quiz-rdma-connection-failures
-widgets: [qp-state-machine]
+widgets: [qp-state-machine, counter-decoder]
 labs: []
 tags: [rdma, rocev2, infiniband, gid, mtu, pkey, troubleshooting]
 further_reading:
@@ -128,6 +128,12 @@ On mlx5 NICs, RDMA transport counters are exposed under `/sys/class/infiniband/<
 | `req_cqe_error` / `resp_cqe_error` | Completions with error on requester / responder side | Correlate with the application's error log |
 
 A useful pattern: if `local_ack_timeout_err` climbs on the sender but `out_of_sequence` is zero on the receiver, the packets are not reaching the receiver at all (addressing, routing, ACL, MTU). If `out_of_sequence` climbs on the receiver, packets arrive with gaps: the path works but drops some (congestion drops, link errors, lossless misconfiguration).
+
+Try the pattern in the decoder: mark `local_ack_timeout_err` rising with `out_of_sequence` flat, then flip `out_of_sequence` to rising, and compare the ranked causes.
+
+```widget
+counter-decoder
+```
 
 ### The side channels
 

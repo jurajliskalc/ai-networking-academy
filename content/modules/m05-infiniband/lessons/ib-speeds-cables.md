@@ -12,7 +12,7 @@ objectives:
   - Estimate switch counts and port reach for a two-tier fat tree from switch radix.
 prerequisites: [ib-architecture]
 quiz: quiz-ib-speeds-cables
-widgets: [fabric-sizer]
+widgets: [fabric-sizer, ib-speeds]
 labs: []
 tags: [infiniband, ndr, hdr, xdr, pam4, fec, osfp, qsfp, dac, aoc, transceivers, cabling]
 further_reading:
@@ -55,6 +55,12 @@ Notes:
 - Older generations quote "signalling rate" (for example QDR = 40 Gb/s) while the usable data rate was 80 % of that because of 8b/10b encoding. From FDR onward, 64b/66b (and then FEC-based framing) made the overhead small.
 - From EDR onward the nominal port speeds (100, 200, 400, 800) are the data rates; the higher per-lane signalling figures include FEC and framing overhead.
 - **XDR** details (exact lane rate, FEC, reach per cable type) are the newest and should be taken from current NVIDIA/IBTA documentation; NVIDIA's XDR products are the Quantum-X800 switch family and ConnectX-8 SuperNIC generation. The IBTA roadmap lists a further generation (GDR) beyond XDR.
+
+Sort the generations, then pick a generation and width to compute the link data rate and check it against the PCIe slot it sits in:
+
+```widget
+ib-speeds
+```
 
 ### NRZ, PAM4 and FEC
 

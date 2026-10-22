@@ -11,7 +11,7 @@ objectives:
   - Recognise from NCCL logs when NCCL has fallen back to sockets or lost GPUDirect RDMA, and name the usual causes.
 prerequisites: [troubleshooting-methodology, nccl-debugging, pcie-numa-topology, nccl-tests-interpretation]
 quiz: quiz-slow-collectives-stragglers
-widgets: [allreduce-sim, pcie-topo]
+widgets: [allreduce-sim, pcie-topo, training-step-timeline]
 labs: []
 tags: [nccl, stragglers, pcie, numa, acs, gpudirect, troubleshooting]
 further_reading:
@@ -70,6 +70,12 @@ Every byte a GPU contributes to an inter-node collective crosses a chain: **GPU 
 ### Why one slow node hurts so much: the arithmetic
 
 nccl-tests reports **algbw** (bytes / time) and **busbw** (algbw × 2(*n*−1)/*n* for all-reduce), which normalises to the hardware bandwidth each rank actually needs. On a healthy rail-optimized cluster with eight 400G NICs per node, large-message inter-node all-reduce busbw often sits in the range of a few hundred GB/s per node, depending on generation, NCCL version and algorithm. If one node's NIC is limited to a quarter of line rate, the inter-node phase of the ring is limited to that rate on the affected rail. Because NCCL stripes data across channels and rails, the effect is not always a perfect fraction, but a single degraded NIC typically produces a **large, reproducible drop** that appears whenever that node participates and vanishes when it is excluded. That last property is the key to bisection.
+
+Use the timeline below to see the same effect at the level of a whole training step: raise the straggler slider and watch the comm stream follow the slowest rank while every healthy rank waits.
+
+```widget
+training-step-timeline
+```
 
 ### PCIe downtraining
 

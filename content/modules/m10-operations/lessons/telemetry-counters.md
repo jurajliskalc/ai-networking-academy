@@ -11,7 +11,7 @@ objectives:
   - Map a symptom to the counter that proves or disproves it, and to the next command to run.
 prerequisites: [rdma-on-linux, ib-tools-diagnostics, pfc-priority-flow-control, ecn-and-dcqcn]
 quiz: quiz-telemetry-counters
-widgets: [pfc-ecn-sim]
+widgets: [pfc-ecn-sim, counter-decoder]
 labs: []
 tags: [telemetry, counters, ethtool, perfquery, dcgm, wjh, operations]
 further_reading:
@@ -78,6 +78,8 @@ A useful mental model for the lossless counters:
 ### Host NIC counters (mlx5 / ConnectX, Ethernet mode)
 
 `ethtool -S <netdev>` on a ConnectX port prints driver, vport and physical port (`_phy`) counters. The `_phy` suffix means "counted by the physical port hardware", which is the closest to the wire and includes traffic the kernel never sees, such as RoCE. Counter sets differ between ConnectX generations and driver releases, so always confirm names against the mlx5 counters documentation for your version. The ones that matter most:
+
+The per-priority pause counters (`rx_prioN_pause`, `rx_prioN_pause_duration`, `rx_prioN_pause_transition`, `tx_prioN_pause`, `tx_prioN_pause_duration`) are only present for priorities that have PFC enabled on that NIC: if `rx_prio3_pause` is missing from the output, PFC is not enabled on priority 3 there.
 
 | Counter (mlx5, verify for your version) | Meaning | Healthy expectation |
 |---|---|---|
@@ -230,7 +232,7 @@ A rising `SymbolErrorCounter` with `PortRcvErrors` on one port, and clean neighb
 | Collective bandwidth low on one node only | Loss on that node's path | RDMA `out_of_sequence`, `packet_seq_err` on that node; `rx_discards_phy` | Find the dropping hop (switch drops / WJH); fix PFC or the link |
 | `tx_prioN_pause` high from a host | Host cannot drain receive traffic | `ethtool -S` tx pause, PCIe link status (`lspci -vv`), `rx_out_of_buffer` | Fix PCIe downtraining, NUMA placement, or receiver starvation |
 | PFC pauses rising, CNPs zero | ECN not marking or CNPs blocked | Switch ECN-marked counter, `np_cnp_sent`, `rp_cnp_handled` | Enable ECN on the RoCE queue; carry CNPs on their configured priority |
-| Drops counted on the RoCE priority | PFC not enabled for that priority / trust mismatch | `rx_prioN_pause` both directions zero, drops non-zero; switch PFC config | Align PFC priority and DSCP/PCP trust end-to-end |
+| Drops counted on the RoCE priority | PFC not enabled for that priority / trust mismatch | `rx_prioN_pause`/`tx_prioN_pause` flat at zero, or absent from `ethtool -S` if the NIC itself lacks PFC on that priority; drops non-zero; switch PFC config | Align PFC priority and DSCP/PCP trust end-to-end |
 | IB job slow, one port high `PortXmitWait` | Congested or slow downstream link | `perfquery` on that port and its egress neighbours | Rebalance routing, find the slow receiver or degraded link |
 | Rising `SymbolErrorCounter`, `PortRcvErrors` | Bad cable, optic or port | `perfquery`, `mlxlink` BER | Reseat/replace optic or cable; check BER after |
 | Throughput dips with GPU clock drops | Thermal or power throttling | DCGM clock event reasons, temperature | Fix cooling/power capping; drain node |
@@ -240,6 +242,12 @@ pfc-ecn-sim
 ```
 
 Use the simulator to watch how the same congestion event looks in counters: with ECN thresholds below the PFC XOFF threshold, marks (and CNPs) rise first and pauses stay rare; push the ECN threshold above XOFF and the pause counter takes over.
+
+Now go the other way, from counters to cause: mark which counters are rising or flat (or load a scenario) and see how the hypotheses re-rank.
+
+```widget
+counter-decoder
+```
 
 > [!INTERVIEW]
 > "Your dashboard shows PFC pause frames on every leaf. Is the fabric broken?" A strong answer: not necessarily. Pauses are expected in moderation under incast. I would look at the rate and the distribution: are pauses concentrated on a few ports, are they propagating to spines, and are ECN marks and CNPs rising with them? If CNPs are near zero while pauses rise, ECN is not working and PFC is doing congestion control by itself, which risks head-of-line blocking and spreading. I would also check for drops on the lossless priority and transport counters like `out_of_sequence`, because those show real harm to jobs.

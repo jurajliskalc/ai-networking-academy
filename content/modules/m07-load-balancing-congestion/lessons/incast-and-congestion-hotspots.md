@@ -11,7 +11,7 @@ objectives:
   - Choose mitigations for incast across switch, NIC and application layers.
 prerequisites: [ecn-and-dcqcn, pfc-priority-flow-control, flow-collisions-entropy]
 quiz: quiz-incast-and-congestion-hotspots
-widgets: [pfc-ecn-sim]
+widgets: [pfc-ecn-sim, queue-latency]
 labs: []
 tags: [incast, congestion, pfc, ecn, dcqcn, hotspots, all-to-all]
 further_reading:
@@ -81,6 +81,12 @@ sender, rate cut), typically several microseconds to tens of microseconds in a l
 several rate-cut iterations to converge. In other words, a large incast fills its share of buffer
 **before** end-to-end congestion control can react. That is why lossless fabrics need PFC as a
 backstop, and why PFC thresholds and headroom matter.
+
+Check the table with the calculator: set 400G and a 1 MB or 10 MB buffer, vary N and the burst size, and compare tail drop with pausing the senders.
+
+```widget
+queue-latency
+```
 
 > [!ANALOGY]
 > Incast is a stadium emptying through one exit gate. Building more corridors inside the stadium

@@ -1090,9 +1090,9 @@ questions:
     prompt: |
       A RoCE host shows drops during an all-to-all, while the switch reports no pause frames received from this host. Host data (illustrative):
 
-        $ ethtool -S ens1f0np0 | grep -E 'rx_discards_phy|tx_prio3_pause'
+        $ ethtool -S ens1f0np0 | grep -E 'rx_discards_phy|prio3_pause'
              rx_discards_phy: 92,113
-             tx_prio3_pause: 0
+        (no rx_prio3_pause / tx_prio3_pause lines are printed)
         $ mlnx_qos -i ens1f0np0 | grep -A2 'PFC configuration'
         PFC configuration:
                 priority    0   1   2   3   4   5   6   7
@@ -1103,7 +1103,7 @@ questions:
       - id: a
         text: "Enable PFC for priority 3 on the host (for example mlnx_qos -i ens1f0np0 --pfc 0,0,0,1,0,0,0,0) to match the switch."
         correct: true
-        explanation: "With PFC disabled on the host, the NIC drops when its buffer fills instead of pausing the switch. Enabling PFC on the RoCE priority restores lossless behavior."
+        explanation: "With PFC disabled on the host, the NIC drops when its buffer fills instead of pausing the switch. mlx5 exposes per-priority pause counters only for PFC-enabled priorities, so the missing prio3_pause counters are themselves a clue. Enabling PFC on the RoCE priority restores lossless behavior."
       - id: b
         text: "Disable PFC on the switch port so both sides match."
         explanation: "That makes the whole path lossy, which is the opposite of what RoCE needs here."

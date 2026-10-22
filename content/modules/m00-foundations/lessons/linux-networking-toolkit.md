@@ -129,7 +129,7 @@ $ ethtool -S ens1f0np0 | grep -E 'crc|discard|prio3_pause'
 ```
 *(illustrative output, mlx5-style counter names)*
 
-Reading it: no CRC errors and no discards at the physical port is good; the NIC has *received* pause frames on priority 3 (the switch asked it to slow down), but never *sent* any. Whether 18,234 pauses is a problem depends on rate and context, a question for `pfc-priority-flow-control`.
+Reading it: no CRC errors and no discards at the physical port is good; the NIC has *received* pause frames on priority 3 (the switch asked it to slow down), but never *sent* any. Whether 18,234 pauses is a problem depends on rate and context, a question for `pfc-priority-flow-control`. Note that mlx5 only shows the `prioN_pause` counters for priorities with PFC enabled on the NIC, so if `rx_prio3_pause` does not appear at all, PFC is not enabled on priority 3.
 
 ### Finding your switch port with LLDP
 

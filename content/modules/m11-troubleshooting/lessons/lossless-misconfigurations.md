@@ -11,7 +11,7 @@ objectives:
   - Write a verification checklist that catches partial rollouts and trust-mode mismatches before production.
 prerequisites: [pfc-priority-flow-control, ecn-and-dcqcn, qos-trust-and-mapping, pfc-storms-deadlocks, rocev2-configuration-end-to-end]
 quiz: quiz-lossless-misconfigurations
-widgets: [pfc-ecn-sim]
+widgets: [pfc-ecn-sim, dscp-mapper]
 labs: []
 tags: [rocev2, pfc, ecn, dcqcn, cnp, qos, trust, mtu, troubleshooting]
 further_reading:
@@ -92,7 +92,10 @@ traffic, is "protected".
 
 Signature: per-priority byte counters show RoCE on priority 3; pause counters show activity (or
 configuration) only on priority 4; switch drop counters climb on the RoCE queue; receivers see
-sequence errors and senders retransmit.
+sequence errors and senders retransmit. On an mlx5 host whose own PFC is on priority 4, `ethtool -S`
+lists only `prio4` pause counters: `rx_prio3_pause`/`tx_prio3_pause` are absent, because mlx5
+exposes them only for PFC-enabled priorities. Any pauses the switch sends for priority 3 then show
+up in the switch's per-priority PFC transmit counters, not on the NIC.
 
 ### 2. Trust mismatch
 
@@ -104,6 +107,12 @@ the default priority (often 0), which is lossy and has no ECN profile.
 A subtle variant: the switch trusts DSCP, but the NIC is in PCP trust. The NIC then sends RoCE on
 its priority based on its own rules, and, crucially, honours or generates PFC for priorities that
 do not match what the switch uses. Both ends must agree.
+
+Use the mapper to reproduce the classification failures: set trust PCP on an untagged link, or a wrong NCCL_IB_TC, and follow the packet to the queue it really lands in.
+
+```widget
+dscp-mapper
+```
 
 ### 3. Partial rollout and missing hops
 

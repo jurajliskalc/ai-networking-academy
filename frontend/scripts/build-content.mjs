@@ -11,7 +11,32 @@ const OUT = path.join(ROOT, 'frontend', 'public', 'content');
 const CHECK_ONLY = process.argv.includes('--check');
 
 const WIDGETS = ['rocev2-packet', 'allreduce-sim', 'pfc-ecn-sim', 'ecmp-collision', 'fabric-sizer',
-  'qp-state-machine', 'pcie-topo', 'parallelism-map', 'ib-credit-flow'];
+  'qp-state-machine', 'pcie-topo', 'parallelism-map', 'ib-credit-flow',
+  'ethernet-frame',
+  'subnet-calculator',
+  'mtu-calculator',
+  'queue-latency',
+  'training-step-timeline',
+  'collective-explorer',
+  'pcie-bandwidth',
+  'nvlink-generations',
+  'bgp-path-sim',
+  'evpn-route-explorer',
+  'ib-addressing',
+  'ib-speeds',
+  'verbs-flow',
+  'transport-matrix',
+  'headroom-calculator',
+  'dscp-mapper',
+  'pfc-deadlock',
+  'nccl-env-explorer',
+  'nccl-tests-reader',
+  'optics-planner',
+  'ber-fec',
+  'troubleshooting-tree',
+  'counter-decoder',
+  'telemetry-sampling',
+];
 const SECTIONS = ['Why this matters', 'Concepts', 'How it works', 'In practice', 'Common pitfalls', 'Key takeaways'];
 const QTYPES = ['single', 'multi', 'scenario'];
 

@@ -11,7 +11,7 @@ objectives:
   - Identify the NUMA node and PCIe placement of a GPU or NIC with standard Linux tools.
 prerequisites: [four-networks-of-an-ai-cluster, linux-networking-toolkit]
 quiz: quiz-pcie-numa-topology
-widgets: [pcie-topo]
+widgets: [pcie-topo, pcie-bandwidth]
 labs: []
 tags: [pcie, numa, topology, server, affinity]
 further_reading:
@@ -62,8 +62,8 @@ usable bandwidth **per direction** for an x16 link, which is the width used by G
 | PCIe 3.0 | 8 GT/s | 128b/130b | ~16 GB/s (~126 Gb/s) | Older 100G NICs, V100-era servers |
 | PCIe 4.0 | 16 GT/s | 128b/130b | ~32 GB/s (~252 Gb/s) | A100-era servers, 200G NICs |
 | PCIe 5.0 | 32 GT/s | 128b/130b | ~63 GB/s (~504 Gb/s) | H100/H200/B200-era servers, 400G NICs |
-| PCIe 6.0 | 64 GT/s (PAM4) | FLIT mode with FEC | ~121-128 GB/s (~1 Tb/s) | 800G NICs such as ConnectX-8 class devices |
-| PCIe 7.0 | 128 GT/s (PAM4) | FLIT mode | ~242-256 GB/s | Specification released 2025; products later |
+| PCIe 6.0 | 64 GT/s (PAM4) | FLIT mode with FEC | ~118-128 GB/s (~1 Tb/s raw; 236 of every 256 FLIT bytes carry TLPs) | 800G NICs such as ConnectX-8 class devices |
+| PCIe 7.0 | 128 GT/s (PAM4) | FLIT mode | ~236-256 GB/s | Specification released 2025; products later |
 
 These are link-level numbers. Real DMA throughput is lower because every TLP carries header overhead
 (a 256-byte or 512-byte maximum payload size with ~20-30 bytes of header and framing), and read requests
@@ -78,6 +78,12 @@ Now the key calculation every AI network engineer should be able to do in their 
 
 This is why NIC generations and PCIe generations move in lockstep: 200G arrived with Gen4, 400G with
 Gen5, 800G with Gen6.
+
+Try the calculator: pick a generation, width and NIC speed and see whether the slot can feed the port, then compare the per-lane numbers with what the kernel prints at boot.
+
+```widget
+pcie-bandwidth
+```
 
 > [!ANALOGY]
 > Think of PCIe lanes like the member links of a LAG between two switches. More lanes means more
@@ -357,7 +363,7 @@ options; the goal is the same.
 
 - PCIe is a packet-switched network inside the server, with links, lanes, switches, flow control and
   error counters.
-- Per direction, x16 is roughly 32 GB/s at Gen4, 63 GB/s at Gen5, and about 128 GB/s at Gen6: 400G NICs
+- Per direction, x16 is roughly 32 GB/s at Gen4, 63 GB/s at Gen5, and about 118-128 GB/s at Gen6: 400G NICs
   need Gen5 x16, 800G NICs need Gen6 x16 or two Gen5 x16 links.
 - Traffic between devices under the same PCIe switch stays local; anything else climbs to the root
   complex and possibly across the socket interconnect.

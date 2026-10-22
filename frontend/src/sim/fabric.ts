@@ -63,7 +63,7 @@ NCCL_DEBUG=WARN
 function emptyNicCounters(r: number): Record<string, number> {
   const c: Record<string, number> = {
     rx_packets_phy: 0, tx_packets_phy: 0, rx_bytes_phy: 0, tx_bytes_phy: 0,
-    rx_crc_errors_phy: 0, rx_symbol_err_phy: 0, rx_discards_phy: 0, tx_discards_phy: 0,
+    rx_crc_errors_phy: 0, rx_symbol_err_phy: 0, rx_pcs_symbol_err_phy: 0, rx_corrected_bits_phy: 0, rx_discards_phy: 0, tx_discards_phy: 0,
     rx_out_of_buffer: 0, link_down_events_phy: 0,
   };
   for (let p = 0; p < 8; p++) {
@@ -203,9 +203,10 @@ export function parseConf(conf: string): Record<string, string> {
 
 // ---------------------------------------------------------------- evaluation
 
-export const roceMtu = (netdevMtu: number) => [...IB_MTUS].reverse().find((m) => netdevMtu >= m + 100) ?? 256;
+// Linux iboe_get_mtu(): the largest IB MTU that fits in the netdev MTU minus 96 bytes of RoCE headers.
+export const roceMtu = (netdevMtu: number) => [...IB_MTUS].reverse().find((m) => netdevMtu - 96 >= m) ?? 256;
 export const pcieGbps = (n: Nic) => {
-  const perLane: Record<number, number> = { 8: 7.877, 16: 15.753, 32: 31.508, 64: 63.015 };
+  const perLane: Record<number, number> = { 8: 7.876, 16: 15.753, 32: 31.507, 64: 64 };
   return (perLane[n.pcieSpeed] ?? 31.507) * n.pcieWidth;
 };
 
@@ -355,9 +356,13 @@ export function accrueTraffic(s: FabricState, kind: 'collective' | 'pair', scope
       nic.hw.rx_write_requests += pkts;
       port.counters.rx_packets += pkts; port.counters.tx_packets += pkts;
       const kinds = new Set(issues.map((i) => i.kind));
+      // FEC corrects bit errors on every PAM4 link; a healthy link shows a slow trickle of corrected bits.
+      c.rx_corrected_bits_phy += kinds.has('ber') ? Math.round(pkts * 4154 * 8 * 3e-4) : Math.round(pkts * 4154 * 8 * 2e-8);
       if (kinds.has('ber')) {
+        // Beyond the FEC limit: uncorrected symbols, and packets dropped for coding (symbol) or FCS errors.
         const errs = Math.round(pkts * port.ber * 400);
-        c.rx_symbol_err_phy += errs * 37; c.rx_crc_errors_phy += errs;
+        c.rx_pcs_symbol_err_phy += errs * 37;
+        c.rx_symbol_err_phy += Math.round(errs / 4); c.rx_crc_errors_phy += errs;
         port.counters.rx_crc += errs; port.counters.rx_errors += errs;
         nic.hw.out_of_sequence += errs; nic.hw.packet_seq_err += Math.round(errs / 3);
         nic.hw.local_ack_timeout_err += Math.round(errs / 50);
@@ -370,7 +375,8 @@ export function accrueTraffic(s: FabricState, kind: 'collective' | 'pair', scope
         nic.hw.out_of_sequence += Math.round(drops * 0.92);
         nic.hw.packet_seq_err += Math.round(drops * 0.3);
         nic.hw.local_ack_timeout_err += Math.round(drops / 900);
-        if (kinds.has('pfc')) { c[`rx_prio${ROCE_PRIO}_pause`] += 412_377; port.counters.tx_pfc_pause += 412_377; }
+        // The switch keeps pausing priority 3 toward a NIC that does not honour it (and has no prio-3 pause counters).
+        if (kinds.has('pfc')) port.counters.tx_pfc_pause += 412_377;
         if (kinds.has('trust')) { c.rx_prio0_packets += pkts; c[`rx_prio${ROCE_PRIO}_packets`] -= pkts; }
       } else {
         // Healthy lossless fabric under an all-to-all-ish load: some ECN marking and CNPs, little pausing.

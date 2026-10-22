@@ -415,7 +415,12 @@ function ethtool(s: FabricState, h: Host, a: string[]): ExecResult {
 ` };
   }
   if (flag === '-S') {
-    return { out: 'NIC statistics:\n' + Object.entries(nic.counters).map(([k, v]) => `     ${k}: ${fmtNum(v)}`).join('\n') + '\n' };
+    // mlx5 exposes rx/tx_prio<p>_pause* only for priorities with PFC enabled (kernel mlx5 counters.rst).
+    const shown = Object.entries(nic.counters).filter(([k]) => {
+      const m = k.match(/^[rt]x_prio(\d)_pause/);
+      return !m || nic.pfc[Number(m[1])];
+    });
+    return { out: 'NIC statistics:\n' + shown.map(([k, v]) => `     ${k}: ${fmtNum(v)}`).join('\n') + '\n' };
   }
   if (flag === '-m') {
     const bad = port.ber > 1e-8;

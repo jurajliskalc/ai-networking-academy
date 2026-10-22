@@ -12,7 +12,7 @@ objectives:
   - Read BGP summary and route output to verify a leaf's sessions and ECMP paths.
 prerequisites: [clos-leaf-spine, ecmp-hashing, ip-addressing-routing]
 quiz: quiz-bgp-in-the-data-center
-widgets: []
+widgets: [bgp-path-sim]
 labs: []
 tags: [bgp, ebgp, rfc7938, unnumbered, ecmp, underlay, frr]
 further_reading:
@@ -157,6 +157,12 @@ documentation for exactly what it changes in your version.
 When a leaf-spine link fails, the leaf removes that next hop from its ECMP groups locally (fast, often
 in hardware next-hop groups), and the spine sends withdrawals to the other leaves, which remove that
 spine as a next hop for the affected prefixes. Thanks to the shared spine ASN there is no path hunting.
+
+Fail spine–leaf links below and watch which leaves lose which next hops; switch to unique spine ASNs and turn off multipath-relax to see the ECMP set collapse to one next hop (either change alone keeps full ECMP):
+
+```widget
+bgp-path-sim
+```
 
 ### BGP unnumbered
 

@@ -12,7 +12,7 @@ objectives:
   - Explain the difference between drop, ECN marking and pause as responses to a full queue.
 prerequisites: [osi-ethernet-frames, ip-addressing-routing]
 quiz: quiz-switching-and-queues
-widgets: [pfc-ecn-sim]
+widgets: [pfc-ecn-sim, queue-latency]
 labs: []
 tags: [switching, buffers, queues, scheduling, ecn, pfc, incast, foundations]
 further_reading:
@@ -106,6 +106,12 @@ queueing delay = queue depth (bits) / egress link rate (bits per second)
 Compare that with the propagation delay inside a data center (about 5 ns per metre of fibre, so a 100 m run is about 0.5 us) and the switch pipeline (sub-microsecond). **In a loaded fabric, queueing dominates latency.** Every microsecond of queueing on the critical path of a collective operation is time GPUs spend waiting.
 
 How fast can a queue fill? With 8-to-1 incast at 400G, excess arrival is 2.8 Tb/s, which is 350 MB per millisecond. A port allowed to use, say, 2 MB of buffer is full in about 6 us. Buffers do not "absorb" sustained incast; they only buy microseconds for something else (a congestion signal, a pause, or the end of the burst) to happen.
+
+Reproduce these numbers in the calculator: pick a link speed and buffer, raise the incast degree, and watch how quickly the queue reaches the buffer limit and how much is dropped.
+
+```widget
+queue-latency
+```
 
 ### Traffic classes and schedulers
 

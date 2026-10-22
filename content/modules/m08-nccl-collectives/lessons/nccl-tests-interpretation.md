@@ -11,7 +11,7 @@ objectives:
   - Design a test campaign that isolates bad nodes, links or settings.
 prerequisites: [nccl-configuration, collective-algorithms]
 quiz: quiz-nccl-tests-interpretation
-widgets: [allreduce-sim]
+widgets: [allreduce-sim, nccl-tests-reader]
 labs: []
 tags: [nccl-tests, benchmarking, busbw, algbw, all-reduce, validation]
 further_reading:
@@ -151,6 +151,12 @@ Column by column:
 
 Check the arithmetic on the last row: algbw = 8,589,934,592 B / 46.5 ms ≈ 184.7 GB/s;
 busbw = 184.7 × 2 × 15/16 ≈ 346.4 GB/s.
+
+The reader starts with that row pasted in. Change the collective, rank count or NICs per node to see how busbw and the expected ceiling move, and which verdict a result earns.
+
+```widget
+nccl-tests-reader
+```
 
 ### The shape of the curve
 

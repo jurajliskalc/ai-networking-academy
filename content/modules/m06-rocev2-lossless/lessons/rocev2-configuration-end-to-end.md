@@ -11,7 +11,7 @@ objectives:
   - Validate the configuration with a staged test plan and a small set of golden counters.
 prerequisites: [rocev2-encapsulation, pfc-priority-flow-control, buffers-headroom-ets, ecn-and-dcqcn, qos-trust-and-mapping, pfc-storms-deadlocks]
 quiz: quiz-rocev2-configuration-end-to-end
-widgets: [pfc-ecn-sim]
+widgets: [pfc-ecn-sim, mtu-calculator]
 labs: []
 tags: [rocev2, configuration, mlnx_qos, nvue, cumulus, sonic, validation]
 further_reading:
@@ -98,6 +98,12 @@ on **every** RDMA NIC (in a rail-optimised server, typically eight).
 ```bash
 ip link set dev ens1f0np0 mtu 9000
 ethtool -A ens1f0np0 rx off tx off        # disable 802.3x link-level pause
+```
+
+Before moving on, check that the contract's MTUs agree: enter 9000 on the host and 9216 on each hop, then try a hop left at a default MTU and see what breaks.
+
+```widget
+mtu-calculator
 ```
 
 **2. Trust and PFC**

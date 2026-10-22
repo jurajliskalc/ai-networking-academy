@@ -11,6 +11,7 @@ objectives:
   - Define link acceptance and alerting thresholds for a PAM4 AI fabric, hedged to vendor guidance.
 prerequisites: [ib-speeds-cables, optics-cabling-power, ib-tools-diagnostics]
 quiz: quiz-link-layer-ber-fec
+widgets: [ber-fec]
 labs: []
 tags: [ber, fec, rs-fec, pam4, optics, mlxlink, link-flap, physical-layer]
 further_reading:
@@ -88,6 +89,12 @@ Each escaped error typically corrupts a packet, which fails its CRC and is dropp
 means the receiver sees a sequence gap and the sender retransmits (with go-back-N on many NICs, the
 whole window behind the lost packet). For a ring all-reduce with thousands of flows, a link that drops
 a packet every few seconds can be a measurable straggler; a link at 1e-9 is a disaster.
+
+Try it: pick a 400G or 800G link, slide the pre-FEC BER up to the KP4 limit and just past it, and watch the uncorrectable-codeword estimate collapse from "never" (at 1e-5) to hours (at ~2.4e-4) to one or more per second (at ~5e-4). That steepness is why the limit is a cliff, and real bursty errors make it worse than this random-error model shows.
+
+```widget
+ber-fec
+```
 
 > [!ANALOGY]
 > FEC is like the error-correcting memory (ECC) in a server: a few corrected errors per day are

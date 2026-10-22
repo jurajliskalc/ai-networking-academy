@@ -11,7 +11,7 @@ objectives:
   - Choose an appropriate transport for a given AI or storage communication pattern and justify it.
 prerequisites: [verbs-qps-mrs]
 quiz: quiz-transport-types-operations
-widgets: []
+widgets: [transport-matrix]
 labs: []
 tags: [rdma, transport, rc, ud, xrc, dct, rdma-write, rdma-read, atomics]
 further_reading:
@@ -145,6 +145,12 @@ With RC, every pair of communicating processes needs a QP on each side. For P pr
 | **Fewer peers** | Collective algorithms (rings, trees) mean each rank talks to only a few peers. |
 
 NCCL uses RC QPs because ring and tree collectives keep the number of peers per rank small, and it can open several QPs per peer connection to spread traffic over more ECMP paths (`NCCL_IB_QPS_PER_CONNECTION`; see `nccl-configuration`). MPI and UCX-based applications with all-to-all patterns are where DC and UD shine; UCX exposes them as transports such as `rc_mlx5`, `dc_mlx5` and `ud_mlx5` via `UCX_TLS`.
+
+Filter the matrix by what your workload needs, then enter your node and process counts to see how RC, XRC, DC and UD QP counts diverge.
+
+```widget
+transport-matrix
+```
 
 ## In practice
 

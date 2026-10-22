@@ -11,7 +11,7 @@ objectives:
   - Explain where high-frequency telemetry (sub-second, buffer and microburst data) fits and what it costs.
 prerequisites: [telemetry-counters]
 quiz: quiz-streaming-telemetry-gnmi
-widgets: [pfc-ecn-sim]
+widgets: [pfc-ecn-sim, telemetry-sampling]
 labs: []
 tags: [telemetry, gnmi, openconfig, prometheus, grafana, operations]
 further_reading:
@@ -121,6 +121,12 @@ Every interval is a trade-off between resolution, device CPU, network overhead a
 | Configuration/state (BGP, routes) | ON_CHANGE | immediate | Change correlation |
 
 The key trick for buffers: an instantaneous occupancy sample every 10 seconds will almost never land inside a 100-microsecond burst. Use **watermarks** (peak occupancy since the last read, cleared on read) or histograms when the ASIC provides them. The sample interval then becomes the window over which you ask "what was the worst moment?", which is the right question.
+
+See it for yourself: switch between instant samples, averages and watermarks at 10 s and 1 ms, and compare the bursts detected and the peak the collector reports.
+
+```widget
+telemetry-sampling
+```
 
 ### High-frequency telemetry
 

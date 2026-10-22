@@ -11,7 +11,7 @@ objectives:
   - Verify an end-to-end MTU with a do-not-fragment ping and diagnose an MTU black hole.
 prerequisites: [osi-ethernet-frames, ip-addressing-routing]
 quiz: quiz-mtu-jumbo-frames
-widgets: [rocev2-packet]
+widgets: [rocev2-packet, mtu-calculator]
 labs: []
 tags: [mtu, jumbo-frames, pmtud, rocev2, efficiency, foundations]
 further_reading:
@@ -122,6 +122,12 @@ sequenceDiagram
 ```
 
 PMTUD fails silently when the ICMP message is never generated (some platforms do not generate it for frames dropped as oversize at L2), is rate-limited, or is filtered by a firewall. The result is the **MTU black hole**. RDMA makes this worse: RoCE does not perform PMTUD at all. The RDMA path MTU is set when a queue pair is configured, so if any link in the path cannot carry it, packets are dropped, the transport retransmits, and eventually the connection errors out. **For RDMA, the MTU must simply be consistent everywhere.**
+
+Check a path yourself: set the host MTU, add a VXLAN overlay or lower one switch hop, and see which hop drops RoCE packets and which only black-holes full-size TCP and pings.
+
+```widget
+mtu-calculator
+```
 
 ### Where MTU matters in each AI cluster network
 

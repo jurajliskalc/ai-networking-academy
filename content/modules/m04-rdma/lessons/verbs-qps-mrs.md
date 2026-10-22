@@ -11,7 +11,7 @@ objectives:
   - Follow a work request from ibv_post_send to a work completion on a completion queue, including error completions.
 prerequisites: [why-rdma]
 quiz: quiz-verbs-qps-mrs
-widgets: [qp-state-machine]
+widgets: [qp-state-machine, verbs-flow]
 labs: []
 tags: [rdma, verbs, libibverbs, queue-pair, memory-region, completion-queue]
 further_reading:
@@ -164,6 +164,12 @@ Details worth knowing:
 - The work queue entries (WQEs) and completion queue entries (CQEs) live in host memory that both the process and the NIC can access. The doorbell is a write into a NIC register page mapped into the process (the "UAR" on NVIDIA adapters). Vendor optimisations — such as writing a small WQE directly to the NIC to save a DMA round trip (BlueFlame on ConnectX) — are implementation details of the provider library.
 - Completions on one QP are delivered in order of the posted WRs. A successful completion of a send means the data has been acknowledged by the remote NIC (for RC) — not that the remote *application* has seen it.
 - A CQ can overflow if the application posts more signaled WRs than the CQ has room for and does not poll. The CQ then goes into error, an asynchronous event is raised, and the affected QPs stop.
+
+Step through the same sequence below. Switch between WRITE, SEND/RECV and READ, try inline data, and give the WRITE a wrong rkey to see which component reports the error.
+
+```widget
+verbs-flow
+```
 
 ### Polling versus events
 

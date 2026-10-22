@@ -12,7 +12,7 @@ objectives:
   - Verify VNIs, MAC/IP routes and VTEP forwarding state on a leaf.
 prerequisites: [bgp-in-the-data-center, mtu-jumbo-frames, four-networks-of-an-ai-cluster]
 quiz: quiz-evpn-vxlan-frontend
-widgets: []
+widgets: [evpn-route-explorer]
 labs: []
 tags: [evpn, vxlan, overlay, front-end, multi-tenancy, irb, multihoming]
 further_reading:
@@ -117,6 +117,12 @@ EVPN uses the BGP address family **L2VPN EVPN** (AFI 25, SAFI 70). The route typ
 Each route also carries a **Route Distinguisher** (RD, making the route unique) and **Route Targets**
 (RTs, extended communities deciding which VNIs or VRFs import it), as in other BGP VPNs. Many NOSes can
 derive RDs and RTs automatically from the ASN and VNI.
+
+Pick a route type to see its NLRI fields, then step through a host joining a VNI to see which routes leaf 1 sends and when:
+
+```widget
+evpn-route-explorer
+```
 
 ## How it works
 

@@ -11,7 +11,7 @@ objectives:
   - Decide how a management platform integrates with your source of truth, open telemetry pipeline and incident workflow.
 prerequisites: [subnet-manager-routing, ib-tools-diagnostics, telemetry-counters, streaming-telemetry-gnmi]
 quiz: quiz-ufm-netq-management
-widgets: []
+widgets: [telemetry-sampling]
 labs: []
 tags: [ufm, netq, management, infiniband, cumulus, operations]
 further_reading:
@@ -158,6 +158,12 @@ for p in ports:
 ```
 
 The design point matters more than the endpoint: poll or subscribe, compute deltas, push results into your alerting, and use UFM actions (for example port isolation) only from automation that has the same review and audit trail as configuration changes.
+
+The poll interval of any such integration decides what it can see. Try a 30 s or 5 min interval against a bursty queue and compare instant samples with watermarks.
+
+```widget
+telemetry-sampling
+```
 
 ### NetQ: validations and state history
 

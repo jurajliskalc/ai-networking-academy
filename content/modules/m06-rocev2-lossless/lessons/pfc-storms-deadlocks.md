@@ -11,7 +11,7 @@ objectives:
   - Compare lossless RoCE with lossy (resilient) RoCE and state the conditions under which each is a sound choice.
 prerequisites: [pfc-priority-flow-control, buffers-headroom-ets, clos-leaf-spine]
 quiz: quiz-pfc-storms-deadlocks
-widgets: [pfc-ecn-sim]
+widgets: [pfc-ecn-sim, pfc-deadlock]
 labs: []
 tags: [pfc, pfc-storm, pfc-watchdog, deadlock, cbd, lossy-roce, resilient-roce]
 further_reading:
@@ -118,6 +118,12 @@ buffers, so there is no cycle. Cycles appear when packets take a path that goes 
 | **Transient routing loops** | During convergence two switches can briefly point at each other. With lossless traffic the loop can fill buffers and lock into a deadlock that outlives the loop. | Fast, loop-free convergence. TTL expiry drops looping packets, but it may not be fast enough. PFC watchdog as a backstop. |
 | **Flooding of lossless traffic** | If a switch has an ARP/ND entry for a host but its MAC table entry has expired, it may *flood* unicast to all ports in the VLAN, including back up towards other switches. Guo et al. describe this pattern causing deadlock. | Do not flood lossless traffic: drop it when the destination MAC is unknown. Align ARP and MAC timers. Prefer routed (L3) host links. |
 | **Topologies with cycles by design** | Rings, tori, dragonfly or "extra" cross links, without deadlock-free routing | Use virtual channels or priority changes per hop (research and HPC techniques), or avoid lossless across them |
+
+Build a deadlock yourself: with the two failed links and valley paths the builder starts with, press Run and watch the four buffers on the cycle pause each other until throughput drops to zero. Then stop all senders (the deadlock stays), and try each remedy in turn.
+
+```widget
+pfc-deadlock
+```
 
 ### PFC watchdog (switch side)
 

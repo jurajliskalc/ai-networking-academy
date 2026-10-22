@@ -11,7 +11,7 @@ objectives:
   - Relate leaf-spine to the fat-tree and rail-optimized fabrics used for AI back-end networks.
 prerequisites: [ip-addressing-routing, switching-and-queues, ai-traffic-patterns]
 quiz: quiz-clos-leaf-spine
-widgets: [fabric-sizer]
+widgets: [fabric-sizer, bgp-path-sim]
 labs: []
 tags: [clos, leaf-spine, fat-tree, topology, fabric-design]
 further_reading:
@@ -94,6 +94,12 @@ From those three rules follow the properties that make the design so useful:
 | Losing one of *N* spines removes 1/*N* of inter-leaf capacity | Graceful degradation instead of halving |
 | Add spines to add bandwidth, add leaves to add ports | Scale-out with identical small boxes |
 | All links are routed point-to-point | No STP, no blocked links; failures handled by routing (`bgp-in-the-data-center`) |
+
+Try it: click links to fail them and see each leaf's equal-cost paths shrink from one per spine, while every other path keeps working:
+
+```widget
+bgp-path-sim
+```
 
 > [!ANALOGY]
 > A leaf-spine fabric is like an airline network with a set of identical hub airports where every

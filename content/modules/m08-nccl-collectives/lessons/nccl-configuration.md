@@ -11,7 +11,7 @@ objectives:
   - Configure containers, launchers and PyTorch so NCCL settings reach every rank and failures surface cleanly.
 prerequisites: [nccl-architecture, qos-trust-and-mapping]
 quiz: quiz-nccl-configuration
-widgets: [pcie-topo]
+widgets: [pcie-topo, nccl-env-explorer]
 labs: []
 tags: [nccl, configuration, environment-variables, roce, infiniband, gid, traffic-class, containers]
 further_reading:
@@ -101,6 +101,12 @@ The prefix rule causes a classic mistake: `NCCL_IB_HCA=mlx5_1` also matches `mlx
 # Example for a server with 8 compute NICs (mlx5_0..mlx5_7) and 2 storage NICs (mlx5_8, mlx5_9)
 export NCCL_IB_HCA==mlx5_0,mlx5_1,mlx5_2,mlx5_3,mlx5_4,mlx5_5,mlx5_6,mlx5_7
 export NCCL_SOCKET_IFNAME=^docker,lo,virbr
+```
+
+Open `NCCL_IB_HCA` in the explorer and type `mlx5_1`, then `=mlx5_1`, into the matcher to see the prefix trap on a server with twelve RDMA devices; the table lists the other variables in this lesson with their defaults.
+
+```widget
+nccl-env-explorer
 ```
 
 ### RoCE: GID index and traffic class

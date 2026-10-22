@@ -12,7 +12,7 @@ objectives:
   - Read a published reference architecture critically, separating fixed rules from deployment-specific choices.
 prerequisites: [rail-optimized-topology, four-networks-of-an-ai-cluster]
 quiz: quiz-superpod-reference-architecture
-widgets: [fabric-sizer]
+widgets: [fabric-sizer, optics-planner]
 labs: []
 tags: [superpod, reference-architecture, dgx, scalable-unit, design]
 further_reading:
@@ -193,6 +193,12 @@ current user guide). With a 40 kW air-cooled rack budget (assumption), that is 4
 so a 32-node SU needs about 32 / 4 = **8 compute racks**, plus racks for leaf/spine switches,
 storage and management. Rack power, not switch radix, often sets the physical layout and thus cable
 lengths, which the optics lesson turns into transceiver choices.
+
+The planner's power calculator starts with the four-SU example above (2,048 twin-port modules). Change the media per link class, or move server links to copper, and see what it does to optics power per GPU.
+
+```widget
+optics-planner
+```
 
 ### GB200 NVL72: the rack becomes the unit
 

@@ -12,7 +12,7 @@ objectives:
   - Allocate tenants to a rail-optimized cluster so that shared links, and therefore interference, are minimized.
 prerequisites: [evpn-vxlan-frontend, subnet-manager-routing, spectrum-x-architecture]
 quiz: quiz-multi-tenancy-isolation
-widgets: [parallelism-map]
+widgets: [parallelism-map, evpn-route-explorer]
 labs: []
 tags: [multi-tenancy, pkey, vxlan, evpn, vrf, bluefield, isolation]
 further_reading:
@@ -85,6 +85,12 @@ On Ethernet fabrics tenants are separated by:
 
 The VXLAN tunnel endpoint (VTEP) can be the **leaf switch** or the **host** (typically a DPU or
 SuperNIC that performs encapsulation in hardware).
+
+Step through a tenant host coming up to see which EVPN routes carry its MAC, IP and subnet, and which VNI (L2 or the tenant's L3 VNI) each one uses:
+
+```widget
+evpn-route-explorer
+```
 
 > [!ANALOGY]
 > PKeys are like VLAN membership with a twist: limited membership is a built-in "private VLAN"

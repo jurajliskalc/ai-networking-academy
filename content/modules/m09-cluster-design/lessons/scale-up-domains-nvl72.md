@@ -12,7 +12,7 @@ objectives:
   - Place UALink and other open scale-up efforts in context, with appropriate caution about maturity.
 prerequisites: [nvlink-nvswitch, parallelism-strategies, rail-optimized-topology]
 quiz: quiz-scale-up-domains-nvl72
-widgets: [parallelism-map, pcie-topo]
+widgets: [parallelism-map, pcie-topo, nvlink-generations]
 labs: []
 tags: [nvlink, nvswitch, nvl72, gb200, scale-up, ualink, design]
 further_reading:
@@ -107,6 +107,12 @@ unidirectional bits. Convert both to **GB/s per direction**:
 4. Ratio with 400G: 900 / 50 = **18x**. With 800G: 900 / 100 = **9x**.
 
 (Comparing 1.8 TB/s against 50 GB/s would claim 36x, double the true ratio.)
+
+Reproduce these numbers in the widget: select GB200 NVL72, try 400G and 800G NICs, and use the ring all-reduce mode for the worked example that follows.
+
+```widget
+nvlink-generations
+```
 
 ### Worked example: one all-reduce, two networks
 

@@ -11,7 +11,7 @@ objectives:
   - Run an incident from first page to a written root cause with a hypothesis log and a prevention action.
 prerequisites: [nccl-debugging, ib-tools-diagnostics, rocev2-configuration-end-to-end]
 quiz: quiz-troubleshooting-methodology
-widgets: [allreduce-sim]
+widgets: [allreduce-sim, troubleshooting-tree]
 labs: []
 tags: [troubleshooting, methodology, incident-response, nccl, bisection, sre]
 further_reading:
@@ -292,6 +292,12 @@ NIC, its PCIe link, its cable, or its leaf port. Then look at `lspci -vv` for th
 | Small messages slow, large fine | Latency path: wrong transport, CPU affinity | NCCL init log, `numactl`, IRQ affinity | Correct NUMA/transport settings |
 | Job hangs, NCCL timeout names a peer | Dead path, RDMA retry exhaustion, GPU fault | Kernel log, `hw_counters` retry/timeouts | Replace part, fix route or config |
 | Periodic slowdowns | Periodic event (checkpoint, scrape, retrain) | Time-align telemetry with job metrics | Separate traffic classes, schedule |
+
+Walk the same method as a decision tree: start from scoping, pick the branch your evidence supports, and note which command each leaf asks you to run.
+
+```widget
+troubleshooting-tree
+```
 
 ### Running the incident
 

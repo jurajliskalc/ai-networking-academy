@@ -8,11 +8,11 @@ stated as what it is.
 | Area | Status | Evidence |
 |---|---|---|
 | Content compiler and validator | Done | `npm run validate` prints `Content OK`. It enforces IDs, required sections and keys, quiz option rules (correct-count, explanations), string types, cross-references, widget IDs and table cell counts. |
-| Static SPA (16 routes) | Done | `npm run build` passes `tsc` (strict) and Vite. All 197 routes render in headless Chrome without uncaught errors (crawl on 2026-10-22). |
+| Static SPA (16 routes) | Done | `npm run build` passes `tsc` (strict) and Vite. All 220 routes, including all 33 widget pages and the 106 widget embeds in lessons, render in headless Chrome without uncaught errors (crawl on 2026-10-22). |
 | All 74 mermaid diagrams render | Done | Same headless crawl; no `data-mermaid-error` fallbacks. |
 | Progress store (localStorage, export/import, SM-2, streaks) | Done | `tests/progress.test.ts` |
-| Fabric Simulator engine + shell | Done | `tests/sim-labs.test.ts`: healthy baseline, every lab broken before and fixed after its `fix` replay, key symptoms (MTU black hole, PFC mismatch, PCIe cap, socket fallback, NVUE staging, pipes). 54 tests pass. |
-| 9 widgets | Done | Type-checked, and rendered in light and dark mode in headless Chrome. Interactions checked by reading the code and the widget authors' headless runs; not exercised by automated UI tests. |
+| Fabric Simulator engine + shell | Done | `tests/sim-labs.test.ts`: healthy baseline, every lab broken before and fixed after its `fix` replay, key symptoms (MTU black hole, PFC mismatch, PCIe cap, socket fallback, NVUE staging, pipes). 164 tests pass in total (simulator labs, progress logic, widget math). |
+| 33 widgets | Done | Each independently reviewed for technical correctness against sources after it was built; the math of every widget with pure logic is covered by unit tests (`tests/widgets-g1..g4.test.ts`, `parallelism.test.ts`). Rendered in light and dark mode in headless Chrome. UI interactions are not exercised by automated browser tests. |
 | Responsive layout | Done | Checked at 500 px (the narrowest width headless Chrome allows) and 1440 px. |
 | CI (validate, test, build, `bash -n`) and Pages deploy workflows | Written | Will run on the first push; not yet executed on GitHub. |
 | Windows launcher (`start-academy.bat` + `scripts/start.ps1`) | Written | The build path it runs (`npm run build`, `vite preview`) is used daily during development; the batch file itself has not been double-clicked on a clean machine. |

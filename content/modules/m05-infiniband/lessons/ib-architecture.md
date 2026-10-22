@@ -12,7 +12,7 @@ objectives:
   - Explain partitions (P_Keys) and compare InfiniBand's design choices with Ethernet/IP.
 prerequisites: [transport-types-operations, clos-leaf-spine]
 quiz: quiz-ib-architecture
-widgets: []
+widgets: [ib-addressing]
 labs: []
 tags: [infiniband, hca, lid, guid, gid, subnet-manager, partitions, lrh]
 further_reading:
@@ -133,6 +133,12 @@ flowchart LR
 A **partition** is InfiniBand's isolation mechanism, comparable to a VLAN but enforced at the endpoints (and optionally by switches). Every packet carries a 16-bit **P_Key** in the BTH. The low 15 bits are the partition number and the top bit is the membership type: **full** (bit set) or **limited** (bit clear). Two ports can communicate only if they share a partition and at least one of them is a full member. The default partition is 0x7FFF, so the default full-member key is **0xFFFF**. The SM programs each port's P_Key table; QPs select an entry with `pkey_index` in the RESET → INIT transition you saw in `verbs-qps-mrs`. In multi-tenant AI clusters, P_Keys keep tenants' traffic apart (see `multi-tenancy-isolation`).
 
 UD traffic is additionally protected by a **Q_Key**, checked by the receiving QP.
+
+Step through a subnet manager sweep on a small fabric, follow a packet's DLID through the LFTs, and set P_Key memberships to see which ports can talk:
+
+```widget
+ib-addressing
+```
 
 ### InfiniBand versus Ethernet/IP at a glance
 

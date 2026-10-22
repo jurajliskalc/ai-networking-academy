@@ -17,7 +17,7 @@ faults:
   - { type: host_pfc, node: node03, rail: 5, prios: [4] }
 hints:
   - A single ib_write_bw flow never congests the fabric, so it never needs PFC. A collective does.
-  - "Run all_reduce_perf once, then compare `ethtool -S <if> | grep prio3_pause` across node03's interfaces."
+  - "Run all_reduce_perf once, then compare `ethtool -S <if> | grep pause` across node03's interfaces. mlx5 only exposes per-priority pause counters for priorities that have PFC enabled."
   - "`mlnx_qos -i <if>` shows a NIC's per-priority PFC configuration."
 diagnosis:
   prompt: What is the root cause?
@@ -25,7 +25,7 @@ diagnosis:
     - id: a
       text: node03 enp170s0np0 (mlx5_5) has PFC enabled on priority 4 instead of 3, so it ignores the switch's pause frames for RoCE traffic and the switch drops packets.
       correct: true
-      explanation: RoCE is classified to priority 3 (DSCP 26). The NIC receives PFC pause frames for priority 3 but has PFC disabled there, so it keeps transmitting. The leaf buffer overflows, packets drop, and go-back-N retransmissions collapse throughput for every rank on that ring.
+      explanation: RoCE is classified to priority 3 (DSCP 26). The leaf sends PFC pause frames for priority 3, but the NIC has PFC disabled there and keeps transmitting (it does not even expose priority-3 pause counters). The leaf buffer overflows, packets drop, and go-back-N retransmissions collapse throughput for every rank on that ring.
     - id: b
       text: ECN is disabled on leaf06.
       explanation: The leaf shows RoCE lossless mode with ECN congestion control, and ECN marks and CNPs appear on all other ports.
@@ -39,9 +39,11 @@ checks:
   - { description: "node03 mlx5_5 enables PFC on priority 3 only", check: host_pfc_only, args: { node: node03, rail: 5, prio: 3 } }
   - { description: "all_reduce bus bandwidth is above 360 GB/s", check: allreduce_min_busbw, args: { value: 360 } }
 solution: |
-  After one `all_reduce_perf` run, `ethtool -S enp170s0np0 | grep prio3_pause` on node03 shows hundreds
-  of thousands of received pause frames. `rdma statistic show link mlx5_5/1` shows `out_of_sequence` and
-  `packet_seq_err` climbing, and on leaf06 `nv show interface swp3 counters` shows drops. `mlnx_qos -i
+  After one `all_reduce_perf` run, `ethtool -S <if> | grep pause` shows `rx_prio3_pause`/`tx_prio3_pause`
+  on every healthy interface, but on node03 `enp170s0np0` only `prio4` pause counters exist: mlx5 exposes
+  per-priority pause counters only where PFC is enabled. On leaf06, `nv show interface swp3 counters` shows
+  hundreds of thousands of PFC pause frames sent toward node03, plus drops, and `rdma statistic show link
+  mlx5_5/1` shows `out_of_sequence` and `packet_seq_err` climbing. `mlnx_qos -i
   enp170s0np0` reveals PFC enabled on priority 4. Fix: `mlnx_qos -i enp170s0np0 --pfc 0,0,0,1,0,0,0,0`.
 
   Lesson: point-to-point tests at low fan-in prove the data path, not the lossless configuration. Add a

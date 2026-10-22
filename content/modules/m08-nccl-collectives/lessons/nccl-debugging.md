@@ -11,7 +11,7 @@ objectives:
   - Isolate the faulty layer (GPU, NVLink, PCIe/GDR, NIC, fabric, configuration) with controlled experiments using nccl-tests and diagnostic-only variables.
 prerequisites: [nccl-tests-interpretation, nccl-configuration]
 quiz: quiz-nccl-debugging
-widgets: [allreduce-sim, pcie-topo]
+widgets: [allreduce-sim, pcie-topo, nccl-env-explorer]
 labs: []
 tags: [nccl, debugging, troubleshooting, hangs, timeouts, nccl-debug]
 further_reading:
@@ -156,6 +156,12 @@ ranks are just the cascade. For status 12, look at the specific `hca` and `remot
 message: they name the local NIC and the peer, so you can check that exact link pair, its switch
 ports and the path between them. Raising `NCCL_IB_TIMEOUT` or `NCCL_IB_RETRY_CNT` only makes sense
 after you have confirmed that the fabric is healthy and congestion events are legitimately long.
+
+Switch the explorer to "Symptom → suspect variables" to see which settings to check for each class of symptom before you change anything.
+
+```widget
+nccl-env-explorer
+```
 
 ### Performance regressions: a layer-by-layer method
 

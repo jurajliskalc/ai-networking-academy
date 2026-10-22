@@ -11,7 +11,7 @@ objectives:
   - Explain why a server with eight RDMA NICs needs careful addressing and source-based routing.
 prerequisites: [osi-ethernet-frames]
 quiz: quiz-ip-addressing-routing
-widgets: []
+widgets: [subnet-calculator]
 labs: []
 tags: [ipv4, ipv6, subnetting, cidr, routing, arp, ecmp, foundations]
 further_reading:
@@ -145,6 +145,12 @@ Either way, one server ends up with eight interfaces on eight *different* subnet
 2. **Which interface answers ARP?** By default Linux answers an ARP request for *any* local address on *any* interface ("ARP flux"). With eight NICs on one host, a leaf may learn the wrong MAC for an address. The kernel sysctls `arp_ignore` and `arp_announce` (documented in the kernel's ip-sysctl reference) restrict this; vendor guides for multi-NIC RoCE hosts typically recommend setting them. Strict **reverse-path filtering** (`rp_filter`) can additionally drop legitimate asymmetric traffic and is often set to loose mode on such hosts.
 
 RDMA adds one more layer: the NIC uses a **GID table** that maps IP addresses to RDMA identities. The GID for an address only exists if the address is configured on that NIC's netdev, so IP configuration mistakes surface as RDMA connection failures (`rdma-connection-failures`).
+
+Check the worked example `10.0.3.77/26` and a /31 in the calculator, then generate a /31-per-NIC plan for your own server and rail count and see how each rail leaf summarises its links.
+
+```widget
+subnet-calculator
+```
 
 ## In practice
 

@@ -12,7 +12,7 @@ objectives:
   - Read host and switch PFC counters and tell a healthy pattern from a pathological one.
 prerequisites: [rocev2-encapsulation, switching-and-queues, ib-flow-control-vls]
 quiz: quiz-pfc-priority-flow-control
-widgets: [pfc-ecn-sim, ib-credit-flow]
+widgets: [pfc-ecn-sim, ib-credit-flow, headroom-calculator]
 labs: []
 tags: [pfc, lossless, 802.1qbb, pause, flow-control, xoff]
 further_reading:
@@ -180,6 +180,12 @@ tuneable. On most, they are derived automatically from the buffer profile.
 XOFF is often *dynamic*. With a shared buffer, the threshold is a function of free shared buffer
 (the "alpha" or dynamic-threshold factor), not a fixed byte value. The next lesson covers this.
 
+Size the headroom region in the diagram above: change the cable length and speed and see how many bytes must fit above XOFF.
+
+```widget
+headroom-calculator
+```
+
 ### Who sends PFC, and who receives it
 
 - **Switches** send PFC upstream when their ingress PGs fill, and stop transmitting a priority when
@@ -243,7 +249,9 @@ ethtool -A ens1f0np0 rx off tx off
 ```
 
 The mlx5 driver exposes per-priority pause counters through `ethtool -S`. The names below are
-documented in the kernel's mlx5 counters page. Availability depends on driver version.
+documented in the kernel's mlx5 counters page. Availability depends on driver version, and the
+per-priority pause counters appear only for priorities that have PFC enabled on the NIC: no
+`rx_prio3_pause` line means PFC is not enabled on priority 3 there.
 
 ```bash
 ethtool -S ens1f0np0 | grep -E 'prio3_pause|pause_storm'

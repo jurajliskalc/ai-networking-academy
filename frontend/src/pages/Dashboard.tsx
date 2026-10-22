@@ -41,7 +41,7 @@ export default function Dashboard() {
       <section className="fabric-bg relative overflow-hidden rounded-3xl border border-line bg-panel p-6 md:p-10">
         <div className="grid items-center gap-8 md:grid-cols-[1.3fr_1fr]">
           <div>
-            <div className="mb-3 font-mono text-xs uppercase tracking-[0.2em] text-accent">From noob to master</div>
+            <div className="mb-3 font-mono text-xs uppercase tracking-[0.2em] text-accent">From beginner to master</div>
             <h1 className="text-4xl font-extrabold leading-[1.05] tracking-tight md:text-5xl">The network is the computer<br /><span className="text-accent">that trains the model.</span></h1>
             <p className="mt-4 max-w-xl text-muted">
               Learn AI cluster networking end to end: RDMA, InfiniBand, RoCEv2 and lossless Ethernet, NCCL collectives,

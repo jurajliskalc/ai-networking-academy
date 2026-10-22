@@ -25,7 +25,7 @@ IDs are permanent: progress is keyed by them (see [CURRICULUM_PLAN.md](CURRICULU
 id: pfc-priority-flow-control          # equals the file name
 title: Priority Flow Control (PFC): pausing one class, not the link
 module: m06-rocev2-lossless            # must match the directory
-level: 3                               # 1 noob, 2 practitioner, 3 engineer, 4 master
+level: 3                               # 1 beginner, 2 practitioner, 3 engineer, 4 master
 estimated_minutes: 45
 objectives:                            # 3-5 measurable outcomes
   - Explain how an 802.1Qbb PAUSE frame stops one priority on one link.

@@ -11,7 +11,7 @@ objectives:
   - Describe the generation-to-generation trends (PCIe, port speed, integrated PCIe switching) and why they matter for fabric design.
 prerequisites: [pcie-numa-topology, four-networks-of-an-ai-cluster]
 quiz: quiz-nics-dpus-supernics
-widgets: []
+widgets: [pcie-bandwidth]
 labs: []
 tags: [nic, dpu, supernic, connectx, bluefield, offload]
 further_reading:
@@ -172,6 +172,12 @@ physical layer.
 > Port speed on the network side and PCIe bandwidth on the host side must match. A 2x400G dual-port
 > NIC on a single PCIe Gen5 x16 link cannot run both ports at line rate simultaneously. That is fine
 > for a front-end NIC used for redundancy, but wrong for a compute NIC.
+
+Check the note with the calculator: choose Gen5 x16, a 400G NIC and two ports at line rate, then try Gen6.
+
+```widget
+pcie-bandwidth
+```
 
 ## In practice
 

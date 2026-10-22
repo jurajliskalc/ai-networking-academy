@@ -11,7 +11,7 @@ objectives:
   - Explain why synchronous training makes the slowest GPU or link set the pace for the whole cluster.
 prerequisites: []
 quiz: quiz-ai-training-101
-widgets: []
+widgets: [training-step-timeline]
 labs: []
 tags: [training, gradients, gpu, mfu, synchronous, checkpointing, ai-workloads]
 further_reading:
@@ -134,6 +134,12 @@ Frameworks try to hide communication. In data-parallel training, the backward pa
 | Data loading | Storage and CPU pipeline (usually hidden by prefetching) |
 
 As GPUs get faster each generation, compute per step shrinks while the bytes to communicate do not, so more communication becomes exposed. **Faster GPUs make the network matter more, not less.**
+
+Try it below: turn overlap off and on, shrink the forward and backward times to mimic a faster GPU and watch the exposed communication grow, then make one rank 20 % slower and see every rank wait for it.
+
+```widget
+training-step-timeline
+```
 
 ### Failures and checkpoints
 

@@ -11,7 +11,7 @@ objectives:
   - Explain why distributed AI training and GPUDirect RDMA depend on these properties.
 prerequisites: [collective-operations, ai-traffic-patterns, nics-dpus-supernics]
 quiz: quiz-why-rdma
-widgets: []
+widgets: [verbs-flow]
 labs: []
 tags: [rdma, kernel-bypass, zero-copy, offload, gpudirect, fundamentals]
 further_reading:
@@ -110,6 +110,12 @@ For an RDMA Write:
 5. The remote NIC acknowledges; the local NIC, once all packets are acknowledged, writes a *completion* into a completion queue that the application polls.
 
 Nothing in that list involves a kernel on either side or the remote CPU. That is why RDMA latency for small messages on a modern adapter through one switch is commonly in the low single-digit microseconds, whereas kernel TCP round trips are typically in the tens of microseconds — treat both as orders of magnitude that depend on the NIC, CPU, switch and tuning.
+
+Step through the five stages in detail below and watch which components each one touches: for an RDMA Write, the remote CPU never lights up.
+
+```widget
+verbs-flow
+```
 
 ### Why the remote memory is safe
 

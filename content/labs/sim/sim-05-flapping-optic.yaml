@@ -15,13 +15,13 @@ ticket: |
 faults:
   - { type: bad_cable, switch: leaf05, port: swp3, ber: 1.0e-5 }
 hints:
-  - "Run a test, then look for physical-layer errors: `ethtool -S <if> | grep -E 'symbol|crc|link_down'`."
+  - "Run a test, then look for physical-layer errors: `ethtool -S <if> | grep -E 'symbol|corrected|crc|link_down'`. Compare with a healthy interface: some corrected bits are normal on PAM4 links."
   - "`mlxlink -d <dev> -c` shows raw and effective BER, `ethtool -m <if>` shows per-lane RX power, and `dmesg` shows link flaps."
 diagnosis:
   prompt: Which evidence best identifies the root cause?
   options:
     - id: a
-      text: node03 enp154s0np0 shows rx_symbol_err_phy and rx_crc_errors_phy rising, a raw BER around 3E-04 (above what RS-FEC can correct) with post-FEC errors, low RX power on one lane and link flaps in dmesg. The leaf05 swp3 cable or optic is bad.
+      text: node03 enp154s0np0 shows rx_pcs_symbol_err_phy (symbols FEC could not correct), rx_symbol_err_phy and rx_crc_errors_phy rising, a raw BER around 3E-04 (above what RS-FEC can correct) with post-FEC errors, low RX power on one lane and link flaps in dmesg. The leaf05 swp3 cable or optic is bad.
       correct: true
       explanation: Symbol errors and a pre-FEC BER far above normal, uncorrectable (post-FEC) errors, one weak lane and flaps all point at the physical link. Corrupted packets are dropped and RDMA retransmits them, so that rail paces the collective.
     - id: b

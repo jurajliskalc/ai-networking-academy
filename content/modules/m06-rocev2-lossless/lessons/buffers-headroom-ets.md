@@ -11,7 +11,7 @@ objectives:
   - Explain what DCBX negotiates over LLDP and when to rely on it versus static configuration.
 prerequisites: [pfc-priority-flow-control, switching-and-queues]
 quiz: quiz-buffers-headroom-ets
-widgets: [pfc-ecn-sim]
+widgets: [pfc-ecn-sim, headroom-calculator]
 labs: []
 tags: [buffers, headroom, ets, 802.1qaz, dcbx, shared-buffer, lossless]
 further_reading:
@@ -190,6 +190,12 @@ So: on the order of **100 KB per lossless priority per port** at 400G in a data 
   is hard, and why designs avoid PFC across long links.
 - Double the speed to 800G and *every* rate-proportional term doubles, while buffer per port has not
   grown as fast across ASIC generations.
+
+Reproduce the worked example below (it defaults to 400G, 100 m, 9216 bytes and 1 µs), then stretch the cable to 2 km or add a second lossless priority and watch the total budget.
+
+```widget
+headroom-calculator
+```
 
 > [!TIP]
 > Do not hand-calculate production headroom. Switch vendors provide headroom calculators, or compute

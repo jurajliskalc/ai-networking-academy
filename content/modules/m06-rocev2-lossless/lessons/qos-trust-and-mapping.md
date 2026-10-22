@@ -12,7 +12,7 @@ objectives:
   - Diagnose classification mismatches from counters.
 prerequisites: [pfc-priority-flow-control, ecn-and-dcqcn]
 quiz: quiz-qos-trust-and-mapping
-widgets: []
+widgets: [dscp-mapper]
 labs: []
 tags: [qos, dscp, pcp, trust, classification, traffic-class, cnp]
 further_reading:
@@ -122,6 +122,12 @@ check the actual map.
 > "Set traffic class 26" is a classic mistake. A ToS byte of 26 is binary `000110 10`: **DSCP 6**,
 > ECN ECT(0). DSCP 6 maps to priority 0 under a class-selector map, which is best-effort and lossy.
 > If you want DSCP 26, the traffic-class value is **104** (or 106).
+
+Try the conversions below: type a DSCP or a ToS byte, load the "NCCL_IB_TC=26" preset, and switch the trust mode to PCP on an untagged link.
+
+```widget
+dscp-mapper
+```
 
 ### The common NVIDIA convention
 

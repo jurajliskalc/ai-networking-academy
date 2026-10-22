@@ -11,7 +11,7 @@ objectives:
   - Explain the difference between algorithm bandwidth and bus bandwidth as reported by nccl-tests.
 prerequisites: [ai-training-101, parallelism-strategies]
 quiz: quiz-collective-operations
-widgets: [allreduce-sim]
+widgets: [allreduce-sim, collective-explorer]
 labs: []
 tags: [collectives, all-reduce, ring, tree, alpha-beta, nccl, busbw, ai-workloads]
 further_reading:
@@ -68,6 +68,12 @@ The last two lines show the most important identity in this lesson:
 > **all-reduce = reduce-scatter followed by all-gather.**
 
 This is not just a curiosity. It is how bandwidth-optimal all-reduce algorithms work, and it is why sharded training (which uses reduce-scatter and all-gather separately) moves roughly the same data as all-reduce, split into two phases.
+
+Pick each collective in the explorer below and compare what every rank holds before and after, how big the output is relative to the input, and the busbw factor nccl-tests applies.
+
+```widget
+collective-explorer
+```
 
 ## How it works
 

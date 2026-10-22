@@ -11,7 +11,7 @@ objectives:
   - Define measurable acceptance criteria and a burn-in procedure that catches infant-mortality failures.
 prerequisites: [perftest-benchmarking, nccl-tests-interpretation, optics-cabling-power, telemetry-counters]
 quiz: quiz-fabric-validation-burn-in
-widgets: [allreduce-sim, ecmp-collision]
+widgets: [allreduce-sim, ecmp-collision, nccl-tests-reader]
 labs: []
 tags: [validation, burn-in, acceptance, nccl-tests, perftest, cabling]
 further_reading:
@@ -209,6 +209,12 @@ Illustrative tail of output (trimmed):
 ```
 
 Read the large-message `busbw` (here about 369 GB/s; for all-reduce busbw = algbw x 2(n-1)/n, almost exactly 2x at 256 ranks) against your reference, and check `#wrong` is 0 (data corruption would show here). The "Avg bus bandwidth" averages over all sizes including tiny latency-bound messages, so it is not the headline number.
+
+Paste a large-message row from a validation run into the reader, set 256 ranks, 8 GPUs and 8 × 400G NICs per node, and check its efficiency against the first-order ceiling before you compare it with your reference value.
+
+```widget
+nccl-tests-reader
+```
 
 ### Finding the bad node in a collective
 

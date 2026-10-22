@@ -11,7 +11,7 @@ objectives:
   - Explain how encapsulation turns a GPU's RDMA message into a stack of headers, and why that matters for efficiency.
 prerequisites: []
 quiz: quiz-osi-ethernet-frames
-widgets: [rocev2-packet]
+widgets: [rocev2-packet, ethernet-frame]
 labs: []
 tags: [osi, ethernet, frames, encapsulation, vlan, foundations]
 further_reading:
@@ -112,6 +112,12 @@ Key consequences:
 - **Minimum frame size is 64 bytes** (dst + src + type + 46-byte payload + FCS = 6+6+2+46+4). Smaller payloads are padded.
 - **Maximum standard frame size is 1518 bytes** (1500-byte payload + 18 bytes of header and FCS), or 1522 with a VLAN tag. The 1500-byte payload limit is the classic **MTU**; jumbo frames raise it, which is the subject of `mtu-jumbo-frames`.
 - **The FCS only detects errors; it does not correct them.** A frame with a bad CRC is discarded and counted (on Linux, typically in an `rx_crc_errors`-style counter; exact names depend on the driver). Recovering the data is somebody else's job: TCP retransmits, and the RDMA transport in the NIC retransmits. On modern high-speed links, forward error correction (FEC) at the physical layer corrects most bit errors before the CRC check ever sees them; you will meet FEC again in `link-layer-ber-fec`.
+
+Build a few frames yourself: toggle the VLAN tag, switch between IPv4, IPv6 and RoCEv1, shrink the payload until padding appears, and click each segment to see its fields and bit widths.
+
+```widget
+ethernet-frame
+```
 
 ### Inter-packet gap: the bytes you never see
 

@@ -44,7 +44,7 @@ export const useExam = (id: string) => useJson<Exam>(`exams/${id}.json`);
 export const useLabBody = (id: string) => useJson<{ id: string; body: string }>(`labs/${id}.json`);
 
 export const LEVELS: Record<number, { name: string; label: string }> = {
-  1: { name: 'Noob', label: 'L1 · Noob' },
+  1: { name: 'Beginner', label: 'L1 · Beginner' },
   2: { name: 'Practitioner', label: 'L2 · Practitioner' },
   3: { name: 'Engineer', label: 'L3 · Engineer' },
   4: { name: 'Master', label: 'L4 · Master' },

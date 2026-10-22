@@ -11,7 +11,7 @@ objectives:
   - Turn each incident into an automated check (telemetry alert, admission test or CI guardrail).
 prerequisites: [troubleshooting-methodology, link-layer-ber-fec, lossless-misconfigurations, slow-collectives-stragglers, rdma-connection-failures]
 quiz: quiz-case-studies
-widgets: [pfc-ecn-sim, ecmp-collision]
+widgets: [pfc-ecn-sim, ecmp-collision, troubleshooting-tree]
 labs: []
 tags: [incident-response, postmortem, troubleshooting, case-study]
 further_reading:
@@ -142,7 +142,7 @@ The legacy `SymbolErrorCounter` is only 16 bits wide and saturates at 65535, so 
 | 02:05 | Diff of template v13 vs v14 shows the PFC priority change |
 | 02:40 | Rollback to v13; throughput recovers within minutes |
 
-**Evidence.** On the NICs (`ethtool -S`), the per-priority pause counters for priority 3 stopped incrementing after the change, while receivers showed RDMA `out_of_sequence` climbing (counter names per the mlx5 counters documentation). Illustrative 60-second deltas on one receiver during an all-to-all burst:
+**Evidence.** On the NICs (`ethtool -S`), the per-priority pause counters for priority 3 stopped incrementing after the change (the NICs still had PFC on priority 3, so the counters existed but stayed flat: the switches no longer paused on 3), while receivers showed RDMA `out_of_sequence` climbing (counter names per the mlx5 counters documentation). Illustrative 60-second deltas on one receiver during an all-to-all burst:
 
 ```text
 ethtool -S: rx_prio3_pause 0        tx_prio3_pause 0          <- was thousands/min before 18:00
@@ -278,6 +278,12 @@ rebooted node:      /sys/class/infiniband/mlx5_0/ports/1/gid_attrs/types/3  ->  
 | Run-to-run variance, no errors, uneven link utilisation | ECMP collisions and polarization | Per-member utilisation and ECN marks; variance across reruns | Hash seeds per tier, more QPs, adaptive routing |
 | One-node-dependent slowdown after maintenance | PCIe downtraining | Bisection; per-rail perftest; `lspci -vv` LnkSta | Reseat/replace; admission check |
 | Retry exceeded on jobs that include certain nodes | GID index drift | GID type/address at the index; NCCL WARN with odd remote GID | Select GID by type/address |
+
+Replay each case through the triage tree: choose the answers its evidence gives and check that you land on the same root cause.
+
+```widget
+troubleshooting-tree
+```
 
 > [!INTERVIEW]
 > "Tell me about a difficult incident you debugged." Interviewers want structure, not drama: the symptom and impact, how you scoped it, the hypothesis you tested and *discarded*, the evidence that proved the root cause, and the prevention you shipped so it could not recur. Use one of these patterns from your own experience, and be specific about counters and commands. Saying "the first test missed it because it did not use the same nodes as the job" shows real depth.

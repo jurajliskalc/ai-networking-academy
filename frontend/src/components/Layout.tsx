@@ -62,7 +62,7 @@ export default function Layout({ children }: { children: ReactNode }) {
         </NavLink>
         {nav}
         <div className="mt-auto space-y-2 px-2 pt-6 text-xs text-muted">
-          <div className="flex items-center gap-2"><GraduationCap size={14} />Noob → Master · 13 modules</div>
+          <div className="flex items-center gap-2"><GraduationCap size={14} />Beginner → Master · 13 modules</div>
           <a href={REPO_URL} target="_blank" rel="noreferrer" className="flex items-center gap-2 hover:text-fg"><Github size={14} />Source on GitHub</a>
         </div>
       </aside>

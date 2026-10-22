@@ -2,7 +2,7 @@
 
 # AI Networking Academy
 
-**From noob to master in AI cluster networking.**
+**From beginner to master in AI cluster networking.**
 RDMA · InfiniBand · RoCEv2 · lossless Ethernet · NCCL · rail-optimized fabrics · troubleshooting
 
 [![CI](https://github.com/jurajliskalc/ai-networking-academy/actions/workflows/ci.yml/badge.svg)](https://github.com/jurajliskalc/ai-networking-academy/actions/workflows/ci.yml)
@@ -33,11 +33,11 @@ hands-on curriculum. It starts at "what is an Ethernet frame" and ends at design
 
 | | |
 |---|---|
-| **70 lessons** in 13 modules, ~165,000 words | Four levels: Noob → Practitioner → Engineer → Master. Every lesson follows the same structure: *Why this matters → Concepts → How it works → In practice → Common pitfalls → Key takeaways*. Lessons include callouts for network engineers (ANALOGY) and interview prep (INTERVIEW). |
+| **70 lessons** in 13 modules, ~165,000 words | Four levels: Beginner → Practitioner → Engineer → Master. Every lesson follows the same structure: *Why this matters → Concepts → How it works → In practice → Common pitfalls → Key takeaways*. Lessons include callouts for network engineers (ANALOGY) and interview prep (INTERVIEW). |
 | **520 quiz questions** | Each lesson ends with a quiz, mostly scenario questions ("given these counters, what is wrong?"). **Every option is explained**, including the wrong ones. |
 | **14 Fabric Simulator labs** | Break/fix incident tickets in a browser-simulated 32-GPU rail-optimized RoCE cluster. You investigate with real tool syntax (`ethtool -S`, `mlnx_qos`, `show_gids`, `ib_write_bw`, `all_reduce_perf`, NVUE), commit a diagnosis, apply a fix, and the lab grades the fabric state. |
 | **7 hands-on Linux labs** | Real work on your own VM: Soft-RoCE and perftest, RoCEv2 packet captures, a containerlab BGP-unnumbered Clos, ECMP entropy, ECN/DCTCP congestion, EVPN-VXLAN. Each lab has a `check.sh`. |
-| **9 interactive visualizations** | RoCEv2 packet anatomy, ring vs tree all-reduce, PFC/ECN/DCQCN queue dynamics, ECMP collisions vs adaptive routing, fabric sizer, QP state machine, PCIe topology explorer, parallelism-to-network map, IB credits vs PFC. |
+| **33 interactive visualizations** | Embedded in the lessons and runnable on their own. Examples: a parallelism-to-network map with a per-step traffic estimator, the life of an RDMA WRITE, Ethernet/RoCE frame and MTU builders, subnet and rail addressing, PFC headroom and DSCP mapping, PFC deadlock builder, ECMP collisions vs adaptive routing, ring vs tree all-reduce, nccl-tests reader, NCCL environment explorer, PCIe/NVLink/InfiniBand speed tables, BER/FEC calculator, optics planner, counter decoder, a slow-job triage tree and telemetry sampling. Every widget's math is unit-tested. |
 | **3 timed mock exams** (140 questions) | Fundamentals, engineer and master level, scored by domain. Original practice material, not real certification questions. |
 | **Reference** | 155 annotated commands (Linux, rdma-core, perftest, InfiniBand, NVIDIA tools, NCCL, Cumulus NVUE, SONiC) and a 213-term glossary that also drives **SM-2 spaced-repetition flashcards**. |
 | **Progress tracking** | A lesson counts as mastered only when it is read *and* its quiz is passed. Streaks, an activity heatmap, weak-spot review, and exam domain profiles. Everything stays in your browser, with export and import. |
@@ -46,8 +46,8 @@ hands-on curriculum. It starts at "what is an Ethernet frame" and ends at design
 
 | # | Module | Level |
 |---|---|---|
-| 0 | Networking foundations for AI engineers | Noob |
-| 1 | Why AI needs a different network | Noob |
+| 0 | Networking foundations for AI engineers | Beginner |
+| 1 | Why AI needs a different network | Beginner |
 | 2 | Inside the GPU server: PCIe, NUMA, NICs/DPUs, GPUDirect, NVLink | Practitioner |
 | 3 | Data center fabric fundamentals: Clos, ECMP, BGP, EVPN-VXLAN | Practitioner |
 | 4 | RDMA fundamentals: verbs, QPs, transports, perftest | Practitioner |
@@ -76,6 +76,8 @@ configuration drift.
 Every lab is checked by the test suite: it must fail its checks before the documented fix and pass all
 of them after the fix is replayed. The model and its limits are documented in
 [docs/SIMULATOR.md](docs/SIMULATOR.md).
+
+<img src="docs/screenshots/parallelism.png" alt="Parallelism to network map with traffic estimator" width="900" />
 
 <table><tr>
 <td><img src="docs/screenshots/lesson.png" alt="Lesson in dark mode" /></td>

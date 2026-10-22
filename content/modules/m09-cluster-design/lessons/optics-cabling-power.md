@@ -12,7 +12,7 @@ objectives:
   - Plan cable lengths, labeling and cleaning practices that keep link error rates low.
 prerequisites: [ib-speeds-cables, fabric-sizing-math]
 quiz: quiz-optics-cabling-power
-widgets: [fabric-sizer]
+widgets: [fabric-sizer, optics-planner]
 labs: []
 tags: [optics, transceivers, cabling, power, cpo, lpo, osfp]
 further_reading:
@@ -110,6 +110,12 @@ spines in a central network row.
 The lesson: the physical layout determines the media, and the media determines power and failure
 rates. Placing leaves in the middle of a row can bring server links within AEC reach on some
 designs; that saves optics but concentrates heat and cable bulk.
+
+Try the planner with each link class's distance: watch where copper stops reaching at 400G versus 800G, then use the fabric calculator below it to turn module counts into kilowatts.
+
+```widget
+optics-planner
+```
 
 ### Worked example: optics power
 

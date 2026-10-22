@@ -11,7 +11,7 @@ objectives:
   - Verify NVLink health and Fabric Manager state with nvidia-smi and related tools.
 prerequisites: [pcie-numa-topology, parallelism-strategies]
 quiz: quiz-nvlink-nvswitch
-widgets: [parallelism-map, pcie-topo]
+widgets: [parallelism-map, pcie-topo, nvlink-generations]
 labs: []
 tags: [nvlink, nvswitch, scale-up, nvl72, fabric-manager]
 further_reading:
@@ -81,6 +81,12 @@ the scale-out fabric impractical.
 > Bidirectional versus unidirectional is the most common source of confusion with NVLink numbers.
 > "900 GB/s" for H100 is the sum of both directions over 18 links, about 450 GB/s each way. NIC
 > speeds are usually quoted per direction. Always normalize before comparing.
+
+Switch the chart below between bidirectional and per-direction bandwidth, then pick a generation and a NIC speed to see the true ratio and the time to move a buffer over each.
+
+```widget
+nvlink-generations
+```
 
 ### From links to a switched fabric
 

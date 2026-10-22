@@ -11,7 +11,7 @@ objectives:
   - Describe in-network and in-switch reduction (CollNet/SHARP, NVLS) and the PAT algorithm at a conceptual level.
 prerequisites: [collective-operations]
 quiz: quiz-collective-algorithms
-widgets: [allreduce-sim]
+widgets: [allreduce-sim, collective-explorer]
 labs: []
 tags: [collectives, all-reduce, ring, tree, alpha-beta, sharp, nvls, nccl]
 further_reading:
@@ -73,6 +73,12 @@ Let S be the buffer size per rank and n the number of ranks.
 
 Note that **all-reduce = reduce-scatter + all-gather**, which is why its volume is twice
 (n-1)/n · S. These factors reappear as the "bus bandwidth" correction factors in nccl-tests.
+
+Use the explorer to check each row of the table: choose a collective and n, and read the bytes each rank sends and the matching nccl-tests busbw factor.
+
+```widget
+collective-explorer
+```
 
 > [!ANALOGY]
 > Think of all-reduce as a group of accountants each holding one page of the company's expenses,

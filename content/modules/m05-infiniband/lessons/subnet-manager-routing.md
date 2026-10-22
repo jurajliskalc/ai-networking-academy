@@ -12,7 +12,7 @@ objectives:
   - Verify the routes the SM installed using ibroute, dump_fts and ibtracert.
 prerequisites: [ib-architecture, ecmp-hashing]
 quiz: quiz-subnet-manager-routing
-widgets: [ecmp-collision]
+widgets: [ecmp-collision, ib-addressing]
 labs: []
 tags: [infiniband, subnet-manager, opensm, ufm, routing, ftree, updn, adaptive-routing]
 further_reading:
@@ -85,6 +85,12 @@ sequenceDiagram
 ```
 
 Linear forwarding tables are written in blocks of 64 entries. Because routing is destination-based, all traffic to a given DLID entering a given switch leaves on the same port (unless adaptive routing is enabled). The quality of a routing engine is therefore how well it spreads *destinations* across links.
+
+Walk through discovery, LID assignment, route computation and LFT programming on a two-switch fabric; fail an inter-switch link to see the tables recomputed:
+
+```widget
+ib-addressing
+```
 
 ### Credit loops: why routing must be deadlock-free
 
