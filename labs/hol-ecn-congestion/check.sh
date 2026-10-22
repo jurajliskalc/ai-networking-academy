@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Copyright (c) 2026 Juraj Liska. AI Networking Academy: noncommercial use only, see LICENSE.
 # hol-ecn-congestion: verify the topology and that ECN marking works end to end.
 # Expects the bottleneck in red-ecn mode (sudo ./bottleneck.sh red-ecn).
 # Runs a 3-second DCTCP flow from ecn-s2, temporarily switching ecn-s2 and ecn-rcv

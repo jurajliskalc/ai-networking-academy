@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Copyright (c) 2026 Juraj Liska. AI Networking Academy: noncommercial use only, see LICENSE.
 # hol-ecn-congestion: configure the bottleneck on ecn-r's egress towards the receiver.
 #
 # Usage: sudo ./bottleneck.sh MODE

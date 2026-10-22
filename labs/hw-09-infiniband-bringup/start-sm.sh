@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Copyright (c) 2026 Juraj Liska. AI Networking Academy: noncommercial use only, see LICENSE.
 # hw-09-infiniband-bringup: start OpenSM on this host and remember what was done, so stop-sm.sh only
 # undoes this lab's change.
 # Usage: sudo ./start-sm.sh [--force]    (--force: start even if a master SM already answers sminfo)

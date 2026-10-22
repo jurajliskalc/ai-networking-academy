@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Copyright (c) 2026 Juraj Liska. AI Networking Academy: noncommercial use only, see LICENSE.
 # Starts AI Networking Academy locally on http://127.0.0.1:8740.
 # Uses Node.js from .tools/node (portable, project-local) or from PATH; downloads a portable Node.js
 # LTS (checksum-verified) into .tools/node if neither exists. Rebuilds the site when content or source

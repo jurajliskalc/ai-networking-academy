@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Copyright (c) 2026 Juraj Liska. AI Networking Academy: noncommercial use only, see LICENSE.
 # hw-01-inventory-baseline: verify both hosts are inventoried and look sane.
 # Run on host A (it reaches host B over SSH):  ../hw-toolkit/aina-hw check hw-01-inventory-baseline
 # Read-only: it changes no settings.

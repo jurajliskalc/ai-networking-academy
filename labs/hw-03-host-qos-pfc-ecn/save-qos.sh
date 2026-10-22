@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Copyright (c) 2026 Juraj Liska. AI Networking Academy: noncommercial use only, see LICENSE.
 # hw-03-host-qos-pfc-ecn: save this host's current QoS state so restore-qos.sh can put it back.
 # Usage: sudo ./save-qos.sh [--force] [A|B|C]   (role auto-detected from the data IPs in lab.env)
 # Saves to /var/lib/aina/state/hw-03-host-qos-pfc-ecn/<role>/. Refuses to overwrite unless --force.

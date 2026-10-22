@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Copyright (c) 2026 Juraj Liska. AI Networking Academy: noncommercial use only, see LICENSE.
 # hol-ecmp-entropy: build a tiny two-path "fabric" from network namespaces.
 #
 #                    +-- ecmp-sp1 --+

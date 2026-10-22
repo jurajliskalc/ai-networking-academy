@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Copyright (c) 2026 Juraj Liska. AI Networking Academy: noncommercial use only, see LICENSE.
 """aina-hw: the AI Networking Academy real-hardware toolkit.
 
 Collects a read-only inventory of RDMA hosts, runs lab check scripts and records their results, and

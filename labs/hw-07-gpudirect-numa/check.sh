@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Copyright (c) 2026 Juraj Liska. AI Networking Academy: noncommercial use only, see LICENSE.
 # hw-07-gpudirect-numa: verify the GPU/NIC layout and GPUDirect RDMA between host A and host B.
 # Run on host A (it reaches host B over SSH):  ../hw-toolkit/aina-hw check hw-07-gpudirect-numa
 # Read-only: it changes no settings. Uses TCP ports 18610 and 18611 for the test handshakes.

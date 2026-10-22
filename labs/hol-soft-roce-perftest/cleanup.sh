@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Copyright (c) 2026 Juraj Liska. AI Networking Academy: noncommercial use only, see LICENSE.
 # hol-soft-roce-perftest: remove the Soft-RoCE device and unload the module.
 # Usage: sudo ./cleanup.sh [rxe-name]
 set -uo pipefail

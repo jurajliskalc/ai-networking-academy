@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Copyright (c) 2026 Juraj Liska. AI Networking Academy: noncommercial use only, see LICENSE.
 # AI Networking Academy: install everything the hands-on labs need on Ubuntu 24.04.
 #
 # Idempotent: safe to run again; already-installed parts are skipped.

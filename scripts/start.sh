@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Copyright (c) 2026 Juraj Liska. AI Networking Academy: noncommercial use only, see LICENSE.
 # Linux/macOS: build (if needed) and serve AI Networking Academy on http://127.0.0.1:8740.
 set -euo pipefail
 cd "$(dirname "$0")/../frontend"

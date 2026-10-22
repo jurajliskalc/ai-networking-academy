@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Copyright (c) 2026 Juraj Liska. AI Networking Academy: noncommercial use only, see LICENSE.
 # hw-08-nccl-two-nodes: run nccl-tests all_reduce_perf across host A and host B with Open MPI,
 # using the values from lab.env, and keep the full NCCL log.
 #

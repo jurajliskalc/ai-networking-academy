@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Copyright (c) 2026 Juraj Liska. AI Networking Academy: noncommercial use only, see LICENSE.
 # hw-06-switch-lossless-incast: run a 2 -> 1 RDMA WRITE incast (A and C into B) and print how the
 # congestion counters moved. Run on host A. Read-only (changes no settings).
 # Usage: ./incast.sh [seconds]     (default 10; TCP ports 18610 and 18611)

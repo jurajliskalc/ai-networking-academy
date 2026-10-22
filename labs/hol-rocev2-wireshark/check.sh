@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Copyright (c) 2026 Juraj Liska. AI Networking Academy: noncommercial use only, see LICENSE.
 # hol-rocev2-wireshark: verify that a capture contains decodable RoCEv2 traffic.
 #
 # Usage: ./check.sh [capture.pcap ...]

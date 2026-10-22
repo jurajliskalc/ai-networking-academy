@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Copyright (c) 2026 Juraj Liska. AI Networking Academy: noncommercial use only, see LICENSE.
 """Write a small, synthetic RoCEv2 capture for dissection practice.
 
 This is the single-VM fallback for the hol-rocev2-wireshark lab: it builds

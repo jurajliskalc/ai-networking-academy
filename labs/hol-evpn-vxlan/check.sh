@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Copyright (c) 2026 Juraj Liska. AI Networking Academy: noncommercial use only, see LICENSE.
 # hol-evpn-vxlan: verify the EVPN control plane and the VXLAN data plane.
 #
 # Usage: sudo ./check.sh

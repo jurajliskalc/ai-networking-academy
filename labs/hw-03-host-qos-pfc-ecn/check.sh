@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Copyright (c) 2026 Juraj Liska. AI Networking Academy: noncommercial use only, see LICENSE.
 # hw-03-host-qos-pfc-ecn: verify host-side lossless QoS on host A and host B.
 # Run on host A:  ../hw-toolkit/aina-hw check hw-03-host-qos-pfc-ecn
 # Read-only. Runs a 5-second ib_write_bw A -> B with --tclass=$TCLASS on TCP port 18602.

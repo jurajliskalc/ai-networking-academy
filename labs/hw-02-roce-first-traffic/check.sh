@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Copyright (c) 2026 Juraj Liska. AI Networking Academy: noncommercial use only, see LICENSE.
 # hw-02-roce-first-traffic: verify RoCEv2 works between host A and host B.
 # Run on host A (it reaches host B over SSH):  ../hw-toolkit/aina-hw check hw-02-roce-first-traffic
 # Read-only: it changes no settings. Uses TCP ports 18600 and 18601 for the test handshakes.

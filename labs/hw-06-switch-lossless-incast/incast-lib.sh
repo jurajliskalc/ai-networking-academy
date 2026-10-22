@@ -1,4 +1,6 @@
 # shellcheck shell=bash
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Copyright (c) 2026 Juraj Liska. AI Networking Academy: noncommercial use only, see LICENSE.
 # hw-06-switch-lossless-incast: 2 -> 1 incast (A and C send RDMA WRITEs to B at the same time).
 # Source after ../hw-toolkit/lib.sh and aina_load_env, then: run_incast SECONDS
 # Results: INCAST_BW_A, INCAST_BW_C (Gb/s), INCAST_OK (1 if both senders completed), and the

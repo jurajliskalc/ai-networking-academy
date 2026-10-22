@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Copyright (c) 2026 Juraj Liska. AI Networking Academy: noncommercial use only, see LICENSE.
 # hol-ecmp-entropy: run a command and show how its traffic split across the two spines.
 #
 # Counts packets/bytes RECEIVED by each spine on its leaf1-facing interface, i.e. the

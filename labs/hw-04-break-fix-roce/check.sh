@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Copyright (c) 2026 Juraj Liska. AI Networking Academy: noncommercial use only, see LICENSE.
 # hw-04-break-fix-roce: verify the incident is closed: fault diagnosed, restored, and host B healthy.
 # Run on host A:  ../hw-toolkit/aina-hw check hw-04-break-fix-roce
 # Read-only. Uses TCP port 18603 for the ping-pong handshake.

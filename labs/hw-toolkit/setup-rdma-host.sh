@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Copyright (c) 2026 Juraj Liska. AI Networking Academy: noncommercial use only, see LICENSE.
 # AI Networking Academy: prepare a real RDMA host for the hardware labs.
 #
 # Installs the user-space RDMA and diagnostic tools, then audits the host (drivers, RDMA devices,

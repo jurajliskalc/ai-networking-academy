@@ -379,6 +379,7 @@ for (const d of ['lessons', 'quizzes', 'exams', 'labs', 'hardware']) fs.mkdirSyn
 const write = (rel, data) => fs.writeFileSync(path.join(OUT, rel), JSON.stringify(data));
 write('index.json', {
   generated: new Date().toISOString(),
+  copyright: '© 2026 Juraj Liska. AI Networking Academy content: CC BY-NC-SA 4.0, noncommercial use only.',
   modules, lessons: [...lessons.values()], labs, exams, commands, glossary,
   hardware: { tiers, requirements, variables, guides },
   quizzes: [...quizzes.values()].map((q) => ({ id: q.id, title: q.title, lesson: q.lesson, count: q.questions.length })),

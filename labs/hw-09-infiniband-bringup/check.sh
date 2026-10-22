@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Copyright (c) 2026 Juraj Liska. AI Networking Academy: noncommercial use only, see LICENSE.
 # hw-09-infiniband-bringup: verify an InfiniBand subnet between host A and host B.
 # Run on host A as your normal user (it reaches host B over SSH with your keys):
 #   sudo -v && ../hw-toolkit/aina-hw check hw-09-infiniband-bringup

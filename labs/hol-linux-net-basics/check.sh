@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Copyright (c) 2026 Juraj Liska. AI Networking Academy: noncommercial use only, see LICENSE.
 # hol-linux-net-basics: verify the end state of the lab.
 # Expected end state: Tasks 1-5 done (jumbo MTU fixed on both hosts). Task 6
 # (routed path through hol1-r) is checked only if hol1-r exists.

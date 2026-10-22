@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Copyright (c) 2026 Juraj Liska. AI Networking Academy: noncommercial use only, see LICENSE.
 # hol-soft-roce-perftest: verify Soft-RoCE works on this host.
 # Runs a short ibv_rc_pingpong and ib_write_bw over the rxe device (single-host
 # loopback mode, client and server on the same device).

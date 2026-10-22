@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Copyright (c) 2026 Juraj Liska. AI Networking Academy: noncommercial use only, see LICENSE.
 # hw-04-break-fix-roce: inject one reversible RoCE fault on THIS host (host B), let the learner
 # diagnose it from host A, then restore.
 #

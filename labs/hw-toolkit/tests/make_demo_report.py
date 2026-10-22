@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Copyright (c) 2026 Juraj Liska. AI Networking Academy: noncommercial use only, see LICENSE.
 """Write the web app's illustrative demo report by running the real collector on two fake hosts.
 
     python3 labs/hw-toolkit/tests/make_demo_report.py      (Linux; writes frontend/src/hw/demo-report.json)

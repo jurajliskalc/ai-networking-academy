@@ -1,4 +1,6 @@
 # shellcheck shell=bash
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Copyright (c) 2026 Juraj Liska. AI Networking Academy: noncommercial use only, see LICENSE.
 # hw-03-host-qos-pfc-ecn: QoS helpers shared by this lab's scripts (and by hw-04's checks).
 # Source after ../hw-toolkit/lib.sh and aina_load_env.
 #

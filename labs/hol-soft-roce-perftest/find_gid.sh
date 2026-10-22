@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Copyright (c) 2026 Juraj Liska. AI Networking Academy: noncommercial use only, see LICENSE.
 # Print the GID table of an RDMA device port from sysfs and the index of the
 # lowest-numbered IPv4-mapped (::ffff:a.b.c.d) RoCE v2 GID.
 #

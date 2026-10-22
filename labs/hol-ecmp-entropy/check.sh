@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Copyright (c) 2026 Juraj Liska. AI Networking Academy: noncommercial use only, see LICENSE.
 # hol-ecmp-entropy: verify the topology and the L3 vs L4 hashing behavior.
 # The script temporarily changes leaf1's hash policy and restores it at the end.
 #

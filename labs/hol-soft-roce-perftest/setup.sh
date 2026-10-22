@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Copyright (c) 2026 Juraj Liska. AI Networking Academy: noncommercial use only, see LICENSE.
 # hol-soft-roce-perftest: load rdma_rxe and create a Soft-RoCE device on a netdev.
 #
 # Usage: sudo ./setup.sh [netdev] [rxe-name]

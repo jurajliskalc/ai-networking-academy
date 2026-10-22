@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Copyright (c) 2026 Juraj Liska. AI Networking Academy: noncommercial use only, see LICENSE.
 # hw-05-link-health-optics: verify the A<->B link is up, consistent and error-free under load.
 # Run on host A (it reaches host B over SSH):  ../hw-toolkit/aina-hw check hw-05-link-health-optics
 # Read-only: it changes no settings. Uses TCP port 18605 for the perftest handshake.

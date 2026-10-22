@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Copyright (c) 2026 Juraj Liska. AI Networking Academy: noncommercial use only, see LICENSE.
 # aina-hw: wrapper so the toolkit can be called as a command. See README.md or "aina-hw --help".
 #   Optional: sudo ln -s "$PWD/aina-hw" /usr/local/bin/aina-hw
 set -euo pipefail

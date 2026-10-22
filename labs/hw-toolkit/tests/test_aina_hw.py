@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Copyright (c) 2026 Juraj Liska. AI Networking Academy: noncommercial use only, see LICENSE.
 """Tests for aina_hw.py. Run on Linux (fake sysfs trees use symlinks):
 
     python3 -m unittest discover -s labs/hw-toolkit/tests -v

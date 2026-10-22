@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Copyright (c) 2026 Juraj Liska. AI Networking Academy: noncommercial use only, see LICENSE.
 # hol-linux-net-basics: build the lab topology (Tasks 1-2) in one go.
 #
 #   hol1-a [a-eth0] ---- [a-br] \

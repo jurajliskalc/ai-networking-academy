@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Copyright (c) 2026 Juraj Liska. AI Networking Academy: noncommercial use only, see LICENSE.
 # hol-evpn-vxlan: create the VXLAN data plane on both leaves (what ifupdown2/NVUE/SONiC
 # would do on a real switch). FRR's zebra notices the new devices and starts advertising
 # VNI 100 in EVPN.

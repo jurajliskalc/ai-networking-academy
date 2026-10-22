@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Copyright (c) 2026 Juraj Liska. AI Networking Academy: noncommercial use only, see LICENSE.
 # hw-03-host-qos-pfc-ecn: restore the QoS state saved by save-qos.sh (or apply-qos.sh).
 # Usage: sudo ./restore-qos.sh [A|B|C]
 # Restores trust mode, PFC-enabled priorities, the lab's DSCP->priority entry and the ECN switches.

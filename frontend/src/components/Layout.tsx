@@ -149,6 +149,13 @@ export default function Layout({ children }: { children: ReactNode }) {
       <main id="main-content" ref={main} tabIndex={-1} className="px-4 py-8 outline-none lg:ml-64 lg:px-10 lg:py-10">
         <div className="mx-auto max-w-6xl">{children}</div>
       </main>
+
+      <footer className="border-t border-line px-4 py-5 text-xs text-muted lg:ml-64 lg:px-10">
+        <div className="mx-auto max-w-6xl">
+          © 2026 Juraj Liska · {SITE}. Free for noncommercial use: code under PolyForm Noncommercial 1.0.0, content under
+          CC BY-NC-SA 4.0. Commercial use needs a license from the author. <a href={`${REPO_URL}/blob/main/LICENSE`} target="_blank" rel="noreferrer" className="underline hover:text-fg">License<span className="sr-only"> (opens in a new tab)</span></a>
+        </div>
+      </footer>
     </div>
   );
 }

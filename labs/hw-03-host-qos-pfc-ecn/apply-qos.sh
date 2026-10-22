@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Copyright (c) 2026 Juraj Liska. AI Networking Academy: noncommercial use only, see LICENSE.
 # hw-03-host-qos-pfc-ecn: configure host-side lossless RoCE QoS on this host's RDMA netdev.
 #   trust DSCP, PFC on ROCE_PRIO only, DSCP ROCE_DSCP -> ROCE_PRIO, ECN on ROCE_PRIO (if exposed).
 # Usage: sudo ./apply-qos.sh [--dry-run] [A|B|C]    (role auto-detected from the data IPs in lab.env)

@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Copyright (c) 2026 Juraj Liska. AI Networking Academy: noncommercial use only, see LICENSE.
 # hw-06-switch-lossless-incast: prove the switched fabric is lossless for RoCE under 2 -> 1 incast.
 # Run on host A:  ../hw-toolkit/aina-hw check hw-06-switch-lossless-incast
 # Read-only. Runs a 10-second incast (A and C into B) on TCP ports 18610 and 18611.
