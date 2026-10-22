@@ -70,17 +70,18 @@ const INFO: Record<Coll, { name: string; formula: string; sent: string; use: str
 };
 const ORDER: Coll[] = ['broadcast', 'reduce', 'allgather', 'reducescatter', 'allreduce', 'alltoall'];
 const KIND: Record<Chunk['kind'], string> = {
-  own: 'border-data/60 bg-data/15 text-data',
-  recv: 'border-warn/60 bg-warn/15 text-warn',
-  sum: 'border-accent/60 bg-accent/15 text-accent',
+  // A 10% tint keeps the coloured label at >= 4.5:1 in the light theme.
+  own: 'border-data/60 bg-data/10 text-data',
+  recv: 'border-warn/60 bg-warn/10 text-warn',
+  sum: 'border-accent/60 bg-accent/10 text-accent',
 };
 
 function Buf({ b }: { b: Buffer }) {
   return (
     <div className="flex gap-0.5">
       {b.map((c, j) => c
-        ? <span key={j} className={`flex h-7 min-w-0 flex-1 items-center justify-center rounded border font-mono text-[10px] ${KIND[c.kind]}`}>{c.label}</span>
-        : <span key={j} className="flex h-7 min-w-0 flex-1 items-center justify-center rounded border border-dashed border-line font-mono text-[10px] text-muted">·</span>)}
+        ? <span key={j} className={`flex h-7 min-w-0 flex-1 items-center justify-center rounded border font-mono text-[10px] ${KIND[c.kind]}`}>{c.label}<span className="sr-only"> ({c.kind === 'own' ? 'own' : c.kind === 'recv' ? 'received' : 'reduced'})</span></span>
+        : <span key={j} className="flex h-7 min-w-0 flex-1 items-center justify-center rounded border border-dashed border-line font-mono text-[10px] text-muted">·<span className="sr-only">empty</span></span>)}
     </div>
   );
 }
@@ -127,7 +128,7 @@ export default function CollectiveExplorer() {
       <div className="flex flex-wrap items-end gap-4">
         <div>
           <div className="mb-1 font-mono text-[10px] uppercase tracking-[0.14em] text-muted">Ranks n</div>
-          <div className="flex flex-wrap gap-1">
+          <div className="flex flex-wrap gap-1" role="group" aria-label="Ranks n">
             {[2, 3, 4, 5, 6, 7, 8].map((o) => (
               <button key={o} type="button" onClick={() => setN(o)} aria-pressed={n === o}
                 className={`rounded-md border px-2 py-1 font-mono text-xs ${n === o ? 'border-accent bg-accent-soft text-accent' : 'border-line hover:bg-panel-2'}`}>{o}</button>
@@ -155,7 +156,7 @@ export default function CollectiveExplorer() {
         <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm border border-dashed border-line" />unused</span>
       </div>
 
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto" tabIndex={0} role="region" aria-label={`${info.name} sizes and busbw factor`} aria-live="polite">
         <table className="w-full min-w-[520px] border-collapse text-sm">
           <tbody>
             {[
@@ -186,7 +187,7 @@ export default function CollectiveExplorer() {
             <input type="number" min={1} max={2000} value={bw} onChange={(e) => setBw(Math.max(1, Number(e.target.value) || 1))} className="mt-1 w-full rounded-md border border-line bg-panel px-2 py-1 font-mono text-sm text-fg" />
           </label>
         </div>
-        <div className="mt-2 flex flex-wrap gap-2">
+        <div className="mt-2 flex flex-wrap gap-2" aria-live="polite">
           <Pill>each rank sends ≈ <span className="font-mono text-fg">{sendMB.toFixed(1)} MB</span></Pill>
           <Pill>ideal time ≈ S·factor / B = {sMB}·{f.toFixed(3)} / {bw} GB/s = <span className="font-mono text-fg">{tMs.toFixed(2)} ms</span></Pill>
           <Pill>algbw = <span className="font-mono text-fg">{(sMB / 1e3 / (tMs / 1e3)).toFixed(1)} GB/s</span>, busbw = <span className="font-mono text-fg">{bw} GB/s</span></Pill>

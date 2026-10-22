@@ -61,16 +61,23 @@ export interface SimLab {
   checks: SimCheck[];
   solution: string;
 }
+export type Fabric = 'any' | 'roce' | 'ib';
 export interface HandsOnLab {
   id: string;
   kind: 'handson';
   title: string;
   level: number;
   estimated_minutes: number;
-  environment: string;
+  environment: 'linux-vm' | 'containerlab' | 'hardware';
   lessons: string[];
   files: string | null;
   verified: boolean;
+  summary: string;
+  /** 0 = virtual (VM/containerlab), 1-3 = real hardware tiers. */
+  tier: number;
+  fabric: Fabric;
+  requires: string[];
+  changes_config: boolean;
   toc: TocEntry[];
 }
 export type Lab = SimLab | HandsOnLab;
@@ -78,6 +85,12 @@ export type Lab = SimLab | HandsOnLab;
 export interface CommandEntry { cmd: string; platform?: string; summary: string; example?: string; notes?: string; tags?: string[] }
 export interface CommandGroup { id: string; title: string; description?: string; commands: CommandEntry[] }
 export interface GlossaryTerm { term: string; expansion?: string; definition: string; lesson?: string }
+
+export interface HwTier { id: number; title: string; summary: string; gear: string }
+export interface HwRequirement { id: string; title: string; description: string }
+export interface HwVariable { name: string; group: string; label: string; default?: string; derived?: string; choices?: string[]; help?: string }
+export interface HwGuide { id: string; title: string; order: number; summary: string; words: number; toc: TocEntry[] }
+export interface HardwareMeta { tiers: HwTier[]; requirements: HwRequirement[]; variables: HwVariable[]; guides: HwGuide[] }
 
 export interface ContentIndex {
   generated: string;
@@ -88,4 +101,5 @@ export interface ContentIndex {
   exams: ExamMeta[];
   commands: CommandGroup[];
   glossary: GlossaryTerm[];
+  hardware: HardwareMeta;
 }

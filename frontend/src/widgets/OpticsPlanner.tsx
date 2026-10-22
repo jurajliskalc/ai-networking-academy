@@ -66,7 +66,7 @@ function Seg<T extends string | number>({ label, value, options, onChange, rende
   return (
     <div>
       <div className="mb-1 font-mono text-[10px] uppercase tracking-[0.14em] text-muted">{label}</div>
-      <div className="flex flex-wrap gap-1">{options.map((o) => (
+      <div className="flex flex-wrap gap-1" role="group" aria-label={label}>{options.map((o) => (
         <button key={String(o)} type="button" onClick={() => onChange(o)} aria-pressed={o === value}
           className={`rounded-md border px-2 py-1 font-mono text-xs transition ${o === value ? 'border-accent bg-accent-soft text-accent' : 'border-line bg-panel hover:bg-panel-2'}`}>{render ? render(o) : String(o)}</button>
       ))}</div>
@@ -104,26 +104,26 @@ export default function OpticsPlanner() {
         <div>
           <div className="mb-1 flex items-baseline justify-between font-mono text-[10px] uppercase tracking-[0.14em] text-muted"><span>Routed cable length</span><span className="text-base font-semibold normal-case tracking-normal text-fg">{dist} m</span></div>
           <input type="range" min={0} max={DIST_STEPS.length - 1} step={1} value={di} onChange={(e) => setDi(Number(e.target.value))}
-            aria-label="Routed cable length in metres" className="w-full accent-[var(--accent)]" />
+            aria-label="Routed cable length in metres" aria-valuetext={`${dist} m`} className="w-full accent-[var(--accent)]" />
         </div>
         <Seg label="Placement" value={where} options={['intra', 'inter'] as const} onChange={setWhere} render={(w) => (w === 'intra' ? 'intra-rack' : 'inter-rack')} />
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2" aria-live="polite">
         {best ? <Pill className="border-accent/40 text-accent">lowest power that reaches: {best.m.name} ({best.watts} W/end)</Pill> : <Pill className="text-danger">nothing in this table reaches {dist} m at {sp(speed)}</Pill>}
         {where === 'inter' && best && best.m.kind !== 'transceiver' && <Pill className="text-warn">across racks: check cable routing, bend radius and tray fill for copper</Pill>}
         {where === 'intra' && dist > 3 && <Pill className="text-warn">{dist} m is long for one rack: is this really intra-rack?</Pill>}
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-line">
+      <div className="overflow-x-auto rounded-lg border border-line" tabIndex={0} role="region" aria-label={`Cable and optics options at ${sp(speed)}`}>
         <table className="w-full min-w-[720px] text-left text-xs">
           <thead className="bg-panel-2 font-mono text-[10px] uppercase tracking-[0.1em] text-muted">
             <tr><th className="px-2 py-1.5">Medium</th><th className="px-2 py-1.5">Typical reach @ {sp(speed)}</th><th className="px-2 py-1.5">W per end</th><th className="px-2 py-1.5">W per link</th><th className="px-2 py-1.5">Cost</th><th className="px-2 py-1.5">Pros</th><th className="px-2 py-1.5">Cons</th></tr>
           </thead>
           <tbody>
             {cands.map((c) => (
-              <tr key={c.m.id} className={`border-t border-line align-top ${c === best ? 'bg-accent-soft' : c.fits ? '' : 'opacity-50'}`}>
-                <td className="px-2 py-1.5"><div className={`font-semibold ${c === best ? 'text-accent' : ''}`}>{c.m.name}</div><div className="text-[10px] text-muted">{c.fits ? '✓ reaches' : c.reach === null ? 'not common at this speed' : '✕ too short'}</div></td>
+              <tr key={c.m.id} className={`border-t border-line align-top ${c === best ? 'bg-accent-soft' : c.fits ? '' : 'text-muted'}`}>
+                <td className="px-2 py-1.5"><div className={`font-semibold ${c === best ? 'text-accent' : ''}`}>{c.m.name}{c === best && <span className="sr-only"> (recommended)</span>}</div><div className="text-[10px] text-muted">{c.fits ? '✓ reaches' : c.reach === null ? 'not common at this speed' : '✕ too short'}</div></td>
                 <td className="px-2 py-1.5 font-mono">{reachTxt(c.reach)}</td>
                 <td className="px-2 py-1.5 font-mono">{c.watts === null ? '—' : c.watts === 0 ? '~0' : `~${c.watts}`}</td>
                 <td className="px-2 py-1.5 font-mono">{c.linkW === null ? '—' : c.linkW === 0 ? '~0' : `~${c.linkW}`}</td>
@@ -145,7 +145,7 @@ export default function OpticsPlanner() {
           <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted">Fabric optics power</div>
           <label className="flex items-center gap-2 text-xs text-muted">GPUs <input type="number" min={1} value={gpus} onChange={(e) => setGpus(Math.max(1, Number(e.target.value) || 1))} className="w-24 rounded-md border border-line bg-panel px-2 py-1 font-mono text-xs text-fg" /></label>
         </div>
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Fabric optics power by link class">
           <table className="w-full min-w-[680px] text-left text-xs">
             <thead className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted"><tr><th className="py-1 pr-2">Link class</th><th className="pr-2">Links</th><th className="pr-2">Speed</th><th className="pr-2">Medium</th><th className="pr-2">Ports / module</th><th className="pr-2">W / module</th><th className="pr-2">Modules (ends)</th><th>kW</th></tr></thead>
             <tbody>
@@ -164,7 +164,7 @@ export default function OpticsPlanner() {
             </tbody>
           </table>
         </div>
-        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4" aria-live="polite">
           {[['Powered ends', fmt(totalEnds, 0)], ['Optics power', `${fmt(totalKw, 2)} kW`], ['Per GPU', `${fmt((totalKw * 1000) / gpus, 1)} W`], ['Modules per GPU', fmt(totalEnds / gpus, 2)]].map(([l, v]) => (
             <div key={l} className="rounded-lg border border-line bg-panel px-3 py-2"><div className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted">{l}</div><div className="font-mono text-lg font-semibold tabular-nums text-data">{v}</div></div>
           ))}

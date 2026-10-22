@@ -55,6 +55,11 @@ if ip netns exec hol1-a ping -c 2 -W 1 -q 10.10.0.2 >/dev/null 2>&1; then
   pass "small ping hol1-a -> hol1-b works"
 else
   fail "small ping hol1-a -> hol1-b fails"
+  if [[ "$(sysctl -n net.bridge.bridge-nf-call-iptables 2>/dev/null)" == "1" ]] &&
+     ! iptables -C FORWARD -i br-hol1 -o br-hol1 -j ACCEPT 2>/dev/null; then
+    echo "      hint: bridged traffic is filtered by iptables FORWARD (Docker?); see Task 1:"
+    echo "      sudo iptables -I FORWARD -i br-hol1 -o br-hol1 -j ACCEPT"
+  fi
 fi
 
 if ip netns exec hol1-a ping -c 2 -W 1 -q -M "do" -s 8972 10.10.0.2 >/dev/null 2>&1; then

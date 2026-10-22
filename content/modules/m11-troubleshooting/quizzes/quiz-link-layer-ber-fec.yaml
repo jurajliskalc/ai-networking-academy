@@ -6,7 +6,7 @@ questions:
   - id: q1
     type: scenario
     prompt: >
-      A 400G PAM4 link reports millions of corrected FEC errors per minute, a raw BER of 3E-9,
+      A 400G PAM4 link reports tens of thousands of corrected FEC errors per minute, a raw BER of 3E-9,
       balanced across all lanes, zero effective errors, and no CRC errors on either end for a week.
       What is the right action?
     options:
@@ -21,7 +21,7 @@ questions:
         text: Disable FEC to measure the true error rate in production.
         explanation: Running PAM4 without FEC would corrupt traffic; raw BER is already reported with FEC on.
       - id: d
-        text: Drain the link because millions of errors per minute will cause RDMA retransmissions.
+        text: Drain the link because tens of thousands of errors per minute will cause RDMA retransmissions.
         explanation: Only errors that escape FEC cause packet loss; there are none here.
     tags: [fec, ber]
   - id: q2
@@ -36,13 +36,13 @@ questions:
         correct: true
         explanation: One lane with about 5 dB less light and far more raw errors is the classic contamination signature. Effective errors are zero, so it is planned work, not an emergency.
       - id: b
-        text: A switch ASIC fault; replace the switch line card.
-        explanation: An ASIC fault would not normally present as low optical power on a single lane.
+        text: A failing SerDes on the switch ASIC for that lane; the raw errors are electrical, so replace the switch line card.
+        explanation: An ASIC fault would not normally present as low optical receive power on a single lane; low Rx power points at the optical path.
       - id: c
-        text: Congestion on that lane because ECMP hashes flows to it.
+        text: Congestion on that lane, because ECMP keeps hashing the heaviest flows onto it and its queue overflows.
         explanation: Lanes are a physical-layer construct within one port; ECMP does not hash to lanes and congestion does not create bit errors.
       - id: d
-        text: FEC mode mismatch between the two ends.
+        text: A FEC mode mismatch between the two ends, which makes one lane decode badly; align the FEC setting.
         explanation: A FEC mismatch usually prevents the link from coming up or affects all lanes, not one lane with low Rx power.
     tags: [optics, ddm, lanes]
   - id: q3
@@ -71,18 +71,18 @@ questions:
       A colleague wants to RMA the cable. What do you say?
     options:
       - id: a
-        text: The counters indicate congestion (credit starvation), not a physical-layer fault; investigate traffic and routing instead.
+        text: The counters show congestion (credit starvation), not a physical-layer fault; investigate traffic and routing instead.
         correct: true
         explanation: PortXmitWait counts time the port had data to send but no credits. Physical errors would show in symbol and receive error counters.
       - id: b
-        text: Agree; PortXmitWait is the primary bit-error counter on InfiniBand.
-        explanation: PortXmitWait is a congestion indicator, not a bit-error counter.
+        text: Agree; PortXmitWait is the main bit-error counter on InfiniBand, and a rise this fast means the cable is degrading.
+        explanation: PortXmitWait is a congestion indicator (time spent waiting for credits), not a bit-error counter.
       - id: c
-        text: Reset all counters and wait for the next flap.
-        explanation: Resetting loses evidence, and there is no indication of flaps.
+        text: Reset all counters on the port and wait for the next link flap; only a flap proves the cable is bad enough to RMA.
+        explanation: Resetting loses evidence, there is no indication of flaps, and nothing here points at the cable.
       - id: d
-        text: Force the link to a lower speed to reduce errors.
-        explanation: There are no errors to reduce; downshifting would only lower capacity.
+        text: Force the link to a lower speed so the signal has more margin, then check whether PortXmitWait stops rising.
+        explanation: There are no errors to reduce; downshifting would only lower capacity and make the credit starvation worse.
     tags: [infiniband, perfquery, congestion]
   - id: q5
     type: scenario
@@ -91,17 +91,17 @@ questions:
       rate. What should you check next?
     options:
       - id: a
-        text: The switch end (its transmitter, transceiver and port counters) and the fibre path, since receive errors at the NIC are caused by the far-end transmitter or the channel.
+        text: The switch end (its transceiver, transmitter and port counters), then the fibre path between the two ends.
         correct: true
-        explanation: Errors are detected at the receiver. If they did not follow the NIC-side optic, the switch-side optic or the cable is next.
+        explanation: Errors are detected at the receiver but caused by the far-end transmitter or the channel. If they did not follow the NIC-side optic, the switch-side optic or the cable is next.
       - id: b
-        text: Replace the NIC, because the errors stayed with it.
+        text: Replace the NIC itself, because the errors stayed with it after its transceiver was swapped.
         explanation: Possible later, but the far-end optic and fibre are far more common causes and must be ruled out first.
       - id: c
-        text: Increase the NIC receive ring size.
-        explanation: Ring size affects host buffer drops, not CRC errors on the wire.
+        text: Increase the NIC receive ring size so bursts stop overflowing the host buffers and corrupting frames.
+        explanation: Ring size affects host buffer drops, not CRC errors on the wire; a full ring drops frames, it does not corrupt them.
       - id: d
-        text: Enable PFC on more priorities to stop the drops.
+        text: Enable PFC on more priorities so the switch stops dropping frames on their way to the NIC.
         explanation: CRC errors are corruption, not congestion; PFC does not help.
     tags: [isolation, crc]
   - id: q6
@@ -154,12 +154,12 @@ questions:
         correct: true
         explanation: FEC is part of the PHY; mismatched FEC usually prevents the link from coming up.
       - id: b
-        text: Clean the connectors; normal Rx power can hide contamination.
+        text: Clean the connectors on both ends; normal receive power can still hide contamination that blocks link-up.
         explanation: Cleaning is good practice, but here a clear configuration mismatch explains the symptom.
       - id: c
-        text: Turn FEC off on both ends so that the configuration matches.
+        text: Turn FEC off on both ends so the configuration matches; matching ends is all that link-up needs.
         explanation: It may come up, but PAM4 without FEC will have unacceptable post-FEC errors; match the vendor-required mode instead.
       - id: d
-        text: Swap the cable for a shorter one.
-        explanation: Power levels are normal; length is not the problem.
+        text: Swap the cable for a shorter one so the signal has more margin during link training.
+        explanation: Power levels are normal and a configuration mismatch explains the symptom; length is not the problem.
     tags: [fec, config]

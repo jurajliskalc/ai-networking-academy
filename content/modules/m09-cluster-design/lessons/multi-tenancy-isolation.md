@@ -43,7 +43,7 @@ isolation for free.
 
 ## Concepts
 
-### Two kinds of isolation
+### Kinds of isolation
 
 | Kind | Question | Mechanisms |
 |---|---|---|

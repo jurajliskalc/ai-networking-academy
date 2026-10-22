@@ -109,3 +109,24 @@ commands:
     summary: Query FRR (the routing suite underneath NVUE) directly for a compact BGP summary across address families.
     notes: Useful when you want the familiar FRR output format. Make configuration changes through NVUE, not vtysh, or NVUE will overwrite them.
     tags: [cumulus, frr, bgp]
+
+  - cmd: nv show system wjh packet-buffer
+    platform: cumulus
+    summary: Show recent packets dropped by the Spectrum ASIC, with What Just Happened (WJH) drop group, drop reason, recommended action, severity and packet addresses.
+    notes: "Related views are nv show system wjh aggregate-buffer (counts per reason) and nv show system wjh l1-buffer (link-down reasons); nv action export system wjh packet-buffer writes a PCAP. Buffer-drop monitoring needs Spectrum-2 or later and uses a SPAN destination. Disable the WJH service when the NetQ agent on the switch collects WJH. The aggregate-buffer, l1-buffer and export commands are from the Cumulus Linux 5.18 documentation; older 5.x releases offer fewer views (5.16 documents only packet-buffer, with what-just-happened poll --export for PCAP), so check the documentation for your release."
+    tags: [cumulus, nvue, wjh, drops, troubleshooting]
+
+  - cmd: nv set interface swp1-8 telemetry histogram egress-buffer traffic-class 3
+    platform: cumulus
+    summary: Enable an egress queue-length histogram for one traffic class on a range of ports (staged until nv config apply; telemetry must be enabled with nv set system telemetry state enabled).
+    notes: "Histograms have 10 bins; bin-min-boundary, histogram-size and sample-interval (default 1024 ns) are set globally under nv set system telemetry histogram egress-buffer and can be overridden per interface. Ingress, counter and latency histograms need Spectrum-2 or later. Use the traffic class your fabric maps RoCE to."
+    tags: [cumulus, nvue, telemetry, histogram, buffers]
+
+  - cmd: sudo cl-resource-query
+    platform: cumulus
+    summary: Report software-maintained utilization of forwarding resources (host, neighbor, route and ECMP entries) against their maximums.
+    example: |
+      IPv4 host entries:      1820,   4% of maximum value  41360
+      IPv4 route entries:    78110,  94% of maximum value  82720
+    notes: "Illustrative output. When a hardware pool fills, NVIDIA documents that new kernel routes can push existing routes from fully to partially allocated, so values near the maximum are a suspect when the control plane knows a prefix but forwarding to it fails. For hardware-reported global and ACL resources (with high watermarks) use nv show platform asic <asic-id> resource."
+    tags: [cumulus, resources, troubleshooting]

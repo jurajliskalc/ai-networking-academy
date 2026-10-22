@@ -25,14 +25,14 @@ diagnosis:
       correct: true
       explanation: lspci shows LnkSta Width x8 (downgraded), and the kernel logged the bandwidth limit at boot. Gen5 x8 delivers roughly 250 Gb/s before protocol overhead, so that rail runs at ~55 % and paces the collective.
     - id: b
-      text: The leaf07 port runs at 200G.
-      explanation: nv show interface shows 400G on every port, and the host reports a 400000Mb/s link.
+      text: leaf07 swp4, facing node04, came back at 200G after the repair, which halves what mlx5_6 can send.
+      explanation: nv show interface shows 400G on every port, and ethtool on node04 reports a 400000Mb/s link.
     - id: c
-      text: The node's NUMA affinity is wrong for all NICs.
-      explanation: NUMA misplacement would affect several NICs and shows up as CPU-side overhead, not as a clean bandwidth cap on one NIC.
+      text: The new motherboard put node04's NICs on the wrong NUMA node, so every rail pays a cross-socket penalty.
+      explanation: NUMA misplacement would affect several NICs and shows up as CPU-side overhead, not as a clean bandwidth cap on one NIC. Only mlx5_6 is slow in ib_write_bw.
     - id: d
-      text: The switch is sending PFC pause frames to node04.
-      explanation: Pause counters are normal, and the cap appears even in an unloaded single-flow test.
+      text: leaf07 is sending PFC pause frames to node04 mlx5_6, which caps that NIC at about half of line rate.
+      explanation: Pause counters are normal, and the cap appears even in an unloaded single-flow test, where nothing needs to be paused.
 checks:
   - { description: "node04 mlx5_6 runs at PCIe Gen5 x16", check: pcie_ok, args: { node: node04, rail: 6 } }
   - { description: "all_reduce bus bandwidth is above 360 GB/s", check: allreduce_min_busbw, args: { value: 360 } }

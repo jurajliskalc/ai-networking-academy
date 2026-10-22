@@ -122,13 +122,13 @@ export default function TransportMatrix() {
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-line">
+      <div className="overflow-x-auto rounded-lg border border-line" tabIndex={0} role="region" aria-label="RDMA transport capability matrix">
         <table className="w-full min-w-[640px] text-left text-xs">
           <thead className="bg-panel-2">
             <tr>
               <th className="px-2 py-2 font-mono text-[10px] uppercase tracking-[0.1em] text-muted">Capability</th>
               {TRANSPORTS.map((t) => (
-                <th key={t} className={`px-2 py-2 font-mono text-sm ${ok(t) ? 'text-fg' : 'text-muted line-through opacity-50'}`}>{t}{t === 'DC' && <span className="text-[10px] text-warn"> *</span>}</th>
+                <th key={t} scope="col" className={`px-2 py-2 font-mono text-sm ${ok(t) ? 'text-fg' : 'text-muted line-through'}`}>{t}{t === 'DC' && <span className="text-[10px] text-warn"> *</span>}{!ok(t) && <span className="sr-only"> (cannot do the selected workload)</span>}</th>
               ))}
             </tr>
           </thead>
@@ -138,7 +138,7 @@ export default function TransportMatrix() {
                 <td className="px-2 py-1.5 font-semibold">{r.label}</td>
                 {TRANSPORTS.map((t) => {
                   const [v, s] = r.cells[t];
-                  return <td key={t} className={`px-2 py-1.5 ${tone[v]} ${ok(t) ? '' : 'opacity-35'}`}>{s}</td>;
+                  return <td key={t} className={`px-2 py-1.5 ${ok(t) ? tone[v] : 'text-muted'}`}>{s}</td>;
                 })}
               </tr>
             ))}
@@ -146,7 +146,7 @@ export default function TransportMatrix() {
         </table>
       </div>
       {reqs.length > 0 && (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2" aria-live="polite">
           <Pill>fits: {TRANSPORTS.filter(ok).join(', ') || 'none'}</Pill>
         </div>
       )}
@@ -163,7 +163,7 @@ export default function TransportMatrix() {
           <input type="checkbox" checked={intra} onChange={(e) => setIntra(e.target.checked)} className="accent-[var(--accent)]" />
           Also use RDMA to processes on the same node (usually NVLink / shared memory instead)
         </label>
-        <div className="mt-3 overflow-x-auto">
+        <div className="mt-3 overflow-x-auto" tabIndex={0} role="region" aria-label="QP counts per transport">
           <table className="w-full min-w-[520px] text-left font-mono text-xs">
             <thead className="text-muted"><tr><th className="py-1 pr-2">Transport</th><th className="pr-2">Per process</th><th className="pr-2">Per node</th><th className="pr-2">Cluster</th><th className="w-1/4">How</th></tr></thead>
             <tbody>
@@ -174,7 +174,7 @@ export default function TransportMatrix() {
                   <td className="pr-2">{fmt(c.perNode)}</td>
                   <td className="pr-2">
                     <div>{fmt(c.cluster)}</div>
-                    <div className="mt-0.5 h-1 rounded bg-panel"><div className="h-1 rounded bg-data" style={{ width: `${Math.max(1, (100 * Math.log10(c.cluster + 1)) / Math.log10(maxCluster + 1))}%` }} /></div>
+                    <div className="mt-0.5 h-1 rounded bg-panel" aria-hidden><div className="h-1 rounded bg-data" style={{ width: `${Math.max(1, (100 * Math.log10(c.cluster + 1)) / Math.log10(maxCluster + 1))}%` }} /></div>
                   </td>
                   <td className="font-sans text-[11px] text-muted">{c.note}</td>
                 </tr>

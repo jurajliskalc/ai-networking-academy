@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { ArrowRight, Boxes, Flame, FlaskConical, Layers, Network, Terminal, Timer } from 'lucide-react';
+import { ArrowRight, Boxes, Flame, FlaskConical, Layers, Network, Server, Terminal, Timer } from 'lucide-react';
 import { useIndex } from '../content';
 import { useProgress } from '../store';
 import { isDue, streak } from '../progress';
@@ -57,7 +57,7 @@ export default function Dashboard() {
       </section>
 
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat label="Rank" value={<span className="text-xl">{rank.title}</span>} sub={<Bar value={o.pct} className="mt-2" />} />
+        <Stat label="Rank" value={<span className="text-xl">{rank.title}</span>} sub={<Bar value={o.pct} label="Progress to the next rank" className="mt-2" />} />
         <Stat label="Lessons mastered" value={`${o.passed}/${o.total}`} sub={`${o.read} read · quiz passed counts as mastered`} />
         <Stat label="Labs solved" value={`${o.labsSolved}/${o.labsTotal}`} sub={`${o.examsPassed}/${o.examsTotal} mock exams passed`} />
         <Stat label="Streak" value={<span className="flex items-center gap-2">{days}<Flame size={22} className={days ? 'text-warn' : 'text-muted'} /></span>} sub={`${due} flashcards due`} />
@@ -78,16 +78,17 @@ export default function Dashboard() {
                   <LevelBadge level={m.level} />
                 </div>
                 <div className="mt-2 font-semibold group-hover:text-accent">{m.title}</div>
-                <div className="mt-3 flex items-center gap-3"><Bar value={st.pct} /><span className="font-mono text-[11px] text-muted">{st.done}/{st.total}</span></div>
+                <div className="mt-3 flex items-center gap-3"><Bar value={st.pct} label={`${m.title} mastered`} /><span className="font-mono text-[11px] text-muted">{st.done}/{st.total}</span></div>
               </Link>
             );
           })}
         </div>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         {[
-          { to: '/labs', icon: FlaskConical, t: 'Break/fix labs', d: `${ix.labs.filter((l) => l.kind === 'sim').length} simulated incidents and ${ix.labs.filter((l) => l.kind === 'handson').length} hands-on Linux labs.` },
+          { to: '/labs', icon: FlaskConical, t: 'Simulator labs', d: `${ix.labs.filter((l) => l.kind === 'sim').length} break/fix incidents in a simulated 32-GPU RoCE cluster.` },
+          { to: '/hw', icon: Server, t: 'Real HW labs', d: `${ix.labs.filter((l) => l.kind === 'handson').length} labs on your own VM, RDMA hosts, switch or GPU nodes, with a toolkit that checks your gear.` },
           { to: '/visualize', icon: Network, t: 'Visualizations', d: 'Packet anatomy, PFC/ECN, ECMP collisions, all-reduce, fabric sizing and more.' },
           { to: '/exams', icon: Timer, t: 'Mock exams', d: `${ix.exams.length} timed assessments with per-domain scoring.` },
           { to: '/flashcards', icon: Boxes, t: 'Flashcards', d: `${ix.glossary.length} terms with SM-2 spaced repetition.` },

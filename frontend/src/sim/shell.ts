@@ -2,8 +2,9 @@
 // practise reading them, but every output is generated from the model in fabric.ts (see docs/SIMULATOR.md).
 import {
   CHECKS, LEAVES, NETDEVS, NODES, RAILS, ROCE_PRIO, SPINES, accrueTraffic, evaluateAllReduce, evaluatePair,
-  hostIp, leafIp, leafPortFor, nicIssues, parseConf, roceMtu, type FabricState, type Host, type Nic, type Switch,
+  hostIp, ibActive, ibHcaLid, ibSmLid, leafIp, leafPortFor, nicIssues, parseConf, roceMtu, type FabricState, type Host, type Nic, type Port, type Switch,
 } from './fabric';
+import { IB_SWITCH_NOTE, hcaGuid, hcaView, ibqueryerrors, iblinkinfo, ibstat, ibstatus, perfquery, sminfo, systemctl } from './ib';
 
 export interface ShellCtx { state: FabricState; host: string; cwd?: string }
 export interface ExecResult { out: string; host?: string; clear?: boolean; changed?: boolean }
@@ -118,11 +119,29 @@ const HELP_HOST = `Fabric Simulator - GPU node commands (simulated; see the Help
   Pipes: | grep [-i -v -E -c] | head | tail | wc -l
 Lab actions (physical work, simulated): replace-cable <switch> <port> | reseat-nic <node> <dev>`;
 
+const HELP_IB = `Fabric Simulator - GPU node commands, InfiniBand variant (simulated; see the Help panel for details)
+  ssh <host>                     node01-node04 (switches are queried in-band, not over SSH)
+  hostname | exit | clear | history
+  ibstat [-l] [<ca> [<port>]] | ibstatus [<ca>[:port]] | ibv_devinfo [-d <dev>] | ibdev2netdev | rdma link
+  iblinkinfo [--switches-only|--cas-only|-d] | sminfo | perfquery [-x] [-r] [-C <ca>] [<lid> [<port>]]
+  ibqueryerrors [-s <Counter,...>] [-c]
+  systemctl status|start|stop|restart|enable [--now]|disable|is-active|is-enabled opensm   (SM host: node01)
+  rdma statistic show link <dev>/1 | lspci [-vv -s <bdf>] | nvidia-smi topo -m | dmesg
+  cat <file> | echo "K=V" >> /etc/nccl.conf | sed -i 's/old/new/' /etc/nccl.conf
+  ib_write_bw -d <dev> [--report_gbits] <peer-host>[:<dev>]
+  all_reduce_perf -b 8 -e 8G -f 2 -g 1    (also via mpirun ... all_reduce_perf ...)
+  Pipes: | grep [-i -v -E -c] | head | tail | wc -l
+Lab actions (physical work, simulated): replace-cable <switch> <port> | reseat-nic <node> <dev>`;
+
 const HELP_SWITCH = `Fabric Simulator - switch commands (NVUE subset, simulated)
   nv show interface | nv show interface <swpN> | nv show interface <swpN> counters
-  nv show qos roce
+  nv show qos roce | nv show interface <swpN> qos roce counters
+  nv show qos congestion-control default-global [traffic-class <tc>]
+  nv show qos pfc-watchdog | nv show interface <swpN> qos pfc-watchdog
   nv set interface <swpN> link mtu <n> | nv set interface <swpN> link state up|down
   nv set qos roce | nv set qos roce mode lossless|lossy | nv unset qos roce
+  nv set qos congestion-control default-global traffic-class <tc> ecn enable|disable
+  nv set|unset interface <swpN> qos pfc-watchdog | nv action clear interface <swpN> qos pfc-watchdog deadlock-count
   nv config diff | nv config apply [-y]
   hostname | exit | clear | ssh <host>
 Lab actions (physical work, simulated): replace-cable <switch> <port>`;
@@ -138,7 +157,7 @@ function execOne(ctx: ShellCtx, stage: string): ExecResult {
   switch (cmd) {
     case 'help':
     case '?':
-      return { out: (isSwitch(host) ? HELP_SWITCH : HELP_HOST) + '\n' };
+      return { out: (isSwitch(host) ? HELP_SWITCH : s.mode === 'ib' ? HELP_IB : HELP_HOST) + '\n' };
     case 'clear':
       return { out: '', clear: true };
     case 'hostname':
@@ -152,14 +171,17 @@ function execOne(ctx: ShellCtx, stage: string): ExecResult {
       const target = args.find((a) => !a.startsWith('-'))?.replace(/^.*@/, '');
       if (!target) return { out: 'usage: ssh <host>\n' };
       if (!NODES.includes(target as never) && !isSwitch(target)) return { out: `ssh: Could not resolve hostname ${target}: Name or service not known\n` };
+      if (isSwitch(target) && s.mode === 'ib') return { out: IB_SWITCH_NOTE(target) };
       return { out: isSwitch(target) ? `Welcome to NVIDIA Cumulus Linux (simulated)\n` : '', host: target };
     }
     case 'replace-cable': {
       const [sw, port] = args;
-      const p = s.switches[sw]?.ports[port];
+      // IB switch ports are numbered: "replace-cable leaf03 3" is the same port as swp3.
+      const p = s.switches[sw]?.ports[/^\d+$/.test(port ?? '') ? `swp${port}` : port];
       if (!p) return { out: 'usage: replace-cable <switch> <port>   e.g. replace-cable leaf05 swp3\n' };
       p.ber = 1e-15;
       p.cable = 'ok';
+      p.lanes = 4;
       s.actions.push(`replace-cable ${sw} ${port}`);
       return { out: `[lab action] Field technician replaced the cable/transceiver on ${sw} ${port}. Link retrained.\n`, changed: true };
     }
@@ -169,6 +191,12 @@ function execOne(ctx: ShellCtx, stage: string): ExecResult {
       if (!nic) return { out: 'usage: reseat-nic <node> <dev>   e.g. reseat-nic node04 mlx5_6\n' };
       nic.pcieWidth = 16;
       nic.pcieSpeed = 32;
+      // A cold reset also clears a hung receive path; with the storm gone the watchdog restores the queue.
+      if (nic.stalled) {
+        nic.stalled = false;
+        const lp = s.switches[LEAVES[nic.rail]].ports[leafPortFor(node)];
+        if (lp.wd) lp.wd.status = lp.wd.status.map(() => 'OK');
+      }
       s.actions.push(`reseat-nic ${node} ${dev}`);
       s.hosts[node].dmesg = s.hosts[node].dmesg.filter((l) => !l.includes(nic.bdf));
       return { out: `[lab action] ${node} drained, powered off, ${dev} reseated, node rebooted and returned to service.\n`, changed: true };
@@ -195,15 +223,47 @@ function findNic(h: Host, name?: string): Nic | undefined {
 }
 
 function operUp(s: FabricState, node: string, nic: Nic) {
+  // IB variant: the IPoIB netdev only gets carrier once the SM has made the port ACTIVE.
+  if (s.mode === 'ib') return hcaView(s, node, nic).state === 'Active';
   const port = s.switches[LEAVES[nic.rail]].ports[leafPortFor(node)];
   return nic.admin && port.admin && port.cable === 'ok';
 }
+
+const IB_ONLY = new Set(['ibstat', 'ibstatus', 'iblinkinfo', 'perfquery', 'sminfo', 'ibqueryerrors', 'ibnetdiscover', 'ibdiagnet', 'opensm']);
+const ROCE_ONLY = new Set(['ethtool', 'mlnx_qos', 'mlxlink', 'show_gids', 'ping']);
 
 function hostCmd(ctx: ShellCtx, h: Host, t: string[]): ExecResult {
   const s = ctx.state;
   const [cmd, ...a] = t;
   const node = h.name;
+  const ib = s.mode === 'ib';
+  if (!ib && IB_ONLY.has(cmd))
+    return { out: `${cmd}: this cluster runs RoCE (Ethernet link layer); infiniband-diags tools need an InfiniBand subnet. Use ibv_devinfo, rdma, ethtool and the switch CLI.\n` };
+  if (ib && ROCE_ONLY.has(cmd))
+    return { out: `${cmd}: not modelled in the InfiniBand variant of the simulator; use ibstat, iblinkinfo, perfquery and ibqueryerrors.\n` };
   switch (cmd) {
+    case 'ibstat':
+      return { out: ibstat(s, h, a) };
+    case 'ibstatus':
+      return { out: ibstatus(s, h, a) };
+    case 'iblinkinfo':
+      return { out: iblinkinfo(s, h, a) };
+    case 'perfquery': {
+      const out = perfquery(s, h, a);
+      return { out, changed: a.includes('-r') };
+    }
+    case 'sminfo':
+      return { out: sminfo(s, h) };
+    case 'ibqueryerrors':
+      return { out: ibqueryerrors(s, h, a) };
+    case 'ibnetdiscover':
+      return { out: 'ibnetdiscover: not modelled in the simulator; iblinkinfo shows the same discovered topology with link state.\n' };
+    case 'ibdiagnet':
+      return { out: 'ibdiagnet: not available in the simulator (it ships with NVIDIA MLNX_OFED/DOCA and UFM). Use the infiniband-diags tools: iblinkinfo, ibqueryerrors, perfquery, sminfo.\n' };
+    case 'opensm':
+      return { out: 'opensm: run it as a service here: systemctl status|start|enable opensm\n' };
+    case 'systemctl':
+      return systemctl(s, h, a);
     case 'history':
       return { out: '(history is shown with the up arrow)\n' };
     case 'cat': {
@@ -272,6 +332,15 @@ function hostCmd(ctx: ShellCtx, h: Host, t: string[]): ExecResult {
       return { out: out + `n_gids_found=${sel.length * 4}\n` };
     }
     case 'rdma': {
+      if (a[0] === 'link' && ib) {
+        const act = ibActive(s);
+        return { out: h.nics.map((n) => {
+          const v = hcaView(s, node, n, act);
+          const st = { Down: 'DOWN', Initialize: 'INIT', Active: 'ACTIVE' }[v.state];
+          const ph = { LinkUp: 'LINK_UP', Polling: 'POLLING', Disabled: 'DISABLED' }[v.phys];
+          return `link ${n.dev}/1 subnet_prefix fe80:0000:0000:0000 lid ${v.lid} sm_lid ${v.state === 'Active' ? ibSmLid(s) : 0} lmc 0 state ${st} physical_state ${ph} netdev ${n.netdev}`;
+        }).join('\n') + '\n' };
+      }
       if (a[0] === 'link') return { out: h.nics.map((n) => `link ${n.dev}/1 state ${operUp(s, node, n) ? 'ACTIVE' : 'DOWN'} physical_state ${operUp(s, node, n) ? 'LINK_UP' : 'DISABLED'} netdev ${n.netdev}`).join('\n') + '\n' };
       if (a[0] === 'statistic' || a[0] === 'stat') {
         const target = a.find((x) => x.includes('/')) ?? '';
@@ -321,7 +390,7 @@ function hostCmd(ctx: ShellCtx, h: Host, t: string[]): ExecResult {
   }
 }
 
-const guid = (node: string, rail: number) => `b83f${(0xd2 + rail).toString(16)}0300${(0x4a + NODES.indexOf(node as never)).toString(16)}c1${rail}${rail}`.slice(0, 16);
+const guid = hcaGuid;
 
 function ipCmd(s: FabricState, h: Host, a: string[]): ExecResult {
   const brief = a.includes('-br');
@@ -371,8 +440,10 @@ function ipCmd(s: FabricState, h: Host, a: string[]): ExecResult {
 
 function devinfo(s: FabricState, node: string, n: Nic): string {
   const up = operUp(s, node, n);
-  const am = roceMtu(n.mtu);
+  const am = s.mode === 'ib' ? 4096 : roceMtu(n.mtu);
   const code: Record<number, number> = { 256: 1, 512: 2, 1024: 3, 2048: 4, 4096: 5 };
+  const v = s.mode === 'ib' ? hcaView(s, node, n) : null;
+  const state = v ? { Down: 'PORT_DOWN (1)', Initialize: 'PORT_INIT (2)', Active: 'PORT_ACTIVE (4)' }[v.state] : up ? 'PORT_ACTIVE (4)' : 'PORT_DOWN (1)';
   return `hca_id:\t${n.dev}
 \ttransport:\t\t\tInfiniBand (0)
 \tfw_ver:\t\t\t\t28.43.1014
@@ -384,13 +455,13 @@ function devinfo(s: FabricState, node: string, n: Nic): string {
 \tboard_id:\t\t\tSIM_0000000838
 \tphys_port_cnt:\t\t\t1
 \t\tport:\t1
-\t\t\tstate:\t\t\t${up ? 'PORT_ACTIVE (4)' : 'PORT_DOWN (1)'}
+\t\t\tstate:\t\t\t${state}
 \t\t\tmax_mtu:\t\t4096 (5)
 \t\t\tactive_mtu:\t\t${am} (${code[am]})
-\t\t\tsm_lid:\t\t\t0
-\t\t\tport_lid:\t\t0
+\t\t\tsm_lid:\t\t\t${v && v.state === 'Active' ? ibSmLid(s) : 0}
+\t\t\tport_lid:\t\t${v ? v.lid : 0}
 \t\t\tport_lmc:\t\t0x00
-\t\t\tlink_layer:\t\tEthernet
+\t\t\tlink_layer:\t\t${v ? 'InfiniBand' : 'Ethernet'}
 `;
 }
 
@@ -429,13 +500,13 @@ function ethtool(s: FabricState, h: Host, a: string[]): ExecResult {
 \tVendor PN                                 : SIM-OSFP-2x400G-DR4
 \tModule temperature                        : ${bad ? '71.25' : '48.50'} degrees C
 \tModule voltage                            : 3.2950 V
-\tLaser bias current (Channel 1)            : 6.810 mA
-\tReceiver signal power (Channel 1)         : ${bad ? '0.0812 mW / -10.90 dBm' : '0.7943 mW / -1.00 dBm'}
-\tReceiver signal power (Channel 2)         : ${bad ? '0.6310 mW / -2.00 dBm' : '0.7762 mW / -1.10 dBm'}
-\tReceiver signal power (Channel 3)         : 0.8128 mW / -0.90 dBm
-\tReceiver signal power (Channel 4)         : 0.7586 mW / -1.20 dBm
-\tLow RX power alarm threshold              : 0.0447 mW / -13.50 dBm
-\tLow RX power warning threshold            : 0.1122 mW / -9.50 dBm
+\tLaser tx bias current (Channel 1)         : 6.810 mA
+\tRcvr signal avg optical power (Channel 1) : ${bad ? '0.0812 mW / -10.90 dBm' : '0.7943 mW / -1.00 dBm'}
+\tRcvr signal avg optical power (Channel 2) : ${bad ? '0.6310 mW / -2.00 dBm' : '0.7762 mW / -1.10 dBm'}
+\tRcvr signal avg optical power (Channel 3) : 0.8128 mW / -0.90 dBm
+\tRcvr signal avg optical power (Channel 4) : 0.7586 mW / -1.20 dBm
+\tLaser rx power low alarm threshold        : 0.0447 mW / -13.50 dBm
+\tLaser rx power low warning threshold      : 0.1122 mW / -9.50 dBm
 ` };
   }
   if (flag === '-a' || flag === '--show-pause') return { out: `Pause parameters for ${nic.netdev}:\nAutonegotiate:\toff\nRX:\t\toff\nTX:\t\toff\n(simulator note: global 802.3x pause is off; PFC is configured per priority, see mlnx_qos)\n` };
@@ -616,6 +687,13 @@ function ibWriteBw(s: FabricState, h: Host, a: string[]): ExecResult {
   }
   const nic = findNic(h, dev);
   if (!nic) return { out: `IB device ${dev} not found\n Unable to find the Infiniband/RoCE device\n` };
+  const ib = s.mode === 'ib';
+  if (ib) {
+    // perftest checks the local port before anything else (perftest_parameters.c: set_link_layer).
+    const v = hcaView(s, h.name, nic);
+    if (v.state !== 'Active')
+      return { out: ` Port number 1 state is ${v.state === 'Down' ? 'Down' : 'Init'}\n Couldn't set the link layer\n Couldn't get context for the device\n` };
+  }
   if (!peer) return { out: `\n************************************\n* Waiting for client to connect... *\n************************************\n(simulator: run the client side instead, e.g. ib_write_bw -d mlx5_0 -x 3 --report_gbits node02)\n` };
   let [peerHost, peerDev] = peer.split(':');
   const ipm = peerHost.match(/^10\.(\d)\.(\d)\.1$/);
@@ -629,6 +707,16 @@ function ibWriteBw(s: FabricState, h: Host, a: string[]): ExecResult {
   if (peerHost === h.name && peerRail === nic.rail) return { out: 'Use a different host or device as the server.\n' };
   const g = gid ?? 3;
   const r = evaluatePair(s, h.name, nic.rail, peerHost, peerRail, g);
+  const lidHex = (n: number) => `0x${n.toString(16).padStart(2, '0')}`;
+  const addr = ib
+    ? ` local address: LID ${lidHex(ibHcaLid(s, h.name, nic.rail))} QPN 0x0127 PSN 0x3a1f2c RKey 0x1fd8bc VAddr 0x007f3a5c400000
+ remote address: LID ${lidHex(ibHcaLid(s, peerHost, peerRail))} QPN 0x0129 PSN 0x7c02d1 RKey 0x1fe0a4 VAddr 0x007f91b8600000
+`
+    : ` local address: LID 0000 QPN 0x0127 PSN 0x3a1f2c RKey 0x1fd8bc VAddr 0x007f3a5c400000
+ GID: 00:00:00:00:00:00:00:00:00:00:255:255:${hostIp(h.name, nic.rail).split('.').map((o) => o.padStart(2, '0')).join(':')}
+ remote address: LID 0000 QPN 0x0129 PSN 0x7c02d1 RKey 0x1fe0a4 VAddr 0x007f91b8600000
+ GID: 00:00:00:00:00:00:00:00:00:00:255:255:${hostIp(peerHost, peerRail).split('.').map((o) => o.padStart(2, '0')).join(':')}
+`;
   const head = `---------------------------------------------------------------------------------------
                     RDMA_Write BW Test
  Dual-port       : OFF\t\tDevice         : ${dev}
@@ -638,17 +726,12 @@ function ibWriteBw(s: FabricState, h: Host, a: string[]): ExecResult {
  TX depth        : 128
  CQ Moderation   : 1
  Mtu             : ${r.mtu}[B]
- Link type       : Ethernet
- GID index       : ${g}
- Max inline data : 0[B]
+ Link type       : ${ib ? 'IB' : 'Ethernet'}
+${ib ? '' : ` GID index       : ${g}\n`} Max inline data : 0[B]
  rdma_cm QPs\t : OFF
  Data ex. method : Ethernet
 ---------------------------------------------------------------------------------------
- local address: LID 0000 QPN 0x0127 PSN 0x3a1f2c RKey 0x1fd8bc VAddr 0x007f3a5c400000
- GID: 00:00:00:00:00:00:00:00:00:00:255:255:${hostIp(h.name, nic.rail).split('.').map((o) => o.padStart(2, '0')).join(':')}
- remote address: LID 0000 QPN 0x0129 PSN 0x7c02d1 RKey 0x1fe0a4 VAddr 0x007f91b8600000
- GID: 00:00:00:00:00:00:00:00:00:00:255:255:${hostIp(peerHost, peerRail).split('.').map((o) => o.padStart(2, '0')).join(':')}
----------------------------------------------------------------------------------------
+${addr}---------------------------------------------------------------------------------------
 `;
   if (!r.ok) {
     if (r.error === 'no route to host' || (r.error && r.error !== 'mtu' && r.error !== 'gid'))
@@ -689,8 +772,24 @@ function allReducePerf(s: FabricState, a: string[]): ExecResult {
   if (debug) {
     out += `node01:41200:41200 [0] NCCL INFO Bootstrap : Using eno1:172.20.0.11<0>\n`;
     if (res.transport === 'Socket') out += res.warnings.map((w) => `node01:41200:41200 [0] NCCL INFO ${w}\n`).join('') + `node01:41200:41200 [0] NCCL INFO NET/Socket : Using [0]eno1:172.20.0.11<0>\nnode01:41200:41200 [0] NCCL INFO Using network Socket\n`;
-    else if (res.ok || res.rails.length) out += `node01:41200:41200 [0] NCCL INFO NET/IB : Using ${res.rails.map((r) => `[${r}]mlx5_${r}:1/RoCE`).join(' ')} [RO]; OOB eno1:172.20.0.11<0>\nnode01:41200:41200 [0] NCCL INFO Using network IB\n`;
+    else if (res.ok || res.rails.length) out += `node01:41200:41200 [0] NCCL INFO NET/IB : Using ${res.rails.map((r) => `[${r}]mlx5_${r}:1/${s.mode === 'ib' ? 'IB' : 'RoCE'}`).join(' ')} [RO]; OOB eno1:172.20.0.11<0>\nnode01:41200:41200 [0] NCCL INFO Using network IB\n`;
     out += `node01:41200:41207 [0] NCCL INFO Channel 00/${lpad(res.rails.length * 2 || 2, 2)} : 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31\n`;
+    if (res.ok && res.transport === 'IB' && res.rails.length > 1) {
+      // Where each ring enters and leaves node01. A ring enters on GPU c and leaves from the last GPU it
+      // visits. Rail-aligned rings send on NIC c again (the same rail the next node receives on); with
+      // NCCL_CROSS_NIC=1 the last GPU may use its own NIC, so the hop to the next node changes rail.
+      // Rail-aligned sends from a GPU that is not next to NIC c go through PXN: NCCL's net.cc then logs
+      // "NET/IB/<dev>(<proxy rank>)", the proxy being the local rank whose GPU sits next to that NIC.
+      const rl = res.rails;
+      for (const [i, c] of rl.slice(0, 4).entries()) {
+        const last = rl[(i + rl.length - 1) % rl.length];
+        const nicOut = res.crossRail || last === c ? `${last}` : `${c}(${c})`;
+        const ch = String(i).padStart(2, '0');
+        out += `node01:41200:${41230 + i} [${c}] NCCL INFO Channel ${ch}/0 : ${24 + last}[${last}] -> ${c}[${c}] [receive] via NET/IB/${c}/GDRDMA\n`;
+        out += `node01:41200:${41230 + i} [${last}] NCCL INFO Channel ${ch}/0 : ${last}[${last}] -> ${8 + c}[${c}] [send] via NET/IB/${nicOut}/GDRDMA\n`;
+      }
+      out += `node01:41200:41207 [0] NCCL INFO (channel lines for the other channels trimmed)\n`;
+    }
   }
   if (!res.ok) {
     accrueTraffic(s, 'collective', undefined, res);
@@ -749,14 +848,48 @@ function switchCmd(sw: Switch, t: string[]): ExecResult {
       const p = sw.ports[rest[1]];
       if (!p) return { out: `Error: The requested item does not exist.\n` };
       const up = p.admin && p.cable === 'ok';
+      if (rest[2] === 'qos' && rest[3] === 'pfc-watchdog') return { out: showPfcwd(sw, p) };
+      if (rest[2] === 'qos' && rest[3] === 'roce' && rest[4] === 'counters') return { out: showRoceCounters(p) };
+      if (rest[2] === 'qos') return { out: 'Supported: nv show interface <swpN> qos pfc-watchdog | nv show interface <swpN> qos roce counters\n' };
       if (rest[2] === 'counters') {
         const c = p.counters;
         return { out: `Statistic          Value\n-----------------  ------------\nRX packets         ${c.rx_packets}\nTX packets         ${c.tx_packets}\nRX errors          ${c.rx_errors}\nRX FCS/CRC errors  ${c.rx_crc}\nRX drops           ${c.rx_drops}\nTX drops           ${c.tx_drops}\nRX PFC pause       ${c.rx_pfc_pause}  (priority ${ROCE_PRIO})\nTX PFC pause       ${c.tx_pfc_pause}  (priority ${ROCE_PRIO})\nTX ECN marked      ${c.ecn_marked}\nCarrier transitions ${c.link_flaps * 2}\n` };
       }
       return { out: `                         operational  applied\n-----------------------  -----------  -------\ntype                     swp          swp\n[acl]\nlink\n  admin-status           ${p.admin ? 'up' : 'down'}           \n  oper-status            ${up ? 'up' : 'down'}\n  state                  ${up ? 'up' : 'down'}           ${sw.cfg.ports[p.name].admin ? 'up' : 'down'}\n  mtu                    ${p.mtu}         ${sw.cfg.ports[p.name].mtu}\n  speed                  ${up ? '400G' : ''}\n  fec                    rs\n  lanes                  4\n  carrier-transitions    ${p.counters.link_flaps * 2}\n  ${p.peer.kind === 'host' ? `lldp neighbor           ${up ? `${p.peer.node} ${NETDEVS[p.peer.rail]}` : ''}` : `lldp neighbor           ${up ? `${p.peer.sw} ${p.peer.port}` : ''}`}\n` };
     }
+    if (rest[0] === 'qos' && rest[1] === 'pfc-watchdog') {
+      return { out: `                  operational  applied\n----------------  -----------  --------------\npolling-interval               0:00:00.100000\nrobustness                     3\n` };
+    }
+    if (rest[0] === 'qos' && rest[1] === 'congestion-control') {
+      if (rest[2] !== 'default-global') return { out: 'Supported: nv show qos congestion-control default-global [traffic-class <tc>]\n' };
+      const off = sw.cfg.ecnOff ?? [];
+      const tcs = [0, ROCE_PRIO];
+      if (rest[3] === 'traffic-class' && rest[4]) {
+        const tc = Number(rest[4]);
+        if (!tcs.includes(tc)) return { out: `Error: The requested item does not exist.\n` };
+        const e = off.includes(tc) ? 'disable' : 'enable';
+        return { out: `               operational  applied    description
+-------------  -----------  ---------  -----------------------------------
+ecn            ${pad(e, 13)}${pad(e, 11)}Early Congestion Notification State
+max-threshold  1500000 B    1500000 B  Maximum Threshold (in bytes)
+min-threshold  150000 B     150000 B   Minimum Threshold (in bytes)
+probability    100          100        Probability
+red            disable      disable    Random Early Detection State
+` };
+      }
+      return { out: `    operational  applied  description
+--  -----------  -------  -----------
+
+ECN Configurations
+=====================
+    traffic-class  ECN      RED      Min Th    Max Th     Probability
+    -------------  -------  -------  --------  ---------  -----------
+${tcs.map((tc) => `    ${pad(tc, 15)}${pad(off.includes(tc) ? 'disable' : 'enable', 9)}disable  150000 B  1500000 B  100`).join('\n')}
+` };
+    }
     if (rest[0] === 'qos' && rest[1] === 'roce') {
       const r = sw.cfg.roce;
+      const ecnTcs = [0, ROCE_PRIO].filter((tc) => !(sw.cfg.ecnOff ?? []).includes(tc)).join(',') || '-';
       if (r === 'off') return { out: '                    operational  applied\n------------------  -----------  -------\nenable              off          off\n' };
       return { out: `                    operational  applied
 ------------------  -----------  --------
@@ -765,7 +898,7 @@ mode                ${pad(r, 13)}${r}
 cable-length        100          100
 congestion-control
   congestion-mode   ECN          ECN
-  enabled-tc        0,3          0,3
+  enabled-tc        ${pad(ecnTcs, 13)}${ecnTcs}
   max-threshold     1.43 MB      1.43 MB
   min-threshold     146.48 KB    146.48 KB
   probability       100
@@ -790,9 +923,47 @@ RoCE SP->TC mapping and ETS configurations
 (values illustrative; check "nv show qos roce" on your release)
 ` };
     }
-    return { out: 'Supported: nv show interface [<swpN> [counters]] | nv show qos roce\n' };
+    return { out: 'Supported: nv show interface [<swpN> [counters | qos pfc-watchdog | qos roce counters]] | nv show qos roce | nv show qos pfc-watchdog | nv show qos congestion-control default-global\n' };
+  }
+  if (verb === 'action') {
+    // nv action clear interface <swp> qos pfc-watchdog deadlock-count
+    if (rest[0] === 'clear' && rest[1] === 'interface' && rest[3] === 'qos' && rest[4] === 'pfc-watchdog' && rest[5] === 'deadlock-count') {
+      const p = sw.ports[rest[2]];
+      if (!p) return { out: `Error: Invalid interface ${rest[2]}\n` };
+      if (p.wd) p.wd.deadlocks = p.wd.deadlocks.map(() => 0);
+      return { out: 'Action succeeded\n', changed: true };
+    }
+    return { out: 'Supported: nv action clear interface <swpN> qos pfc-watchdog deadlock-count\n' };
   }
   if (verb === 'set' || verb === 'unset') {
+    if (rest[0] === 'qos' && rest[1] === 'congestion-control') {
+      // nv set qos congestion-control default-global traffic-class <tc[,tc]> ecn enable|disable
+      if (rest[2] !== 'default-global' || rest[3] !== 'traffic-class' || !rest[4] || rest[5] !== 'ecn')
+        return { out: 'Supported: nv set|unset qos congestion-control default-global traffic-class <tc> ecn [enable|disable] (thresholds are not modelled)\n' };
+      const tcs = rest[4].split(',').map(Number);
+      if (tcs.some((x) => !(x >= 0 && x <= 7))) return { out: `Error: Invalid value for traffic-class: ${rest[4]}\n` };
+      const v = verb === 'unset' ? 'enable' : rest[6];
+      if (v !== 'enable' && v !== 'disable') return { out: `Error: Invalid value for ecn: ${rest[6] ?? ''} (enable, disable)\n` };
+      const p = stage();
+      const off = new Set(p.ecnOff ?? []);
+      for (const x of tcs) {
+        if (v === 'disable') off.add(x);
+        else off.delete(x);
+      }
+      p.ecnOff = [...off].sort();
+      return { out: '', changed: true };
+    }
+    if (rest[0] === 'interface' && rest[1] && rest[2] === 'qos' && rest[3] === 'pfc-watchdog') {
+      const p = stage();
+      const port = p.ports[rest[1]];
+      if (!port) return { out: `Error: Invalid interface ${rest[1]}\n` };
+      if (verb === 'unset') port.pfcwd = false;
+      else if (rest[4] === 'state') {
+        if (rest[5] !== 'enabled' && rest[5] !== 'disabled') return { out: `Error: Invalid value for state: ${rest[5] ?? ''} (enabled, disabled)\n` };
+        port.pfcwd = rest[5] === 'enabled';
+      } else port.pfcwd = true;
+      return { out: '', changed: true };
+    }
     if (rest[0] === 'qos' && rest[1] === 'roce') {
       const p = stage();
       if (verb === 'unset') p.roce = 'off';
@@ -817,17 +988,23 @@ RoCE SP->TC mapping and ETS configurations
         return { out: '', changed: true };
       }
     }
-    return { out: 'Supported: nv set|unset interface <swpN> link mtu <n> | link state up|down; nv set|unset qos roce [mode lossless|lossy]\n' };
+    return { out: 'Supported: nv set|unset interface <swpN> link mtu <n> | link state up|down | qos pfc-watchdog; nv set|unset qos roce [mode lossless|lossy]; nv set qos congestion-control default-global traffic-class <tc> ecn enable|disable\n' };
   }
   if (verb === 'config') {
     if (rest[0] === 'diff') {
       if (!sw.pending) return { out: '' };
       const lines: string[] = [];
+      const offOld = sw.cfg.ecnOff ?? [];
+      const offNew = sw.pending.ecnOff ?? [];
+      for (const tc of [...new Set([...offOld, ...offNew])].sort())
+        if (offOld.includes(tc) !== offNew.includes(tc))
+          lines.push(`- set:\n    qos:\n      congestion-control:\n        default-global:\n          traffic-class:\n            '${tc}':\n              ecn: ${offNew.includes(tc) ? 'disable' : 'enable'}`);
       if (sw.pending.roce !== sw.cfg.roce) lines.push(sw.pending.roce === 'off' ? `- unset:\n    qos:\n      roce: null` : `- set:\n    qos:\n      roce:\n        mode: ${sw.pending.roce}`);
       for (const [n, p] of Object.entries(sw.pending.ports)) {
         const o = sw.cfg.ports[n];
         if (p.mtu !== o.mtu) lines.push(`- set:\n    interface:\n      ${n}:\n        link:\n          mtu: ${p.mtu}`);
         if (p.admin !== o.admin) lines.push(`- set:\n    interface:\n      ${n}:\n        link:\n          state: ${p.admin ? 'up' : 'down'}`);
+        if ((p.pfcwd !== false) !== (o.pfcwd !== false)) lines.push(`- set:\n    interface:\n      ${n}:\n        qos:\n          pfc-watchdog:\n            state: ${p.pfcwd !== false ? 'enabled' : 'disabled'}`);
       }
       return { out: lines.join('\n') + (lines.length ? '\n' : '') };
     }
@@ -838,6 +1015,7 @@ RoCE SP->TC mapping and ETS configurations
       for (const [n, p] of Object.entries(sw.cfg.ports)) {
         sw.ports[n].mtu = p.mtu;
         sw.ports[n].admin = p.admin;
+        sw.ports[n].pfcwd = p.pfcwd !== false;
       }
       return { out: 'applied [rev_id: 12]\n', changed: true };
     }
@@ -845,6 +1023,42 @@ RoCE SP->TC mapping and ETS configurations
   }
   void cfg;
   return { out: 'Supported verbs: nv show | nv set | nv unset | nv config (type "help")\n' };
+}
+
+function showPfcwd(sw: Switch, p: Port): string {
+  const applied = sw.cfg.ports[p.name].pfcwd !== false ? 'enabled' : 'disabled';
+  const oper = p.pfcwd !== false ? 'enabled' : 'disabled';
+  let out = `                 operational  applied\n---------------  -----------  -------\nstate            ${pad(oper, 13)}${applied}\n`;
+  if (p.pfcwd === false || !p.wd) return out;
+  out += '\nPFC WD Status\n===========================\n    traffic-class  status    deadlock-count\n    -------------  --------  --------------\n\n';
+  out += p.wd.status.map((st, tc) => `    ${pad(tc, 15)}${pad(st, 10)}${p.wd!.deadlocks[tc]}`).join('\n') + '\n';
+  return out;
+}
+
+function showRoceCounters(p: Port): string {
+  const c = p.counters;
+  const row = (label: string, v: string | number, d: string) => `${pad(label, 31)}${pad(v, 23)}${d}`;
+  return [
+    '                               operational            description',
+    '-----------------------------  ---------------------  ------------------------------------------',
+    'rx-stats',
+    '  rx-pfc-stats',
+    row('    pause-packets', c.rx_pfc_pause, 'Rx PFC pause packets for RoCE traffic'),
+    '  rx-roce-stats',
+    row('    no-buffer-discard', 0, 'Rx buffer discards for RoCE traffic'),
+    row('    roce-packets', c.rx_packets, 'Rx RoCE Packets'),
+    'tx-stats',
+    '  tx-cnp-stats',
+    row('    cnp-packets', Math.round(c.ecn_marked * 0.97), 'Tx CNP Packets'),
+    '  tx-ecn-stats',
+    row('    ecn-marked-packets', c.ecn_marked, 'Tx ECN marked packets'),
+    '  tx-pfc-stats',
+    row('    pause-packets', c.tx_pfc_pause, 'Tx PFC pause packets for RoCE traffic'),
+    '  tx-roce-stats',
+    row('    roce-packets', c.tx_packets, 'Tx RoCE Packets'),
+    row('    unicast-no-buffer-discard', c.tx_drops, 'Tx buffer discards for RoCE traffic'),
+    '(subset of the fields; buffer-usage and pause-duration rows are not modelled)',
+  ].join('\n') + '\n';
 }
 
 export const allHosts = [...NODES, ...LEAVES, ...SPINES];

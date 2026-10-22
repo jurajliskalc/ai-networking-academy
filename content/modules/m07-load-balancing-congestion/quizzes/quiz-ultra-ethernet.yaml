@@ -8,17 +8,17 @@ questions:
     prompt: "Which statement about the Ultra Ethernet Consortium's Specification 1.0 is accurate?"
     options:
       - id: a
-        text: "It was released in June 2025 and defines Ultra Ethernet Transport plus software, network and link-layer elements on standard Ethernet/IP."
+        text: "Released in June 2025, it defines the UET transport plus software, network and link layers over standard Ethernet/IP."
         correct: true
         explanation: "UEC 1.0 spans several layers and builds on Ethernet and IP rather than replacing them."
       - id: b
-        text: "It is a new revision of RoCEv2 published by the IBTA."
+        text: "It is a new revision of RoCEv2 published by the IBTA, which adds packet spraying and selective retransmission to it."
         explanation: "UEC is a separate consortium under the Linux Foundation; UET is not a RoCE revision."
       - id: c
-        text: "It replaces Ethernet framing with a new link protocol."
-        explanation: "It keeps Ethernet; link-layer features such as LLR are optional additions."
+        text: "It replaces standard Ethernet framing with a new link protocol, so UEC NICs need UEC-specific switches end to end."
+        explanation: "It keeps Ethernet and runs on standard switches; link-layer features such as LLR are optional additions."
       - id: d
-        text: "It defines a proprietary API owned by one switch vendor."
+        text: "It defines a proprietary API owned by one switch vendor, licensed to NIC makers that join the consortium."
         explanation: "The semantic layer is aligned with libfabric, an open API, and the effort is multi-vendor."
     tags: [uec]
   - id: q2
@@ -48,13 +48,13 @@ questions:
         correct: true
         explanation: "Changing the entropy value changes the hash result, spreading packets over many paths."
       - id: b
-        text: "Switches must be upgraded to per-packet adaptive routing."
+        text: "Switches must first be upgraded to per-packet adaptive routing, which UET depends on for spraying."
         explanation: "Switch AR is complementary but not required for UET spraying."
       - id: c
-        text: "The receiver tells each switch which port to use."
-        explanation: "Path choice is driven by the sender's entropy and the switches' hash."
+        text: "The receiver tells each switch which egress port to use through a control message per flow."
+        explanation: "Switches are not programmed per flow by receivers. Path choice is driven by the sender's entropy and the switches' hash."
       - id: d
-        text: "UET uses a separate VLAN per path."
+        text: "UET pins each path to a separate VLAN, and the sender rotates packets across those VLANs."
         explanation: "UET does not require VLAN-based path pinning."
     tags: [entropy, spraying]
   - id: q4
@@ -62,17 +62,17 @@ questions:
     prompt: "A switch in a UEC fabric would drop a packet due to congestion but instead forwards only its header to the destination. What feature is this and what is the benefit?"
     options:
       - id: a
-        text: "Packet trimming: the receiver learns immediately which packet was lost and can trigger fast selective retransmission."
+        text: "Packet trimming: the receiver learns at once which packet was lost and can trigger fast selective retransmission."
         correct: true
         explanation: "Trimming turns a silent drop into an explicit loss signal, avoiding timeouts."
       - id: b
-        text: "Link Level Retry: the switch will resend the full packet on the same link."
-        explanation: "LLR handles frame corruption on one link, not congestion drops."
+        text: "Link Level Retry: the switch keeps the payload and resends the full packet on the same link once it drains."
+        explanation: "LLR handles frame corruption on one link, not congestion drops, and it retransmits rather than forwarding a header."
       - id: c
-        text: "PFC: the header acts as a pause frame."
-        explanation: "PFC pause frames are MAC control frames, not trimmed data packets."
+        text: "PFC: the forwarded header acts as a pause frame, which the receiver relays back to stop the sender."
+        explanation: "PFC pause frames are link-local MAC control frames, not trimmed data packets forwarded to a receiver."
       - id: d
-        text: "ECN marking: the header carries a CE codepoint only."
+        text: "ECN marking: the switch sends only the header with a CE codepoint, which the receiver echoes back as congestion feedback."
         explanation: "ECN marks a full packet that is still delivered; trimming removes the payload."
     tags: [trimming]
   - id: q5
@@ -100,34 +100,34 @@ questions:
     prompt: "A vendor proposes replacing your RoCEv2 NICs with 'UEC-ready' NICs and claims existing verbs-based applications and RoCE peers will talk to them unchanged. What is the correct assessment?"
     options:
       - id: a
-        text: "Skeptical: UET is a different transport with a libfabric-aligned API; it does not interoperate on the wire with RoCEv2, so software and peer compatibility must be verified."
+        text: "Skeptical: UET is a different, libfabric-aligned transport that does not interoperate with RoCEv2 on the wire."
         correct: true
-        explanation: "RoCE and UET can coexist on a fabric but are different protocols; applications need a libfabric provider or plugin."
+        explanation: "RoCE and UET can coexist on a fabric but are different protocols, so software and peer compatibility must be verified; applications need a libfabric provider or plugin."
       - id: b
-        text: "Correct, because UET is backward compatible with RoCEv2 by specification."
-        explanation: "The UEC specification defines a new transport, not a RoCE-compatible extension."
+        text: "Correct, because UET is backward compatible with RoCEv2 by specification and negotiates down to it per peer."
+        explanation: "The UEC specification defines a new transport, not a RoCE-compatible extension, and there is no fallback negotiation to RoCEv2."
       - id: c
-        text: "Correct, because both use UDP port 4791."
+        text: "Correct, because both use UDP port 4791, so RoCEv2 peers will accept and decode UET packets."
         explanation: "Port 4791 is RoCEv2's port; UET is a separate protocol (IANA assigned it UDP port 4793, per UEC's design paper)."
       - id: d
-        text: "Irrelevant, because NCCL does not use the network."
-        explanation: "NCCL uses the network for inter-node collectives through its NET transport and plugins."
+        text: "Irrelevant, because NCCL keeps its collectives inside NVLink and does not use the back-end network."
+        explanation: "NCCL uses NVLink within a node, but the network for inter-node collectives through its NET transport and plugins."
     tags: [interoperability]
   - id: q7
     type: single
     prompt: "What is the main purpose of UET's ephemeral packet delivery contexts (PDCs)?"
     options:
       - id: a
-        text: "To create transport state on demand without a separate handshake, keeping NIC state proportional to active peers rather than job size."
+        text: "To create transport state on demand without a separate handshake, so NIC state scales with active peers, not job size."
         correct: true
         explanation: "At AI scale every GPU may talk to thousands of peers; pre-established per-peer connections are expensive."
       - id: b
-        text: "To encrypt traffic between tenants."
+        text: "To encrypt traffic between tenants, with a fresh key negotiated for every packet delivery context."
         explanation: "Security is handled by the Transport Security sublayer."
       - id: c
-        text: "To pin each transfer to a single path for ordering."
+        text: "To pin each transfer to a single path so that packets of a message arrive in order at the receiver."
         explanation: "PDCs are about state management, not path pinning."
       - id: d
-        text: "To replace IP addressing with a UEC address."
+        text: "To replace IP addressing with a UEC address space, so endpoints are reachable without IP routing."
         explanation: "UET runs over standard IP."
     tags: [pdc]

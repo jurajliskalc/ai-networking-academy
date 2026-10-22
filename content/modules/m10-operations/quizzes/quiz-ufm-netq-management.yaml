@@ -10,18 +10,18 @@ questions:
       reports a master SM GUID that does not belong to either UFM server. What is the most likely cause?
     options:
       - id: a
-        text: A rogue subnet manager (for example OpenSM on a test or compute node) with a higher priority took mastership.
+        text: A rogue SM, such as OpenSM started on a compute or test node, with a higher priority took mastership.
         correct: true
         explanation: Only intended SMs should be able to become master. An unknown master GUID is the signature of a stray SM.
       - id: b
-        text: A single bad cable on one leaf.
-        explanation: A bad cable causes local errors and perhaps a sweep, but does not change the master SM GUID.
+        text: A single bad cable on one leaf, flapping often enough to keep triggering heavy SM sweeps.
+        explanation: A bad cable causes local errors and sweeps, but it does not change which GUID is the master SM.
       - id: c
-        text: PFC is misconfigured on the spines.
-        explanation: InfiniBand uses credit-based flow control; PFC does not apply.
+        text: PFC misconfigured on the spines, causing pause storms that make the SM re-route.
+        explanation: InfiniBand uses credit-based flow control; PFC does not apply, and it would not change the master SM.
       - id: d
-        text: The NetQ agent crashed.
-        explanation: NetQ is an Ethernet operations tool and does not run the IB subnet manager.
+        text: The NetQ agent crashed on a UFM server, so a standby SM elsewhere took over mastership.
+        explanation: NetQ is an Ethernet operations tool and does not run or affect the IB subnet manager; a UFM standby taking over would still report a UFM server's GUID.
     tags: [ufm, sm]
   - id: q2
     type: single
@@ -32,11 +32,11 @@ questions:
         correct: true
         explanation: Without a working SM the fabric cannot react to changes, and a newly booted fabric cannot come up.
       - id: b
-        text: All data packets are forwarded through the UFM server.
+        text: Data packets between hosts are forwarded through the UFM server, which acts as the core of the fabric's data path.
         explanation: Data is forwarded by switches using tables the SM programs; UFM is not in the data path.
       - id: c
-        text: UFM provides DHCP for all hosts.
-        explanation: DHCP is not a UFM function.
+        text: UFM provides DHCP and IPoIB addressing for every host, so nodes cannot boot without it.
+        explanation: Neither DHCP nor IPoIB address assignment is a UFM function.
     tags: [ufm]
   - id: q3
     type: scenario
@@ -45,18 +45,18 @@ questions:
       fine. netq check mtu reports one link with MTU 1500 facing a spine port at 9216. What explains the pattern?
     options:
       - id: a
-        text: Only flows hashed by ECMP onto the mismatched link have their full-size packets dropped, so loss appears intermittent.
+        text: Only flows that ECMP hashes onto the mismatched link lose their full-size packets, so loss looks intermittent.
         correct: true
         explanation: ECMP spreads flows across many links; only those using the bad link are affected, which looks random from the endpoints.
       - id: b
-        text: The MTU mismatch causes every flow to fragment, slowing all traffic equally.
+        text: The MTU mismatch makes every flow fragment at that hop, which slows all traffic equally.
         explanation: RoCEv2 packets are not fragmented by the fabric; oversize packets are dropped, and only on that link.
       - id: c
-        text: MTU mismatches cannot cause loss; the cause must be elsewhere.
-        explanation: A frame larger than the receiving interface's MTU is discarded.
+        text: MTU mismatches cannot cause loss on RoCE because RDMA retransmits; the cause must be elsewhere.
+        explanation: A frame larger than the receiving interface's MTU is discarded; retransmission is the symptom, not a cure.
       - id: d
-        text: The spine is running an old NetQ agent.
-        explanation: Agent versions affect visibility, not forwarding.
+        text: The spine runs an old NetQ agent that misreports MTU, so the check result is a false alarm.
+        explanation: Agent versions affect visibility, not forwarding, and nothing suggests the reported MTU is wrong.
     tags: [netq, mtu]
   - id: q4
     type: single
@@ -67,11 +67,11 @@ questions:
         correct: true
         explanation: Historical state snapshots let you compare before and after without having captured it manually.
       - id: b
-        text: Running the InfiniBand subnet manager.
-        explanation: That is a UFM function on InfiniBand.
+        text: Running the InfiniBand subnet manager and re-sweeping to list topology changes.
+        explanation: Running the SM is a UFM function on InfiniBand, not NetQ.
       - id: c
-        text: Generating Jinja2 templates.
-        explanation: Templates belong to the automation pipeline, not NetQ.
+        text: Rendering Jinja2 templates of each device's intended configuration to compare with the running one.
+        explanation: Templates belong to the automation pipeline, not NetQ, and intended configuration does not show what operational state changed.
     tags: [netq]
   - id: q5
     type: scenario
@@ -80,17 +80,17 @@ questions:
       email nobody reads. What is the best architectural improvement?
     options:
       - id: a
-        text: Forward platform events and counters into the shared TSDB and alert routing, deduplicated, alongside host and GPU data.
+        text: Forward platform events and counters into the shared TSDB and alert pipeline, alongside host and GPU data.
         correct: true
-        explanation: One place for correlated data and one alert pipeline shortens triage and avoids missed events.
+        explanation: One place for correlated, deduplicated data and one alert pipeline shortens triage and avoids missed events.
       - id: b
-        text: Remove UFM and NetQ to reduce the number of tools.
+        text: Remove UFM and NetQ and keep only Grafana, so engineers have one single tool to check during every incident.
         explanation: You lose the SM (on IB) and vendor health rules; integration is the better answer.
       - id: c
-        text: Add a fourth dashboard tool.
-        explanation: More silos make the problem worse.
+        text: Add a fourth dashboard tool that embeds the other three in browser tabs.
+        explanation: More silos make the problem worse, and alerts still go nowhere.
       - id: d
-        text: Increase the email alert frequency.
+        text: Send UFM alerts to a second email list and raise their frequency so they get noticed.
         explanation: More unread email does not improve response.
     tags: [integration]
   - id: q6
@@ -104,14 +104,14 @@ questions:
         correct: true
         explanation: Connecting fabric health to scheduling keeps jobs off degraded paths automatically.
       - id: b
-        text: Lowering the symbol error threshold in UFM.
+        text: Lowering UFM's symbol error threshold so the port is flagged as unhealthy much sooner.
         explanation: Detection already worked; the gap is acting on it.
       - id: c
-        text: Running nccl-tests nightly.
+        text: Running nccl-tests across all nodes every night and reviewing the slowest ranks each morning.
         explanation: Useful for regression detection but does not react to a specific unhealthy port in real time.
       - id: d
-        text: Enabling ECN on the IB switches.
-        explanation: ECN marking is not the relevant mechanism, and it would not keep jobs off a degraded link.
+        text: Enabling ECN on the IB switches so traffic is steered around the degraded link.
+        explanation: ECN marking signals congestion to senders; it does not steer traffic around a link and would not keep jobs off a degraded one.
     tags: [ufm, scheduler]
   - id: q7
     type: multi

@@ -8,11 +8,17 @@ environment: linux-vm
 lessons: [rdma-on-linux, perftest-benchmarking]
 files: labs/hol-soft-roce-perftest
 verified: false
+tier: 0
+fabric: any
+requires: [linux-vm]
+summary: "Soft-RoCE turns any NIC into an RDMA device: GID tables, RC ping-pong and perftest bandwidth and latency."
 ---
 
 > [!NOTE]
 > This lab has been syntax-checked (`bash -n` on every script) but has not yet been executed end
 > to end on a real VM. If a command behaves differently on your system, please report it.
+> It does not run under WSL2 as tested (kernel 6.6.87.2-microsoft-standard-WSL2, built without
+> `rdma_rxe`). Use a regular VM with Ubuntu's generic kernel.
 
 ## Goal
 

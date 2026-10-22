@@ -14,10 +14,10 @@ Levels: **L1 beginner** (no prior knowledge assumed) → **L2 practitioner** →
 | `m04-rdma`: RDMA fundamentals | L2 | `why-rdma`, `verbs-qps-mrs`, `transport-types-operations`, `rdma-on-linux`, `perftest-benchmarking` |
 | `m05-infiniband`: InfiniBand | L3 | `ib-architecture`, `subnet-manager-routing`, `ib-flow-control-vls`, `ib-speeds-cables`, `sharp-in-network-computing`, `ib-tools-diagnostics` |
 | `m06-rocev2-lossless`: RoCEv2 and lossless Ethernet | L3 | `rocev2-encapsulation`, `pfc-priority-flow-control`, `buffers-headroom-ets`, `ecn-and-dcqcn`, `qos-trust-and-mapping`, `pfc-storms-deadlocks`, `rocev2-configuration-end-to-end` |
-| `m07-load-balancing-congestion`: Load balancing and congestion at scale | L3 | `flow-collisions-entropy`, `adaptive-routing-packet-spraying`, `incast-and-congestion-hotspots`, `spectrum-x-architecture`, `ultra-ethernet` |
+| `m07-load-balancing-congestion`: Load balancing and congestion at scale | L3 | `flow-collisions-entropy`, `adaptive-routing-packet-spraying`, `incast-and-congestion-hotspots`, `congestion-control-algorithms`, `spectrum-x-architecture`, `ultra-ethernet` |
 | `m08-nccl-collectives`: Collective communication and NCCL | L3 | `collective-algorithms`, `nccl-architecture`, `nccl-configuration`, `nccl-tests-interpretation`, `nccl-debugging` |
-| `m09-cluster-design`: AI cluster architecture and design | L4 | `rail-optimized-topology`, `superpod-reference-architecture`, `fabric-sizing-math`, `optics-cabling-power`, `storage-and-frontend-networks`, `multi-tenancy-isolation`, `scale-up-domains-nvl72` |
-| `m10-operations`: Operations, telemetry and automation | L4 | `telemetry-counters`, `streaming-telemetry-gnmi`, `fabric-validation-burn-in`, `network-automation-for-ai`, `ufm-netq-management` |
+| `m09-cluster-design`: AI cluster architecture and design | L4 | `rail-optimized-topology`, `superpod-reference-architecture`, `fabric-sizing-math`, `optics-cabling-power`, `storage-and-frontend-networks`, `multi-tenancy-isolation`, `ai-fabric-security`, `scale-up-domains-nvl72`, `open-scale-up-fabrics`, `inference-cluster-design` |
+| `m10-operations`: Operations, telemetry and automation | L4 | `telemetry-counters`, `streaming-telemetry-gnmi`, `drop-reasons-in-band-telemetry`, `fabric-validation-burn-in`, `network-automation-for-ai`, `ufm-netq-management`, `kubernetes-network-operator` |
 | `m11-troubleshooting`: Troubleshooting mastery | L4 | `troubleshooting-methodology`, `link-layer-ber-fec`, `lossless-misconfigurations`, `slow-collectives-stragglers`, `rdma-connection-failures`, `case-studies` |
 | `m12-capstone`: Capstone and career prep | L4 | `design-review-capstone`, `interview-preparation`, `exam-strategy` |
 
@@ -25,8 +25,10 @@ Levels: **L1 beginner** (no prior knowledge assumed) → **L2 practitioner** →
 
 - **Fabric Simulator labs** (`content/labs/sim/*.yaml`): break/fix tickets in a browser-simulated
   rail-optimized cluster. They run anywhere, including on GitHub Pages. See [AUTHORING.md](AUTHORING.md#simulator-labs).
-- **Hands-on labs** (`content/labs/handson/*.md` plus files in `labs/`): real Linux work with
-  containerlab/FRR and Soft-RoCE (`rdma_rxe`). They need a Linux host or VM.
+- **Real HW labs** (`content/labs/handson/*.md` plus files in `labs/`), in tiers defined in
+  `content/hardware/hardware.yaml`: Tier 0 runs on one VM (containerlab/FRR, Soft-RoCE); Tier 1 needs two
+  RDMA hosts, Tier 2 a lossless switch and a third host, Tier 3 GPU nodes. Guides for the track live in
+  `content/hardware/guides/`, and `labs/hw-toolkit/` holds the setup script, `aina-hw` and `lib.sh`.
 
 ## Widgets
 

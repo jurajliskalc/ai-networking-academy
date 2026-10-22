@@ -50,7 +50,7 @@ function Seg<T extends string | number>({ label, value, options, onChange, rende
   return (
     <div>
       <div className="mb-1 font-mono text-[10px] uppercase tracking-[0.14em] text-muted">{label}</div>
-      <div className="flex flex-wrap gap-1">
+      <div className="flex flex-wrap gap-1" role="group" aria-label={label}>
         {options.map((o) => (
           <button key={String(o)} type="button" onClick={() => onChange(o)} aria-pressed={o === value}
             className={`rounded-md border px-2 py-1 font-mono text-xs transition ${o === value ? 'border-accent bg-accent-soft text-accent' : 'border-line bg-panel hover:bg-panel-2'}`}>
@@ -120,11 +120,11 @@ export default function MtuCalculator() {
         <div className="mb-1 flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.14em] text-muted">
           <span>Switch hops (port MTU)</span>
           <span className="flex gap-1 normal-case tracking-normal">
-            <button type="button" disabled={hops.length <= 2} onClick={() => setHops(hops.slice(0, -1))} className="rounded-md border border-line bg-panel px-2 py-0.5 disabled:opacity-40">− hop</button>
-            <button type="button" disabled={hops.length >= 3} onClick={() => setHops([...hops, 9216])} className="rounded-md border border-line bg-panel px-2 py-0.5 disabled:opacity-40">+ hop</button>
+            <button type="button" disabled={hops.length <= 2} onClick={() => setHops(hops.slice(0, -1))} aria-label="Remove a hop" className="min-h-6 rounded-md border border-line bg-panel px-2 py-0.5 disabled:opacity-40">− hop</button>
+            <button type="button" disabled={hops.length >= 3} onClick={() => setHops([...hops, 9216])} aria-label="Add a hop" className="min-h-6 rounded-md border border-line bg-panel px-2 py-0.5 disabled:opacity-40">+ hop</button>
           </span>
         </div>
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Switch hops and verdicts">
           <table className="w-full text-left text-xs">
             <thead className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted">
               <tr><th className="py-1 pr-3">Hop</th><th className="py-1 pr-3">MTU</th><th className="py-1 pr-3 text-right">RoCE pkt</th><th className="py-1 pr-3 text-right">Full-MTU pkt</th><th className="py-1">Verdict</th></tr>
@@ -135,7 +135,7 @@ export default function MtuCalculator() {
                   <td className="py-1 pr-3 font-mono">{['leaf (ingress)', 'spine', 'leaf (egress)'][hops.length === 2 && i === 1 ? 2 : i]}</td>
                   <td className="py-1 pr-3">
                     <input aria-label={`MTU of hop ${i + 1}`} type="number" min={576} max={10240} value={hops[i]} onChange={(e) => setHop(i, clampInt(e.target.value, 576, 10240))}
-                      className="w-20 rounded-md border border-line bg-panel px-1.5 py-0.5 font-mono text-xs" />
+                      className="min-h-6 w-20 rounded-md border border-line bg-panel px-1.5 py-0.5 font-mono text-xs" />
                   </td>
                   <td className={`py-1 pr-3 text-right font-mono ${active && !v.roceFits ? 'text-danger' : ''}`}>{active ? fmt(v.roceSize) : '—'}</td>
                   <td className={`py-1 pr-3 text-right font-mono ${!v.fullFits ? 'text-warn' : ''}`}>{fmt(v.fullSize)}</td>
@@ -159,7 +159,7 @@ export default function MtuCalculator() {
           : `End to end OK: RoCE active MTU ${active} and full ${fmt(netdev)} B host packets fit every hop.`}
       </div>
 
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" aria-live="polite">
         <Out label="RoCE active_mtu" value={active || 'none'} tone={active === 4096 ? 'text-accent' : 'text-warn'} sub={`largest IB MTU ≤ ${netdev} − 96 = ${netdev - 96}`} />
         <Out label="Largest RoCE IP pkt" value={active ? `${fmt(roceIp)} B` : '—'} tone="text-data" sub={ov ? `outer IP ${fmt(roceIp + ov)} B` : `frame ${fmt(roceIp + 18 + (vlan ? 4 : 0))} B incl. FCS`} />
         <Out label="TCP MSS" value={fmt(tcpMss(netdev, ipv6))} sub={`MTU − ${hdr} IP − 20 TCP`} />

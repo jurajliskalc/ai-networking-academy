@@ -98,7 +98,7 @@ commands:
     platform: linux
     summary: Dump the driver's extended NIC statistics, including per-priority PFC pause, physical-layer errors and discards.
     example: |
-      # illustrative output from an mlx5 NIC, filtered
+      # illustrative output from an mlx5 NIC, filtered and trimmed (the pattern also matches *_pause_duration / *_pause_transition lines)
       $ ethtool -S ens1f0np0 | grep -E 'prio3_pause|discards_phy|crc_errors_phy|out_of_buffer|symbol_err'
            rx_out_of_buffer: 0
            rx_discards_phy: 1834
@@ -118,7 +118,7 @@ commands:
       Vendor name                               : EXAMPLE
       Module temperature                        : 41.20 degrees C
       Rx loss of signal                         : None
-      Laser rx power (lane 1)                   : 0.9120 mW / -0.40 dBm
+      Rcvr signal avg optical power (Channel 1) : 0.9120 mW / -0.40 dBm
     notes: Which fields appear depends on the module type and the ethtool/kernel version. A lane with RX power far below its siblings points to a dirty or damaged fiber. On NVIDIA NICs mlxlink gives a richer view.
     tags: [ethtool, optics, dom, physical]
 

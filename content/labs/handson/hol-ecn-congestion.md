@@ -7,13 +7,17 @@ estimated_minutes: 90
 environment: linux-vm
 lessons: [ecn-and-dcqcn, incast-and-congestion-hotspots]
 files: labs/hol-ecn-congestion
-verified: false
+verified: true
+tier: 0
+fabric: any
+requires: [linux-vm]
+summary: "A Linux router namespace becomes a congested switch: tail drop vs RED/ECN marking vs DCTCP, plus an incast burst."
 ---
 
 > [!NOTE]
-> This lab has been syntax-checked (`bash -n` on every script) but has not yet been executed end
-> to end on a real VM. Numbers depend on your VM's CPU and kernel; treat every result below as
-> illustrative and focus on the differences between runs.
+> Verified end to end (every task, `check.sh` and `cleanup.sh`) on Ubuntu 24.04 under WSL2 (kernel 6.6.87.2-microsoft-standard-WSL2) on 2026-10-22; see `labs/README.md` for the exact versions and the caveats of WSL2.
+> Numbers depend on your VM's CPU and kernel; treat every result below as illustrative and focus on
+> the differences between runs.
 
 ## Goal
 
@@ -56,7 +60,8 @@ By the end you can:
   - `setup.sh`: builds the namespaces, disables TSO/GSO/GRO on all veths (so the queue holds
     MTU-sized packets), sets every namespace to CUBIC and starts three iperf3 servers on the
     receiver (ports 5201-5203, one per sender). `setup.sh --restart-servers` only restarts those
-    servers (needed in Task 5).
+    servers (needed in Task 5). It also adds `dctcp` to the host-wide
+    `net.ipv4.tcp_allowed_congestion_control` list (see Task 5); `cleanup.sh` restores it.
   - `bottleneck.sh MODE`: `fifo`, `red-ecn`, `fq_codel`, `off` or `show`.
   - `incast.sh`: synchronized burst from all three senders.
   - `cleanup.sh`, `check.sh`.
@@ -181,6 +186,11 @@ sudo ip netns exec ecn-rcv sysctl -w net.ipv4.tcp_congestion_control=dctcp
 sudo ./setup.sh --restart-servers
 ```
 
+If the first `sysctl` fails with `Operation not permitted`: Linux lets a network namespace other
+than the host's make a congestion control its default only if that algorithm is listed in the
+host-wide `net.ipv4.tcp_allowed_congestion_control` (by default typically just `reno cubic`).
+`setup.sh` adds `dctcp` to that list; check with `sysctl net.ipv4.tcp_allowed_congestion_control`.
+
 **Why restart the servers:** a DCTCP sender marks even its SYN as ECN-capable (ECT), which classic
 RFC 3168 TCP does not do. Linux accepts ECN on such a SYN only if the *listening* socket itself
 uses DCTCP, and a listening socket keeps the congestion control that was the default when it was
@@ -210,13 +220,14 @@ for i in $(seq 1 10); do q | grep -o 'backlog [^ ]* [^ ]*' | tail -1; sleep 1; d
 **What to observe and why:**
 
 - Both reach high throughput with few or no retransmissions. Check the `ss -tin` line of the
-  DCTCP flow: it shows the congestion control (`dctcp`), ECN state, and on recent iproute2
-  versions a `dctcp:(...)` block with its internal state (field names vary by version).
-- DCTCP sees many more marks per second than CUBIC, yet backs off only a little each time, so
-  it keeps the queue hovering around the marking threshold with small oscillations. CUBIC halves
-  its window on each congestion signal, so its queue (and throughput) oscillates more. With
-  only 100 Mbit/s and microsecond RTTs, the difference can be modest; it grows with bandwidth-delay
-  product.
+  DCTCP flow: it shows the congestion control (`dctcp`), `delivered_ce` (segments that arrived
+  CE-marked) and, on recent iproute2 versions, a `dctcp:(...)` block with its internal state such
+  as `alpha` (field names vary by version).
+- DCTCP backs off only a little for each window that contains marks, so it keeps the queue
+  hovering around the marking threshold with small oscillations. CUBIC halves its window on each
+  congestion signal (at most once per round trip), so its queue oscillates more. With only
+  100 Mbit/s and microsecond RTTs, the difference is modest (both flows may see a similar number
+  of marks and reach the same throughput here); it grows with the bandwidth-delay product.
 
 ### Task 6: DCTCP and classic TCP in one queue
 

@@ -23,18 +23,18 @@ diagnosis:
   prompt: What is the root cause?
   options:
     - id: a
-      text: node03 enp170s0np0 (mlx5_5) has PFC enabled on priority 4 instead of 3, so it ignores the switch's pause frames for RoCE traffic and the switch drops packets.
+      text: node03 mlx5_5 (enp170s0np0) enables PFC on priority 4 instead of 3, so it ignores the leaf's pause frames for RoCE and packets are dropped.
       correct: true
-      explanation: RoCE is classified to priority 3 (DSCP 26). The leaf sends PFC pause frames for priority 3, but the NIC has PFC disabled there and keeps transmitting (it does not even expose priority-3 pause counters). The leaf buffer overflows, packets drop, and go-back-N retransmissions collapse throughput for every rank on that ring.
+      explanation: RoCE is classified to priority 3 (DSCP 26). The leaf sends PFC pause frames for priority 3, but the NIC has PFC disabled there and keeps transmitting (it does not even expose priority-3 pause counters). The leaf buffer overflows, packets drop, and go-back-N retransmissions collapse throughput for every rank on that ring. A single ib_write_bw flow never congests the port, so it never needs PFC and still reaches line rate.
     - id: b
-      text: ECN is disabled on leaf06.
-      explanation: The leaf shows RoCE lossless mode with ECN congestion control, and ECN marks and CNPs appear on all other ports.
+      text: leaf06 lost its RoCE QoS profile, so rail 5 runs in a lossy class and the leaf drops RoCE packets once a collective loads it.
+      explanation: nv show qos roce on leaf06 shows lossless mode with PFC on priority 3, and the other nodes' rail-5 ports show ECN marks and no drops. Only the port facing node03 drops, while it sends hundreds of thousands of pause frames that are ignored.
     - id: c
-      text: The re-image installed slower NIC firmware.
-      explanation: ib_write_bw reaches line rate, so the NIC data path itself is fine.
+      text: node03's re-image left enp170s0np0 trusting PCP, so untagged RoCE is classified to priority 0 on receive and never gets PFC protection.
+      explanation: "mlnx_qos -i enp170s0np0 shows 'Priority trust state: dscp'. What is wrong is the PFC vector, which enables priority 4 instead of 3."
     - id: d
-      text: NCCL is using the ring algorithm and should use tree instead.
-      explanation: The choice of algorithm cannot explain a 65 % drop that appears on only one node, together with drop and out-of-sequence counters.
+      text: The re-image flashed different ConnectX firmware on node03, and mlx5_5 now has a slower data path that throttles its ring.
+      explanation: ib_write_bw on mlx5_5 reaches line rate (~392 Gb/s) and ibv_devinfo shows the same fw_ver as the other nodes, so the NIC data path is fine. The problem only appears under load, together with drops and out-of-sequence counters.
 checks:
   - { description: "node03 mlx5_5 enables PFC on priority 3 only", check: host_pfc_only, args: { node: node03, rail: 5, prio: 3 } }
   - { description: "all_reduce bus bandwidth is above 360 GB/s", check: allreduce_min_busbw, args: { value: 360 } }

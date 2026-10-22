@@ -12,32 +12,32 @@ questions:
         correct: true
         explanation: This is the bounce-buffer path; data crosses PCIe twice and passes through host memory.
       - id: b
-        text: The NIC reads it directly through the GPU BAR.
+        text: The NIC reads it directly from GPU memory through the GPU's PCIe BAR, as it would for any other PCIe peer.
         explanation: That is exactly what GPUDirect RDMA enables; without it, the NIC cannot target GPU memory.
       - id: c
-        text: The GPU sends it over NVLink to the NIC.
+        text: The GPU pushes it over NVLink straight into the NIC, which then sends it onto the fabric.
         explanation: NICs attach over PCIe; NVLink connects GPUs (and Grace CPUs), not NICs in these designs.
       - id: d
-        text: The CPU transmits it with the kernel TCP stack.
-        explanation: RDMA bypasses the kernel networking stack in both cases.
+        text: The CPU copies it into a socket buffer and sends it through the kernel TCP/IP stack.
+        explanation: RDMA bypasses the kernel networking stack in both cases; only the source of the NIC's DMA changes.
     tags: [gdr]
   - id: q2
     type: single
     prompt: What is the job of the nvidia-peermem kernel module?
     options:
       - id: a
-        text: It lets the RDMA stack pin GPU memory and obtain its PCIe addresses when an application registers a GPU buffer as a memory region.
+        text: It lets the RDMA stack pin GPU memory and get its PCIe addresses when an application registers a GPU buffer with the NIC.
         correct: true
-        explanation: It is a peer-memory client that bridges ibv_reg_mr() on GPU addresses to the GPU driver.
+        explanation: It is a peer-memory client that bridges ibv_reg_mr() on GPU addresses (registering a memory region) to the GPU driver.
       - id: b
-        text: It implements NVLink routing between GPUs.
+        text: It implements NVLink routing between the GPUs, programming the NVSwitch chips once the driver has loaded.
         explanation: NVLink and NVSwitch are managed by the GPU driver and Fabric Manager, not by peermem.
       - id: c
-        text: It provides the cuFile API for GPUDirect Storage.
+        text: It provides the cuFile API that applications call to read and write files directly into GPU memory with GPUDirect Storage.
         explanation: cuFile is a user-space library; GDS historically relies on the nvidia-fs module.
       - id: d
-        text: It enables PFC on the NIC.
-        explanation: PFC is NIC and switch QoS configuration, unrelated to GPU memory registration.
+        text: It enables PFC and ECN on the NIC so that GPU traffic gets a lossless class when GPUDirect RDMA is active.
+        explanation: PFC and ECN are NIC and switch QoS configuration, unrelated to GPU memory registration.
     tags: [gdr, kernel]
   - id: q3
     type: scenario
@@ -48,13 +48,13 @@ questions:
         correct: true
         explanation: Load nvidia-peermem (or meet DMA-BUF requirements) and confirm GDRDMA appears in the logs.
       - id: b
-        text: The fabric has PFC disabled, which removes the GDRDMA label.
+        text: PFC is disabled on the fabric, and NCCL drops the GDRDMA label when the network is lossy.
         explanation: The GDRDMA marker reflects the host-side data path, not switch QoS.
       - id: c
-        text: The job is using NVLink instead of the network.
+        text: The job is using NVLink instead of the network, so the NET/IB channels listed carry no real data.
         explanation: NET/IB lines are network channels; NVLink traffic is reported as P2P transport.
       - id: d
-        text: This is normal; GDRDMA only appears on InfiniBand, never on RoCE.
+        text: "This is normal: GDRDMA appears only on InfiniBand, and the label is never printed for RoCE."
         explanation: GPUDirect RDMA works on both InfiniBand and RoCE.
     tags: [gdr, nccl, troubleshooting]
   - id: q4
@@ -66,10 +66,10 @@ questions:
         correct: true
         explanation: Read round trips grow with path length, so the NIC needs more outstanding reads to fill the pipe.
       - id: b
-        text: Sends are encrypted and receives are not.
-        explanation: Encryption is not part of the GDR mechanism.
+        text: Sends are encrypted by the NIC on the way out while receives are not, and encryption adds a cost per PCIe hop.
+        explanation: Encryption is not part of the GDR mechanism, and it would not scale with PCIe path length.
       - id: c
-        text: Receives use NVLink and sends use PCIe.
+        text: Receives arrive at the GPU over NVLink, while sends must leave over PCIe through every PCIe switch on the path.
         explanation: Both directions between NIC and GPU use PCIe.
     tags: [gdr, pcie]
   - id: q5
@@ -77,17 +77,17 @@ questions:
     prompt: "On a server, GPU3's nearest NIC is on the other CPU socket (topology SYS). An engineer sets NCCL_NET_GDR_LEVEL=SYS to 'force GPUDirect everywhere' and bandwidth gets worse. Why?"
     options:
       - id: a
-        text: GDR across the socket interconnect makes the NIC read GPU memory over a slow, shared path; staging can be faster, and the real fix is the GPU-NIC mapping.
+        text: Cross-socket GDR makes the NIC read GPU memory over the slow, shared socket link; the fix is the GPU-NIC mapping.
         correct: true
-        explanation: NCCL's default threshold exists because cross-socket P2P often underperforms. Fix the placement rather than the threshold.
+        explanation: NCCL's default threshold exists because cross-socket P2P often underperforms; staging through host memory can be faster. Fix the placement rather than the threshold.
       - id: b
-        text: SYS disables GPUDirect RDMA entirely.
+        text: SYS is the most restrictive level, so the change switched GPUDirect RDMA off for every GPU and NIC pair on the node.
         explanation: SYS is the most permissive value; LOC disables GDR.
       - id: c
-        text: The variable only affects storage, so the change is a coincidence.
-        explanation: NCCL_NET_GDR_LEVEL controls GDR on network transfers.
+        text: NCCL_NET_GDR_LEVEL only affects GPUDirect Storage, so the slowdown is a coincidence unrelated to it.
+        explanation: NCCL_NET_GDR_LEVEL controls GDR on network transfers, not storage.
       - id: d
-        text: SYS forces TCP sockets instead of RDMA.
+        text: SYS forces NCCL onto TCP sockets for GPUs whose NIC is on another socket, bypassing RDMA entirely.
         explanation: The transport choice is separate; this variable only sets the GDR distance threshold.
     tags: [gdr, nccl, numa]
   - id: q6
@@ -119,12 +119,12 @@ questions:
         correct: true
         explanation: It prints a platform support summary; gdsio is the companion benchmark.
       - id: b
-        text: ibv_devinfo
+        text: ibv_devinfo (for example ibv_devinfo -v)
         explanation: That lists RDMA device attributes, not GDS support.
       - id: c
-        text: nvidia-smi topo -m
-        explanation: That shows GPU/NIC topology, which is useful but does not report GDS support.
+        text: nvidia-smi (for example nvidia-smi topo -m)
+        explanation: topo -m shows GPU/NIC topology, which is useful but does not report GDS support.
       - id: d
-        text: ethtool -S
-        explanation: That shows NIC counters.
+        text: ethtool (for example ethtool -S ens1f0)
+        explanation: ethtool -S shows NIC counters, not GDS support.
     tags: [gds, tools]

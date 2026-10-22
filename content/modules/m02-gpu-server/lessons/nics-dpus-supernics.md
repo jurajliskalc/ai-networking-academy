@@ -21,6 +21,8 @@ further_reading:
     url: https://docs.nvidia.com/doca/sdk/
   - title: Linux kernel documentation, mlx5 driver and devlink
     url: https://docs.kernel.org/networking/device_drivers/ethernet/mellanox/mlx5/index.html
+  - title: "NVIDIA DOCA Profiles (DOCA-Host installation profiles, DOCA 3.0)"
+    url: https://networking-docs.nvidia.com/doca/archive/3-0-0/DOCA+Profiles/
   - title: rdma-core (user-space RDMA libraries and tools)
     url: https://github.com/linux-rdma/rdma-core
 ---
@@ -89,8 +91,9 @@ and features depend on the SKU and firmware.
 | BlueField-3 DPU | Up to 400G, 16 Arm cores, on-card DDR | PCIe Gen5 | Front-end/storage DPU; a SuperNIC variant is used in Spectrum-X designs |
 | Next generations | ConnectX-9 class (1.6T) and BlueField-4 have been announced for the Rubin generation | | Hedge: check current NVIDIA announcements for availability and specs |
 
-Most ConnectX and BlueField adapters are **VPI** (Virtual Protocol Interconnect) capable: the same port
-can run as InfiniBand or Ethernet depending on firmware configuration. The cable, transceiver and the
+Many ConnectX and BlueField SKUs are **VPI** (Virtual Protocol Interconnect) capable: the same port
+can run as InfiniBand or Ethernet depending on firmware configuration. Others are Ethernet-only (the
+ConnectX-6 Dx family, for example, and the "EN" SKUs of other generations), so check the exact SKU. The cable, transceiver and the
 switch on the other end must agree.
 
 ## How it works
@@ -227,6 +230,28 @@ devlink dev info            # firmware versions per device, if supported by the 
 
 Firmware matters enormously for RDMA NICs: congestion control behaviour, adaptive-routing support and
 bug fixes all live there. Fleets should run a single validated firmware version, checked at burn-in.
+
+### Install the host software stack (DOCA-Host profiles)
+
+On NVIDIA adapters the host drivers and tools come either from the distribution ("inbox", see
+`rdma-on-linux`) or from NVIDIA's **DOCA-Host** packages, which replaced the standalone MLNX_OFED
+distribution. DOCA-Host is installed by adding NVIDIA's package repository for your OS and
+installing a **profile**. The DOCA 3.0 documentation describes four:
+
+| Profile | Contents (per NVIDIA's description) | Typical use |
+|---|---|---|
+| `doca-ofed` | Driver-only installation, equivalent to MLNX_OFED | Hosts that only need the RDMA drivers and tools |
+| `doca-roce` | Lightweight RoCE functionality | RoCE-only hosts |
+| `doca-networking` | Networking-specific installation without the full DOCA library set | NVIDIA's recommendation for ConnectX hosts |
+| `doca-all` | The full DOCA suite: libraries, drivers and tools | BlueField development, mixed BlueField and ConnectX fleets |
+
+Profile names and contents change between DOCA releases (older releases had fewer profiles), and
+the installer needs kernel headers that match the running kernel, so follow the installation guide
+for your DOCA version and OS. Installing `doca-all` on a ConnectX-only host does not enable
+DPU-only features: the libraries need hardware the adapter does not have. Whatever you install, pin
+the version fleet-wide together with the NIC firmware, and verify afterwards with `ibv_devinfo`
+(firmware version, port state) and `rdma link show`. On Kubernetes the same driver can be delivered
+as a container by the NVIDIA Network Operator (`kubernetes-network-operator`).
 
 ### Configure the port protocol (VPI adapters)
 

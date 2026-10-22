@@ -28,6 +28,12 @@ run ip netns add hol1-b
 run ip link add br-hol1 type bridge
 run ip link set br-hol1 up
 
+# Docker loads br_netfilter (bridged IPv4 goes through iptables FORWARD) and sets
+# the FORWARD policy to DROP; let frames switched by br-hol1 through.
+if command -v iptables >/dev/null 2>&1; then
+  run iptables -I FORWARD -i br-hol1 -o br-hol1 -j ACCEPT
+fi
+
 for n in a b; do
   run ip link add "${n}-br" type veth peer name "${n}-eth0"
   run ip link set "${n}-eth0" netns "hol1-${n}"

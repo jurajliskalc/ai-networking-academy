@@ -30,13 +30,13 @@ questions:
         correct: true
         explanation: Direct meshes left some pairs without a direct link and made bandwidth uneven.
       - id: b
-        text: It converts NVLink to Ethernet for the scale-out fabric.
+        text: It converts NVLink traffic to Ethernet so GPUs in different servers can reach each other over the scale-out fabric.
         explanation: NVSwitch switches NVLink traffic; scale-out traffic leaves via NICs over PCIe.
       - id: c
-        text: It replaces PCIe as the connection to NICs.
+        text: It replaces PCIe as the connection between GPUs and NICs, so scale-out traffic no longer crosses a PCIe switch.
         explanation: NICs are still attached over PCIe in these designs.
       - id: d
-        text: It adds RDMA reliability to NVLink.
+        text: It adds RDMA-style reliability to NVLink, retransmitting packets that direct GPU-to-GPU links would otherwise drop.
         explanation: NVLink has its own link-level reliability; NVSwitch is about connectivity and in-switch reduction.
     tags: [nvswitch]
   - id: q3
@@ -48,13 +48,13 @@ questions:
         correct: true
         explanation: On NVSwitch systems Fabric Manager must configure the NVLink fabric before CUDA can use the GPUs.
       - id: b
-        text: Whether PFC is enabled on the ToR switch.
-        explanation: A CUDA initialization failure on a single node is not a fabric QoS issue.
+        text: Whether PFC is enabled on the ToR switch for the priority that the GPUs' NVLink traffic uses.
+        explanation: NVLink traffic never crosses the ToR, and a CUDA initialization failure on a single node is not a fabric QoS issue.
       - id: c
-        text: Whether nvidia-peermem is loaded.
+        text: Whether nvidia-peermem is loaded, since CUDA cannot map GPU memory until it has registered.
         explanation: Missing peermem silently disables GPUDirect RDMA; it does not prevent CUDA initialization.
       - id: d
-        text: Whether the NIC firmware is current.
+        text: Whether the NIC firmware matches the new driver, since CUDA probes the NICs during initialization.
         explanation: NIC firmware does not affect CUDA initialization on the GPUs.
     tags: [fabric-manager, troubleshooting]
   - id: q4
@@ -62,14 +62,14 @@ questions:
     prompt: Why is tensor parallelism normally kept inside the NVLink domain?
     options:
       - id: a
-        text: It exchanges activations within every layer and needs bandwidth roughly an order of magnitude beyond what a scale-out NIC provides.
+        text: It exchanges activations within every layer, needing roughly an order of magnitude more bandwidth than a scale-out NIC gives.
         correct: true
         explanation: On H100, NVLink offers about 9x the per-direction bandwidth of a 400G NIC, at lower latency.
       - id: b
-        text: NCCL cannot run tensor parallelism over RDMA.
+        text: NCCL cannot run tensor-parallel collectives over RDMA, so TP groups that span servers fail to initialize at all.
         explanation: NCCL can communicate over any transport; the issue is performance, not capability.
       - id: c
-        text: Tensor parallelism generates no traffic at all.
+        text: Tensor parallelism generates no traffic of its own, so it only works where GPUs can share memory directly over NVLink.
         explanation: It is one of the most communication-intensive forms of parallelism.
     tags: [parallelism, nvlink]
   - id: q5
@@ -81,13 +81,13 @@ questions:
         correct: true
         explanation: Collectives move at the pace of the slowest participant; this is a hardware ticket for that node.
       - id: b
-        text: The scale-out fabric is congested.
-        explanation: Clean fabric counters and a single-node test reproducing the issue point inside the server.
+        text: The scale-out fabric is congested, and the single-node test is slowed by the same congestion on that node's NICs.
+        explanation: A single-node test does not use the scale-out fabric, and the fabric counters are clean; the problem is inside the server.
       - id: c
-        text: Inactive links are normal power saving and do not affect performance.
+        text: Inactive links are normal NVLink power saving at idle and do not affect the bandwidth the node reaches under load.
         explanation: Healthy GPUs in the same system show all links active at the same speed.
       - id: d
-        text: NVLink SHARP is disabled, which shows links as inactive.
+        text: NVLink SHARP is disabled on that node, which reports its links as inactive and lowers the all-reduce bandwidth.
         explanation: NVLS is a collective algorithm feature; it does not change link state.
     tags: [nvlink, troubleshooting]
   - id: q6
@@ -119,12 +119,12 @@ questions:
         correct: true
         explanation: NV# counts the NVLinks bonded between the pair, here through NVSwitch.
       - id: b
-        text: The GPUs are 18 PCIe hops apart.
+        text: The GPUs are 18 PCIe hops apart through the switch hierarchy.
         explanation: PCIe distances use PIX, PXB, PHB, NODE and SYS.
       - id: c
-        text: NVLink generation 18.
+        text: The link between the pair runs NVLink generation 18.
         explanation: The number is a link count, not a generation.
       - id: d
-        text: 18 GB/s of bandwidth between the GPUs.
+        text: The pair has 18 GB/s of bandwidth between them in each direction.
         explanation: It is a link count; bandwidth depends on per-link speed and generation.
     tags: [nvlink, topology]

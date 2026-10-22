@@ -64,8 +64,8 @@ export const VARS: Var[] = [
   { name: 'NCCL_TOPO_DUMP_FILE', cat: 'topo', what: 'Write the detected topology as XML', def: 'unset', typical: 'a path such as /tmp/nccl_topo.xml when debugging', wrong: '—', detail: 'Compare dumps of a good and a bad node.' },
   { name: 'NCCL_ALGO', cat: 'algo', what: 'Restrict algorithms', def: 'unset (tuned per size)', typical: 'unset; Ring or Tree only to test', wrong: 'A leftover override costs bandwidth or latency for months', detail: 'Comma list (e.g. Ring, Tree, CollnetDirect, CollnetChain, NVLS, NVLSTree, PAT); ^ excludes. Names supported depend on version.', diag: true },
   { name: 'NCCL_PROTO', cat: 'algo', what: 'Restrict protocols', def: 'LL,LL128,Simple where LL128 is supported', typical: 'unset; Simple only to test', wrong: 'Small-message latency or large-message bandwidth regresses', detail: 'NVIDIA discourages changing it except to work around a bug.', diag: true },
-  { name: 'NCCL_MIN_CTAS', cat: 'algo', what: 'Minimum CTAs (channels) per collective', def: 'undefined (auto)', typical: 'unset', wrong: 'Too many SMs taken from compute, or too few for bandwidth', detail: 'Up to 64 (32 before 2.25). Replaces NCCL_MIN_NCHANNELS.' },
-  { name: 'NCCL_MAX_CTAS', cat: 'algo', what: 'Maximum CTAs (channels) per collective', def: 'undefined (auto)', typical: 'unset', wrong: 'Bandwidth capped below the NICs', detail: 'Up to 64 (32 before 2.25). Replaces NCCL_MAX_NCHANNELS.' },
+  { name: 'NCCL_MIN_CTAS', cat: 'algo', what: 'Minimum CTAs (channels) per collective', def: 'unset (NCCL decides)', typical: 'unset', wrong: 'Too many SMs taken from compute, or too few for bandwidth', detail: 'Up to 64 (32 before 2.25). Replaces NCCL_MIN_NCHANNELS.' },
+  { name: 'NCCL_MAX_CTAS', cat: 'algo', what: 'Maximum CTAs (channels) per collective', def: 'unset (NCCL decides)', typical: 'unset', wrong: 'Bandwidth capped below the NICs', detail: 'Up to 64 (32 before 2.25). Replaces NCCL_MAX_NCHANNELS.' },
   { name: 'NCCL_MIN_NCHANNELS', cat: 'algo', what: 'Minimum channels (old name)', def: 'platform dependent', typical: 'migrate to NCCL_MIN_CTAS', wrong: 'Same as MIN_CTAS', detail: 'Deprecated in 2.17.', deprecated: 'NCCL_MIN_CTAS' },
   { name: 'NCCL_MAX_NCHANNELS', cat: 'algo', what: 'Maximum channels (old name)', def: 'auto', typical: 'migrate to NCCL_MAX_CTAS', wrong: 'Same as MAX_CTAS', detail: 'Deprecated in 2.17.', deprecated: 'NCCL_MAX_CTAS' },
   { name: 'NCCL_NVLS_ENABLE', cat: 'algo', what: 'NVLink SHARP (in-switch reduction) on NVSwitch systems', def: '2 (use if supported)', typical: 'default', wrong: 'Disabled: lower all-reduce busbw on NVLS-capable nodes', detail: '0 off (no NVLS resources allocated). 1 and 2 (default) behave the same since 2.29: init does not fail where NVLS is unsupported, but fails if NVLS resources cannot be allocated (2.27-2.28 tried a silent fallback).' },
@@ -119,12 +119,12 @@ function Matcher() {
       <label className="flex flex-wrap items-center gap-2 font-mono text-sm"><span>{varName}=</span>
         <input value={spec} onChange={(e) => setSpec(e.target.value)} className="min-w-0 flex-1 rounded-md border border-line bg-panel px-2 py-1 font-mono text-sm" aria-label={`${varName} value`} />
       </label>
-      <div className="flex flex-wrap gap-1">{PRESETS[which].map((x) => <button key={x} type="button" onClick={() => setSpec(x)} className="rounded border border-line bg-panel px-1.5 py-0.5 font-mono text-[11px] hover:bg-panel-2">{x.length > 26 ? `${x.slice(0, 24)}…` : x}</button>)}</div>
+      <div className="flex flex-wrap gap-1" role="group" aria-label="Example values">{PRESETS[which].map((x) => <button key={x} type="button" onClick={() => setSpec(x)} title={x.length > 26 ? x : undefined} className="min-h-6 rounded border border-line bg-panel px-1.5 py-0.5 font-mono text-[11px] hover:bg-panel-2">{x.length > 26 ? <><span aria-hidden>{`${x.slice(0, 24)}…`}</span><span className="sr-only">{x}</span></> : x}</button>)}</div>
       <div className="text-xs text-muted">Parsed: {p.items.length ? <>{p.exclude ? 'exclude' : 'include'} {p.exact ? 'exact names' : 'name prefixes'} [{p.items.map((i) => i.name + (i.port !== undefined ? `:${i.port}` : '')).join(', ')}]</> : 'empty: NCCL\'s automatic selection applies'}</div>
-      <div className="grid grid-cols-2 gap-1 sm:grid-cols-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-1 sm:grid-cols-3 lg:grid-cols-4" aria-live="polite">
         {res.map((d) => (
-          <div key={d.name} className={`rounded-md border px-2 py-1 text-xs ${d.selected ? 'border-accent bg-accent-soft' : 'border-line bg-panel opacity-70'}`}>
-            <div className={`font-mono font-semibold ${d.selected ? 'text-accent' : 'text-muted line-through'}`}>{d.name}{which === 'hca' ? ':1' : ''}</div>
+          <div key={d.name} className={`rounded-md border px-2 py-1 text-xs ${d.selected ? 'border-accent bg-accent-soft' : 'border-dashed border-line bg-panel'}`}>
+            <div className={`font-mono font-semibold ${d.selected ? 'text-accent' : 'text-muted line-through'}`}>{d.name}{which === 'hca' ? ':1' : ''}<span className="sr-only">{d.selected ? ' (used)' : ' (not used)'}</span></div>
             <div className={`text-[11px] ${d.selected && /storage|front|docker|lo|virbr/.test(d.role) ? 'text-danger' : 'text-muted'}`}>{d.role}{d.by ? ` · ${d.by}` : ''}</div>
           </div>
         ))}
@@ -149,7 +149,7 @@ export default function NcclEnvExplorer() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap gap-1">
+      <div className="flex flex-wrap gap-1" role="group" aria-label="View">
         {(['table', 'symptom'] as const).map((m) => <button key={m} type="button" aria-pressed={mode === m} onClick={() => setMode(m)}
           className={`rounded-md border px-3 py-1 text-sm ${mode === m ? 'border-accent bg-accent-soft text-accent' : 'border-line bg-panel hover:bg-panel-2'}`}>{m === 'table' ? 'Variables' : 'Symptom → suspect variables'}</button>)}
       </div>
@@ -159,13 +159,13 @@ export default function NcclEnvExplorer() {
           <label className="flex min-w-[200px] flex-1 items-center gap-2 text-sm"><span className="sr-only">Search variables</span>
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, purpose or symptom…" className="w-full rounded-md border border-line bg-panel px-2 py-1.5 text-sm" />
           </label>
-          <Pill>{rows.length} / {VARS.length}</Pill>
+          <span aria-live="polite"><Pill>{rows.length} / {VARS.length}<span className="sr-only"> variables shown</span></Pill></span>
         </div>
-        <div className="flex flex-wrap gap-1">
+        <div className="flex flex-wrap gap-1" role="group" aria-label="Filter by category">
           {CATS.map((c) => { const a = cats.includes(c.id); return <button key={c.id} type="button" aria-pressed={a} onClick={() => setCats(a ? cats.filter((x) => x !== c.id) : [...cats, c.id])}
             className={`rounded-md border px-2 py-1 font-mono text-xs ${a ? 'border-accent bg-accent-soft text-accent' : 'border-line bg-panel hover:bg-panel-2'}`}>{c.label}</button>; })}
         </div>
-        <div className="max-h-[420px] overflow-auto rounded-lg border border-line">
+        <div className="max-h-[420px] overflow-auto rounded-lg border border-line" tabIndex={0} role="region" aria-label="NCCL variables">
           <table className="w-full min-w-[760px] text-left text-xs">
             <thead className="sticky top-0 bg-panel-2 font-mono text-[10px] uppercase tracking-[0.1em] text-muted">
               <tr><th className="px-2 py-1.5">Variable</th><th className="px-2 py-1.5">What it does</th><th className="px-2 py-1.5">Default</th><th className="px-2 py-1.5">Typical</th><th className="px-2 py-1.5">Symptom when wrong</th></tr>
@@ -173,7 +173,7 @@ export default function NcclEnvExplorer() {
             <tbody>
               {rows.map((r) => (
                 <tr key={r.name} className={`border-t border-line align-top ${sel === r.name ? 'bg-accent-soft' : ''}`}>
-                  <td className="px-2 py-1.5"><button type="button" onClick={() => setSel(r.name)} aria-pressed={sel === r.name} className="text-left font-mono text-accent hover:underline">{r.name}</button>
+                  <td className="px-2 py-1.5"><button type="button" onClick={() => setSel(r.name)} aria-pressed={sel === r.name} className="min-h-6 text-left font-mono text-accent hover:underline">{r.name}</button>
                     {r.diag && <div className="text-[10px] text-warn">test only</div>}{r.deprecated && <div className="text-[10px] text-warn">deprecated</div>}</td>
                   <td className="px-2 py-1.5">{r.what}</td><td className="px-2 py-1.5 font-mono text-muted">{r.def}</td><td className="px-2 py-1.5 font-mono">{r.typical}</td><td className="px-2 py-1.5 text-muted">{r.wrong}</td>
                 </tr>
@@ -188,21 +188,21 @@ export default function NcclEnvExplorer() {
             <div className="mt-1.5 grid gap-1 text-xs sm:grid-cols-3"><div><span className="text-muted">Default: </span><span className="font-mono">{v.def}</span></div><div><span className="text-muted">Typical: </span><span className="font-mono">{v.typical}</span></div><div><span className="text-muted">If wrong: </span>{v.wrong}</div></div>
             {v.name === 'NCCL_IB_TIMEOUT' && (
               <label className="mt-2 block text-xs"><span className="font-mono">NCCL_IB_TIMEOUT={tmo}</span> → 4.096 µs × 2^{tmo} = <span className="font-mono text-data">{fmtT(ibTimeoutUs(tmo))}</span> per attempt; × 7 retries (NCCL_IB_RETRY_CNT default) ≈ <span className="font-mono text-data">{fmtT(ibTimeoutUs(tmo) * 7)}</span> before the error
-                <input type="range" min={10} max={24} value={tmo} onChange={(e) => setTmo(Number(e.target.value))} className="mt-1 w-full accent-[var(--accent)]" aria-label="NCCL_IB_TIMEOUT exponent" /></label>
+                <input type="range" min={10} max={24} value={tmo} onChange={(e) => setTmo(Number(e.target.value))} className="mt-1 w-full accent-[var(--accent)]" aria-label="NCCL_IB_TIMEOUT exponent" aria-valuetext={`${tmo}: ${fmtT(ibTimeoutUs(tmo))} per attempt`} /></label>
             )}
           </div>
         )}
         {(sel === 'NCCL_IB_HCA' || sel === 'NCCL_SOCKET_IFNAME') && <Matcher />}
       </> : (
         <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
-          <ul className="space-y-1">
+          <ul className="space-y-1" aria-label="Symptoms">
             {SYMPTOMS.map((s, i) => <li key={s.s}><button type="button" aria-pressed={sym === i} onClick={() => setSym(i)}
               className={`w-full rounded-md border px-2 py-1.5 text-left text-sm ${sym === i ? 'border-accent bg-accent-soft' : 'border-line bg-panel hover:bg-panel-2'}`}>{s.s}</button></li>)}
           </ul>
-          <div className="space-y-2">
+          <div className="space-y-2" aria-live="polite">
             {SYMPTOMS[sym].vars.map((n) => { const x = VARS.find((y) => y.name === n)!; return (
               <div key={n} className="rounded-lg border border-line bg-panel-2 px-3 py-2 text-sm">
-                <button type="button" onClick={() => { setMode('table'); setSel(n); setQ(''); setCats([]); }} className="font-mono font-semibold text-accent hover:underline">{n}</button>
+                <button type="button" onClick={() => { setMode('table'); setSel(n); setQ(''); setCats([]); }} className="min-h-6 font-mono font-semibold text-accent hover:underline">{n}</button>
                 <div className="text-xs text-muted">{x.what}. Default <span className="font-mono">{x.def}</span>; typical <span className="font-mono">{x.typical}</span>.</div>
               </div>); })}
             <p className="text-xs text-muted">{SYMPTOMS[sym].note} Confirm what each rank actually saw with NCCL_DEBUG=INFO and NCCL_DEBUG_SUBSYS=ENV before changing anything.</p>

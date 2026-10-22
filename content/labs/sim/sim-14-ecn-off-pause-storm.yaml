@@ -1,0 +1,61 @@
+id: sim-14-ecn-off-pause-storm
+title: "ECN off, PFC on: congestion handled only by pausing"
+level: 3
+estimated_minutes: 40
+lessons: [ecn-and-dcqcn, pfc-storms-deadlocks, pfc-priority-flow-control, lossless-misconfigurations]
+summary: One leaf stops ECN-marking RoCE. Nothing drops, but PFC pausing becomes the only brake and the job slows.
+start: node01
+ticket: |
+  **INC-4802 · Sev2 · Training throughput down ~45 % after a leaf05 change window**
+
+  > Last night's change window refreshed the QoS config on leaf05. Since then multi-node jobs run at a
+  > little over half speed. `ib_write_bw` passes at ~392 Gb/s on every rail, there are no drops, no CRC
+  > errors and no link flaps. The only red panel in Grafana is "leaf05 PFC pause frames", which is off
+  > the chart. The network on-call proposes disabling PFC on leaf05 to stop the pause storm. - ML platform team
+
+  Should PFC be disabled? Find the root cause, fix it, and verify.
+faults:
+  - { type: switch_ecn, switch: leaf05, tc: 3, enabled: false }
+hints:
+  - Pause frames are a symptom. In a healthy RoCE fabric, which mechanism slows senders down before a switch buffer gets full enough to pause them?
+  - "After one `all_reduce_perf` run, compare `rdma statistic show link mlx5_4/1` (rail 4, leaf05) with another rail, for example mlx5_3: look at `np_ecn_marked_roce_packets`, `np_cnp_sent` and `rp_cnp_handled`."
+  - "On leaf05, compare `nv show qos roce` and `nv show qos congestion-control default-global` with the same commands on leaf04. `nv show interface swp2 qos roce counters` shows ECN marks and pauses per port."
+diagnosis:
+  prompt: What is the root cause, and what should happen to PFC?
+  options:
+    - id: a
+      text: leaf05 has ECN marking disabled on traffic class 3, so DCQCN never slows the rail-4 senders and PFC pausing is left as the only congestion control. Keep PFC on.
+      correct: true
+      explanation: With ECN off on the RoCE class, leaf05 never marks packets, so receivers send no CNPs (np_ecn_marked_roce_packets, np_cnp_sent and rp_cnp_handled all stay at 0 on rail 4) and senders keep transmitting at line rate. The only thing left to stop buffer overflow is PFC, so leaf05 pauses its host ports constantly (TX PFC pause in the millions). Every pause also stops the other flows queued behind it on that ingress port (head-of-line blocking), which is why victim flows slow down too. Re-enabling ECN on traffic class 3 brings back the normal pattern of some marks and almost no pauses.
+    - id: b
+      text: PFC on leaf05 generates spurious pause frames after the change. Disabling PFC on leaf05 restores throughput, because RoCE recovers quickly from the few drops that follow.
+      explanation: The pauses are not spurious, they are the only thing preventing buffer overflow. Without PFC the rail would drop packets and RoCE's go-back-N recovery would collapse throughput much further (compare sim-04). nv show qos roce shows PFC correctly on priority 3.
+    - id: c
+      text: The rail-4 NICs have DCQCN disabled, so they ignore congestion notifications and keep sending at line rate into leaf05 until the leaf has to pause them.
+      explanation: A NIC that ignores CNPs would still receive them. Here np_ecn_marked_roce_packets is 0 on every rail-4 receiver, so no marked packet ever arrived, and rp_cnp_ignored is 0. The marks are missing at the switch, not ignored at the hosts.
+    - id: d
+      text: A slow receiver on rail 4 creates incast at leaf05. Its own pause frames back up the whole rail, so that node's NIC should be found and replaced.
+      explanation: The pauses flow from leaf05 toward all four hosts equally (TX PFC pause on every host port, rx_prio3_pause on every rail-4 NIC), and the NICs send almost none. No single host is pausing the leaf.
+checks:
+  - { description: "leaf05 ECN marking is enabled on traffic class 3", check: switch_ecn_on, args: { switch: leaf05, tc: 3 } }
+  - { description: "leaf05 has no unapplied configuration", check: no_pending, args: { switch: leaf05 } }
+  - { description: "all_reduce bus bandwidth is above 360 GB/s", check: allreduce_min_busbw, args: { value: 360 } }
+solution: |
+  After one `all_reduce_perf` run, rail 4 is the odd one out. On every rail-4 NIC, `rdma statistic show
+  link mlx5_4/1` shows `np_ecn_marked_roce_packets 0`, `np_cnp_sent 0` and `rp_cnp_handled 0`, while other
+  rails show thousands of marks and CNPs. `ethtool -S enp154s0np0 | grep prio3_pause` shows over a million
+  `rx_prio3_pause` frames (the leaf pausing the NIC), and leaf05 `nv show interface swp2 qos roce counters`
+  shows `ecn-marked-packets 0` with TX `pause-packets` in the millions. On leaf05, `nv show qos
+  congestion-control default-global` lists traffic class 3 with ECN `disable`, and `nv show qos roce`
+  reports `enabled-tc 0` where leaf04 says `0,3`.
+
+  Fix: `nv set qos congestion-control default-global traffic-class 3 ecn enable` then `nv config apply`.
+  Do not disable PFC: that turns a slow fabric into a lossy one.
+
+  Lesson: PFC and ECN do different jobs. ECN/DCQCN is the rate control that keeps queues short; PFC is
+  the emergency brake that prevents loss. A fabric that is lossless but has no ECN works, but it pauses
+  constantly and spreads head-of-line blocking to innocent flows. Alert on pause rate together with ECN
+  marks, and audit both in every QoS change.
+fix:
+  - "leaf05: nv set qos congestion-control default-global traffic-class 3 ecn enable"
+  - "leaf05: nv config apply -y"

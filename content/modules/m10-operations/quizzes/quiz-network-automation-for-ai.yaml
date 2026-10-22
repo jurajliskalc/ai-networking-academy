@@ -11,18 +11,18 @@ questions:
       process fix?
     options:
       - id: a
-        text: Stop the rollout on any device error or failed post-check, and make the apply idempotent so it can be safely re-run.
+        text: Stop the rollout on any device error or failed post-check, and make the apply idempotent so it is safe to re-run.
         correct: true
         explanation: Partial application leaves a device in an unintended state. Failing fast and re-applying idempotently restores consistency.
       - id: b
-        text: Log into the leaf and fix the configuration by hand.
-        explanation: This fixes the symptom once but creates drift unless folded back into the source of truth, and the process gap remains.
+        text: Log into the leaf, fix the configuration by hand, and close the change because the other 199 leaves applied cleanly.
+        explanation: This fixes the symptom once but creates drift unless folded back into the source of truth, and the process gap (continuing after errors) remains.
       - id: c
-        text: Push to all devices in parallel next time so the change finishes faster.
-        explanation: Parallel push increases blast radius and does nothing about errors.
+        text: Push to all 200 devices in parallel next time, so the window in which configs differ is shorter.
+        explanation: Parallel push increases blast radius and does nothing about stopping on errors.
       - id: d
-        text: Disable PFC on that leaf to stop the drops.
-        explanation: Without PFC the RoCE class becomes lossy, making the problem worse.
+        text: Disable PFC on that leaf so the RoCE priority stops pausing and the drops go away.
+        explanation: Without PFC the RoCE class becomes lossy, making drops worse, and the misapplied configuration is still there.
     tags: [rollout, idempotence]
   - id: q2
     type: single
@@ -33,10 +33,10 @@ questions:
         correct: true
         explanation: That makes re-running after partial failures and continuous drift remediation safe.
       - id: b
-        text: The configuration can never contain errors.
-        explanation: Idempotence says nothing about whether the intent itself is correct; CI checks address that.
+        text: The rendered configuration is validated before it is pushed, so it cannot contain errors.
+        explanation: Idempotence says nothing about whether the intent itself is correct; schema and CI checks address that.
       - id: c
-        text: Each run applies the commands again in the same order regardless of current state.
+        text: Each run re-sends every command in the same order, regardless of what the device already has.
         explanation: That describes an imperative script, which is often not idempotent.
     tags: [idempotence]
   - id: q3
@@ -46,17 +46,17 @@ questions:
       node-0301 nic2. What does this mean and why does it matter?
     options:
       - id: a
-        text: The NIC of the wrong rail is cabled to a rail-3 leaf, breaking rail alignment and likely reducing collective bandwidth.
+        text: A wrong-rail NIC is cabled to a rail-3 leaf, breaking rail alignment and likely reducing collective bandwidth.
         correct: true
         explanation: In a rail-optimized design NIC N of every node must land on rail N's leaves; a wrong-rail cable forces traffic through spines.
       - id: b
-        text: It is cosmetic because the link is up and BGP is established.
+        text: "It is cosmetic: the link is up and BGP is established, so traffic reaches node-0301 either way."
         explanation: Link and routing state do not prove correct placement; rail alignment is a performance property.
       - id: c
-        text: The source of truth is always wrong in such cases, so update it to match the network.
+        text: The source of truth is stale; update it to match what LLDP observes, since the cabling is live.
         explanation: Update the SoT only if the design intentionally changed; otherwise recable to the plan.
       - id: d
-        text: LLDP is unreliable on AI fabrics and should be ignored.
+        text: LLDP neighbour data is unreliable on high-speed AI fabrics, so the mismatch should be ignored.
         explanation: LLDP is the standard way to discover neighbours and is reliable for this purpose.
     tags: [sot, cabling, rails]
   - id: q4
@@ -90,29 +90,29 @@ questions:
         correct: true
         explanation: Every manual change must get a follow-up change to the source of truth before the incident is closed.
       - id: b
-        text: Full-config replace should never be used.
+        text: Full-config replace was used, and it should never be used because it reverts emergency fixes.
         explanation: Full replace worked as designed by enforcing intent; the intent was out of date.
       - id: c
-        text: The deployment tool is not idempotent.
-        explanation: An idempotent tool reapplying stale intent produces exactly this result; the gap is the intent.
+        text: The deployment tool is not idempotent, so the routine run re-applied old threshold values it had cached locally.
+        explanation: An idempotent tool reapplying stale intent produces exactly this result; the gap is the intent, not the tool.
       - id: d
-        text: Spines should be excluded from automation.
-        explanation: Excluding devices creates more drift, not less.
+        text: Spines were in automation scope; they should be managed by hand once an incident touches them.
+        explanation: Excluding devices from automation creates more drift, not less.
     tags: [drift, process]
   - id: q6
     type: single
     prompt: Why are host NIC QoS settings part of fabric automation, not only server configuration management?
     options:
       - id: a
-        text: Lossless operation requires hosts and switches to agree on trust, PFC priority, DSCP and MTU, so both must come from one policy.
+        text: Lossless operation needs hosts and switches to agree on trust, PFC priority, DSCP and MTU, so both come from one policy.
         correct: true
         explanation: Host-switch disagreement is a top cause of drops on the RoCE class.
       - id: b
-        text: Switches copy their QoS configuration to hosts via LLDP automatically in all deployments.
+        text: Switches push their full QoS configuration to every connected host NIC over LLDP automatically, so hosts need no policy.
         explanation: DCBX can exchange some settings in some setups, but it is not universal and is often disabled; you cannot rely on it.
       - id: c
-        text: Host NICs do not have QoS settings.
-        explanation: NICs have trust mode, PFC enablement and RoCE traffic class settings.
+        text: Host NICs have no QoS settings of their own; they follow whatever DSCP marks the switch rewrites.
+        explanation: NICs have trust mode, PFC enablement and RoCE traffic class settings that must match the switches.
     tags: [host, qos]
   - id: q7
     type: scenario
@@ -125,13 +125,13 @@ questions:
         correct: true
         explanation: Changing one rail affects one NIC per node, limiting impact, and canaries catch errors before they spread.
       - id: b
-        text: All leaves of all rails at once during a maintenance window.
+        text: All leaves of all rails at once in one maintenance window, so the fabric is never in a mixed state.
         explanation: Every node is affected simultaneously; a bad change hits the entire cluster.
       - id: c
-        text: All spines first, then all leaves, in parallel.
+        text: All spines first, then all leaves in parallel, because spines carry the most traffic.
         explanation: Spine changes affect every cross-leaf path; doing them in parallel maximises blast radius.
       - id: d
-        text: Random devices until all are done.
+        text: Devices in random order, so any problem with the profile is spread evenly across rails.
         explanation: Random order makes impact unpredictable and post-change correlation hard.
     tags: [rollout, rails]
   - id: q8
@@ -143,9 +143,9 @@ questions:
         correct: true
         explanation: Stage, review the diff, apply, and verify operational state; automation should mirror this.
       - id: b
-        text: nv config apply first, then nv set to stage the change.
+        text: nv config apply first to open a revision, then nv set to stage the change.
         explanation: Applying before staging applies nothing new; the order is reversed.
       - id: c
-        text: Edit files under /etc directly and reboot.
+        text: Edit the files under /etc directly, then reload the services or reboot the switch.
         explanation: Editing files behind NVUE bypasses its revision model and is overwritten or causes drift.
     tags: [nvue]

@@ -26,15 +26,15 @@ questions:
     prompt: What is the main purpose of RDMA Write with Immediate?
     options:
       - id: a
-        text: Place data directly into remote memory and also generate a receive completion carrying 32 bits of immediate data at the target.
+        text: Place data directly into remote memory and also give the target a receive completion with 32 bits of immediate data.
         correct: true
         explanation: It combines one-sided placement with a notification, consuming one receive WR at the target.
       - id: b
-        text: Send data without needing any remote memory registration.
-        explanation: The target buffer must still be registered and the initiator needs its rkey.
+        text: Write into remote memory that the target never registered, using the immediate value in place of an rkey.
+        explanation: The immediate value is not a key; the target buffer must still be registered and the initiator needs its rkey.
       - id: c
-        text: Make the write faster by skipping acknowledgements.
-        explanation: On RC it is acknowledged like any other operation.
+        text: Make the write faster by skipping acknowledgements, since the immediate value already confirms delivery.
+        explanation: On RC it is acknowledged like any other operation; the immediate value is a notification for the target, not an ACK.
     tags: [operations, write-with-imm]
   - id: q3
     type: multi
@@ -61,17 +61,17 @@ questions:
     prompt: Which statement about DC (Dynamically Connected) transport is accurate?
     options:
       - id: a
-        text: It is an NVIDIA (Mellanox) extension, exposed through mlx5 direct verbs, where a few initiators reach many targets reliably.
+        text: An NVIDIA (Mellanox) extension, exposed via mlx5 direct verbs, in which a few initiators reach many targets reliably.
         correct: true
         explanation: DC is not in the base IB specification and is specific to ConnectX adapters.
       - id: b
-        text: It is a standard IBTA transport supported by every RDMA vendor.
+        text: A standard IBTA transport defined in the base specification and supported by every RDMA vendor's adapters.
         explanation: XRC is standard; DC is vendor-specific.
       - id: c
-        text: It is an unreliable transport similar to UD.
+        text: An unreliable datagram transport similar to UD, trading delivery guarantees for fewer connections.
         explanation: DC provides reliable delivery like RC.
       - id: d
-        text: It is the RoCEv2 equivalent of RC.
+        text: The RoCEv2 equivalent of RC, carrying the same reliable connection semantics over UDP/IP.
         explanation: RoCEv2 carries the same RC transport as InfiniBand; DC is a different, NVIDIA-specific transport.
     tags: [dc]
   - id: q5
@@ -81,17 +81,17 @@ questions:
       and retransmission starting at 502, followed by 503 again. What happened?
     options:
       - id: a
-        text: PSN 502 was lost; the responder detected a sequence gap, sent a NAK, and the requester retransmitted from the missing PSN.
+        text: PSN 502 was lost; the responder saw a sequence gap and sent a NAK, and the requester resent from 502.
         correct: true
         explanation: This is the PSN sequence error NAK path. Resending 503 as well is the go-back-N style behaviour of classic implementations.
       - id: b
-        text: The receiver had no receive WRs posted and issued an RNR NAK.
+        text: The receiver had no receive WRs posted and returned an RNR NAK, so the requester backed off and resent.
         explanation: An RNR NAK is a different syndrome and does not involve a PSN gap.
       - id: c
-        text: The ACK timer expired because the responder was slow.
+        text: The requester's ACK timer expired because the responder was slow, and the NAK marks the timeout.
         explanation: A timeout would not need a NAK; the NAK shows the responder explicitly reported the gap.
       - id: d
-        text: The requester duplicated packets because of a misconfigured ECMP hash.
+        text: A misconfigured ECMP hash duplicated packets in the fabric, so 502 and 503 arrived twice.
         explanation: Duplicates caused by the network would not be preceded by a NAK and a deliberate restart at 502.
     tags: [reliability, psn]
   - id: q6
@@ -102,17 +102,17 @@ questions:
       most likely to help?
     options:
       - id: a
-        text: Use a transport that reduces connection count, such as DC (on ConnectX via UCX) or XRC, so QP state fits better in NIC caches.
+        text: Use a transport with fewer connections, such as DC (ConnectX, via UCX) or XRC, so QP state fits the NIC caches.
         correct: true
         explanation: Thousands of RC QPs per process cause NIC context cache misses; DC/XRC reduce the working set.
       - id: b
-        text: Switch to UC to avoid acknowledgements.
+        text: Switch to UC to avoid acknowledgements, which halves the per-message work the NIC must do for each of its peers.
         explanation: UC still needs one QP per peer and loses reliability.
       - id: c
-        text: Increase retry_cnt to 7.
-        explanation: Retries only matter on loss or timeouts, which are not the problem here.
+        text: Raise retry_cnt to 7 so that QPs survive the timeouts that larger jobs inevitably produce.
+        explanation: Retries only matter on loss or timeouts, and there are no link errors; connection state is the problem here.
       - id: d
-        text: Increase the path MTU beyond 4096.
+        text: Raise the path MTU beyond 4096 bytes so fewer packets are needed per all-to-all message.
         explanation: The IB transport MTU maxes out at 4096 bytes, and MTU is not the bottleneck described.
     tags: [scalability, xrc, dc]
   - id: q7
@@ -124,11 +124,11 @@ questions:
         correct: true
         explanation: RNR happens when a message needs a receive WR and none is posted.
       - id: b
-        text: Plain RDMA Write and RDMA Read.
+        text: Plain RDMA Write and RDMA Read, because they land in buffers the responder must pre-post.
         explanation: These do not consume receive WRs and cannot cause RNR.
       - id: c
-        text: Atomic Fetch and Add only.
-        explanation: Atomics do not consume receive WRs.
+        text: Atomic Fetch and Add only, because it waits for the responder's CPU to compute the result.
+        explanation: Atomics are executed by the responder NIC and do not consume receive WRs.
     tags: [rnr]
   - id: q8
     type: single
@@ -139,12 +139,12 @@ questions:
         correct: true
         explanation: RETH holds the 64-bit virtual address, 32-bit rkey and 32-bit DMA length.
       - id: b
-        text: AETH
+        text: AETH (ACK Extended Transport Header)
         explanation: AETH is the ACK extended header carrying ACK/NAK syndromes.
       - id: c
-        text: DETH
+        text: DETH (Datagram Extended Transport Header)
         explanation: DETH carries the Q_Key and source QPN for datagram transports.
       - id: d
-        text: BTH
+        text: BTH (Base Transport Header)
         explanation: BTH carries opcode, destination QPN, PSN and P_Key, but not the remote address.
     tags: [headers]

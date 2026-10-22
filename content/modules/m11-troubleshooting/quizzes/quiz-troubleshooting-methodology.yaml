@@ -15,13 +15,13 @@ questions:
         correct: true
         explanation: A reboot destroys counters, kernel messages and transient state. Capture them first; then remediation is safe.
       - id: b
-        text: Reboot them; counters reset on reboot anyway, so nothing of value is lost.
+        text: Reboot them; the watchdog already named the faulty nodes, and their counters reset on reboot anyway, so little is lost.
         explanation: That counters reset is exactly the problem. The pre-reboot values and kernel log are the evidence.
       - id: c
-        text: Raise the NCCL timeout so the job stops failing, then investigate later.
+        text: Raise the NCCL timeout so the job stops failing, then investigate the slowdown once the job is stable again.
         explanation: This masks the fault and the job remains 25% slower; it is at best a documented temporary mitigation.
       - id: d
-        text: Clear the switch counters fabric-wide so the investigation starts from a clean baseline.
+        text: Clear the switch counters fabric-wide first, so the investigation starts from a clean, comparable baseline on every port.
         explanation: Clearing counters destroys history. Use deltas between snapshots instead of resets.
     explanation: Stabilize and preserve evidence before changing anything.
     tags: [methodology, evidence]
@@ -58,13 +58,13 @@ questions:
         correct: true
         explanation: Cumulative totals over months say nothing about the incident window. Rates over the same interval are the evidence.
       - id: b
-        text: The suspect port is the root cause because it has more pause frames.
+        text: The suspect port is the root cause, because it has received 600,000 more pause frames than its healthy peer.
         explanation: A 6% difference in lifetime totals is noise; it may come from months-old events.
       - id: c
-        text: PFC is misconfigured on both nodes because any pause is a fault.
+        text: PFC is misconfigured on both nodes, because any pause at all on a correctly sized fabric is a fault.
         explanation: Pause is normal in a lossless fabric under load. Its rate and context matter.
       - id: d
-        text: The counter wrapped, so the values must be reset before analysis.
+        text: The counter has probably wrapped after 210 days, so reset both ports before trusting the values.
         explanation: There is no evidence of a wrap, and resetting destroys evidence. Use deltas.
     tags: [counters, deltas]
   - id: q4
@@ -76,13 +76,13 @@ questions:
         correct: true
         explanation: Synchronous collectives proceed in lockstep; the critical path is set by the slowest participant.
       - id: b
-        text: NCCL retransmits all data on every link when one link is slow.
+        text: NCCL retransmits all data on every link when one link is slow, to keep the ring's buffers in lockstep.
         explanation: NCCL does not retransmit data over healthy links because one is slow; the issue is waiting, not retransmission.
       - id: c
-        text: The subnet manager reroutes all traffic onto the slow link.
+        text: The subnet manager reroutes traffic onto the slow link because it reports the fewest queued packets.
         explanation: Routing does not deliberately concentrate traffic on a degraded link.
       - id: d
-        text: ECMP hashing sends every flow through the slow link.
+        text: ECMP hashing sends every flow through the slow link, since its queue looks shortest to the switch.
         explanation: ECMP spreads flows; the impact comes from synchronization, not from hashing everything onto one link.
     tags: [collectives, stragglers]
   - id: q5
@@ -117,13 +117,13 @@ questions:
         correct: true
         explanation: Reverting the leading suspect on a small blast radius and verifying with the same test proves or refutes it without affecting everything.
       - id: b
-        text: Roll back both the template and the firmware everywhere at once.
+        text: Roll back both the template and the firmware everywhere at once, since either change could explain it.
         explanation: This may fix it, but you will not know which change was responsible, and the blast radius is large.
       - id: c
-        text: Declare the template the root cause based on timing and close the incident.
+        text: Declare the template the root cause, since its timing matches and pod A did not get it, and close the incident.
         explanation: Correlation is a lead, not proof. Two changes happened; only a test can separate them.
       - id: d
-        text: Wait to see whether the problem resolves on its own overnight.
+        text: Wait overnight to see whether the slowdown clears once the new firmware finishes settling.
         explanation: Waiting wastes cluster time and gathers no new evidence.
     tags: [change-correlation]
   - id: q7
@@ -131,17 +131,17 @@ questions:
     prompt: Which result best verifies that an incident is fixed?
     options:
       - id: a
-        text: The test that showed the fault now passes, and the production metric (step time or bus bandwidth) is back at baseline.
+        text: The test that showed the fault now passes, and the production metric (step time or busbw) is back at baseline.
         correct: true
         explanation: Verification means the original symptom and evidence are gone, measured the same way.
       - id: b
-        text: The suspected component was replaced.
+        text: The suspected component was replaced with a new, tested spare and the change ticket was closed.
         explanation: Replacing a part does not prove it was the cause; the symptom might persist.
       - id: c
-        text: Switch error counters are zero after being cleared.
+        text: Switch error counters read zero after being cleared, showing the fabric no longer produces errors.
         explanation: Freshly cleared counters are zero by definition; they prove nothing until traffic runs.
       - id: d
-        text: No new alerts fired in the last ten minutes.
+        text: No new alerts have fired in the ten minutes since the change on any node or switch involved in the original incident.
         explanation: Absence of alerts is weak evidence; alerts may not cover the failure mode.
     tags: [verification]
   - id: q8
@@ -156,13 +156,13 @@ questions:
         correct: true
         explanation: Falling back to sockets points at NCCL not finding or not being allowed to use RDMA devices; that is a host/configuration issue.
       - id: b
-        text: Spine buffer sizes, because small messages are dropped first.
+        text: Spine buffer sizes, because small messages are dropped first and NCCL then avoids the IB transport.
         explanation: Buffer drops would not change the transport NCCL reports in its init log.
       - id: c
-        text: Fibre cleanliness on the leaf ports.
+        text: Fibre cleanliness on the leaf ports, since a dirty link can make RDMA connection setup fail.
         explanation: Link errors cause retransmissions and drops, not a transport fallback reported at init.
       - id: d
-        text: The subnet manager routing algorithm.
-        explanation: Routing affects paths, not whether NCCL chooses sockets.
+        text: The subnet manager routing algorithm, which decides whether NCCL gets an RDMA path at all.
+        explanation: Routing affects paths, not whether NCCL chooses sockets, and the switch counters are clean.
     explanation: Read the NCCL init log early; it tells you which transport is in use.
     tags: [nccl, transport]

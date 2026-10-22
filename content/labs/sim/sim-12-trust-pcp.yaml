@@ -19,18 +19,18 @@ diagnosis:
   prompt: What is the root cause?
   options:
     - id: a
-      text: node01 enp24s0np0 trusts PCP. On untagged links every received packet is classified as priority 0, so the NIC never generates PFC for RoCE and its receive buffer overflows.
+      text: node01 enp24s0np0 trusts PCP, so untagged RoCE arriving on it is classified as priority 0 and is never protected by PFC.
       correct: true
-      explanation: With trust PCP and no 802.1Q tag, the NIC maps everything to the default priority. RoCE traffic arriving at node01 is not protected by PFC on priority 3, so the NIC drops packets under incast and the senders retransmit.
+      explanation: With trust PCP and no 802.1Q tag, the NIC maps every received packet to the default priority. RoCE traffic arriving at node01 is not protected by PFC on priority 3, so the NIC never sends pause frames for it, drops packets under incast, and the senders retransmit.
     - id: b
-      text: leaf01 trusts DSCP when it should trust PCP.
-      explanation: DSCP trust is the right choice for routed, untagged RoCE fabrics.
+      text: leaf01 trusts DSCP, but untagged host links need PCP trust, so RoCE from node01 misses the lossless queue on the leaf under load.
+      explanation: DSCP trust is the right choice for routed, untagged RoCE fabrics (an untagged frame has no PCP field), and leaf01 serves the other three nodes without problems.
     - id: c
-      text: node01 has the wrong GID index.
-      explanation: The connections come up fine; the problem appears only under load.
+      text: node01 mlx5_0 lost PFC on priority 3 during manual provisioning, so it ignores the leaf's pause frames.
+      explanation: mlnx_qos -i enp24s0np0 shows PFC enabled on priority 3, and the priority-3 pause counters exist in ethtool -S. What is wrong is the trust state.
     - id: d
-      text: The replacement node has slower GPUs.
-      explanation: The counters show drops and out-of-sequence events on one NIC, which is a network symptom.
+      text: The RMA unit has a different PCIe/NUMA layout, so node01's GPUs reach mlx5_0 across sockets and slow the ring.
+      explanation: nvidia-smi topo -m shows GPU0 and NIC0 (mlx5_0) connected through a single PCIe bridge (PIX), ib_write_bw is fine, and the counters show drops and out-of-sequence events on one NIC, which is a network symptom.
 checks:
   - { description: "node01 mlx5_0 trusts DSCP", check: host_trust, args: { node: node01, rail: 0, trust: dscp } }
   - { description: "all_reduce bus bandwidth is above 360 GB/s", check: allreduce_min_busbw, args: { value: 360 } }

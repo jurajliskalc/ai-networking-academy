@@ -14,9 +14,11 @@ function Heatmap({ activity }: { activity: Record<string, number> }) {
     return { k, v: activity[k] ?? 0 };
   });
   const level = (v: number) => (v === 0 ? 0.08 : v < 3 ? 0.35 : v < 8 ? 0.65 : 1);
+  const active = cells.filter((c) => c.v > 0);
+  const total = active.reduce((s, c) => s + c.v, 0);
   return (
-    <div className="overflow-x-auto">
-      <div className="grid w-max grid-flow-col grid-rows-7 gap-[3px]">
+    <div className="overflow-x-auto" tabIndex={0} role="img" aria-label={`Activity heatmap: ${total} actions on ${active.length} of the last ${days} days${active.length ? `, most recently on ${active[active.length - 1].k}` : ''}.`}>
+      <div className="grid w-max grid-flow-col grid-rows-7 gap-[3px]" aria-hidden>
         {cells.map((c) => <div key={c.k} title={`${c.k}: ${c.v} actions`} className="h-3 w-3 rounded-[3px] bg-accent" style={{ opacity: level(c.v) }} />)}
       </div>
     </div>
@@ -47,28 +49,28 @@ export default function ProgressPage() {
         <Stat label="Labs" value={`${o.labsSolved}/${o.labsTotal}`} sub="solved" />
         <Stat label="Streak" value={streak(progress.activity)} sub="days in a row" />
       </div>
-      <Card className="p-5"><div className="mb-3 text-sm font-semibold">Activity, last 18 weeks</div><Heatmap activity={progress.activity} /></Card>
+      <Card className="p-5"><h2 className="mb-3 text-sm font-semibold">Activity, last 18 weeks</h2><Heatmap activity={progress.activity} /></Card>
       <div className="grid gap-6 lg:grid-cols-2">
         <Card className="p-5">
-          <div className="mb-4 text-sm font-semibold">Modules</div>
+          <h2 className="mb-4 text-sm font-semibold">Modules</h2>
           <div className="space-y-3">
             {ix.modules.map((m) => {
               const st = moduleStats(ix, progress, m);
-              return <div key={m.id}><div className="mb-1 flex justify-between text-sm"><Link to={`/module/${m.id}`} className="hover:text-accent">{m.order}. {m.title}</Link><span className="font-mono text-xs text-muted">{st.done}/{st.total}</span></div><Bar value={st.pct} /></div>;
+              return <div key={m.id}><div className="mb-1 flex justify-between text-sm"><Link to={`/module/${m.id}`} className="hover:text-accent">{m.order}. {m.title}</Link><span className="font-mono text-xs text-muted">{st.done}/{st.total}</span></div><Bar value={st.pct} label={`${m.title} mastered`} /></div>;
             })}
           </div>
         </Card>
         <div className="space-y-6">
           <Card className="p-5">
-            <div className="mb-3 text-sm font-semibold">Review next</div>
+            <h2 className="mb-3 text-sm font-semibold">Review next</h2>
             {weakest.length ? <ul className="space-y-2 text-sm">{weakest.map((l) => <li key={l.id} className="flex justify-between gap-3"><Link to={`/lesson/${l.id}`} className="hover:text-accent">{l.title}</Link><span className="font-mono text-warn">{progress.quizzes[l.quiz].best}%</span></li>)}</ul> : <p className="text-sm text-muted">No failed quizzes. Keep going.</p>}
           </Card>
           <Card className="p-5">
-            <div className="mb-3 text-sm font-semibold">Mock exam domains (all attempts)</div>
-            {Object.keys(domainTotals).length ? <div className="space-y-3">{Object.entries(domainTotals).map(([d, [r, t]]) => <div key={d}><div className="mb-1 flex justify-between text-sm"><span>{d}</span><span className="font-mono text-xs text-muted">{Math.round((100 * r) / t)}%</span></div><Bar value={(100 * r) / t} /></div>)}</div> : <p className="text-sm text-muted">Take a mock exam to see your domain profile.</p>}
+            <h2 className="mb-3 text-sm font-semibold">Mock exam domains (all attempts)</h2>
+            {Object.keys(domainTotals).length ? <div className="space-y-3">{Object.entries(domainTotals).map(([d, [r, t]]) => <div key={d}><div className="mb-1 flex justify-between text-sm"><span>{d}</span><span className="font-mono text-xs text-muted">{Math.round((100 * r) / t)}%</span></div><Bar value={(100 * r) / t} label={`${d}: exam score`} /></div>)}</div> : <p className="text-sm text-muted">Take a mock exam to see your domain profile.</p>}
           </Card>
           <Card className="p-5">
-            <div className="mb-3 text-sm font-semibold">Ranks</div>
+            <h2 className="mb-3 text-sm font-semibold">Ranks</h2>
             <ol className="space-y-1 text-sm">{RANKS.map((r) => <li key={r.title} className={r.title === rank.title ? 'font-semibold text-accent' : 'text-muted'}>{r.min}% · {r.title}</li>)}</ol>
           </Card>
         </div>

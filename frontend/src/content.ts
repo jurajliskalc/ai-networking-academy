@@ -42,6 +42,11 @@ export const useLessonBody = (id: string) => useJson<{ id: string; body: string;
 export const useQuiz = (id: string) => useJson<Quiz>(`quizzes/${id}.json`);
 export const useExam = (id: string) => useJson<Exam>(`exams/${id}.json`);
 export const useLabBody = (id: string) => useJson<{ id: string; body: string }>(`labs/${id}.json`);
+export const useGuideBody = (id: string | null) => useJson<{ id: string; body: string }>(id ? `hardware/${id}.json` : null);
+
+/** Simulator labs live under /labs, everything that runs on the learner's own machines under /hw/labs. */
+export const labPath = (lab: { id: string; kind: string } | string) =>
+  typeof lab === 'string' ? (lab.startsWith('sim-') ? `/labs/${lab}` : `/hw/labs/${lab}`) : lab.kind === 'sim' ? `/labs/${lab.id}` : `/hw/labs/${lab.id}`;
 
 export const LEVELS: Record<number, { name: string; label: string }> = {
   1: { name: 'Beginner', label: 'L1 · Beginner' },

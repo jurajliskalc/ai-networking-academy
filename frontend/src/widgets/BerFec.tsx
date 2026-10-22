@@ -122,7 +122,7 @@ function Seg<T extends string | number>({ label, value, options, onChange, rende
   return (
     <div>
       <div className="mb-1 font-mono text-[10px] uppercase tracking-[0.14em] text-muted">{label}</div>
-      <div className="flex flex-wrap gap-1">
+      <div className="flex flex-wrap gap-1" role="group" aria-label={label}>
         {options.map((o) => (
           <button key={String(o)} type="button" onClick={() => onChange(o)} aria-pressed={o === value}
             className={`rounded-md border px-2 py-1 font-mono text-xs transition ${o === value ? 'border-accent bg-accent-soft text-accent' : 'border-line bg-panel hover:bg-panel-2'}`}>
@@ -151,7 +151,7 @@ function BerScale({ ber, fec }: { ber: number; fec: FecId }) {
   const x = (b: number) => 20 + ((Math.log10(b) + 12) / 9) * 720;
   const marks = [-12, -11, -10, -9, -8, -7, -6, -5, -4, -3];
   return (
-    <svg viewBox="0 0 760 70" className="w-full" role="img" aria-label="Pre-FEC BER scale with FEC limits">
+    <svg viewBox="0 0 760 70" className="w-full" role="img" aria-label={`Pre-FEC BER scale from 1e-12 to 1e-3: operating point ${ber.toExponential(1)}, quoted limits KR4 about 5e-5 and KP4 about 2.4e-4${fec === 'none' ? '' : `, ${fec.toUpperCase()} selected`}`}>
       <rect x={x(1e-8)} y={14} width={x(1e-6) - x(1e-8)} height={16} fill="var(--accent)" opacity={0.18} />
       <text x={(x(1e-8) + x(1e-6)) / 2} y={10} fontSize={10} textAnchor="middle" fill="var(--muted)">typical vendor acceptance band (illustrative)</text>
       <line x1={20} y1={30} x2={740} y2={30} stroke="var(--border)" strokeWidth={2} />
@@ -197,7 +197,7 @@ export default function BerFec() {
           <label htmlFor="ber-exp" className="mb-1 flex items-baseline justify-between font-mono text-[10px] uppercase tracking-[0.14em] text-muted">
             <span>Pre-FEC (raw) BER</span><span className="text-base font-semibold normal-case tracking-normal text-fg">{sci(ber)}</span>
           </label>
-          <input id="ber-exp" type="range" min={-12} max={-3} step={0.1} value={exp} onChange={(e) => setExp(Number(e.target.value))} className="w-full accent-[var(--accent)]" />
+          <input id="ber-exp" type="range" min={-12} max={-3} step={0.1} value={exp} onChange={(e) => setExp(Number(e.target.value))} aria-valuetext={`BER ${ber.toExponential(1)}`} className="w-full accent-[var(--accent)]" />
         </div>
       </div>
 
@@ -214,6 +214,9 @@ export default function BerFec() {
         </div>
       )}
 
+      <p className="sr-only" aria-live="polite">
+        {`Pre-FEC BER ${ber.toExponential(1)}. ${r.marginDecades === null ? 'No FEC.' : r.marginDecades >= 0 ? `Margin ${r.marginDecades.toFixed(1)} decades to the quoted limit.` : `${(-r.marginDecades).toFixed(1)} decades over the quoted limit.`} Frame loss ratio ${r.log10Flr.toFixed(1)} as a power of ten.`}
+      </p>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <Out label="Raw bit errors / s" value={sci(r.bitErrPerSec)} sub={`${sci(r.lineBps)} b/s × ${sci(ber)}`} />
         <Out label="Time between raw errors" value={fmtDuration(r.secPerBitErr)} />

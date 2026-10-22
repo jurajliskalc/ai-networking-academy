@@ -34,7 +34,7 @@ transport, lossless Ethernet or InfiniBand, routing, and the collective library 
 who can explain why an all-reduce is slow, starting from `nvidia-smi topo -m` and ending at a PFC
 counter on a spine port, beats one who has memorised more acronyms.
 
-Speaking as a hiring manager: most rejections are not about missing facts. They come from unstructured
+From the hiring side, most rejections are not about missing facts. They come from unstructured
 answers, confident statements that turn out to be wrong, and troubleshooting by guessing ("I would
 reboot the switch"). This lesson shows you how the loops are built, gives you a question bank with model
 answer outlines, and teaches the tactics for the two rounds that decide most offers: the whiteboard
@@ -297,7 +297,8 @@ They are grading method more than the answer.
 ### Hands-on fluency checks
 
 Interviewers notice whether you have actually typed these commands. On a lab host (Soft-RoCE works for
-the RDMA ones) make sure you can run and interpret:
+the RDMA ones, see the [Soft-RoCE lab](#/hw/labs/hol-soft-roce-perftest); with two real RDMA hosts, the
+[first RoCEv2 traffic lab](#/hw/labs/hw-02-roce-first-traffic)) make sure you can run and interpret:
 
 ```bash
 ibv_devinfo -v                  # device, port state, active MTU, link layer

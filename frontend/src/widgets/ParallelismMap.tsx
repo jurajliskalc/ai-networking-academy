@@ -85,12 +85,15 @@ export function trafficPerGpu(i: TrafficIn) {
   return { tp, pp, dp, ep };
 }
 
-const hue = (i: number) => `hsl(${(i * 137.508) % 360} 58% 44%)`;
+// Fills are dark enough (30% lightness) that the white rank numbers keep 4.5:1 on every hue, yellow included.
+const hue = (i: number) => `hsl(${(i * 137.508) % 360} 58% 30%)`;
+// Ranks outside the focused GPU's groups are dimmed by desaturating the fill, not by opacity, so their numbers stay readable.
+const dimHue = (i: number) => `hsl(${(i * 137.508) % 360} 14% 34%)`;
 const SCALE = ['—', 'low', 'medium', 'high', 'very high'];
 function Rating({ v }: { v: number }) {
   return (
     <span className="inline-flex items-center gap-1.5" title={SCALE[v]}>
-      <span className="flex gap-0.5">{[1, 2, 3, 4].map((i) => <span key={i} className={`h-2 w-2 rounded-sm ${i <= v ? 'bg-warn' : 'border border-line bg-panel-2'}`} />)}</span>
+      <span className="flex gap-0.5" aria-hidden>{[1, 2, 3, 4].map((i) => <span key={i} className={`h-2 w-2 rounded-sm ${i <= v ? 'bg-warn' : 'border border-line bg-panel-2'}`} />)}</span>
       <span className="text-[11px] text-muted">{SCALE[v]}</span>
     </span>
   );
@@ -100,7 +103,7 @@ function Seg({ label, value, options, onChange, disabled }: { label: string; val
   return (
     <div>
       <div className="mb-1 font-mono text-[10px] uppercase tracking-[0.14em] text-muted">{label}</div>
-      <div className="flex flex-wrap gap-1">
+      <div className="flex flex-wrap gap-1" role="group" aria-label={label}>
         {options.map((o) => (
           <button key={o} type="button" disabled={disabled?.(o)} onClick={() => onChange(o)} aria-pressed={o === value}
             className={`rounded-md border px-2 py-1 font-mono text-xs transition disabled:opacity-30 ${o === value ? 'border-accent bg-accent-soft text-accent' : 'border-line hover:bg-panel-2'}`}>{o}</button>
@@ -208,7 +211,8 @@ export default function ParallelismMap() {
       {!valid ? (
         <div className="rounded-lg border border-danger/40 bg-danger/10 p-3 text-sm text-danger">TP × PP = {TP * PP} does not divide {N} GPUs.</div>
       ) : (
-        <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${N > 128 ? 92 : 120}px, 1fr))` }}>
+        <div className="grid gap-1.5" role="group" aria-label={`${N} GPUs in ${servers} servers, coloured by ${COLOR_LABEL[colorBy]}. Select a GPU to outline its TP, PP, DP${moe ? ' and EP' : ''} peers.`}
+          style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${N > 128 ? 92 : 120}px, 1fr))` }}>
           {Array.from({ length: servers }, (_, s) => (
             <div key={s} className="rounded-md border border-line bg-panel-2 p-1">
               <div className="mb-0.5 font-mono text-[9px] text-muted">srv {s}</div>
@@ -218,9 +222,9 @@ export default function ParallelismMap() {
                   const me = f?.r === c.r;
                   return (
                     <button key={c.r} type="button" onClick={() => setFocus(c.r)} onMouseEnter={() => setFocus(c.r)}
-                      aria-label={`GPU ${c.r}: tp ${c.tp}, pp ${c.pp}, dp ${c.dp}`}
+                      aria-label={`GPU ${c.r}: tp ${c.tp}, pp ${c.pp}, dp ${c.dp}${moe ? `, ep ${c.ep}` : ''}${p ? `, ${p.toUpperCase()} peer of GPU ${f!.r}` : ''}`} aria-pressed={me}
                       className="aspect-square rounded-sm font-mono text-[8px] leading-none text-white"
-                      style={{ background: hue(colorKey(c)), outline: me ? '2px solid var(--text)' : p ? `2px solid ${PEER_RING[p]}` : undefined, outlineOffset: 1, opacity: f && !me && !p ? 0.55 : 1 }}>
+                      style={{ background: f && !me && !p ? dimHue(colorKey(c)) : hue(colorKey(c)), outline: me ? '2px solid var(--text)' : p ? `2px solid ${PEER_RING[p]}` : undefined, outlineOffset: 1 }}>
                       {c.r}
                     </button>
                   );
@@ -233,14 +237,14 @@ export default function ParallelismMap() {
 
       {f && (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
-          <span className="font-mono">GPU {f.r}: tp={f.tp} pp={f.pp} dp={f.dp}{moe ? ` ep=${f.ep}` : ''} (server {f.server})</span>
+          <span className="font-mono" aria-live="polite">GPU {f.r}: tp={f.tp} pp={f.pp} dp={f.dp}{moe ? ` ep=${f.ep}` : ''} (server {f.server})</span>
           {Object.entries(PEER_RING).filter(([k]) => k !== 'ep' || moe).map(([k, v]) => (
-            <span key={k} className="inline-flex items-center gap-1 text-muted"><span className="h-2.5 w-2.5 rounded-sm" style={{ outline: `2px solid ${v}` }} />{k.toUpperCase()} peers</span>
+            <span key={k} className="inline-flex items-center gap-1 text-muted"><span className="h-2.5 w-2.5 rounded-sm" style={{ outline: `2px solid ${v}` }} aria-hidden />{k.toUpperCase()} peers</span>
           ))}
         </div>
       )}
 
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Traffic by parallelism type">
         <table className="w-full min-w-[680px] border-collapse text-sm">
           <thead>
             <tr className="border-b border-line text-left font-mono text-[10px] uppercase tracking-[0.12em] text-muted">
@@ -290,7 +294,7 @@ export default function ParallelismMap() {
         {moe && model.topk === 0 && <p className="mt-2 text-xs text-warn">The selected model is dense; pick the MoE model to see expert-parallel traffic.</p>}
         {epTooBig && <p className="mt-2 text-xs text-danger">EP {EP} exceeds this model's {model.experts} experts: each EP rank must hold at least one whole expert, so pick EP ≤ {model.experts} for the estimate.</p>}
         {!layersOk && <p className="mt-2 text-xs text-warn">{model.layers} layers do not split evenly over {PP} stages; the estimate uses {(model.layers / PP).toFixed(1)} layers per stage.</p>}
-        <div className="mt-3 overflow-x-auto">
+        <div className="mt-3 overflow-x-auto" tabIndex={0} role="region" aria-label="Traffic estimate per GPU per step" aria-live="polite">
           <table className="w-full min-w-[520px] border-collapse text-sm">
             <thead>
               <tr className="border-b border-line text-left font-mono text-[10px] uppercase tracking-[0.12em] text-muted">

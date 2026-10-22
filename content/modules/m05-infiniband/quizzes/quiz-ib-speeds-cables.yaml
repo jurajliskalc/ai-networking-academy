@@ -30,11 +30,11 @@ questions:
         correct: true
         explanation: Four amplitude levels shrink the eye; RS-FEC keeps the post-FEC error rate very low.
       - id: b
-        text: FEC replaces credit-based flow control at high speed.
+        text: FEC replaces credit-based flow control at these speeds, because link-level retransmission would be too slow.
         explanation: FEC handles bit errors; credit flow control is a separate link-layer mechanism.
       - id: c
-        text: FEC encrypts the data on the wire.
-        explanation: FEC adds redundancy for error correction, not confidentiality.
+        text: FEC encrypts the data on the wire, which NDR requires for links between switches.
+        explanation: FEC adds redundancy for error correction, not confidentiality, and IB has no such encryption requirement.
     tags: [pam4, fec]
   - id: q3
     type: multi
@@ -64,18 +64,18 @@ questions:
       peers. What is the most likely cause and fix?
     options:
       - id: a
-        text: Two lanes failed to train (damaged or dirty cable or module); reseat, clean, or replace it and retrain the link.
+        text: Two lanes failed to train (damaged or dirty cable or module); reseat, clean or replace it and retrain.
         correct: true
         explanation: Reduced width with correct lane speed points at lane-level physical problems.
       - id: b
-        text: The SM assigned the port to a slower partition.
+        text: The SM assigned the port to a slower partition, which caps it at half width until it is moved.
         explanation: Partitions do not change link width.
       - id: c
-        text: The routing engine sends only half the traffic to this host.
+        text: The routing engine sends only half of the traffic to this host, so the port trained to match.
         explanation: Routing does not change negotiated link width.
       - id: d
         text: This is normal for NDR; links alternate between 2X and 4X.
-        explanation: A 4x port should train at 4X; 2X here is a fault.
+        explanation: "A 4x port trains at 4X. Only node12's link is at 2X, and it stays there under full perftest load: that is a lane fault, not a normal operating mode."
     tags: [link-width, troubleshooting]
   - id: q5
     type: scenario
@@ -88,10 +88,10 @@ questions:
         correct: true
         explanation: Copper is cheapest and lowest power for short reach; 40 m is beyond copper reach at NDR.
       - id: b
-        text: Passive copper for both, because copper has lower latency.
+        text: Passive copper for both runs, because copper has lower latency than optics and still reaches 40 m at NDR rates.
         explanation: Passive copper does not reach tens of metres at NDR speeds.
       - id: c
-        text: Single-mode long-reach optics for both, to standardise.
+        text: Single-mode long-reach optics for both, to standardise on one part type across the fabric.
         explanation: Possible but wasteful in cost and power for 2 m in-rack links.
     tags: [cables, design]
   - id: q6
@@ -120,14 +120,14 @@ questions:
       check?
     options:
       - id: a
-        text: The adapter's PCIe link (generation and width) with lspci -vv; it is probably in a Gen4 slot or trained at reduced width.
+        text: The adapter's PCIe link (generation and width) in lspci -vv; it is likely in a Gen4 slot or at reduced width.
         correct: true
         explanation: The IB link is fine; the host bus is the bottleneck.
       - id: b
-        text: Replace the IB cable.
+        text: Replace the IB cable, since a marginal cable can show Rate 400 while passing only half the data.
         explanation: Rate 400 with no errors indicates the IB link is healthy.
       - id: c
-        text: Change the SM routing engine.
+        text: Change the SM routing engine, because the current one sends all of this host's traffic over a single congested path.
         explanation: Routing would not affect a single host across all peers this way.
     tags: [pcie, troubleshooting]
   - id: q8

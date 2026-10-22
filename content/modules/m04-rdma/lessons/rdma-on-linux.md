@@ -197,7 +197,7 @@ Two families of counters are exposed under `/sys/class/infiniband/<dev>/ports/<n
 
 ### Preparing a host
 
-On a typical distribution the packages are named along these lines (names vary by distribution): `rdma-core`, `libibverbs-utils` or `ibverbs-utils` (for `ibv_devinfo`), `infiniband-diags`, `librdmacm-utils` (for `rping`) and `perftest`. Then:
+On a typical distribution the packages are named along these lines (names vary by distribution): `rdma-core`, `libibverbs-utils` or `ibverbs-utils` (for `ibv_devinfo`), `infiniband-diags`, `librdmacm-utils` or `rdmacm-utils` (for `rping`) and `perftest`. Then:
 
 ```text
 $ lsmod | grep -E "^(mlx5_ib|ib_uverbs|ib_core|rdma_cm)"

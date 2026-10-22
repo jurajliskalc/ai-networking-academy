@@ -4,7 +4,9 @@
 export const STORAGE_KEY = 'aina.progress.v1';
 
 export interface QuizRecord { best: number; last: number; attempts: number; passed: boolean; at: string }
-export interface LabRecord { solved: boolean; diagnosisCorrect: boolean; attempts: number; hintsUsed: number; at: string }
+/** `evidence` is set when a hardware lab was verified by an imported check result (aina-hw check). */
+export interface LabEvidence { host: string | null; finished: string; pass: number; warn: number; source: 'toolkit' | 'pasted' }
+export interface LabRecord { solved: boolean; diagnosisCorrect: boolean; attempts: number; hintsUsed: number; at: string; evidence?: LabEvidence }
 export interface ExamAttempt { exam: string; score: number; passed: boolean; at: string; seconds: number; byDomain: Record<string, [number, number]> }
 export interface Card { ef: number; interval: number; reps: number; due: string }
 export type Theme = 'system' | 'light' | 'dark';
@@ -67,6 +69,18 @@ export function recordQuiz(p: Progress, id: string, pct: number, passPct: number
     passed: (prev?.passed ?? false) || pct >= passPct, at: d.toISOString(),
   };
   return bump({ ...p, quizzes: { ...p.quizzes, [id]: rec } }, d);
+}
+
+/** Record an imported hardware-lab check. A passing check marks the lab solved with evidence; a failing one
+ *  only counts as an attempt (it never un-solves a lab). */
+export function recordHwCheck(p: Progress, lab: string, rec: { passed: boolean; host: string | null; finished: string; counts: { PASS: number; WARN: number }; source: 'toolkit' | 'pasted' }, d = new Date()): Progress {
+  const prev = p.labs[lab];
+  if (prev?.evidence?.finished === rec.finished && prev.evidence.host === rec.host) return p;
+  const evidence: LabEvidence | undefined = rec.passed ? { host: rec.host, finished: rec.finished, pass: rec.counts.PASS, warn: rec.counts.WARN, source: rec.source } : prev?.evidence;
+  return bump({
+    ...p,
+    labs: { ...p.labs, [lab]: { solved: (prev?.solved ?? false) || rec.passed, diagnosisCorrect: true, attempts: (prev?.attempts ?? 0) + 1, hintsUsed: 0, at: d.toISOString(), ...(evidence ? { evidence } : {}) } },
+  }, d);
 }
 
 /** Score a question: full credit only for exactly the correct set. */

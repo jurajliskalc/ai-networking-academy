@@ -48,13 +48,13 @@ export function WidgetFrame({ id, standalone = false }: { id: string; standalone
   if (!w) return <div className="rounded-xl border border-danger/40 p-4 text-sm text-danger">Unknown widget: {id}</div>;
   const C = w.component;
   return (
-    <section className="overflow-hidden rounded-2xl border border-line bg-panel">
+    <section className="overflow-hidden rounded-2xl border border-line bg-panel" aria-label={`Interactive: ${w.title}`}>
       <div className="flex items-center justify-between gap-4 border-b border-line bg-panel-2 px-4 py-2.5">
         <div>
           <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-accent">Interactive</div>
           <div className="text-sm font-semibold">{w.title}</div>
         </div>
-        {!standalone && <Link to={`/visualize/${w.id}`} className="text-muted hover:text-fg" title="Open full size"><Maximize2 size={16} /></Link>}
+        {!standalone && <Link to={`/visualize/${w.id}`} className="rounded p-1 text-muted hover:text-fg" title="Open full size" aria-label={`Open ${w.title} full size`}><Maximize2 size={16} aria-hidden /></Link>}
       </div>
       <div className="p-4 md:p-5">
         <Suspense fallback={<div className="h-64 animate-pulse rounded-lg bg-panel-2" />}><C /></Suspense>

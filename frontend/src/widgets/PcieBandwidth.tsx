@@ -47,7 +47,7 @@ function Seg<T extends string | number>({ label, value, options, onChange, fmt }
   return (
     <div>
       <div className="mb-1 font-mono text-[10px] uppercase tracking-[0.14em] text-muted">{label}</div>
-      <div className="flex flex-wrap gap-1">
+      <div className="flex flex-wrap gap-1" role="group" aria-label={label}>
         {options.map((o) => (
           <button key={String(o)} type="button" onClick={() => onChange(o)} aria-pressed={o === value}
             className={`rounded-md border px-2 py-1 font-mono text-xs transition ${o === value ? 'border-accent bg-accent-soft text-accent' : 'border-line hover:bg-panel-2'}`}>{fmt ? fmt(o) : String(o)}</button>
@@ -96,7 +96,7 @@ export default function PcieBandwidth() {
         </div>
       </div>
 
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="PCIe generations and link bandwidth">
         <table className="w-full min-w-[680px] border-collapse text-sm">
           <thead>
             <tr className="border-b border-line text-left font-mono text-[10px] uppercase tracking-[0.12em] text-muted">
@@ -140,7 +140,7 @@ export default function PcieBandwidth() {
           <label htmlFor="pcie-eff" className="mb-1 flex justify-between font-mono text-[10px] uppercase tracking-[0.14em] text-muted">
             <span>Assumed TLP / protocol efficiency (illustrative)</span><span className="text-fg">{eff}%</span>
           </label>
-          <input id="pcie-eff" type="range" min={70} max={100} step={1} value={eff} onChange={(e) => setEff(Number(e.target.value))} className="w-full accent-[var(--accent)]" />
+          <input id="pcie-eff" type="range" min={70} max={100} step={1} value={eff} aria-valuetext={`${eff}%`} onChange={(e) => setEff(Number(e.target.value))} className="w-full accent-[var(--accent)]" />
         </div>
 
         <svg viewBox="0 0 640 108" className="mt-3 w-full" role="img" aria-label={`Link ${f3(link)} Gb/s, usable about ${usable.toFixed(0)} Gb/s, port demand ${need} Gb/s`}>
@@ -155,7 +155,7 @@ export default function PcieBandwidth() {
           <line x1={170 + (need / max) * 440} x2={170 + (need / max) * 440} y1={2} y2={104} stroke="var(--warn)" strokeDasharray="3 3" />
         </svg>
 
-        <div className={`mt-2 rounded-md border p-2 text-sm ${V[v].cls}`}>{V[v].text}</div>
+        <div className={`mt-2 rounded-md border p-2 text-sm ${V[v].cls}`} role="status">{V[v].text} <span className="sr-only">Usable about {usable.toFixed(0)} Gb/s for {need} Gb/s of port demand.</span></div>
         <ol className="mt-3 list-decimal space-y-1 pl-5 text-sm text-muted">
           <li>link = ⌊{g.gts * 1000} × {g.num}/{g.den}⌋ Mb/s × {width} = {laneMbps(g).toLocaleString('en-US')} × {width} = <b className="font-mono text-fg">{f3(link)} Gb/s</b> = {(link / 8).toFixed(1)} GB/s per direction</li>
           <li>usable ≈ {f3(link)}{g.gen >= 6 ? ' × 236/256' : ''} × {eff}% = <b className="font-mono text-fg">{usable.toFixed(1)} Gb/s</b> ({(usable / 8).toFixed(1)} GB/s)</li>

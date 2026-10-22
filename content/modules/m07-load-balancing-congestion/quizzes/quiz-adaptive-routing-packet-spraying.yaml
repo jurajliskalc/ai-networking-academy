@@ -8,18 +8,18 @@ questions:
     prompt: "What condition allows a flowlet to be moved to a different path without causing reordering?"
     options:
       - id: a
-        text: "The idle gap before the flowlet is larger than the maximum delay difference between the candidate paths."
+        text: "The idle gap before the flowlet exceeds the maximum delay difference between the candidate paths."
         correct: true
         explanation: "If the gap exceeds the path delay skew, the last packet on the old path arrives before the first packet on the new one."
       - id: b
-        text: "The flowlet is smaller than one MTU."
-        explanation: "Size does not prevent reordering; timing relative to path delay does."
+        text: "The flowlet is smaller than one MTU, so it fits in a single packet that cannot be reordered."
+        explanation: "Size does not prevent reordering; a single packet can still overtake earlier packets on a slower path. Timing relative to path delay is what matters."
       - id: c
-        text: "Both paths have the same number of hops."
-        explanation: "Equal hop counts do not mean equal queueing delay."
+        text: "Both paths have the same number of hops, so packets see the same propagation and switching delay."
+        explanation: "Equal hop counts do not mean equal delay: queueing delay differs between paths and dominates under load."
       - id: d
-        text: "The switch uses the same hash seed on all tiers."
-        explanation: "Hash seeds are unrelated to flowlet safety."
+        text: "The switch uses the same hash seed on all tiers, so the new path is consistent end to end."
+        explanation: "Hash seeds are unrelated to flowlet safety; reordering depends on the idle gap versus path delay skew."
     tags: [flowlets]
   - id: q2
     type: single
@@ -30,13 +30,13 @@ questions:
         correct: true
         explanation: "Without gaps larger than the threshold, the switch never gets a safe point to move the flow."
       - id: b
-        text: "RDMA packets do not carry a UDP header that switches can hash."
-        explanation: "RoCEv2 packets do carry UDP headers; the issue is timing, not headers."
+        text: "RoCEv2 packets carry no transport header that switches can use to detect flowlet boundaries."
+        explanation: "RoCEv2 packets do carry UDP headers, and flowlets are detected by timing gaps per flow; the issue is timing, not headers."
       - id: c
-        text: "Flowlet switching only works on InfiniBand."
-        explanation: "Flowlet switching was designed for Ethernet/IP data centers (e.g. CONGA, LetFlow)."
+        text: "Flowlet switching only works on InfiniBand, where the subnet manager can move flows between paths."
+        explanation: "Flowlet switching was designed for Ethernet/IP data centers (e.g. CONGA, LetFlow) and is a switch-local decision."
       - id: d
-        text: "RDMA requires every packet to take a different path."
+        text: "RDMA requires every packet to take a different path, which flowlet switching cannot provide."
         explanation: "Classic RDMA prefers a single path; it is spraying that needs special support."
     tags: [flowlets, rdma]
   - id: q3
@@ -48,14 +48,14 @@ questions:
         correct: true
         explanation: "Spraying reorders packets; without out-of-order placement support, goodput collapses despite a balanced fabric."
       - id: b
-        text: "Adaptive routing created a routing loop."
-        explanation: "AR chooses among valid equal-cost ports; a loop would cause TTL expiry and drops, not sequence errors with balanced links."
+        text: "Adaptive routing created a transient routing loop, so packets circulate between tiers and arrive late."
+        explanation: "AR chooses among valid equal-cost ports; a loop would cause TTL expiry and drops, not sequence errors on perfectly balanced links."
       - id: c
-        text: "The ECN thresholds are too high."
-        explanation: "ECN thresholds affect congestion response, not sequence errors."
+        text: "The ECN thresholds are too high, so queues overflow and drop packets before marking starts."
+        explanation: "The only change was enabling spraying, and the links are now evenly loaded rather than congested. Overflow drops would show up as discards on hot queues; the sequence counters here come from reordering."
       - id: d
-        text: "The MTU on the spine is too small."
-        explanation: "An MTU problem would cause drops and failed connections, not reordering counters."
+        text: "The MTU on the spine is too small, so large RoCE packets are fragmented and reassembled out of order."
+        explanation: "RoCEv2 packets are not fragmented. An MTU problem would cause drops and failed connections, not reordering counters."
     tags: [reordering, troubleshooting]
   - id: q4
     type: multi
@@ -86,13 +86,13 @@ questions:
         correct: true
         explanation: "InfiniBand is centrally managed; the SM computes and programs forwarding, including AR groups."
       - id: b
-        text: "Each HCA, by negotiating paths with BGP."
+        text: "Each HCA, by negotiating paths with its neighbours through BGP sessions."
         explanation: "InfiniBand does not use BGP; forwarding is programmed by the SM."
       - id: c
-        text: "NCCL, by writing switch tables at job start."
+        text: "NCCL, by writing the switch forwarding tables when each job starts."
         explanation: "NCCL can use AR-friendly transfer modes but does not program switches."
       - id: d
-        text: "The spine switches autonomously with no configuration."
+        text: "The spine switches themselves, autonomously and with no configuration."
         explanation: "AR must be enabled and groups computed by the SM."
     tags: [infiniband, adaptive-routing]
   - id: q6
@@ -100,34 +100,34 @@ questions:
     prompt: "A fabric already uses per-packet adaptive routing with NIC reordering support. An MoE job still shows PFC pauses on host-facing leaf ports during all-to-all. What does this tell you?"
     options:
       - id: a
-        text: "The congestion is at the endpoints (incast); load balancing cannot remove it, congestion control and scheduling must."
+        text: "It is endpoint (incast) congestion, which load balancing cannot remove; congestion control and scheduling must."
         correct: true
         explanation: "Many senders to one receiver exceed that port's rate no matter which paths they take."
       - id: b
-        text: "Adaptive routing is misconfigured and should be replaced by static ECMP."
-        explanation: "Static ECMP would add fabric collisions on top of the incast."
+        text: "Adaptive routing is misconfigured and is concentrating flows, so it should be replaced by static ECMP."
+        explanation: "Static ECMP would add fabric collisions on top of the incast, and no path choice changes the last-hop bottleneck."
       - id: c
-        text: "The spine is oversubscribed and needs more uplinks."
+        text: "The spine is oversubscribed, so traffic backs up toward the hosts; the fix is more uplinks per leaf."
         explanation: "Pauses on host-facing ports point to last-hop congestion, not spine capacity."
       - id: d
-        text: "The NICs are reordering too aggressively."
-        explanation: "Reordering tolerance does not create pause frames on host-facing ports."
+        text: "The NICs are reordering too aggressively, which makes the leaves pause traffic toward them."
+        explanation: "Reordering tolerance does not create pause frames; pauses come from buffer occupancy, here caused by many senders converging on one receiver."
     tags: [incast, adaptive-routing]
   - id: q7
     type: single
     prompt: "What was the key observation of LetFlow compared with CONGA?"
     options:
       - id: a
-        text: "Choosing a random path at each flowlet boundary already balances well, because flowlets adapt their size to path congestion."
+        text: "A random path at each flowlet boundary already balances well, because flowlet sizes adapt to path congestion."
         correct: true
         explanation: "Flowlets on congested paths end sooner (senders back off and create gaps) and get re-placed, while those on uncongested paths grow longer and stick, without explicit congestion feedback."
       - id: b
-        text: "Per-packet spraying never causes reordering in data centers."
+        text: "Per-packet spraying never causes reordering in data centers, so flowlet tracking is unnecessary overhead."
         explanation: "Spraying does reorder packets; LetFlow works at flowlet granularity to avoid it."
       - id: c
-        text: "ECMP should hash on the IPv6 flow label only."
-        explanation: "LetFlow is about flowlet path selection, not hash fields."
+        text: "ECMP should hash on the IPv6 flow label only, which lets hosts steer flows away from congestion."
+        explanation: "LetFlow is about flowlet path selection in switches, not about which header fields are hashed."
       - id: d
-        text: "Load balancing must be done by the end hosts, not switches."
-        explanation: "LetFlow is a switch-based scheme."
+        text: "Load balancing must be done by the end hosts, which see congestion earlier than any switch can."
+        explanation: "LetFlow is a switch-based scheme that needs no host changes."
     tags: [letflow, conga]

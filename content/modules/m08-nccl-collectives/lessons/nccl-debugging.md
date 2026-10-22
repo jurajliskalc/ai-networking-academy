@@ -20,7 +20,7 @@ further_reading:
   - title: NCCL environment variables (NCCL_DEBUG and friends)
     url: https://docs.nvidia.com/deeplearning/nccl/user-guide/docs/env.html
   - title: PyTorch ProcessGroupNCCL environment variables
-    url: https://pytorch.org/docs/stable/torch_nccl_environment_variables.html
+    url: https://docs.pytorch.org/docs/stable/torch_nccl_environment_variables.html
   - title: nccl-tests repository (NVIDIA)
     url: https://github.com/NVIDIA/nccl-tests
 ---

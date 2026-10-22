@@ -347,8 +347,9 @@ options; the goal is the same.
   BIOS (check vendor docs), update firmware.
 - **Cross-socket GPU-NIC pairing.** Symptom: GPU-NIC throughput well below line rate, high variance.
   Cause: the application or NCCL picked a NIC on the other socket, often because of a misconfigured
-  NIC allow-list. Fix: let NCCL auto-select based on topology, or set the NIC list in the correct order
-  (see `nccl-configuration`).
+  NIC allow-list that leaves out a GPU's local NIC. Fix: let NCCL auto-select based on topology, or make
+  sure any allow-list includes every GPU's local NIC; NCCL pairs GPUs and NICs by topology, not by list
+  order (see `nccl-configuration`).
 - **ACS left on in bare-metal training.** Symptom: P2P traffic is slow and loads the CPU root complex.
   Cause: ACS redirection sends every peer request through the root complex. Fix: disable ACS where your
   security model allows it, and verify with `lspci`.

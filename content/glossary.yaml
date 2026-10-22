@@ -113,6 +113,10 @@ terms:
   - term: "Credit-based flow control"
     definition: "InfiniBand's link-level flow control: the receiver advertises buffer credits per virtual lane and the sender transmits only when it holds credits. Packets are therefore never dropped for lack of buffer, unlike Ethernet, which needs PFC for the same effect."
     lesson: ib-flow-control-vls
+  - term: "CSIG"
+    expansion: "Congestion Signaling"
+    definition: "An Ultra Ethernet in-band telemetry mechanism (Specification 1.1, October 2026) that carries a 4-byte or 8-byte Layer-2 tag that switches along the path update to report congestion magnitude and location (one value, such as the largest queueing delay or the least available bandwidth); the destination reflects it to the sender in ACKs for use by congestion control and load balancing."
+    lesson: congestion-control-algorithms
   - term: "Cut-through switching"
     definition: "A forwarding mode in which a switch starts transmitting a frame as soon as it has read the header, before the whole frame arrives. It lowers latency compared with store-and-forward but cannot drop a frame with a bad FCS before forwarding it."
     lesson: switching-and-queues
@@ -150,6 +154,10 @@ terms:
   - term: "DGX"
     definition: "NVIDIA's integrated AI server line (for example DGX H100 with eight GPUs, NVSwitch and one 400G compute NIC per GPU). DGX systems are the building block of the DGX SuperPOD reference architectures."
     lesson: superpod-reference-architecture
+  - term: "Disaggregated serving"
+    expansion: "Prefill/decode disaggregation"
+    definition: "An LLM serving architecture that runs the prefill and decode phases on separate GPU pools, so that each pool can be sized and tuned for its phase. The KV cache produced by prefill must be transferred to the decode GPU, usually over RDMA, which puts that transfer on the time-to-first-token path."
+    lesson: inference-cluster-design
   - term: "DOCA"
     definition: "NVIDIA's software framework and driver/SDK stack for BlueField DPUs and ConnectX NICs. Newer host driver packages (DOCA-Host) succeed the standalone MLNX_OFED distribution."
     lesson: nics-dpus-supernics
@@ -157,6 +165,10 @@ terms:
     expansion: "Data Processing Unit"
     definition: "A NIC with general-purpose cores and accelerators that can run infrastructure services (networking, storage, security) isolated from the host CPU. It is often used on the front-end network for multi-tenant isolation."
     lesson: nics-dpus-supernics
+  - term: "DRA"
+    expansion: "Dynamic Resource Allocation"
+    definition: "A Kubernetes API for requesting devices through ResourceClaims, DeviceClasses and driver-published ResourceSlices. Constraints such as matchAttribute on resource.kubernetes.io/pcieRoot can make the scheduler allocate a GPU and a NIC under the same PCIe root, which NUMA-level Topology Manager alignment cannot guarantee."
+    lesson: kubernetes-network-operator
   - term: "DSCP"
     expansion: "Differentiated Services Code Point"
     definition: "The 6-bit field in the IP header used to mark traffic class. RoCEv2 deployments usually trust DSCP on switch ports and map the RoCE DSCP value to a lossless priority and queue."
@@ -178,6 +190,10 @@ terms:
   - term: "Entropy"
     definition: "The variability in header fields that a hash function can use to spread flows across paths. AI fabrics have low entropy because they carry few, very large flows; RoCEv2 adds entropy by varying the UDP source port per QP."
     lesson: flow-collisions-entropy
+  - term: "ESUN"
+    expansion: "Ethernet for Scale-Up Networking"
+    definition: "An Open Compute Project Networking workstream announced in October 2025 that works on open, standards-based Ethernet switching and framing for scale-up AI fabrics. Endpoint transport is handled in the separate SUE-T workstream, and ESUN intends to align with the UEC and IEEE 802.3."
+    lesson: open-scale-up-fabrics
   - term: "Ethertype"
     definition: "The 2-byte Ethernet header field identifying the payload protocol, for example 0x0800 for IPv4, 0x86DD for IPv6, 0x8100 for an 802.1Q tag and 0x8915 for RoCEv1."
     lesson: osi-ethernet-frames
@@ -268,10 +284,18 @@ terms:
   - term: "HGX"
     definition: "NVIDIA's GPU baseboard platform (for example eight GPUs connected by NVSwitch) that server vendors build systems around. DGX systems use the same baseboard design."
     lesson: nvlink-nvswitch
+  - term: "HPCC"
+    expansion: "High Precision Congestion Control"
+    definition: "A window-based congestion-control algorithm (Alibaba and co-authors, SIGCOMM 2019) in which every switch adds in-band telemetry (queue length, transmitted bytes, timestamp, link speed) to packets, and the sender sizes its window so the most loaded link on the path runs at a target utilisation such as 95%. It needs telemetry support in every switch."
+    lesson: congestion-control-algorithms
   - term: "ICRC"
     expansion: "Invariant CRC"
     definition: "A 4-byte end-to-end CRC at the end of every InfiniBand and RoCE packet. It covers only fields that do not change in transit; in RoCEv2 the fields routers may rewrite (such as TTL, DSCP/ECN and the UDP checksum) are masked before computing it. The Ethernet FCS still protects each hop separately."
     lesson: rocev2-encapsulation
+  - term: "IFA"
+    expansion: "Inband Flow Analyzer"
+    definition: "An in-band telemetry format, described in an IETF individual draft led by Broadcom authors (now expired), that records per-hop flow metadata in a transport-agnostic header. Some switch and NIC implementations use it; for example, NVIDIA's DOCA PCC library lists IFA-based probe packet types."
+    lesson: drop-reasons-in-band-telemetry
   - term: "Incast"
     definition: "A many-to-one traffic pattern in which many senders transmit to one receiver at the same time, overflowing the egress queue toward that receiver. It is common in all-to-all phases, parameter aggregation and storage reads."
     lesson: incast-and-congestion-hotspots
@@ -279,6 +303,14 @@ terms:
     expansion: "IB"
     definition: "A lossless, credit-flow-controlled network architecture with a hardware RDMA transport and a centralized subnet manager. It is the traditional fabric for HPC and many large AI training clusters."
     lesson: ib-architecture
+  - term: "INT"
+    expansion: "In-band Network Telemetry"
+    definition: "A technique, specified by P4.org, in which switches report per-hop state such as hop latency, queue occupancy and timestamps for the packets they forward: written into the packets (INT-MD), exported directly to a collector (INT-XD, formerly postcards) or a mix (INT-MX). HPCC uses it for congestion control; embedding costs header bytes per hop."
+    lesson: drop-reasons-in-band-telemetry
+  - term: "IOAM"
+    expansion: "In Situ Operations, Administration and Maintenance"
+    definition: "An IETF approach to in-band telemetry whose data fields are defined in RFC 9197 (May 2022): nodes write records such as node ID, interface IDs, timestamps, transit delay, queue depth and buffer occupancy into trace options carried in live packets."
+    lesson: drop-reasons-in-band-telemetry
   - term: "IPoIB"
     expansion: "IP over InfiniBand"
     definition: "A driver that carries IP traffic over an InfiniBand fabric, exposing an ib0-style netdev. It is used for management-style IP traffic and for RDMA connection setup through rdma_cm on IB."
@@ -333,9 +365,17 @@ terms:
     expansion: "Linear Pluggable Optics"
     definition: "Pluggable optical modules without a DSP retimer, relying on the host SerDes to drive the optics directly. They save power and latency but require host and module to be qualified together."
     lesson: optics-cabling-power
+  - term: "M_Key"
+    expansion: "Management Key"
+    definition: "An InfiniBand key the subnet manager sets per port and per switch so that only an SM holding the key can change port configuration. Management packets with a wrong M_Key are dropped and can raise a bad-M_Key trap. It is an access token, not an encryption key."
+    lesson: ai-fabric-security
   - term: "MAC address"
     definition: "The 48-bit layer-2 address of an Ethernet interface. Switches forward frames within a broadcast domain by destination MAC."
     lesson: osi-ethernet-frames
+  - term: "MACsec"
+    expansion: "IEEE 802.1AE Media Access Control Security"
+    definition: "Link-layer encryption and authentication between two directly connected Ethernet devices, with keys agreed by MKA (IEEE 802.1X). It is hop by hop: data is protected on the cable but is in clear text inside each switch."
+    lesson: ai-fabric-security
   - term: "MAD"
     expansion: "Management Datagram"
     definition: "The 256-byte InfiniBand management packet format used by the subnet manager (SMPs) and other managers such as performance management (GMPs). Tools like perfquery send MADs to read port counters."
@@ -370,6 +410,10 @@ terms:
     expansion: "Maximum Transmission Unit"
     definition: "The largest payload a link layer carries in one frame. For RoCE, the RDMA path MTU (for example 1024, 2048 or 4096 bytes) must fit within the Ethernet MTU with header overhead."
     lesson: mtu-jumbo-frames
+  - term: "Multus"
+    expansion: "Multus CNI"
+    definition: "A Kubernetes CNI meta-plugin that gives a pod additional network interfaces (net1, net2, ...) by calling other CNI plugins described in NetworkAttachmentDefinition objects, selected with the k8s.v1.cni.cncf.io/networks pod annotation. AI clusters use it to attach pods to the RDMA compute fabric alongside the default eth0."
+    lesson: kubernetes-network-operator
   - term: "NCCL"
     expansion: "NVIDIA Collective Communications Library"
     definition: "The library that implements collectives between NVIDIA GPUs over NVLink, PCIe, InfiniBand, RoCE and sockets. It detects topology, picks algorithms (ring, tree, NVLS, CollNet) and protocols, and drives the NICs with GPUDirect RDMA."
@@ -409,6 +453,10 @@ terms:
     expansion: "Network Interface Card"
     definition: "The adapter connecting a server to the network. In AI servers the compute NICs are RDMA-capable and typically one is paired with each GPU."
     lesson: nics-dpus-supernics
+  - term: "NIXL"
+    expansion: "NVIDIA Inference Xfer Library"
+    definition: "An open-source library for point-to-point data movement in inference frameworks such as NVIDIA Dynamo. It abstracts CPU and GPU memory and file, block and object storage behind one API, with transports as plugins (UCX is the one most examples use; GPUDirect Storage and others are available)."
+    lesson: inference-cluster-design
   - term: "Non-blocking"
     definition: "A fabric whose internal capacity at every tier equals the capacity of its host ports (1:1), so any permutation of traffic can in principle run at line rate. In practice hashing collisions can still prevent full throughput."
     lesson: oversubscription-and-blocking
@@ -416,6 +464,9 @@ terms:
     expansion: "Non-Uniform Memory Access"
     definition: "A server architecture where each CPU socket has its own local memory and PCIe devices, and access to the other socket's resources crosses a slower inter-socket link. Placing processes, GPUs and NICs on the same NUMA node avoids that penalty."
     lesson: pcie-numa-topology
+  - term: "NVIDIA Network Operator"
+    definition: "A Kubernetes operator, installed with Helm, that deploys and manages the components a pod needs for RDMA: the DOCA-OFED driver container, RDMA shared and SR-IOV device plugins, Multus and CNI plugins, NV-IPAM, NIC configuration and InfiniBand P_Key integration. It is configured through NicClusterPolicy and, in recent releases, NicNodePolicy resources."
+    lesson: kubernetes-network-operator
   - term: "nvidia-smi topo -m"
     definition: "A command that prints the connectivity matrix between GPUs, NICs and CPUs, using labels such as NV# (NVLink), PIX, PXB, PHB, NODE and SYS. It shows which NIC is closest to each GPU."
     lesson: reading-server-topology
@@ -425,6 +476,9 @@ terms:
   - term: "NVLink"
     definition: "NVIDIA's high-bandwidth GPU-to-GPU interconnect. Per-GPU bandwidth depends on generation, for example about 900 GB/s total for NVLink 4 on H100 and about 1.8 TB/s for NVLink 5 on Blackwell (check the product datasheet)."
     lesson: nvlink-nvswitch
+  - term: "NVLink Fusion"
+    definition: "NVIDIA's offering of NVLink connectivity and IP, including NVLink-C2C and chiplet options, that lets third-party CPUs and custom accelerators join NVIDIA's rack-scale NVLink platforms. It is licensable technology, not a multi-vendor standard."
+    lesson: open-scale-up-fabrics
   - term: "NVLink SHARP"
     expansion: "NVLS"
     definition: "In-switch reduction and multicast performed by NVSwitch (third generation and later). NCCL can use it as the NVLS algorithm to accelerate all-reduce within an NVLink domain."
@@ -459,6 +513,9 @@ terms:
     expansion: "Four-level Pulse Amplitude Modulation"
     definition: "A signaling scheme that encodes 2 bits per symbol using four voltage levels. It doubles bits per symbol versus NRZ but has a much lower signal-to-noise margin, which is why PAM4 links depend on FEC."
     lesson: link-layer-ber-fec
+  - term: "Partition enforcement"
+    definition: "Switch-port filtering in InfiniBand that drops packets whose P_Key is not in the port's partition table. Enabled on host-facing ports, it keeps partitions intact even if a tenant with root edits its own HCA. Drops are counted in PortRcvConstraintErrors and PortXmitConstraintErrors."
+    lesson: ai-fabric-security
   - term: "Path MTU"
     definition: "The largest MTU usable on the whole path between two endpoints. RDMA QPs are configured with an active path MTU, and a value larger than the smallest hop supports causes silent drops."
     lesson: mtu-jumbo-frames
@@ -513,6 +570,10 @@ terms:
   - term: "Prefill"
     definition: "The first phase of LLM inference in which the whole prompt is processed in parallel to build the KV cache. It is compute-bound and produces the time to first token."
     lesson: inference-networking
+  - term: "Prefix-aware routing"
+    expansion: "KV-aware routing"
+    definition: "Inference request routing that sends a request to the worker that already caches the KV blocks of its prompt prefix, weighed against that worker's load, instead of plain round-robin. It is implemented by inference gateways' endpoint pickers and by routers in serving stacks such as Dynamo and llm-d."
+    lesson: inference-cluster-design
   - term: "Priority group"
     expansion: "PG"
     definition: "An ingress buffer accounting class on a switch to which one or more priorities are mapped. PFC thresholds (XOFF/XON) and headroom are configured per priority group."
@@ -525,6 +586,10 @@ terms:
     expansion: "Packet Sequence Number"
     definition: "The 24-bit sequence number in the BTH used by reliable RDMA transports to detect lost or duplicated packets and to trigger NAKs and retransmission."
     lesson: transport-types-operations
+  - term: "PSP"
+    expansion: "PSP Security Protocol"
+    definition: "An offload-friendly encryption protocol designed by Google and open-sourced in 2022. Per-connection keys are derived from a Security Parameter Index and an on-device master key, so the NIC keeps almost no per-connection state. Packets are carried in a UDP encapsulation."
+    lesson: ai-fabric-security
   - term: "Q_Key"
     expansion: "Queue Key"
     definition: "A 32-bit key carried in the DETH of datagram (UD) traffic. A receiving UD QP accepts a datagram only if its Q_Key matches the QP's configured Q_Key, a lightweight authorization check since UD has no connection setup."
@@ -570,6 +635,9 @@ terms:
   - term: "rdma-core"
     definition: "The upstream Linux userspace RDMA package providing libibverbs, librdmacm, provider drivers and utilities such as ibv_devinfo and rping (the rdma tool itself ships with iproute2)."
     lesson: rdma-on-linux
+  - term: "Receiver-driven congestion control"
+    definition: "A family of designs (for example Homa, and Ultra Ethernet's RCCC) in which the receiver, which sees all senders converging on its downlink, grants credits or permission to send, so incast is controlled before queues form. It cannot see congestion in the network core, so it is often combined with a sender-based algorithm."
+    lesson: congestion-control-algorithms
   - term: "Reduce-scatter"
     definition: "A collective that reduces buffers across ranks and leaves each rank with a different slice of the result. A ring all-reduce is a reduce-scatter followed by an all-gather."
     lesson: collective-operations
@@ -624,6 +692,10 @@ terms:
     expansion: "Scalable Hierarchical Aggregation and Reduction Protocol"
     definition: "NVIDIA's in-network computing technology in which InfiniBand switches perform reductions for collectives, roughly halving the data each host sends for all-reduce. NCCL uses it through the CollNet/SHARP plugin."
     lesson: sharp-in-network-computing
+  - term: "SM_Key"
+    expansion: "Subnet Manager Key"
+    definition: "A random key shared by the legitimate subnet manager instances and used during SM handover. Together with a list of allowed SM GUIDs, it stops an unknown or rogue SM from taking over as master."
+    lesson: ai-fabric-security
   - term: "Soft-RoCE"
     expansion: "rdma_rxe"
     definition: "A software implementation of RoCEv2 in the Linux kernel that runs over any Ethernet NIC. It is useful for learning and functional testing, not for performance."
@@ -634,6 +706,10 @@ terms:
   - term: "Spine switch"
     definition: "A second-tier switch in a leaf-spine fabric that connects to every leaf. Spines carry all traffic between leaves and are typically interconnected only through the leaves."
     lesson: clos-leaf-spine
+  - term: "SR-IOV"
+    expansion: "Single Root I/O Virtualization"
+    definition: "A PCIe capability that lets one physical NIC function present many virtual functions (VFs), each with its own queues and, on RDMA NICs, its own RDMA device. Kubernetes and virtualization platforms hand VFs to pods or VMs for near-native, isolated access to the fabric."
+    lesson: kubernetes-network-operator
   - term: "SRQ"
     expansion: "Shared Receive Queue"
     definition: "A receive queue shared by many QPs so that receive buffers need not be posted per connection. It reduces memory use when a process talks to many peers."
@@ -651,12 +727,19 @@ terms:
     expansion: "SM"
     definition: "The InfiniBand control-plane entity that discovers the fabric, assigns LIDs, computes and programs forwarding tables and handles changes. One master SM is active, with standby SMs for failover."
     lesson: subnet-manager-routing
+  - term: "SUE"
+    expansion: "Scale-Up Ethernet"
+    definition: "Broadcom's framework for using Ethernet as an accelerator scale-up fabric, with compact headers, link-layer retry and credit-based flow control. Broadcom contributed version 1.0 to OCP, where the endpoint work continues as SUE-T (SUE-Transport)."
+    lesson: open-scale-up-fabrics
   - term: "SuperNIC"
     definition: "NVIDIA's term for a network accelerator optimized for GPU-to-GPU traffic in AI Ethernet fabrics, such as BlueField-3 SuperNIC or ConnectX-8 SuperNIC. Compared with a DPU it focuses on high-speed RDMA rather than running host-offloaded services."
     lesson: nics-dpus-supernics
   - term: "SuperPOD"
     definition: "NVIDIA's DGX SuperPOD reference architecture for large AI clusters, specifying servers, scalable units, rail-optimized compute fabric, storage, in-band and out-of-band networks."
     lesson: superpod-reference-architecture
+  - term: "Swift"
+    definition: "Google's delay-based datacenter congestion control (SIGCOMM 2020): AIMD on a congestion window around a target delay measured with NIC hardware timestamps, with separate fabric and endpoint windows, targets scaled by hop count and flow count, and windows allowed below one packet (enforced by pacing) to survive very large incasts."
+    lesson: congestion-control-algorithms
   - term: "Symbol errors"
     definition: "Errors in received line-code symbols reported by the physical layer, for example the InfiniBand SymbolErrorCounter. With FEC some are expected; a rapidly increasing count indicates a degrading link."
     lesson: link-layer-ber-fec
@@ -670,6 +753,9 @@ terms:
     expansion: "TP"
     definition: "Splitting individual layers' matrix operations across GPUs. It requires all-reduce or all-gather inside every layer, so it is kept within the NVLink scale-up domain."
     lesson: parallelism-strategies
+  - term: "TIMELY"
+    definition: "An RTT-based, rate-based congestion control from Google (SIGCOMM 2015) that adjusts the sending rate using the gradient of RTT samples measured by the NIC: additive increase when the gradient is zero or negative, multiplicative decrease proportional to a positive gradient, with low and high RTT thresholds as guards."
+    lesson: congestion-control-algorithms
   - term: "Traffic class"
     expansion: "TC"
     definition: "A switch or NIC internal class that maps to an egress queue with its own scheduling. Priorities (from PCP or DSCP) map to traffic classes."
@@ -680,6 +766,14 @@ terms:
   - term: "Trust mode"
     definition: "The switch or NIC setting that decides which packet field (DSCP or PCP) assigns traffic to an internal priority. RoCEv2 fabrics typically use DSCP trust so priority survives layer-3 routing."
     lesson: qos-trust-and-mapping
+  - term: "TSS"
+    expansion: "Transport Security Sublayer (Ultra Ethernet)"
+    definition: "The optional security sublayer of Ultra Ethernet Transport. Endpoints in a secure domain share a key distributed by a management entity, packets are protected with AES-GCM (default 256-bit key, 16-byte tag), and replay is prevented with per-packet counters. It applies only to UET traffic."
+    lesson: ai-fabric-security
+  - term: "UALink"
+    expansion: "Ultra Accelerator Link"
+    definition: "An open, memory-semantic scale-up interconnect for accelerators defined by the UALink Consortium. The 200G 1.0 specification (April 2025) puts UALink-specific protocol, transaction and data link layers on an IEEE 802.3-based PHY and supports pods of up to 1,024 accelerators connected through UALink switches."
+    lesson: open-scale-up-fabrics
   - term: "UC"
     expansion: "Unreliable Connected"
     definition: "An RDMA transport with connected QPs but no acknowledgements or retransmission. It supports Send and RDMA Write but not RDMA Read or atomics."
@@ -706,6 +800,9 @@ terms:
     expansion: "VL"
     definition: "An InfiniBand logical channel on a link with its own buffers and credits. Data VLs are separately flow-controlled; VL15 is reserved for subnet management packets and is not flow controlled."
     lesson: ib-flow-control-vls
+  - term: "Virtual pod"
+    definition: "In UALink, a partition of a pod made by dividing switch ports into non-overlapping subsets. Accelerators in one virtual pod can communicate with each other but not with accelerators outside it, which enables multi-tenant scale-up domains."
+    lesson: open-scale-up-fabrics
   - term: "VLAN"
     expansion: "Virtual LAN"
     definition: "An 802.1Q tag with a 12-bit ID that separates broadcast domains on one physical network. The tag also carries the PCP priority bits."
@@ -722,6 +819,14 @@ terms:
     expansion: "Virtual Extensible LAN"
     definition: "An overlay encapsulation (RFC 7348) that carries Ethernet frames in UDP (port 4789) across a routed underlay. It adds about 50 bytes of overhead, so underlay MTU must be raised accordingly."
     lesson: evpn-vxlan-frontend
+  - term: "Wide expert parallelism"
+    expansion: "Wide EP"
+    definition: "Serving a mixture-of-experts model with its experts spread across many GPUs (for example over a hundred), so each GPU holds few experts and keeps memory free for KV cache. Every MoE layer of every decode step then needs a small-message dispatch and combine all-to-all, which makes fabric tail latency critical."
+    lesson: inference-cluster-design
+  - term: "WJH"
+    expansion: "What Just Happened"
+    definition: "NVIDIA Spectrum switch telemetry that reports dropped packets together with a drop reason, a recommended action and packet details, grouped into L1, L2, L3, tunnel, buffer and ACL categories. It turns a rising discard counter into an explanation, for example a tail drop on a given queue or a blackhole route."
+    lesson: drop-reasons-in-band-telemetry
   - term: "WQE"
     expansion: "Work Queue Element"
     definition: "The hardware descriptor for one work request posted to a send or receive queue. The application writes WQEs and rings a doorbell so the NIC processes them."

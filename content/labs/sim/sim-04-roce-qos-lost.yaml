@@ -26,13 +26,13 @@ diagnosis:
       correct: true
       explanation: Without the RoCE profile the switch puts RoCE in a lossy default class with no ECN marking. Every node's mlx5_5 sees drops and out-of-sequence NAKs, and the whole job slows to the speed of that rail.
     - id: b
-      text: The upgrade reset all host NICs to trust PCP.
-      explanation: A switch upgrade does not change host NIC settings; mlnx_qos on the hosts still shows trust dscp.
+      text: The upgrade window also reset the host NICs to trust PCP, so untagged RoCE lands in priority 0 and loses PFC protection.
+      explanation: A switch upgrade does not change host NIC settings; mlnx_qos on the hosts still shows trust dscp. A host-side problem on every NIC would also hit every rail, not just rail 5.
     - id: c
-      text: The spine uplinks of leaf06 are down.
-      explanation: Rail-local collective traffic stays on the leaf; spine uplinks do not carry it in this design.
+      text: leaf06's spine uplinks did not come back after the upgrade, so rail 5 traffic is squeezed through the remaining paths.
+      explanation: nv show interface on leaf06 shows swp31 and swp32 up. Rail-local collective traffic stays on the leaf anyway; spine uplinks do not carry it in this design.
     - id: d
-      text: The new NOS defaults to an MTU of 1500.
+      text: The new NOS defaults every port to an MTU of 1500, so full-size RoCE packets are dropped and retransmitted.
       explanation: nv show interface shows MTU 9216 on every port, and an MTU problem would make the job fail rather than slow down.
 checks:
   - { description: "leaf06 runs RoCE in lossless mode", check: switch_roce, args: { switch: leaf06, mode: lossless } }

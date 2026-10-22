@@ -27,14 +27,14 @@ diagnosis:
       correct: true
       explanation: The restored config lost the jumbo MTU on one port. RoCE takes its 4096-byte path MTU from the hosts and never learns about the smaller switch MTU, so large transfers time out and retry until the QP goes to the error state.
     - id: b
-      text: node02's mlx5_2 negotiated a RoCE MTU of 1024, which NCCL does not support.
-      explanation: NCCL works with any RoCE MTU; a 1024-byte path MTU costs efficiency, not correctness. Here the host MTU is still 9000.
+      text: node02's enp82s0np0 lost its jumbo MTU and is back at 1500, so the 9000-byte frames node01 sends on rail 2 are rejected on receive.
+      explanation: "On node02, ip link show enp82s0np0 still reports mtu 9000 and ibv_devinfo shows active_mtu 4096. A host MTU mismatch would also not black-hole RoCE: the path MTU is the minimum of both ends, so the connection would simply use smaller packets. The change touched leaf03, not node02."
     - id: c
-      text: PFC is disabled on leaf03, so packets are dropped under congestion.
-      explanation: A lossless misconfiguration costs bandwidth under load; it does not make every large packet disappear, and ping with DF set shows a pure size problem.
+      text: The replacement line card came up without the RoCE QoS profile, so leaf03 runs rail 2 lossy and drops RoCE packets under load.
+      explanation: nv show qos roce on leaf03 still shows lossless mode with PFC on priority 3. A lossy class costs bandwidth under load; it does not make every large packet disappear, and an unloaded ping with DF set already shows a pure size problem.
     - id: d
-      text: The GID index is wrong on node02.
-      explanation: A wrong GID index fails during connection setup (ibv_modify_qp), regardless of packet size.
+      text: node02 uses a link-local RoCE GID, so its QPs toward node01 cannot be routed across rail 2 and the transfers time out.
+      explanation: A wrong GID index fails during connection setup (ibv_modify_qp ... Connection timed out on the RTR transition), regardless of packet size. Here the QP connects and only large packets go missing (status=12), and nccl.conf sets GID index 3.
 checks:
   - { description: "leaf03 swp2 carries jumbo frames again (MTU 9216)", check: port_mtu_min, args: { switch: leaf03, port: swp2, value: 9216 } }
   - { description: "No uncommitted NVUE changes on leaf03", check: no_pending, args: { switch: leaf03 } }

@@ -12,13 +12,13 @@ questions:
         correct: true
         explanation: "Catalogues change; only the official pages are authoritative."
       - id: b
-        text: In a forum post summarising the exam from last year.
+        text: In a detailed forum post from last year summarising every domain of the exam.
         explanation: "Third-party summaries go stale and may be wrong."
       - id: c
-        text: In this academy's mock exams.
+        text: In this academy's mock exams, which mirror the real exam's format and domains.
         explanation: "The mock exams are original practice material, not a description of any real exam."
       - id: d
-        text: From a colleague who passed a previous version.
+        text: From a colleague who passed a previous version of the exam with a high score.
         explanation: "Useful for anecdotes, but exams are re-versioned; verify officially."
     tags: [certification]
   - id: q2
@@ -32,13 +32,13 @@ questions:
         correct: true
         explanation: "The heuristic prioritises heavy, weak domains."
       - id: b
-        text: Equal time, because both domains are on the exam.
+        text: Equal time on both, because every domain is on the exam and a gap anywhere costs points.
         explanation: "Ignores both weight and weakness, so returns per hour differ greatly."
       - id: c
-        text: More time on Domain B because it is nearly mastered.
+        text: More time on Domain B, because it is nearly mastered and the last step to mastery is quickest.
         explanation: "Polishing a strong, light domain yields little score improvement."
       - id: d
-        text: "2.5 : 1 in favour of Domain A, based on weight alone."
+        text: "2.5 : 1 in favour of Domain A, based on the blueprint weights (25 versus 10)."
         explanation: "That uses weight only; the heuristic also multiplies by how far you are from mastery."
     tags: [study-plan]
   - id: q3
@@ -50,13 +50,13 @@ questions:
         correct: true
         explanation: "Recalling from memory before checking is retrieval, which strengthens memory most."
       - id: b
-        text: Re-reading the DCQCN section three times.
+        text: Re-reading the DCQCN section three times, until every step of it feels familiar.
         explanation: "Re-reading builds familiarity, which is easily mistaken for recall."
       - id: c
-        text: Highlighting the key sentences of the lesson.
+        text: Highlighting the key sentences of the DCQCN section as you read it.
         explanation: "Highlighting is passive and has weak evidence as a learning method."
       - id: d
-        text: Copying the lesson's diagrams into a notebook.
+        text: Copying the lesson's DCQCN diagrams and captions into a notebook by hand.
         explanation: "Copying with the source visible does not require recall."
     tags: [learning-science]
   - id: q4
@@ -89,13 +89,13 @@ questions:
         correct: true
         explanation: "Different causes need different fixes; this is the point of the error log categories."
       - id: b
-        text: Retake the same exam tomorrow until you score 100%.
+        text: Retake the same exam tomorrow, and keep retaking it until you score 100% on the RoCE questions.
         explanation: "An immediate retake mostly measures memory of the answers, not understanding."
       - id: c
-        text: Reread the entire RoCE module from the beginning.
+        text: Reread the entire RoCE module from the beginning, since four misses show the whole domain is weak.
         explanation: "Inefficient and does nothing for the misread problem."
       - id: d
-        text: Ignore the misreads, since they were careless mistakes.
+        text: Study only the headroom math and ignore the two misreads, since they were careless slips rather than real knowledge gaps.
         explanation: "Misreads recur under exam pressure unless you change your reading technique."
     tags: [mock-exams, error-log]
   - id: q6
@@ -127,12 +127,12 @@ questions:
         correct: true
         explanation: "90 / 50 = 1.8 minutes per question; doubling it leaves room for hard questions without starving the rest."
       - id: b
-        text: After 30 seconds, regardless of difficulty.
+        text: After 30 seconds, regardless of difficulty, to bank time for later review.
         explanation: "Too aggressive for scenario questions with output to read."
       - id: c
-        text: Never; always finish a question once started.
+        text: Never; always finish a question once started, so no reading time is wasted.
         explanation: "Risks running out of time on questions you could have answered quickly."
       - id: d
-        text: After 10 minutes.
+        text: After 10 minutes, since scenario questions are worth the extra time.
         explanation: "Five such questions would consume more than half the exam."
     tags: [exam-technique, pacing]

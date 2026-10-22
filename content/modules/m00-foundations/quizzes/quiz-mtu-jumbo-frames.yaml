@@ -70,32 +70,32 @@ questions:
         correct: true
         explanation: Small control packets fit, large data packets are dropped; the DF ping isolates the rail with the problem.
       - id: b
-        text: ECMP hashing is placing rail-4 traffic on too many paths.
-        explanation: Spreading traffic does not drop large packets selectively.
+        text: ECMP hashing spreads rail-4 traffic over too many spine paths, so large messages arrive out of order and are discarded.
+        explanation: Spreading traffic does not drop large packets selectively, and a single ping is one flow that follows one path.
       - id: c
-        text: The GPUs on rail 4 have insufficient memory.
-        explanation: GPU memory has nothing to do with whether a large ICMP packet crosses the network.
+        text: The GPUs on rail 4 ran out of memory after maintenance, so neither large NCCL buffers nor large pings can be handled.
+        explanation: GPU memory has nothing to do with whether a large ICMP packet, handled by the host kernel, crosses the network.
       - id: d
-        text: The TTL on rail-4 packets is too low.
-        explanation: TTL problems affect packets of all sizes equally.
+        text: The TTL on rail-4 packets is too low after the change, so all of the larger probes expire before they reach their peers.
+        explanation: TTL problems affect packets of all sizes equally, yet small pings succeed.
     tags: [mtu, troubleshooting]
   - id: q5
     type: single
     prompt: Why does the MTU have to be consistent end to end for RDMA, even more strictly than for TCP?
     options:
       - id: a
-        text: RoCE does not perform Path MTU Discovery; the path MTU is fixed when the queue pair is configured, so oversize packets are just dropped.
+        text: "RoCE does no Path MTU Discovery: the path MTU is fixed when the queue pair is set up, so oversize packets are just dropped."
         correct: true
         explanation: TCP can adapt via PMTUD (when ICMP works); RDMA cannot, so a smaller link anywhere breaks it.
       - id: b
-        text: RDMA packets cannot be larger than 1500 bytes.
-        explanation: RDMA MTU commonly reaches 4096 bytes with jumbo frames.
+        text: RDMA packets can never exceed 1500 bytes, so any link set to a jumbo MTU makes the NIC reject the connection.
+        explanation: RDMA MTU commonly reaches 4096 bytes with jumbo frames; larger link MTUs are not a problem.
       - id: c
-        text: RDMA uses IP fragmentation, which requires identical MTUs.
-        explanation: RDMA traffic is not fragmented; that is the problem.
+        text: RDMA relies on IP fragmentation in the switches, and fragments can only be reassembled if all MTUs are identical.
+        explanation: RDMA traffic is not fragmented at all; that is exactly why an undersized link simply drops it.
       - id: d
-        text: InfiniBand MTU values change dynamically per packet.
-        explanation: The path MTU is a fixed attribute of the connection, not a per-packet value.
+        text: The RDMA MTU is renegotiated per packet with every switch on the path, and a mismatch makes that handshake fail.
+        explanation: The path MTU is a fixed attribute of the connection set at queue-pair setup; switches take no part in it and nothing is negotiated per packet.
     tags: [rdma, pmtud]
   - id: q6
     type: scenario
@@ -108,14 +108,14 @@ questions:
         correct: true
         explanation: A frame-size MTU of 9000 cannot carry a 9000-byte IP packet plus 14-18 bytes of Ethernet header.
       - id: b
-        text: Lower the hosts to 1500.
-        explanation: That would fix the symptom but throw away jumbo frames and drop RoCE to MTU 1024.
+        text: Lower the hosts to a 1500 MTU, since jumbo frames are not supported between hosts behind a routed leaf.
+        explanation: Jumbo frames work fine across routed hops; lowering the hosts would hide the symptom but throw away jumbo frames and drop RoCE to MTU 1024.
       - id: c
-        text: Enable IP fragmentation on the switches.
+        text: Enable IP fragmentation on the switches so the 9000-byte packets are split to fit the 9000-byte frame limit.
         explanation: Data center switches generally do not fragment in hardware, and RDMA must not be fragmented anyway.
       - id: d
-        text: Disable the FCS check.
-        explanation: The FCS has nothing to do with size limits and disabling error detection would be harmful.
+        text: Disable the FCS check on the switch ports, since the 4-byte FCS is what pushes these frames over the limit.
+        explanation: The FCS is part of every frame whether or not it is checked, so disabling the check frees no room, and turning off error detection is harmful.
     tags: [mtu, switches]
   - id: q7
     type: single

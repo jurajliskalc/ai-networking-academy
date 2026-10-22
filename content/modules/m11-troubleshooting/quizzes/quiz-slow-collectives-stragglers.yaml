@@ -15,14 +15,14 @@ questions:
         correct: true
         explanation: The slowdown follows the node set, so continue the search there; parallel subsets shorten the number of rounds.
       - id: b
-        text: Reboot all 64 nodes and rerun the job to see if the problem clears.
+        text: Reboot all 64 nodes and rerun the job; stale driver or firmware state is the usual cause of a fleet-wide slowdown.
         explanation: A reboot destroys evidence (and may hide a downtrained link until it recurs) without localising anything.
       - id: c
-        text: Raise ECN thresholds on all spine switches to reduce marking.
+        text: Raise ECN thresholds on all spine switches, since extra marking at 64-node scale throttles senders too early.
         explanation: Nothing so far points at congestion control, and a fabric-wide change risks new problems. Localise first.
       - id: d
-        text: Run single-node tests again with a larger message size.
-        explanation: Single-node tests already passed; they cannot see inter-node segments where the fault evidently lies.
+        text: Rerun the single-node tests with larger messages, since small sizes can hide a slow NIC inside one node.
+        explanation: Single-node tests already passed and stay inside the node; no message size makes them exercise the inter-node segments where the fault evidently lies.
     tags: [bisection, methodology]
   - id: q2
     type: scenario
@@ -33,18 +33,18 @@ questions:
       What does this mean for the node?
     options:
       - id: a
-        text: The NIC trained at a quarter of its lanes, so it can move roughly a quarter of its PCIe bandwidth and cannot sustain line rate.
+        text: The NIC trained on a quarter of its lanes, so it gets roughly a quarter of its PCIe bandwidth and cannot sustain line rate.
         correct: true
         explanation: Gen5 x4 is on the order of 12-15 GB/s, roughly 100-120 Gb/s, far below 400 Gb/s. Width reductions point to a physical or firmware issue.
       - id: b
-        text: Nothing; PCIe links reduce width at idle to save power and this is normal.
+        text: Nothing; PCIe links drop to fewer lanes when lightly used to save power and widen again automatically as traffic rises.
         explanation: The reading was taken under load, and width reduction is not a normal power-saving behaviour on these platforms; idle generation drops are the benign case.
       - id: c
-        text: The NIC's Ethernet port negotiated 100G instead of 400G.
+        text: The NIC's network port negotiated 100G instead of 400G, and LnkSta is reporting that reduced port speed.
         explanation: LnkSta describes the PCIe link to the host, not the network port. Check the network speed separately with ethtool or ibstat.
       - id: d
-        text: The GPU attached to this NIC is thermally throttling.
-        explanation: GPU throttling shows in nvidia-smi clock event reasons, not in the NIC's PCIe link status.
+        text: The GPU attached to this NIC is thermally throttling, and the platform narrowed the shared PCIe link to cut power.
+        explanation: GPU throttling shows in nvidia-smi clock event reasons, not in the NIC's PCIe link status; throttling does not narrow a PCIe link.
     tags: [pcie, downtraining]
   - id: q3
     type: scenario
@@ -56,17 +56,17 @@ questions:
       Which root cause is most likely?
     options:
       - id: a
-        text: The container cannot use the RDMA devices (no /dev/infiniband access or missing verbs provider libraries), so NCCL fell back to TCP sockets.
+        text: The container lacks RDMA access (no /dev/infiniband or no verbs provider libraries), so NCCL fell back to TCP sockets.
         correct: true
         explanation: The "No device found" line followed by NET/Socket is the signature of a fallback. Bare metal works, so the container boundary is the prime suspect.
       - id: b
-        text: The fabric has PFC disabled, so RoCE packets are dropped.
+        text: The fabric has PFC disabled, so RoCE packets are dropped and NCCL abandons RDMA after repeated retransmissions.
         explanation: Lossless misconfiguration would slow RDMA traffic, but NCCL would still report NET/IB. Here IB was never used.
       - id: c
-        text: GPUDirect RDMA is disabled because nvidia_peermem is not loaded.
+        text: GPUDirect RDMA is disabled because nvidia_peermem is not loaded, so NCCL cannot register GPU memory with the NIC.
         explanation: Missing GDR keeps NCCL on NET/IB without the GDRDMA marker; it does not cause a socket fallback.
       - id: d
-        text: NCCL_SOCKET_IFNAME points to the wrong interface.
+        text: NCCL_SOCKET_IFNAME points at eth0 instead of the RDMA interface, so NCCL never looks for the IB devices.
         explanation: That variable selects the bootstrap/socket interface. It does not stop NCCL from finding IB devices.
     tags: [nccl, fallback, containers]
   - id: q4
@@ -78,13 +78,13 @@ questions:
         correct: true
         explanation: The GDRDMA suffix marks the GPUDirect RDMA path. Without it, transfers bounce through host memory, costing bandwidth and CPU.
       - id: b
-        text: That node uses TCP sockets for this channel.
-        explanation: A socket transport would be reported as NET/Socket, not NET/IB.
+        text: That node fell back to TCP sockets for this channel; NET/IB without a suffix means sockets over IPoIB.
+        explanation: A socket transport (including sockets over IPoIB) is reported as NET/Socket, not NET/IB.
       - id: c
-        text: That node uses NVLink instead of the network for this channel.
+        text: That node routes this channel over NVLink, so it does not need the GPUDirect network path.
         explanation: NVLink paths are reported as P2P or NVLS transports, not as NET/IB.
       - id: d
-        text: That node uses a different IB port number, which is harmless.
+        text: That node uses a different IB port number for this channel, which is harmless.
         explanation: The number after NET/IB is the NCCL net device index; the missing GDRDMA marker is the meaningful difference.
     tags: [nccl, gdr]
   - id: q5
@@ -99,13 +99,13 @@ questions:
         correct: true
         explanation: An intermittent compute straggler produces exactly this tail pattern while the network looks clean.
       - id: b
-        text: Node 17 has a downtrained NIC PCIe link.
+        text: Node 17 has a downtrained NIC PCIe link, which slows its share of each collective and stretches the tail.
         explanation: Downtraining is persistent and would show in nccl-tests with node 17 included.
       - id: c
-        text: The spine layer is suffering from ECMP collisions.
+        text: The spine layer is suffering ECMP collisions that occasionally land two elephant flows on one uplink.
         explanation: Collisions would usually show as congestion signals (ECN marks, PFC pauses, uneven uplink load), and the counters are flat.
       - id: d
-        text: NCCL is falling back to sockets on node 17.
+        text: NCCL is falling back to sockets on node 17 whenever its RDMA connections are re-established.
         explanation: A fallback is persistent and would be visible in the INFO log and in every benchmark involving node 17.
     tags: [throttling, dcgm]
   - id: q6
@@ -117,17 +117,17 @@ questions:
       What is the most likely cause and fix?
     options:
       - id: a
-        text: ACS redirects GPU-NIC peer-to-peer traffic to the root complex; disable ACS (persistently, ideally via BIOS) on these bare-metal nodes.
+        text: ACS redirects GPU-NIC peer-to-peer traffic through the root complex; disable ACS (e.g. in BIOS) on these bare-metal nodes.
         correct: true
         explanation: ReqRedir+/CmpltRedir+ force P2P requests up through the CPU, which matches a GPU-buffer-only slowdown.
       - id: b
-        text: The NIC's MTU is too small; raise it to 9000.
+        text: The NIC's MTU is too small; GPU-buffer transfers use larger work requests, so raise the netdev MTU to 9000.
         explanation: MTU would affect host and GPU buffers alike. The difference here is specific to the P2P path.
       - id: c
-        text: PFC is not enabled on the RoCE priority.
+        text: PFC is not enabled on the RoCE priority; GPU-buffer transfers arrive in bigger bursts, so enable PFC on that priority first.
         explanation: A lossless misconfiguration would hurt both buffer types under congestion, and a two-node test is unlikely to congest.
       - id: d
-        text: The GPU is in a different NUMA node than the CPU running ib_write_bw.
+        text: The GPU is on a different NUMA node from the CPU running ib_write_bw; pin the test to the GPU's NUMA node.
         explanation: NUMA placement affects host-buffer staging; it does not explain a GPU-buffer-only drop with ACS redirection visible.
     tags: [acs, gpudirect, pcie]
   - id: q7
@@ -159,9 +159,9 @@ questions:
         correct: true
         explanation: Synchronous collectives complete at the speed of their slowest participant; the penalty propagates around the ring.
       - id: b
-        text: The slow NIC sends PFC pause frames to every switch in the fabric.
+        text: The slow NIC sends PFC pause frames toward every switch, so the whole fabric slows to its rate.
         explanation: A slow NIC does not by itself generate fabric-wide pauses; the ring dependency is what spreads the delay.
       - id: c
-        text: NCCL automatically lowers every NIC to the slowest NIC's link speed.
+        text: NCCL detects the slow NIC and lowers every other NIC in the job to the same link speed to keep the ring balanced.
         explanation: NCCL does not renegotiate link speeds; the effect comes from collective synchronisation.
     tags: [collectives, theory]

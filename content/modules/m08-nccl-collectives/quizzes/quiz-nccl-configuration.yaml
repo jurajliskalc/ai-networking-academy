@@ -12,14 +12,14 @@ questions:
         correct: true
         explanation: "A leading '=' requests exact matching; '^' excludes."
       - id: b
-        text: "NCCL ignores NCCL_IB_HCA when more than ten devices exist."
-        explanation: "The variable is honored; the matching rule causes this behaviour."
+        text: "NCCL ignores NCCL_IB_HCA when it finds more NICs than GPUs and falls back to the devices closest to each GPU in the PCIe tree."
+        explanation: "The variable is honored; ignoring it would not select exactly the devices whose names start with mlx5_1. The matching rule causes this behaviour."
       - id: c
-        text: "The environment variable was not forwarded to the rank."
-        explanation: "If it were not forwarded, NCCL would use all devices, not this specific subset."
+        text: "The variable was not forwarded to every rank, so ranks without it picked their NICs from topology detection."
+        explanation: "If it were not forwarded, NCCL would use all devices, not this specific subset that shares the mlx5_1 prefix."
       - id: d
-        text: "mlx5_10 and mlx5_11 are bonded with mlx5_1."
-        explanation: "Bonding is not implied; this is the prefix rule."
+        text: "mlx5_10 and mlx5_11 are bonded with mlx5_1 into one LAG, so NCCL treats them as ports of one device."
+        explanation: "Nothing implies bonding, and the three appear as separate devices in the log; this is the prefix rule."
     tags: [nccl-ib-hca]
   - id: q2
     type: single
@@ -30,13 +30,13 @@ questions:
         correct: true
         explanation: "26 x 4 = 104; the low two bits are the ECN field."
       - id: b
-        text: "26, the DSCP value itself."
-        explanation: "That would yield DSCP 6 on the wire."
+        text: "26, the DSCP value itself, because NCCL shifts it into the DSCP bits of the header."
+        explanation: "NCCL_IB_TC is the full traffic class byte and is not shifted; 26 would yield DSCP 6 on the wire."
       - id: c
-        text: "3, the PFC priority number."
+        text: "3, the PFC priority number that the lossless queue is mapped to on the switch."
         explanation: "NCCL_IB_TC is a traffic class byte, not a PFC priority."
       - id: d
-        text: "0, because switches classify RoCE by UDP port."
+        text: "0, because switches classify RoCE traffic by its UDP destination port 4791."
         explanation: "The described fabric classifies by DSCP, so the DSCP must be set."
     tags: [roce, qos]
   - id: q3
@@ -44,17 +44,17 @@ questions:
     prompt: "What does NCCL_IB_GID_INDEX select on a RoCE port?"
     options:
       - id: a
-        text: "Which GID table entry (and thus IP address and RoCE version) NCCL uses; it must be a RoCEv2 entry on the back-end network."
+        text: "Which GID table entry (and so IP address and RoCE version) NCCL uses; it must be a RoCEv2 entry on the back-end network."
         correct: true
         explanation: "show_gids or sysfs shows each index's IP and version."
       - id: b
-        text: "The InfiniBand service level of NCCL traffic."
+        text: "The InfiniBand service level that NCCL stamps on its traffic, which switches map to a virtual lane."
         explanation: "That is NCCL_IB_SL."
       - id: c
-        text: "Which GPU is attached to the NIC."
-        explanation: "GPU-NIC affinity comes from topology detection."
+        text: "Which GPU is paired with the NIC, as an index into the GPU list that nvidia-smi topo -m prints."
+        explanation: "GPU-NIC affinity comes from NCCL's topology detection, not from a GID index."
       - id: d
-        text: "The PFC priority used for pause frames."
+        text: "The PFC priority used for NCCL's pause frames, which must match the lossless priority on the switch."
         explanation: "PFC priority is determined by switch and NIC QoS mapping."
     tags: [gid]
   - id: q4
@@ -66,14 +66,14 @@ questions:
         correct: true
         explanation: "Crossing NIC indices forces traffic between rails through the spine."
       - id: b
-        text: "NCCL_IB_DISABLE=1."
-        explanation: "That would disable RDMA entirely and cripple performance."
+        text: "NCCL_IB_DISABLE=1, so inter-node traffic leaves the RDMA rails and the spine is offloaded."
+        explanation: "That disables RDMA entirely and falls back to sockets, crippling performance without fixing rail alignment."
       - id: c
-        text: "NCCL_MAX_NCHANNELS=1."
+        text: "NCCL_MAX_NCHANNELS=1, so only one ring crosses the network and the spine carries less."
         explanation: "Reducing channels lowers bandwidth and does not fix rail alignment."
       - id: d
-        text: "NCCL_IB_RETRY_CNT=1."
-        explanation: "Retry count is unrelated to NIC selection."
+        text: "NCCL_IB_RETRY_CNT=1, so retransmissions on congested spine links give up sooner."
+        explanation: "Retry count is unrelated to NIC selection and would only make transient loss fatal sooner."
     tags: [rail, cross-nic]
   - id: q5
     type: multi
@@ -107,11 +107,11 @@ questions:
         text: "NCCL_IB_TIMEOUT"
         explanation: "That is the IB verbs ACK timeout exponent, not PyTorch error handling."
       - id: c
-        text: "NCCL_DEBUG"
-        explanation: "NCCL_DEBUG controls logging only."
+        text: "TORCH_DISTRIBUTED_DEBUG"
+        explanation: "It sets the level of torch.distributed debug checks and logging (OFF, INFO, DETAIL), not how failed collectives are handled."
       - id: d
-        text: "NCCL_IB_RETRY_CNT"
-        explanation: "That sets the NIC transport retry count."
+        text: "TORCH_NCCL_TRACE_BUFFER_SIZE"
+        explanation: "It sizes the NCCL flight recorder's trace buffer used to debug hangs; it does not decide how failures are handled."
     tags: [pytorch]
   - id: q7
     type: scenario
@@ -122,14 +122,14 @@ questions:
         correct: true
         explanation: "NCCL uses shared memory for SHM transport and buffers."
       - id: b
-        text: "The RoCE GID index is wrong."
+        text: "The RoCE GID index is wrong inside the container, so NCCL cannot register its shared host buffers with the NIC."
         explanation: "A GID problem affects RDMA connections, not single-node shared memory."
       - id: c
-        text: "PFC is disabled on the switch."
+        text: "PFC is disabled on the switch, so the first intra-node transfers are dropped and NCCL init aborts."
         explanation: "A single-node shared-memory failure does not involve the switch."
       - id: d
-        text: "NCCL_IB_TC is set to 104."
-        explanation: "Traffic class does not affect shared memory allocation."
+        text: "NCCL_IB_TC=104 marks traffic for a queue that the container's network namespace lacks."
+        explanation: "Traffic class only marks RDMA packets; it does not affect shared memory allocation."
     tags: [containers]
   - id: q8
     type: single
@@ -140,12 +140,12 @@ questions:
         correct: true
         explanation: "Larger timeouts tolerate longer stalls but can mask link problems."
       - id: b
-        text: "Bandwidth increases because fewer ACKs are needed."
-        explanation: "The timeout does not change ACK frequency or bandwidth."
+        text: "Bandwidth increases, because the NIC waits longer between ACKs and spends less of the link on ACK packets."
+        explanation: "The timeout does not change ACK frequency or bandwidth; it only sets how long the sender waits for an ACK before retrying."
       - id: c
-        text: "It shortens recovery from link flaps."
-        explanation: "It lengthens the time before the NIC gives up, not recovery."
+        text: "It shortens recovery from link flaps and drops, because the NIC retransmits sooner after a lost packet instead of waiting out the old timeout."
+        explanation: "A larger value lengthens the wait before each retransmission and before the NIC gives up; it does not speed recovery."
       - id: d
-        text: "It changes the PFC pause quanta."
-        explanation: "PFC timing is unrelated to the verbs timeout."
+        text: "It lengthens the PFC pause quanta the NIC requests, giving congested switch buffers more time to drain."
+        explanation: "PFC timing is unrelated to the verbs ACK timeout."
     tags: [timeouts]

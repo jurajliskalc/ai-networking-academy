@@ -1,0 +1,64 @@
+id: sim-18-ib-degraded-link-width
+title: "InfiniBand: one link at 1X, and counters that are not errors"
+level: 3
+estimated_minutes: 40
+lessons: [ib-tools-diagnostics, ib-speeds-cables, link-layer-ber-fec, slow-collectives-stragglers]
+summary: InfiniBand variant. A link trained at a quarter of its width paces every ring. Two other counters try to distract you.
+start: node01
+ticket: |
+  **INC-4925 · Sev3 · InfiniBand all-reduce stuck at a quarter of normal speed**
+
+  > Since Tuesday's cable-management pass in row C, `all_reduce_perf` on the InfiniBand cluster peaks
+  > at about 93 GB/s instead of ~370. After a test run, `ibqueryerrors` lists PortXmitWait on almost every
+  > port, and the storage team says the fabric is simply congested. Someone also noticed a
+  > LinkDownedCounter of 1 on node01 mlx5_5. Every port is ACTIVE and sminfo is fine. - HPC operations
+
+  Separate the real fault from the noise, fix it and verify.
+faults:
+  - { type: ib_fabric }
+  - { type: link_degraded, switch: leaf03, port: swp3, lanes: 1, ber: 1.0e-6 }
+  # One link-down while cables were moved: a link-down is counted on both ends of the link.
+  - { type: ib_counters, node: node01, rail: 5, counters: { LinkDownedCounter: 1 } }
+  - { type: ib_counters, switch: leaf06, port: swp1, counters: { LinkDownedCounter: 1 } }
+hints:
+  - "PortXmitWait counts ticks in which a port had data to send but could not send it, usually for lack of flow-control credits. It measures congestion, not errors. Suppress it with `ibqueryerrors -s PortXmitWait` and look at what is left."
+  - "A link can be ACTIVE and still run at a fraction of its rate. Compare `Rate:` in `ibstat` across HCAs, or look for \"Could be\" in `iblinkinfo`."
+  - "`perfquery -C <ca>` reads a local HCA port, `perfquery <lid> <port>` a switch port. Read a suspect twice around a test run to see which counters are still moving."
+diagnosis:
+  prompt: What limits the job?
+  options:
+    - id: a
+      text: The link from node03 mlx5_2 to leaf03 port 3 trained at 1X instead of 4X and logs symbol errors, so rail 2 runs at a quarter of its rate and paces every ring.
+      correct: true
+      explanation: ibstat on node03 shows Rate 100 for mlx5_2 (400 elsewhere), ibstatus shows "100 Gb/sec (1X NDR)", and iblinkinfo marks both ends of that link "1X ... (Could be 4X )". The same link keeps adding SymbolErrorCounter, LinkErrorRecoveryCounter and PortRcvErrors on both ends. A collective is paced by its slowest rail, so 8 rails x 46.5 GB/s x 0.25 is about 93 GB/s. ib_write_bw on mlx5_2 confirms about 98 Gb/s. A lane is bad, so the cable or transceiver has to be replaced.
+    - id: b
+      text: The fabric is congested. High PortXmitWait on many switch and HCA ports shows that the spine uplinks are oversubscribed and need more capacity.
+      explanation: PortXmitWait (ticks in which a port had data queued but could not send, typically for lack of credits) is expected under an all-reduce on any fabric. This rail-local collective does not use the spines at all (perfquery on spine ports shows no traffic), so there is no uplink to add capacity to. It is not an error counter, which is why ibqueryerrors lets you suppress it.
+    - id: c
+      text: node01 mlx5_5 is flapping. Its LinkDownedCounter shows the link went down, and the retransmissions after each flap slow down every ring in the job.
+      explanation: The counter is 1 on both ends of that link (leaf06 port 1 too) and does not move across test runs, and there are no symbol or receive errors. That is one link-down from when the cable was handled during the cable-management pass. ibstat shows Rate 400 and State Active. A flapping link would keep incrementing.
+    - id: d
+      text: After the cable work, the subnet manager computed unbalanced routes, so rail 2 traffic now detours through the spines and congests their uplinks.
+      explanation: Rail-local traffic between HCAs on the same leaf never needs a spine, whatever the routing. The rail-2 slowdown follows one link that trained at 1X, as iblinkinfo and ibstat show.
+checks:
+  - { description: "leaf03 port 3 (node03 mlx5_2) runs at full 4X width", check: link_width, args: { switch: leaf03, port: swp3, value: 4 } }
+  - { description: "leaf03 port 3 is free of bit errors", check: link_clean, args: { switch: leaf03, port: swp3 } }
+  - { description: "all_reduce bus bandwidth is above 360 GB/s", check: allreduce_min_busbw, args: { value: 360 } }
+solution: |
+  1. Noise first. After a run, `ibqueryerrors` lists PortXmitWait almost everywhere. That is congestion
+     telemetry, not an error. `ibqueryerrors -s PortXmitWait` leaves four entries: both ends of the node01
+     mlx5_5 link (leaf06 port 1) with `LinkDownedCounter == 1`, and both ends of the node03 mlx5_2 link
+     with symbol errors, link error recoveries, link-downs and receive errors.
+  2. node01 mlx5_5: one LinkDowned that never moves, no other errors, rate 400. That is history (the
+     cable was touched during the cable work), not the problem.
+  3. node03 mlx5_2: `ibstat` shows `Rate: 100`, `ibstatus` shows `100 Gb/sec (1X NDR)`, and `iblinkinfo |
+     grep "Could be"` shows `1X ... (Could be 4X )` on leaf03 port 3. Run `perfquery 3 3` (leaf03 is LID 3)
+     before and after a test: SymbolErrorCounter and PortRcvErrors keep climbing.
+  4. Fix: `replace-cable leaf03 3`. The link retrains at 4X, the errors stop and the job returns to ~370 GB/s.
+
+  Lesson: on InfiniBand, check width and speed, not only state. A link that lost lanes stays ACTIVE and
+  quietly runs at a fraction of its rate. Know which counters are errors (SymbolErrorCounter,
+  LinkErrorRecoveryCounter, PortRcvErrors, LinkDownedCounter that keeps moving) and which describe load
+  (PortXmitWait, data counters).
+fix:
+  - "node01: replace-cable leaf03 3"

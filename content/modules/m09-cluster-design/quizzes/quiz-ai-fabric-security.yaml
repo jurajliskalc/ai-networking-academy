@@ -1,0 +1,151 @@
+id: quiz-ai-fabric-security
+title: "Knowledge check: Securing AI fabrics"
+lesson: ai-fabric-security
+pass_pct: 70
+questions:
+  - id: q1
+    type: single
+    prompt: "Why does the RoCEv2 ICRC not protect a fabric against forged RDMA packets?"
+    options:
+      - id: a
+        text: "It is a CRC over invariant fields: anyone who can build the packet can compute a valid value."
+        correct: true
+        explanation: "A CRC detects bit errors. It has no secret key, so a forger simply computes it."
+      - id: b
+        text: "It is recomputed by every router, so a forged value is overwritten before the receiver checks it."
+        explanation: "The ICRC covers invariant fields precisely so that routers do not need to recompute it."
+      - id: c
+        text: "It is only checked when PFC is enabled for the priority that carries the RoCE traffic."
+        explanation: "ICRC checking is part of RoCE packet processing at the receiver, independent of PFC."
+      - id: d
+        text: "It uses a shared key that is published in the IBTA annex, so every vendor knows it."
+        explanation: "The ICRC uses no key at all; that is exactly why it is not authentication."
+    tags: [roce, icrc, threat-model]
+  - id: q2
+    type: scenario
+    prompt: "A GPU cloud gives tenants root on bare-metal InfiniBand hosts. Each tenant is a full member of its own partition. A tenant edits its HCA's partition table to add another tenant's P_Key. What stops its packets from reaching the other tenant?"
+    options:
+      - id: a
+        text: "Partition enforcement on the switch port facing the host, which drops P_Keys the SM did not assign."
+        correct: true
+        explanation: "The host controls its own HCA, so enforcement must also happen on the switch port, where violations count as PortRcvConstraintErrors."
+      - id: b
+        text: "The M_Key on the tenant's HCA, which encrypts the packets so only the right partition can read them."
+        explanation: "M_Key protects management access to port configuration. IB keys are access tokens and encrypt nothing."
+      - id: c
+        text: "The kernel firewall on the destination host, which filters InfiniBand packets by partition key."
+        explanation: "RDMA traffic is handled by the NIC and bypasses kernel firewalls."
+      - id: d
+        text: "Nothing: P_Keys are a convention between cooperating hosts and switches never inspect them."
+        explanation: "Switches can enforce partitions at their ports. That is the control that holds against a malicious host."
+    tags: [pkey, multi-tenancy]
+  - id: q3
+    type: scenario
+    prompt: "After a maintenance window, routing on an InfiniBand fabric changes and sminfo reports a master SM GUID nobody recognises. Which combination of controls would have prevented this?"
+    options:
+      - id: a
+        text: "An allowed-SM GUID list with an SM_Key, and SMPs blocked on hosts that are not SMs."
+        correct: true
+        explanation: "The allowed list and SM_Key make the master ignore unknown SMs, and blocking SMPs stops ordinary hosts from acting as one."
+      - id: b
+        text: "Making all hosts limited members of the default partition, so their SM cannot win the election."
+        explanation: "Limited membership restricts data-plane reachability. It does not take part in SM election."
+      - id: c
+        text: "Raising the sweep interval on the production SM so that it reasserts mastership more often."
+        explanation: "Sweeps rediscover the fabric. They do not stop a higher-priority SM from taking over."
+      - id: d
+        text: "Enabling MACsec on every host link so that the rogue SM's packets are encrypted and ignored."
+        explanation: "MACsec protects links. It does not authorize which device may act as subnet manager."
+    tags: [subnet-manager, rogue-sm]
+  - id: q4
+    type: single
+    prompt: "A compliance document states that MACsec on all switch links gives end-to-end encryption of training traffic. What is wrong with the claim?"
+    options:
+      - id: a
+        text: "MACsec protects each link between two MACsec endpoints, so data is in clear text inside every switch."
+        correct: true
+        explanation: "It is hop-by-hop. A compromised switch, or a legitimate host on the fabric, is not stopped by it."
+      - id: b
+        text: "MACsec only works on InfiniBand links, so it cannot protect RoCEv2 traffic on an Ethernet fabric."
+        explanation: "MACsec is IEEE 802.1AE, an Ethernet standard."
+      - id: c
+        text: "MACsec encrypts only the Ethernet header and leaves the IP payload in clear text on the wire."
+        explanation: "MACsec protects the frame's user data. The weakness is scope (one link), not which bytes it covers."
+      - id: d
+        text: "MACsec requires a subnet manager to distribute keys, which Ethernet fabrics do not have."
+        explanation: "MACsec keys are agreed with MKA from IEEE 802.1X, not by a subnet manager."
+    tags: [macsec, encryption]
+  - id: q5
+    type: single
+    prompt: "Why did Google design PSP instead of using classic IPsec for encrypting data-centre traffic in its NICs?"
+    options:
+      - id: a
+        text: "IPsec stores full state per SA in NIC tables and lacks per-connection keys; PSP derives keys from the SPI."
+        correct: true
+        explanation: "PSP derives receive keys from the packet's SPI and an on-device master key, keeping the NIC nearly stateless."
+      - id: b
+        text: "IPsec cannot encrypt UDP traffic, and PSP was designed specifically to encrypt RoCEv2 between GPUs."
+        explanation: "IPsec encrypts any IP traffic. PSP targeted RPC traffic at scale, and Linux PSP currently covers TCP."
+      - id: c
+        text: "IPsec needs MACsec underneath it, and Google's switches did not support MACsec at the time."
+        explanation: "IPsec has no dependency on MACsec."
+      - id: d
+        text: "PSP needs no keys at all because it relies on the ICRC, which makes it cheaper than IPsec."
+        explanation: "PSP is real encryption with keys. The ICRC is not cryptographic."
+    tags: [psp, ipsec]
+  - id: q6
+    type: multi
+    prompt: "Which statements about the Ultra Ethernet Transport Security sublayer (TSS) match the UEC design described in the lesson? (Select all that apply.)"
+    options:
+      - id: a
+        text: "It is optional, and members of a secure domain share a key distributed by a management entity."
+        correct: true
+        explanation: "TSS is optional. The secure domain key (SDK) is distributed by the secure domain management entity."
+      - id: b
+        text: "Its default cipher is AES-GCM with a 256-bit key and a 16-byte authentication tag."
+        correct: true
+        explanation: "That is the default AEAD described in the UEC design paper."
+      - id: c
+        text: "ECN marks and packet trimming are not authenticated, so switches can still signal congestion."
+        correct: true
+        explanation: "Switches are treated as untrusted but must still mark and trim, so these fields are handled carefully rather than authenticated."
+      - id: d
+        text: "It encrypts RoCEv2 traffic too, so existing RoCE NICs gain TSS with a firmware update."
+        explanation: "TSS is part of UET, a different transport. It does not apply to RoCEv2."
+    tags: [uec, tss]
+  - id: q7
+    type: scenario
+    prompt: "A security team enables IPsec on the RoCE compute network of a 400G cluster. Training throughput halves and host CPU use rises sharply. What is the most likely explanation and next step?"
+    options:
+      - id: a
+        text: "Traffic is not hardware-offloaded; check NIC, firmware and kernel support for IPsec packet offload."
+        correct: true
+        explanation: "Line-rate encryption needs inline NIC offload. High CPU and low bandwidth point to software processing (for example NCCL falling back to kernel TCP sockets) or an offload limit."
+      - id: b
+        text: "IPsec adds about half of each packet as overhead, so 50% throughput is expected at any speed."
+        explanation: "IPsec adds tens of bytes per packet, a small fraction of a jumbo frame, not half."
+      - id: c
+        text: "IPsec disables PFC on the lossless priority; re-enable PFC on the switches to restore throughput."
+        explanation: "IPsec does not change switch PFC configuration, and that would not explain the CPU rise."
+      - id: d
+        text: "The rkeys are now encrypted, so every RDMA operation needs a key lookup on the remote CPU."
+        explanation: "IPsec encrypts packets on the wire; rkeys are still checked by the NIC, not by the remote CPU."
+    tags: [ipsec, offload, performance]
+  - id: q8
+    type: single
+    prompt: "An audit finds that every RoCE host has nftables rules that drop all inbound traffic except SSH. Why does this not isolate the RDMA fabric?"
+    options:
+      - id: a
+        text: "The NIC terminates RoCE in hardware, so those packets never pass through the kernel firewall."
+        correct: true
+        explanation: "Kernel bypass means isolation must be enforced on switches (ACLs, VRFs) or on DPUs."
+      - id: b
+        text: "nftables cannot match UDP, and RoCEv2 is carried in UDP datagrams on destination port 4791."
+        explanation: "nftables matches UDP fine; the issue is that RoCE traffic never reaches it."
+      - id: c
+        text: "SSH must be blocked as well, because NCCL tunnels its RDMA traffic through the SSH session."
+        explanation: "NCCL does not tunnel RDMA through SSH; RDMA runs on the NIC's own transport."
+      - id: d
+        text: "The rules must be applied on the GPUs instead, because GPUDirect RDMA bypasses the CPU."
+        explanation: "GPUs do not run packet filters; enforcement belongs on switches and DPUs."
+    tags: [kernel-bypass, isolation]

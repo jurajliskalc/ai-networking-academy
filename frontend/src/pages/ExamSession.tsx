@@ -20,6 +20,15 @@ export default function ExamSession() {
   const [left, setLeft] = useState(0);
   const [done, setDone] = useState(false);
   const startedAt = useRef(0);
+  const questionRef = useRef<HTMLDivElement>(null);
+  const moved = useRef(false);
+  useEffect(() => {
+    if (!started) return;
+    if (!moved.current) { moved.current = true; return; }
+    questionRef.current?.focus();
+  }, [i, started]);
+  // Announce time only at a few thresholds; a per-second live timer would be unusable with a screen reader.
+  const timeNotice = left <= 60 && left > 0 ? '1 minute left.' : left <= 300 && left > 0 ? '5 minutes left.' : '';
 
   useEffect(() => {
     if (!started || done) return;
@@ -72,9 +81,9 @@ export default function ExamSession() {
     return (
       <div className="mx-auto max-w-3xl">
         <Card className="p-8">
-          <div className="text-center">
-            <div className="font-mono text-xs uppercase tracking-[0.14em] text-muted">{exam.title}</div>
-            <div className="mt-2 text-6xl font-extrabold tabular-nums">{result.score}%</div>
+          <div className="text-center" role="status">
+            <h1 className="font-mono text-xs uppercase tracking-[0.14em] text-muted"><span className="sr-only">Results: </span>{exam.title}</h1>
+            <div className="mt-2 text-6xl font-extrabold tabular-nums"><span className="sr-only">Your score: </span><span>{result.score}%</span></div>
             <div className={`mt-1 font-semibold ${passed ? 'text-accent' : 'text-warn'}`}>{passed ? 'Pass' : 'Below the pass mark'} · {result.right}/{exam.questions.length} correct</div>
           </div>
           <div className="mt-8 space-y-3">
@@ -84,7 +93,7 @@ export default function ExamSession() {
               return (
                 <div key={d.id}>
                   <div className="mb-1 flex justify-between text-sm"><span>{d.title}</span><span className="font-mono text-muted">{r}/{t}</span></div>
-                  <Bar value={pct} />
+                  <Bar value={pct} label={`${d.title}: score`} />
                 </div>
               );
             })}
@@ -107,25 +116,35 @@ export default function ExamSession() {
   const answered = Object.values(answers).filter((a) => a.length).length;
   return (
     <div className="mx-auto max-w-3xl">
+      <h1 className="sr-only">{exam.title}</h1>
       <div className="sticky top-14 z-10 -mx-4 mb-6 flex items-center gap-4 border-b border-line bg-bg/90 px-4 py-3 backdrop-blur">
-        <Link to="/exams" className="text-sm text-muted hover:text-fg">Exit</Link>
-        <Bar value={(100 * answered) / exam.questions.length} />
+        <Link to="/exams" className="text-sm text-muted hover:text-fg">Exit<span className="sr-only"> the exam (answers are not saved)</span></Link>
+        <Bar value={(100 * answered) / exam.questions.length} label="Questions answered" />
         <span className="font-mono text-xs text-muted">{answered}/{exam.questions.length}</span>
-        <span className={`flex items-center gap-1 font-mono text-sm tabular-nums ${left < 300 ? 'text-danger' : ''}`}><Timer size={15} />{fmt(left)}</span>
+        <span className={`flex items-center gap-1 font-mono text-sm tabular-nums ${left < 300 ? 'text-danger' : ''}`}><Timer size={15} aria-hidden /><span className="sr-only">Time left: </span><span>{fmt(left)}</span></span>
+        <span role="status" className="sr-only">{timeNotice}</span>
       </div>
       <Card className="p-6">
-        <QuestionCard q={q} index={i} total={exam.questions.length} chosen={answers[q.id] ?? []} onChange={(ids) => setAnswers((a) => ({ ...a, [q.id]: ids }))} revealed={false} seed={String(startedAt.current)} />
+        <div ref={questionRef} tabIndex={-1} className="outline-none" role="group" aria-label={`Question ${i + 1} of ${exam.questions.length}${flags[q.id] ? ', flagged' : ''}`}>
+          <QuestionCard q={q} index={i} total={exam.questions.length} chosen={answers[q.id] ?? []} onChange={(ids) => setAnswers((a) => ({ ...a, [q.id]: ids }))} revealed={false} seed={String(startedAt.current)} />
+        </div>
         <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
           <Button variant="ghost" onClick={() => setI(i - 1)} disabled={i === 0}><ArrowLeft size={16} />Back</Button>
-          <button onClick={() => setFlags((f) => ({ ...f, [q.id]: !f[q.id] }))} className={`flex items-center gap-1.5 text-sm ${flags[q.id] ? 'text-warn' : 'text-muted hover:text-fg'}`}><Flag size={15} />{flags[q.id] ? 'Flagged' : 'Flag'}</button>
+          <button type="button" aria-pressed={!!flags[q.id]} onClick={() => setFlags((f) => ({ ...f, [q.id]: !f[q.id] }))} className={`flex min-h-6 items-center gap-1.5 text-sm ${flags[q.id] ? 'text-warn' : 'text-muted hover:text-fg'}`}><Flag size={15} aria-hidden />{flags[q.id] ? 'Flagged' : 'Flag'}</button>
           {i < exam.questions.length - 1 ? <Button onClick={() => setI(i + 1)}>Next <ArrowRight size={16} /></Button> : <Button onClick={submit}>Submit exam</Button>}
         </div>
       </Card>
-      <div className="mt-6 grid grid-cols-10 gap-1.5">
-        {exam.questions.map((x, k) => (
-          <button key={x.id} onClick={() => setI(k)} className={`h-8 rounded-md border font-mono text-xs ${k === i ? 'border-fg' : flags[x.id] ? 'border-warn text-warn' : answers[x.id]?.length ? 'border-accent/50 bg-accent-soft' : 'border-line text-muted'}`}>{k + 1}</button>
-        ))}
-      </div>
+      <nav className="mt-6 grid grid-cols-10 gap-1.5" aria-label="Jump to question">
+        {exam.questions.map((x, k) => {
+          const st = [answers[x.id]?.length ? 'answered' : 'unanswered', flags[x.id] ? 'flagged' : ''].filter(Boolean).join(', ');
+          return (
+            <button key={x.id} type="button" onClick={() => setI(k)} aria-label={`Question ${k + 1}, ${st}`} aria-current={k === i ? 'step' : undefined}
+              className={`relative h-8 rounded-md border font-mono text-xs ${k === i ? 'border-fg' : flags[x.id] ? 'border-warn text-warn' : answers[x.id]?.length ? 'border-accent/50 bg-accent-soft' : 'border-line text-muted'}`}>
+              {k + 1}{flags[x.id] && <Flag size={9} aria-hidden className="absolute right-0.5 top-0.5" />}
+            </button>
+          );
+        })}
+      </nav>
       <div className="mt-6 text-center"><Button variant="ghost" onClick={submit}>Submit now ({exam.questions.length - answered} unanswered)</Button></div>
     </div>
   );

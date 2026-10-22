@@ -3,10 +3,12 @@ order: 10
 title: "Operations, telemetry and automation"
 level: 4
 summary: >
-  Counters that matter, streaming telemetry, fabric validation and burn-in, automation, and fabric management platforms.
+  Counters that matter, streaming telemetry, drop reasons and in-band telemetry, fabric validation and burn-in, automation, fabric management platforms and RDMA on Kubernetes.
 lessons:
   - telemetry-counters
   - streaming-telemetry-gnmi
+  - drop-reasons-in-band-telemetry
   - fabric-validation-burn-in
   - network-automation-for-ai
   - ufm-netq-management
+  - kubernetes-network-operator

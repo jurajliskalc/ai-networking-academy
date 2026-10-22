@@ -33,25 +33,25 @@ export default function Settings() {
     <div className="max-w-2xl space-y-6">
       <PageHeader eyebrow="Settings" title="Settings" />
       <Card className="p-5">
-        <div className="mb-3 font-semibold">Theme</div>
-        <div className="flex gap-2">{(['system', 'light', 'dark'] as const).map((t) => <Button key={t} variant={progress.settings.theme === t ? 'primary' : 'ghost'} onClick={() => setTheme(t)}>{t}</Button>)}</div>
+        <h2 id="theme-label" className="mb-3 font-semibold">Theme</h2>
+        <div className="flex gap-2" role="group" aria-labelledby="theme-label">{(['system', 'light', 'dark'] as const).map((t) => <Button key={t} variant={progress.settings.theme === t ? 'primary' : 'ghost'} pressed={progress.settings.theme === t} onClick={() => setTheme(t)}>{t}</Button>)}</div>
       </Card>
       <Card className="p-5">
-        <div className="font-semibold">Your data</div>
+        <h2 className="font-semibold">Your data</h2>
         <p className="mt-1 text-sm text-muted">Progress is stored only in this browser (localStorage). Nothing is sent anywhere. Export it to move between machines or keep a backup.</p>
         <div className="mt-4 flex flex-wrap gap-2">
           <Button variant="ghost" onClick={exportJson}><Download size={16} />Export progress</Button>
           <Button variant="ghost" onClick={() => file.current?.click()}><Upload size={16} />Import progress</Button>
-          <input ref={file} type="file" accept="application/json" className="hidden" onChange={(e) => e.target.files?.[0] && importJson(e.target.files[0])} />
+          <input ref={file} type="file" accept="application/json" className="hidden" aria-label="Progress file to import" onChange={(e) => e.target.files?.[0] && importJson(e.target.files[0])} />
           {!confirmReset ? <Button variant="danger" onClick={() => setConfirmReset(true)}><Trash2 size={16} />Reset all progress</Button>
             : <Button variant="danger" onClick={() => { replace({ ...emptyProgress(), settings: progress.settings }); setConfirmReset(false); setMsg('Progress reset.'); }}>Really reset everything?</Button>}
         </div>
-        {msg && <p className="mt-3 text-sm text-accent">{msg}</p>}
+        <p role="status" className="mt-3 text-sm text-accent empty:hidden">{msg}</p>
       </Card>
       <Card className="p-5 text-sm text-muted">
-        <div className="mb-1 font-semibold text-fg">About</div>
+        <h2 className="mb-1 font-semibold text-fg">About</h2>
         AI Networking Academy is an open, unofficial study platform. Product names belong to their owners; nothing here is endorsed by any vendor.
-        Mock exams are original practice material. Source, issues and contributions: <a className="text-data hover:underline" href={REPO_URL} target="_blank" rel="noreferrer">{REPO_URL.replace('https://', '')}</a>.
+        Mock exams are original practice material. Source, issues and contributions: <a className="text-data underline underline-offset-2" href={REPO_URL} target="_blank" rel="noreferrer">{REPO_URL.replace('https://', '')}<span className="sr-only"> (opens in a new tab)</span></a>.
       </Card>
     </div>
   );

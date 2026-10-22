@@ -32,17 +32,17 @@ questions:
       leaves do you need, and is the uplink capacity adequate?
     options:
       - id: a
-        text: 3 leaves; 48 uplinks x 400G = 19.2 Tb/s (2.4 TB/s), about 12 times the backend, so adequate.
+        text: 3 leaves; 48 x 400G uplinks = 19.2 Tb/s, about 12x the backend's 1.6 Tb/s, so adequate.
         correct: true
         explanation: ceil(128 / 48) = 3; 3 x 16 = 48 uplinks; 200 GB/s = 1.6 Tb/s, so uplinks have about 12x headroom.
       - id: b
-        text: 2 leaves; 32 uplinks, adequate.
+        text: 2 leaves; 32 uplinks x 400G = 12.8 Tb/s, well above the backend, so adequate.
         explanation: 2 leaves give only 96 down-ports for 128 node ports.
       - id: c
-        text: 4 leaves; uplinks inadequate because they are below 1:1.
+        text: 4 leaves; 64 uplinks, but inadequate, because any storage leaf below 1:1 becomes the bottleneck.
         explanation: 3 leaves suffice; and 1:1 is not required when the backend is far slower than the uplinks.
       - id: d
-        text: 3 leaves; 48 uplinks, inadequate because 19.2 Tb/s is less than 200 GB/s.
+        text: 3 leaves; 48 uplinks, but inadequate, because 19.2 Tb/s is less than the 200 GB/s backend.
         explanation: 200 GB/s is only 1.6 Tb/s; 19.2 Tb/s is much larger.
     tags: [storage-fabric, oversubscription]
   - id: q3
@@ -54,13 +54,13 @@ questions:
         correct: true
         explanation: GDS lets the NIC or NVMe device DMA directly to or from GPU memory.
       - id: b
-        text: The need for a filesystem.
+        text: The need for a filesystem, since GPUs read raw NVMe blocks directly.
         explanation: GDS works through supported filesystems and the cuFile API; it does not replace them.
       - id: c
-        text: The storage network itself, by using NVLink to reach storage.
+        text: The storage network itself, by reaching remote storage over NVLink instead.
         explanation: Remote storage still travels over the storage network.
       - id: d
-        text: All PCIe transfers.
+        text: All PCIe transfers between the storage device and GPU memory.
         explanation: Data still crosses PCIe; it just avoids the extra hop through host memory.
     tags: [gds]
   - id: q4
@@ -71,17 +71,17 @@ questions:
       likely cause and remedy?
     options:
       - id: a
-        text: Synchronized checkpoint writes collide with collectives; move storage to a separate fabric or give it an isolated class with guaranteed bandwidth.
+        text: Synchronized checkpoint writes collide with collectives; move storage to its own fabric or a guaranteed class.
         correct: true
-        explanation: The period matches the checkpoint interval and the converged design is the root cause.
+        explanation: The period matches the checkpoint interval and the converged design is the root cause; a separate fabric, or an isolated traffic class with guaranteed bandwidth, removes the collision.
       - id: b
-        text: The subnet manager re-sweeps every 30 minutes; disable it.
+        text: The subnet manager re-sweeps and reroutes the whole fabric every 30 minutes; disable the SM to stop it.
         explanation: Light sweeps do not cause minute-long bandwidth drops, and an InfiniBand fabric needs a running SM.
       - id: c
-        text: GPU thermal throttling; improve cooling.
-        explanation: Would not appear as a precise periodic network bandwidth drop tied to checkpoints.
+        text: GPUs thermally throttle under sustained load every half hour; improve rack cooling.
+        explanation: Throttling would not appear as a precise periodic network bandwidth drop tied to checkpoints.
       - id: d
-        text: ECMP rehashing on the spine; increase the MTU.
+        text: ECMP flows periodically rehash onto the same few spine links; raise the MTU so fewer packets collide.
         explanation: MTU does not influence hashing, and nothing triggers periodic rehashing here.
     tags: [converged, troubleshooting]
   - id: q5
@@ -91,18 +91,18 @@ questions:
       buffered read. What is the most likely explanation?
     options:
       - id: a
-        text: cuFile is running in compatibility mode through host memory because a GDS prerequisite (kernel module, supported mount or PCIe affinity) is missing.
+        text: cuFile is running in compatibility mode through host memory because a GDS prerequisite is missing.
         correct: true
-        explanation: Compatibility mode works but uses the CPU bounce path; check with the GDS tools and fix the prerequisite.
+        explanation: Compatibility mode works but uses the CPU bounce path; check with the GDS tools and fix the missing prerequisite (for example the kernel module, a supported mount or PCIe affinity).
       - id: b
-        text: GDS always uses more CPU than buffered I/O.
-        explanation: Reducing CPU involvement is one of GDS's goals.
+        text: GDS always uses more CPU than buffered I/O, because the CPU must copy into GPU memory.
+        explanation: Reducing CPU involvement is one of GDS's goals; with GDS working, the device DMAs straight into GPU memory and the CPU does not copy.
       - id: c
-        text: The compute fabric is oversubscribed.
-        explanation: The compute fabric is not on the storage path in a separate-fabric design.
+        text: The compute fabric is oversubscribed, so storage reads queue behind collective traffic.
+        explanation: The compute fabric is not on the storage path in a separate-fabric design, and congestion would not raise CPU use.
       - id: d
-        text: The GPU has too little memory for GDS.
-        explanation: Memory size does not switch GDS into the bounce path.
+        text: The GPU has too little memory for GDS, which must hold the whole file in GPU memory.
+        explanation: GDS transfers into the buffers you give it; it does not need the whole file in GPU memory, and memory size does not switch it into the bounce path.
     tags: [gds, troubleshooting]
   - id: q6
     type: multi
@@ -156,12 +156,12 @@ questions:
         correct: true
         explanation: OOB exists for recovery; dependencies on cluster DNS or authentication defeat it.
       - id: b
-        text: It must be non-blocking 1:1.
-        explanation: OOB traffic is tiny; bandwidth ratios are irrelevant.
+        text: It must be non-blocking 1:1 so console sessions and firmware updates never queue behind each other.
+        explanation: OOB traffic is tiny; bandwidth ratios are irrelevant compared with independence from the in-band services.
       - id: c
-        text: It must run RoCEv2 with PFC.
+        text: It must run RoCEv2 with PFC so BMC traffic stays lossless during recovery.
         explanation: OOB is simple 1GbE management traffic; no RDMA.
       - id: d
-        text: It should share switches with the compute fabric to save cost.
+        text: It should share switches with the compute fabric to save cost and cabling.
         explanation: Sharing fate with the data path is exactly what OOB is meant to avoid.
     tags: [oob]

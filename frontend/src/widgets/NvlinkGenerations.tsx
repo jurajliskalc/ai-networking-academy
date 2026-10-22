@@ -55,7 +55,7 @@ export default function NvlinkGenerations() {
 
   return (
     <div className="space-y-4">
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="NVLink generations table">
         <table className="w-full min-w-[700px] border-collapse text-sm">
           <thead>
             <tr className="border-b border-line text-left font-mono text-[10px] uppercase tracking-[0.12em] text-muted">
@@ -102,7 +102,7 @@ export default function NvlinkGenerations() {
         </div>
       </div>
 
-      <svg viewBox={`0 0 640 ${rows.length * 26 + 8}`} className="w-full" role="img" aria-label={`Per-GPU NVLink bandwidth by generation, ${basis === 'dir' ? 'per direction' : 'bidirectional'}, compared with a ${nic}G NIC`}>
+      <svg viewBox={`0 0 640 ${rows.length * 26 + 8}`} className="w-full" role="img" aria-label={`Per-GPU NVLink bandwidth by generation, ${basis === 'dir' ? 'per direction' : 'bidirectional'}, compared with a ${nic}G NIC: ${rows.map((r) => `${r.label} ${fmtBW(r.v)}${r.dashed ? ' (announced)' : ''}`).join('; ')}`}>
         {rows.map((r, i) => (
           <g key={r.key}>
             <text x={0} y={i * 26 + 18} fontSize={11} fill="var(--text)">{r.label}</text>
@@ -114,7 +114,7 @@ export default function NvlinkGenerations() {
 
       <div className="rounded-lg border border-line bg-panel-2 p-3">
         <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.14em] text-muted">Calculator: {g.gen} ({g.gpu}) vs {nic}G NIC</div>
-        <ol className="list-decimal space-y-1 pl-5 text-sm text-muted">
+        <ol className="list-decimal space-y-1 pl-5 text-sm text-muted" aria-live="polite">
           <li>NVLink per direction = {fmtBW(g.bidiGBs)} bidirectional / 2 = <b className="font-mono text-fg">{fmtBW(nvDir)}</b></li>
           <li>NIC per direction = {nic} Gb/s / 8 = <b className="font-mono text-fg">{nicDir} GB/s</b></li>
           <li>ratio = {nvDir} / {nicDir} = <b className="font-mono text-accent">{ratio.toFixed(1)}×</b> <span className="text-danger">(not {wrong.toFixed(0)}×: that mixes bidirectional NVLink with per-direction NIC)</span></li>
@@ -135,7 +135,7 @@ export default function NvlinkGenerations() {
           </label>
         </div>
         {mode === 'ar' && <p className="mt-2 text-sm text-muted">bytes sent per GPU = 2({n}−1)/{n} × {gb} GB = <span className="font-mono text-fg">{bytes.toFixed(3)} GB</span></p>}
-        <div className="mt-2 flex flex-wrap gap-2">
+        <div className="mt-2 flex flex-wrap gap-2" aria-live="polite">
           <Pill>NVLink: {bytes.toFixed(3)} GB / {nvDir} GB/s = <span className="font-mono text-accent">{fmtMs(tNv)} ms</span></Pill>
           <Pill>{nic}G NIC: {bytes.toFixed(3)} GB / {nicDir} GB/s = <span className="font-mono text-warn">{fmtMs(tNic)} ms</span></Pill>
         </div>

@@ -25,13 +25,13 @@ diagnosis:
       correct: true
       explanation: The rings need the same rails on every rank, so one node's restriction limits everyone. This is a classic leftover from a debugging session that bypassed configuration management.
     - id: b
-      text: Four of the eight leaves are oversubscribed.
-      explanation: There are no drops and no pause storms; the missing half is traffic that is never sent.
+      text: Rails 4-7 are oversubscribed at the spine layer, so half of the ring traffic queues behind the leaf uplinks.
+      explanation: Rail-local ring traffic stays on the leaves, and there are no drops and no pause storms. The missing half is traffic that is never sent, as the NCCL INFO line listing only four HCAs shows.
     - id: c
-      text: NCCL_IB_GID_INDEX is wrong on node03.
-      explanation: A wrong GID index makes connections fail outright.
+      text: node03 sets a wrong NCCL_IB_GID_INDEX, so its connections on four of the rails fail and NCCL skips them.
+      explanation: NCCL_IB_GID_INDEX is one value for all HCAs, and a wrong GID index makes connection setup fail outright (ibv_modify_qp times out) instead of dropping rails. node03's nccl.conf sets index 3.
     - id: d
-      text: NCCL picked the tree algorithm, which uses half the bandwidth.
+      text: NCCL picked the tree algorithm for these message sizes, and tree reaches only half the bus bandwidth of ring.
       explanation: The choice of algorithm does not halve bandwidth exactly, and NCCL INFO shows only four HCAs in use.
 checks:
   - { description: "node03 lets NCCL use all eight HCAs", check: nccl_hca_all, args: { node: node03 } }

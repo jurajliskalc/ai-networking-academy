@@ -8,17 +8,17 @@ questions:
     prompt: "Throughput collapses across three racks. Spine ports show continuous Tx and Rx PFC on priority 3. On Leaf 4, the downlink to host H31 shows Rx PFC rising at a constant high rate, and H31's ethtool -S shows tx_prio3_pause and tx_pause_storm_warning_events increasing. The other hosts show only rx_prio3_pause. What is happening?"
     options:
       - id: a
-        text: "A PFC storm rooted at H31's NIC, with back-pressure spreading through Leaf 4 and the spines to victim hosts"
+        text: "A PFC storm rooted at H31's NIC, spreading back-pressure through Leaf 4 and the spines to victims"
         correct: true
         explanation: "H31 sends pauses without receiving them, which makes it the root. Everyone else is only relaying or receiving back-pressure."
       - id: b
-        text: "A PFC deadlock between the spines"
+        text: "A PFC deadlock between the spines, caused by a cyclic buffer dependency after a reroute"
         explanation: "A deadlock has no root device sending pauses. Here there is a clear root."
       - id: c
-        text: "Normal incast congestion that DCQCN will resolve"
-        explanation: "Continuous pauses from one host, plus storm warning counters, are not normal congestion."
+        text: "Normal incast congestion toward H31 that DCQCN will resolve once senders reduce their rates"
+        explanation: "Continuous pauses sent by one host, plus storm warning counters on that host, are not normal congestion that DCQCN resolves."
       - id: d
-        text: "A spine hardware fault, because the spine shows the most PFC"
+        text: "A spine hardware fault, since the spines show continuous PFC in both directions and touch every rack"
         explanation: "Spines are victims here. Follow pauses to the device that sends them without receiving any."
     tags: [pfc-storm, troubleshooting]
   - id: q2
@@ -26,18 +26,18 @@ questions:
     prompt: "What distinguishes a PFC deadlock from a PFC storm?"
     options:
       - id: a
-        text: "A deadlock is a cyclic buffer dependency with no root sender, and it persists even when all traffic sources stop."
+        text: "A deadlock is a cyclic buffer dependency with no root sender; it persists even after all sources stop."
         correct: true
-        explanation: "Each buffer in the cycle waits on the next, so nothing drains without intervention."
+        explanation: "Each buffer in the cycle waits on the next, so nothing drains without intervention. A storm has a root and stops when the root is removed."
       - id: b
-        text: "A deadlock only affects lossy traffic."
+        text: "A deadlock affects only the lossy classes, while a storm is confined to the lossless priority."
         explanation: "Deadlock requires lossless back-pressure. Lossy queues drop instead."
       - id: c
-        text: "A deadlock clears when the PFC timers expire."
+        text: "A deadlock clears by itself once the PFC timers expire, while a storm needs the watchdog to act."
         explanation: "Switches keep refreshing pauses while buffers stay full, so timer expiry does not help."
       - id: d
-        text: "A deadlock is caused by a single faulty NIC."
-        explanation: "That describes the root of a storm."
+        text: "A deadlock is caused by a single faulty NIC that keeps pausing, while a storm needs a routing loop to form."
+        explanation: "It is the other way round: a single device that keeps pausing is the root of a storm. A deadlock needs a cycle of dependencies."
     tags: [deadlock]
   - id: q3
     type: multi
@@ -64,70 +64,70 @@ questions:
     prompt: "A switch PFC watchdog configured with the drop action detects a stormed queue. What does it do?"
     options:
       - id: a
-        text: "It discards packets queued for and arriving into that queue until the pause condition has cleared for the restoration time."
+        text: "It drops packets queued for, and arriving into, that queue until the pause has cleared for the restore time."
         correct: true
         explanation: "Sacrificing traffic to a stalled destination frees buffers upstream and collapses the congestion tree."
       - id: b
-        text: "It shuts down the physical port permanently."
+        text: "It shuts the physical port down until an operator re-enables it, isolating the stalled host from the fabric."
         explanation: "The watchdog acts per queue and restores automatically. Shutting the port is a manual choice."
       - id: c
-        text: "It sends XON frames to the host."
+        text: "It sends XON frames to the host so that the paused queue resumes transmission immediately."
         explanation: "The switch cannot override a host's pauses with XON. The watchdog changes how the switch handles the queue."
       - id: d
-        text: "It changes the DSCP of the affected traffic to a lossy class."
-        explanation: "Watchdogs do not remark traffic."
+        text: "It remarks the affected traffic to a lossy DSCP so that it can be dropped further downstream."
+        explanation: "Watchdogs do not remark traffic. With the drop action they discard it at the stormed queue itself."
     tags: [pfc-watchdog]
   - id: q5
     type: scenario
     prompt: "SONiC pfcwd show stats shows STORM DETECTED/RESTORED climbing to 40/40 over a day on one host-facing queue, and job throughput dips periodically. What is the right response?"
     options:
       - id: a
-        text: "Treat it as a host incident: drain the node and investigate its NIC, PCIe, firmware and OS for periodic stalls."
+        text: "Treat it as a host incident: drain the node and check its NIC, PCIe, firmware and OS for periodic stalls."
         correct: true
         explanation: "Repeated detect and restore cycles mean the host keeps stalling and recovering. The watchdog is containing a real fault."
       - id: b
-        text: "Disable the watchdog on that port to stop the drops."
-        explanation: "That removes the protection, and the next stall becomes a fabric-wide storm."
+        text: "Disable the watchdog on that port, since its drops are what cause the periodic throughput dips."
+        explanation: "The drops are a symptom of the host stalling. Disabling the watchdog removes the protection, and the next stall becomes a fabric-wide storm."
       - id: c
-        text: "Reduce the detection time to the minimum."
+        text: "Reduce the detection time to the minimum, so that each storm is contained before the job notices it."
         explanation: "Shorter detection may drop during legitimate congestion and does not fix the faulty host."
       - id: d
-        text: "Increase PFC headroom on the port."
-        explanation: "Headroom has nothing to do with a host that stops draining its buffer."
+        text: "Increase PFC headroom on that port, so that the queue can absorb each stall without triggering the watchdog."
+        explanation: "Headroom covers in-flight bytes after a pause. It has nothing to do with a host that stops draining its buffer."
     tags: [pfc-watchdog, operations]
   - id: q6
     type: single
     prompt: "What is the main prerequisite for running RoCE in lossy (resilient) mode, with ECN but no PFC?"
     options:
       - id: a
-        text: "NICs with efficient loss recovery (for example selective retransmission) and effective congestion control, validated for lossy operation"
+        text: "NICs with efficient loss recovery, such as selective retransmission, plus effective congestion control"
         correct: true
-        explanation: "Without PFC some drops occur. Go-back-N recovery makes them costly, so the NIC must handle loss well."
+        explanation: "Without PFC some drops occur. Go-back-N recovery makes them costly, so the NIC must handle loss well, and the combination should be validated for lossy operation."
       - id: b
-        text: "A larger PFC headroom reservation"
+        text: "A larger PFC headroom reservation on every port, to absorb the bursts that would otherwise be dropped"
         explanation: "Lossy mode does not use PFC, so it does not need headroom."
       - id: c
-        text: "Trusting PCP instead of DSCP"
-        explanation: "The trust mode is independent of whether the class is lossless or lossy."
+        text: "Trusting PCP instead of DSCP, so that the lossy RoCE class is marked consistently across routed hops"
+        explanation: "The trust mode is independent of whether the class is lossless or lossy, and PCP is rewritten at routed hops, which is why DSCP trust is usually preferred."
       - id: d
-        text: "Running RoCEv1 instead of RoCEv2"
-        explanation: "RoCEv1 is not routable and is unrelated to lossy operation."
+        text: "Running RoCEv1 instead of RoCEv2, because the UDP header of RoCEv2 cannot carry ECN marks"
+        explanation: "ECN lives in the IP header, which RoCEv2 has and RoCEv1 lacks. RoCEv1 is not routable and is unrelated to lossy operation."
     tags: [lossy-roce]
   - id: q7
     type: single
     prompt: "Which NIC-side mechanism protects the fabric from a host whose receive path has stalled?"
     options:
       - id: a
-        text: "Pause-storm prevention: the NIC stops sending pauses after it has paused continuously for a configured timeout."
+        text: "Pause-storm prevention: the NIC stops sending pauses after pausing continuously for a set timeout."
         correct: true
         explanation: "On mlx5 this is reflected in the tx_pause_storm_warning_events and tx_pause_storm_error_events counters, and the timeout is an ethtool tunable."
       - id: b
-        text: "DCQCN rate reduction on the stalled host"
-        explanation: "DCQCN controls the host's sending rate. It does not stop the pauses its receive buffer generates."
+        text: "DCQCN rate reduction, which slows the senders down until the stalled host's receive buffer drains again"
+        explanation: "DCQCN controls sending rates. A stalled receive path never drains, so it keeps generating pauses no matter how slowly traffic arrives."
       - id: c
-        text: "Global 802.3x pause"
+        text: "Global 802.3x link pause, which the NIC falls back to so that every class is held back evenly"
         explanation: "Link pause would make the problem worse by stopping all classes."
       - id: d
-        text: "Increasing the GID table size"
-        explanation: "GIDs are about addressing, not flow control."
+        text: "A larger NIC receive buffer, which absorbs the incoming traffic until the host recovers"
+        explanation: "A stalled host never drains, so any buffer eventually fills. Only stopping the pauses protects the fabric."
     tags: [pfc-storm, nic]

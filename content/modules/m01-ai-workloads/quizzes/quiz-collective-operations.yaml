@@ -15,7 +15,7 @@ questions:
         text: Broadcast followed by all-to-all.
         explanation: Neither operation performs a reduction across all ranks' data.
       - id: c
-        text: All-gather followed by broadcast.
+        text: All-gather followed by broadcast from rank 0.
         explanation: Without a reduction step, nobody computes the sum.
       - id: d
         text: Send followed by recv.
@@ -30,14 +30,14 @@ questions:
         correct: true
         explanation: 2(N-1) steps, each sending one S/N chunk.
       - id: b
-        text: "N x S"
+        text: "N x S, one full copy of the buffer per rank."
         explanation: That would be sending the whole buffer to every rank, which the ring avoids.
       - id: c
-        text: "S/N"
-        explanation: That is the size of one chunk in one step, not the total.
+        text: "S/N, a single chunk per rank for the whole ring."
+        explanation: S/N is the size of one chunk in one step; the ring takes 2(N-1) such steps.
       - id: d
-        text: "log2(N) x S"
-        explanation: The ring's volume does not grow with N at all; it approaches 2S.
+        text: "log2(N) x S, one full buffer per tree level."
+        explanation: A ring is not a tree, and its per-rank volume does not grow with N at all; it approaches 2S.
     tags: [ring, all-reduce]
   - id: q3
     type: scenario
@@ -51,14 +51,14 @@ questions:
         correct: true
         explanation: 2 x 1023 x 5 us is about 10 ms, while the bandwidth term is only about 0.04 ms.
       - id: b
-        text: Each rank sends 128 times more data with 1,024 ranks.
-        explanation: Data per rank approaches 2S for any large N; it barely changes.
+        text: Each rank sends about 128 times more data with 1,024 ranks, so the bandwidth term grows with the rank count.
+        explanation: Data per rank approaches 2S for any large N; it barely changes between 8 and 1,024 ranks.
       - id: c
-        text: Links become slower when more GPUs are attached.
-        explanation: Link bandwidth is fixed in the model; latency steps are what grow.
+        text: Each link is shared by more GPUs at 1,024 ranks, so the per-link rate in the ring drops roughly 128-fold.
+        explanation: Link bandwidth is fixed in the model and each ring link has one sender; latency steps are what grow.
       - id: d
-        text: The 1 MB buffer no longer fits in GPU memory.
-        explanation: 1 MB is tiny relative to GPU memory.
+        text: The 1 MB buffer no longer fits in GPU memory at 1,024 ranks, so it has to be staged through host memory.
+        explanation: 1 MB is tiny relative to GPU memory, and the per-rank buffer does not depend on the rank count.
     tags: [alpha-beta, latency]
   - id: q4
     type: single
@@ -110,13 +110,13 @@ questions:
         correct: true
         explanation: The bottleneck for this test shape is one NIC; using all eight NICs needs ranks on all eight GPUs.
       - id: b
-        text: Agree; busbw should reach about 400 GB/s in this test.
-        explanation: A single rank per server only uses its own nearby NIC, so the server total is not the right comparison.
+        text: Agree; busbw is reported per server, so this test should approach the full 3.2 Tb/s, about 400 GB/s.
+        explanation: busbw describes per-rank traffic, and a single rank per server only uses its own nearby NIC, so the server total is not the right comparison.
       - id: c
-        text: The result is meaningless because nccl-tests cannot measure inter-node bandwidth.
-        explanation: nccl-tests is the standard tool for exactly this purpose.
+        text: The result is meaningless, since nccl-tests only reports intra-node NVLink bandwidth and never measures traffic between nodes.
+        explanation: nccl-tests measures inter-node collectives all the time; it is the standard tool for exactly this purpose.
       - id: d
-        text: busbw must be multiplied by 8 to get the real server figure.
+        text: busbw must be multiplied by the 8 NICs to get the real server figure, which is then about 368 GB/s and fine.
         explanation: busbw is not a per-NIC share of a hidden total; with one rank only one NIC carries traffic.
     tags: [busbw, interpretation]
   - id: q7
@@ -128,12 +128,12 @@ questions:
         correct: true
         explanation: Many concurrent flows converge on each receiver, stressing buffers and congestion control.
       - id: b
-        text: It requires each rank to send N times the buffer size.
+        text: Each rank has to send N times its whole buffer, so total fabric traffic grows with the square of the number of ranks.
         explanation: Each rank sends about (N-1)/N of its buffer in total, split across peers.
       - id: c
-        text: It can only run on InfiniBand.
-        explanation: All-to-all runs on any transport NCCL supports.
+        text: It can only run over InfiniBand, whose credit-based flow control is the only way to carry it without loss.
+        explanation: All-to-all runs on any transport NCCL supports, including RoCE.
       - id: d
-        text: It performs reductions inside the switches.
-        explanation: All-to-all involves no reduction at all.
+        text: It performs the reductions inside the switches, so every switch on the path must buffer partial sums.
+        explanation: All-to-all involves no reduction at all; it only redistributes data.
     tags: [all-to-all]

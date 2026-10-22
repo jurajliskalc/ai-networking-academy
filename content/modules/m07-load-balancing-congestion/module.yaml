@@ -3,10 +3,11 @@ order: 7
 title: "Load balancing and congestion at scale"
 level: 3
 summary: >
-  Why ECMP fails for AI traffic, adaptive routing and packet spraying, incast, NVIDIA Spectrum-X and the Ultra Ethernet Consortium transport.
+  Why ECMP fails for AI traffic, adaptive routing and packet spraying, incast, congestion-control algorithms beyond DCQCN, NVIDIA Spectrum-X and the Ultra Ethernet Consortium transport.
 lessons:
   - flow-collisions-entropy
   - adaptive-routing-packet-spraying
   - incast-and-congestion-hotspots
+  - congestion-control-algorithms
   - spectrum-x-architecture
   - ultra-ethernet

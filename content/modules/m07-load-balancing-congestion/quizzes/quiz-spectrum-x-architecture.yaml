@@ -8,17 +8,17 @@ questions:
     prompt: "Which combination best describes the core of NVIDIA Spectrum-X?"
     options:
       - id: a
-        text: "Spectrum-4-class Ethernet switches plus BlueField-3 or ConnectX-8 SuperNICs, with NVIDIA software, designed to work together."
+        text: "Spectrum-4-class Ethernet switches plus BlueField-3 or ConnectX-8 SuperNICs and NVIDIA software, designed together."
         correct: true
         explanation: "Spectrum-X is an end-to-end platform; its key features require both switch and NIC."
       - id: b
-        text: "Quantum InfiniBand switches running an Ethernet personality."
+        text: "Quantum InfiniBand switches running an Ethernet personality, paired with ConnectX NICs in Ethernet mode."
         explanation: "Quantum is NVIDIA's InfiniBand switch line; Spectrum-X uses Spectrum Ethernet switches."
       - id: c
-        text: "Any 51.2 Tb/s Ethernet switch with any RoCE NIC."
-        explanation: "Generic combinations lack the coordinated AR and congestion-control features."
+        text: "Any 51.2 Tb/s Ethernet switch with any RoCE-capable NIC, made into Spectrum-X by an NVIDIA software stack on the hosts."
+        explanation: "Generic combinations lack the coordinated switch and NIC features (AR with NIC reordering, telemetry-based congestion control)."
       - id: d
-        text: "A new transport protocol that replaces RoCEv2."
+        text: "A new NVIDIA transport protocol that replaces RoCEv2 between BlueField NICs and Spectrum switches."
         explanation: "Spectrum-X still uses RoCEv2; UEC is the effort defining a new transport."
     tags: [spectrum-x]
   - id: q2
@@ -26,17 +26,17 @@ questions:
     prompt: "What allows Spectrum-X to spray packets of a RoCE flow across all paths without the reordering collapse seen on generic RoCE NICs?"
     options:
       - id: a
-        text: "The receiving SuperNIC places out-of-order packets directly in memory and completes messages only when all packets arrived."
+        text: "The receiving SuperNIC places out-of-order packets directly in memory and completes a message once all have arrived."
         correct: true
         explanation: "NVIDIA describes this as direct data placement in the SuperNIC, absorbing reordering at the endpoint."
       - id: b
-        text: "The switches buffer and reorder packets before forwarding them."
+        text: "The switches buffer and reorder each flow's packets at the egress leaf, so the host NIC only ever sees them in order."
         explanation: "That is how cell-based scheduled fabrics work; Spectrum-X moves reordering to the NIC."
       - id: c
-        text: "PFC pauses ensure packets always arrive in order."
+        text: "PFC pauses hold the faster paths back, so the packets of each flow still arrive in order."
         explanation: "PFC prevents loss from congestion; it does not fix ordering across different paths."
       - id: d
-        text: "NCCL resends any out-of-order message at the application level."
+        text: "NCCL detects out-of-order arrivals and resends the affected messages at the application level."
         explanation: "Reordering is handled in NIC hardware, not by NCCL retransmissions."
     tags: [adaptive-routing, ddp]
   - id: q3
@@ -44,54 +44,54 @@ questions:
     prompt: "A cluster has Spectrum-4 leaves with RoCE adaptive routing enabled on all ports. A newly added storage rack uses third-party RoCE NICs, and its RDMA throughput is poor with rising sequence-error counters. What is the most appropriate fix?"
     options:
       - id: a
-        text: "Do not apply per-packet adaptive routing to traffic toward endpoints that cannot absorb reordering; use ECMP for that traffic or class."
+        text: "Do not apply per-packet AR to traffic toward endpoints that cannot absorb reordering; use ECMP for that traffic."
         correct: true
-        explanation: "The AR benefit requires reordering support at the receiver; third-party NICs may not have it."
+        explanation: "The AR benefit requires reordering support at the receiver; third-party NICs may not have it. Keep ECMP for that traffic or class."
       - id: b
-        text: "Increase the PFC headroom on the storage leaf."
+        text: "Increase the PFC headroom on the storage leaf, so the third-party NICs stop losing packets under load."
         explanation: "Headroom affects loss under pause, not reordering-induced sequence errors."
       - id: c
-        text: "Raise ECN thresholds so fewer packets are marked."
-        explanation: "ECN marking is unrelated to the sequence errors."
+        text: "Raise the ECN thresholds on the storage leaf, so that fewer of the storage flows are marked and throttled by DCQCN."
+        explanation: "ECN marking is unrelated to the sequence errors, which come from reordering at NICs that cannot absorb it."
       - id: d
-        text: "Replace the spine switches."
-        explanation: "The spines are not the cause; the endpoints' lack of reordering support is."
+        text: "Replace the spine switches, because the sequence errors point to packet corruption in the spine tier."
+        explanation: "Corruption would show as FCS or symbol errors on the links, not only as sequence errors at the third-party NICs. The endpoints' lack of reordering support is the cause."
     tags: [deployment, troubleshooting]
   - id: q4
     type: single
     prompt: "How does NVIDIA describe Spectrum-X congestion control differing from classic DCQCN?"
     options:
       - id: a
-        text: "It runs on the SuperNIC and uses telemetry from the switches in addition to end-to-end signals, reacting earlier and more precisely."
+        text: "It runs on the SuperNIC and adds switch telemetry to end-to-end signals, so it reacts earlier and more precisely."
         correct: true
         explanation: "DCQCN relies on ECN marks and CNPs; Spectrum-X adds switch telemetry, per NVIDIA."
       - id: b
-        text: "It removes congestion control entirely because adaptive routing prevents all congestion."
+        text: "It removes congestion control entirely, because adaptive routing already prevents all congestion."
         explanation: "AR cannot fix endpoint incast, so congestion control remains essential."
       - id: c
-        text: "It runs only in the switches, which drop packets to slow senders."
+        text: "It runs only in the switches, which drop selected packets so that the senders slow down on their own."
         explanation: "The algorithm runs on the NIC; dropping is not the mechanism."
       - id: d
-        text: "It uses TCP congestion control inside the NIC."
-        explanation: "RoCE traffic does not use TCP."
+        text: "It runs a TCP-style congestion control inside the NIC, using duplicate ACKs returned by the receiver as its loss signal."
+        explanation: "RoCE traffic does not use TCP, and Spectrum-X congestion control is not loss-based."
     tags: [congestion-control]
   - id: q5
     type: scenario
     prompt: "In a design review, a colleague states as fact that Spectrum-X 'achieves 95 % effective bandwidth while Ethernet only gets 60 %'. What is the best response?"
     options:
       - id: a
-        text: "Attribute it as NVIDIA's published figure under NVIDIA's conditions, and propose a validation plan comparing tuned ECMP and Spectrum-X on our workload."
+        text: "Cite it as NVIDIA's figure under NVIDIA's conditions, and propose measuring tuned ECMP vs Spectrum-X on our workload."
         correct: true
         explanation: "Vendor numbers depend on baseline, workload and scale; your own measurements are what a design should rely on."
       - id: b
-        text: "Accept it, since NVIDIA measured it on a large cluster."
+        text: "Accept it as fact, since a vendor-published benchmark from a large cluster will apply to our design too."
         explanation: "A figure from one deployment does not automatically apply to another topology and workload."
       - id: c
-        text: "Reject it as impossible, since Ethernet cannot exceed 60 % efficiency."
+        text: "Reject it as impossible, since Ethernet fabrics cannot exceed about 60 % effective bandwidth."
         explanation: "Well-balanced Ethernet fabrics can achieve high efficiency; the 60 % figure refers to a collision-affected baseline."
       - id: d
-        text: "Replace the figure with InfiniBand's typical efficiency."
-        explanation: "That is not a validation approach either."
+        text: "Replace it with InfiniBand's typical efficiency figure, which is the accepted industry baseline."
+        explanation: "Swapping in another unvalidated number is not a validation approach either."
     tags: [claims, validation]
   - id: q6
     type: multi
@@ -118,16 +118,16 @@ questions:
     prompt: "What does Spectrum-X performance (noise) isolation provide, and what does it not?"
     options:
       - id: a
-        text: "It limits how one job's traffic degrades another's performance, but it does not replace VRFs, EVPN or partitioning for tenant segmentation."
+        text: "It limits how one job's traffic degrades another's, but does not replace VRFs, EVPN or partitioning for segmentation."
         correct: true
         explanation: "Performance isolation is about bandwidth and latency interference, not address separation or access control."
       - id: b
-        text: "It encrypts each tenant's traffic separately."
+        text: "It encrypts each tenant's traffic with separate keys, so one job cannot read or disturb another's."
         explanation: "Encryption is a different feature; isolation here is about performance."
       - id: c
-        text: "It assigns each tenant a dedicated physical spine."
+        text: "It assigns each tenant a dedicated physical spine plane, so that different jobs never share any of the links in the fabric core."
         explanation: "Isolation is achieved through AR and congestion control on shared infrastructure."
       - id: d
-        text: "It removes the need for QoS configuration."
-        explanation: "Spectrum-X still builds on a correct RoCE QoS configuration."
+        text: "It replaces the RoCE QoS configuration, since AR and congestion control handle every class."
+        explanation: "Spectrum-X still builds on a correct RoCE QoS configuration (lossless class, ECN, CNP priority)."
     tags: [isolation]

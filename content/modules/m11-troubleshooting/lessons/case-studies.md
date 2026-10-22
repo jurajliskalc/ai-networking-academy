@@ -221,7 +221,7 @@ LnkCap: Port #0, Speed 32GT/s, Width x16
 LnkSta: Speed 32GT/s, Width x8 (downgraded)
 ```
 
-Gen5 x8 delivers roughly half the PCIe bandwidth of x16, so on a 400G NIC rail 5 of this node could not sustain line rate once protocol overhead was included. Because the job's collectives span all rails and every ring step waits for its slowest hop, the whole job slowed.
+Gen5 x8 delivers roughly half the PCIe bandwidth of x16 (about 252 Gb/s per direction before protocol overhead), so rail 5 of this node could not get near 400G line rate. Because the job's collectives span all rails and every ring step waits for its slowest hop, the whole job slowed.
 
 **Why admission missed it.** The DCGM diagnostic validated the GPUs (including the GPU PCIe links) but not the NIC links, and the admission script checked that the NICs were present and "up", not their PCIe width or achieved bandwidth.
 

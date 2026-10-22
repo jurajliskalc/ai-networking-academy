@@ -19,18 +19,18 @@ diagnosis:
   prompt: What is the root cause?
   options:
     - id: a
-      text: node04 enp41s0np0 has a netdev MTU of 1500, so the RoCE active MTU drops to 1024 bytes on rail 1 and every message needs four times as many packets.
+      text: node04 enp41s0np0 has a netdev MTU of 1500, so RoCE on rail 1 falls back to 1024-byte packets and loses efficiency.
       correct: true
-      explanation: ConnectX NICs derive the RoCE active MTU from the netdev MTU, and a connection's path MTU is the minimum of both ends. All rail-1 connections with node04 therefore use 1024-byte packets, which costs efficiency.
+      explanation: ConnectX NICs derive the RoCE active MTU from the netdev MTU, and a connection's path MTU is the minimum of both ends. All rail-1 connections with node04 therefore use 1024-byte packets, so every message needs four times as many packets as with 4096.
     - id: b
-      text: The leaf02 port MTU is 1500, so jumbo frames are dropped.
-      explanation: A switch-side MTU problem drops full-size packets and makes jobs fail; here nothing fails.
+      text: leaf02 swp4, facing node04, came back with an MTU of 1500, so full-size rail-1 RoCE packets are dropped and retransmitted.
+      explanation: nv show interface shows 9216 on every leaf02 port. A switch-side MTU problem drops full-size packets and makes jobs fail; here nothing fails.
     - id: c
-      text: PFC is misconfigured on node04.
-      explanation: There are no drops and no abnormal pause counters, and the slowdown is visible in unloaded tests.
+      text: The profile change left PFC misconfigured on node04 mlx5_1, so rail-1 traffic is paused more than the others.
+      explanation: mlnx_qos on node04 shows the same PFC settings as the other nodes, there are no drops and no abnormal pause counters, and the slowdown is visible in unloaded ib_write_bw tests.
     - id: d
-      text: The NIC is limited by PCIe.
-      explanation: lspci shows a Gen5 x16 link.
+      text: node04 mlx5_1 trained at a reduced PCIe width, so it cannot feed its 400G port and paces the rail-1 ring.
+      explanation: lspci shows a Gen5 x16 link, and ib_write_bw reports Mtu 1024 on rail 1, which points at the MTU.
 checks:
   - { description: "node04 enp41s0np0 MTU is 9000", check: host_mtu, args: { node: node04, rail: 1, value: 9000 } }
   - { description: "all_reduce bus bandwidth is above 360 GB/s", check: allreduce_min_busbw, args: { value: 360 } }

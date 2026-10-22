@@ -62,17 +62,17 @@ questions:
     prompt: "You need 4,096 400G GPU NICs connected non-blocking. Your switches are 51.2 Tb/s and can run as 64 x 800G or 128 x 400G. What is the most economical topology?"
     options:
       - id: a
-        text: Two tiers with the switches configured as 128 x 400G, since 128 squared over 2 is 8,192 endpoints.
+        text: Two tiers, with the switches run as 128 x 400G, which reaches 8,192 endpoints.
         correct: true
-        explanation: Doubling the radix by running 400G ports keeps the fabric at two tiers, saving a layer of optics and switches.
+        explanation: 128 squared over 2 is 8,192, more than 4,096. Doubling the radix by running 400G ports keeps the fabric at two tiers, saving a layer of optics and switches.
       - id: b
-        text: Three tiers with 64 x 800G, because two tiers only reach 2,048 endpoints.
+        text: Three tiers with 64 x 800G, because two tiers at radix 64 only reach 2,048 endpoints.
         explanation: True at radix 64, but running the switches at 400G avoids the third tier entirely.
       - id: c
-        text: A single giant chassis switch.
+        text: A single large modular chassis switch with 4,096 x 400G ports.
         explanation: No single switch has 4,096 400G ports; that is exactly why Clos fabrics exist.
       - id: d
-        text: A three-tier design with STP to block loops.
+        text: A three-tier design that uses STP to block the redundant loops.
         explanation: Routed Clos fabrics do not use STP, and three tiers are unnecessary here.
     tags: [sizing, radix]
   - id: q5
@@ -100,15 +100,15 @@ questions:
     prompt: "On a leaf with four uplinks to four spines, the route to a remote leaf's prefix shows only three next hops. All four links are physically up. What is the most plausible cause?"
     options:
       - id: a
-        text: The routing session (or route acceptance) on one uplink is missing, so that spine's path is not installed.
+        text: The BGP session or route acceptance on one uplink is missing, so that spine's path is not installed.
         correct: true
         explanation: Each spine should contribute one equal-cost next hop; check the BGP session and multipath settings on the missing link.
       - id: b
-        text: ECMP is limited to three paths by the IEEE standard.
-        explanation: There is no such limit; switches support many more ECMP members.
+        text: ECMP is capped at three members by the IEEE standard, so the fourth equal-cost path is held back as a standby.
+        explanation: No IEEE standard caps ECMP at three, and there is no standby path; switches support many more ECMP members.
       - id: c
-        text: Spines never advertise routes for leaves.
-        explanation: Spines relay leaf routes to the other leaves; that is their job.
+        text: Spines never re-advertise leaf prefixes, so the three next hops must be static routes left from provisioning.
+        explanation: Spines relay leaf routes to the other leaves; that is their job, and nothing points to static routes.
     tags: [ecmp, verification]
   - id: q7
     type: single
@@ -119,9 +119,9 @@ questions:
         correct: true
         explanation: Same topology; only the assignment of server ports to leaves changes, so same-index GPUs are one leaf apart.
       - id: b
-        text: It replaces spines with NVLink switches.
+        text: It keeps the leaves but replaces the spine layer with NVLink switches that join the rails.
         explanation: NVLink is the scale-up network inside the domain; the rail fabric is scale-out.
       - id: c
-        text: It is a ring topology with no spines.
-        explanation: Rails still need spines for cross-rail traffic.
+        text: It is a ring of rail switches with no spines, each handing traffic on to its neighbouring rail.
+        explanation: Rails are leaves of a Clos and still need spines for cross-rail traffic; there is no ring.
     tags: [rail-optimized]

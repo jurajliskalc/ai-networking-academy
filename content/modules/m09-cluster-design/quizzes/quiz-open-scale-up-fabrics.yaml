@@ -1,0 +1,150 @@
+id: quiz-open-scale-up-fabrics
+title: "Knowledge check: Open scale-up fabrics"
+lesson: open-scale-up-fabrics
+pass_pct: 70
+questions:
+  - id: q1
+    type: single
+    prompt: "Which statement about UALink and Ethernet is accurate for the UALink 200G 1.0 specification?"
+    options:
+      - id: a
+        text: "It reuses an IEEE 802.3-based PHY and FEC but defines its own data link, transaction and protocol layers."
+        correct: true
+        explanation: "The white paper describes an 802.3-based PHY with minor changes, under UALink-specific DL, TL and protocol layers."
+      - id: b
+        text: "It carries load/store requests inside standard Ethernet frames, so any Ethernet switch can forward UALink traffic."
+        explanation: "UALink does not use Ethernet framing above the PHY; it needs UALink switches."
+      - id: c
+        text: "It runs RoCEv2 verbs over a reserved Ethernet priority, with PFC providing the lossless behaviour it needs."
+        explanation: "UALink is memory-semantic (read, write, atomics) with link-level replay and credits, not RoCE verbs over PFC."
+      - id: d
+        text: "It replaces the Ethernet PHY with a new PCIe-derived SerDes, so it cannot reuse Ethernet cables or retimers."
+        explanation: "Reusing Ethernet cables, connectors and retimers is an explicit UALink goal."
+    tags: [ualink]
+  - id: q2
+    type: single
+    prompt: "In UALink 1.0, what is a station, and how much bandwidth does it offer?"
+    options:
+      - id: a
+        text: "A group of four 200G lanes, up to 800 Gb/s in each direction."
+        correct: true
+        explanation: "Four lanes form a station with a maximum of 800 Gb/s transmit and 800 Gb/s receive."
+      - id: b
+        text: "One UALink switch chip, up to 1,024 ports of 200 Gb/s each."
+        explanation: "1,024 is the accelerator limit of a pod, not a station or a switch radix."
+      - id: c
+        text: "A group of eight 100G lanes, up to 800 Gb/s summed over both directions."
+        explanation: "A station is four lanes at 200G, and the 800 Gb/s figure applies to each direction."
+      - id: d
+        text: "A rack of accelerators sharing one virtual pod, at 1.8 TB/s per accelerator."
+        explanation: "Virtual pods are partitions; 1.8 TB/s is an NVLink 5 bidirectional figure."
+    tags: [ualink, bandwidth]
+  - id: q3
+    type: scenario
+    prompt: "A hypothetical design gives each accelerator 32 lanes at 200 Gb/s and uses single-tier switches with 512 lanes, one port per accelerator per switch. Configured with x4 ports, how many switch planes are needed and how many accelerators fit in the domain?"
+    options:
+      - id: a
+        text: "8 planes and 128 accelerators, each accelerator at 800 GB/s per direction."
+        correct: true
+        explanation: "32 / 4 = 8 ports, so 8 planes; 512 / 4 = 128 ports per switch; 32 x 200 Gb/s = 6.4 Tb/s = 800 GB/s."
+      - id: b
+        text: "32 planes and 512 accelerators, each accelerator at 800 GB/s per direction."
+        explanation: "That is the x1-port case; x4 ports reduce both the plane count and the radix by four."
+      - id: c
+        text: "8 planes and 512 accelerators, each accelerator at 200 GB/s per direction."
+        explanation: "With x4 ports a 512-lane switch has 128 ports, and bandwidth per accelerator does not depend on port width."
+      - id: d
+        text: "4 planes and 1,024 accelerators, each accelerator at 1.6 TB/s per direction."
+        explanation: "1,024 is the UALink pod limit, not what this switch builds in one hop, and the bandwidth is miscounted."
+    tags: [sizing, ualink]
+  - id: q4
+    type: scenario
+    prompt: "Your kernels issue mostly 64-byte remote writes. A vendor offers a scale-up Ethernet mode that shrinks the per-transfer header from 46 to 10 bytes. Ignoring preamble, gap and FEC, what is the approximate payload efficiency before and after?"
+    options:
+      - id: a
+        text: "About 58% before and about 86% after."
+        correct: true
+        explanation: "64 / (64 + 46) = 58.2% and 64 / (64 + 10) = 86.5%."
+      - id: b
+        text: "About 85% before and about 96% after."
+        explanation: "Those are the figures for 256-byte payloads, not 64-byte ones."
+      - id: c
+        text: "About 72% before and about 98% after."
+        explanation: "Recompute: 64 / 110 and 64 / 74."
+      - id: d
+        text: "No change, because header bytes are hidden by FEC overhead."
+        explanation: "FEC applies to every option; header bytes still consume link time per transfer."
+    tags: [headers, ethernet]
+  - id: q5
+    type: single
+    prompt: "What is the scope of the OCP ESUN workstream announced in October 2025?"
+    options:
+      - id: a
+        text: "Open Ethernet switching and framing for scale-up; endpoint transport is handled in the separate SUE-T workstream."
+        correct: true
+        explanation: "OCP limits ESUN to the network side (initially L2/L3 framing and switching) and moved endpoint work to SUE-T."
+      - id: b
+        text: "A full host software stack and collective library for Ethernet scale-up, replacing NCCL and RCCL."
+        explanation: "OCP explicitly excludes host-side stacks and application-layer solutions from ESUN."
+      - id: c
+        text: "A new non-Ethernet link protocol for accelerators, competing with UALink at the physical layer."
+        explanation: "ESUN is about standards-based Ethernet; non-Ethernet protocols are out of scope."
+      - id: d
+        text: "A certification programme that tests NVLink Fusion products for interoperability with Ethernet."
+        explanation: "ESUN is a technical workstream on Ethernet switching and framing, not a certification for NVLink Fusion."
+    tags: [esun, ocp]
+  - id: q6
+    type: multi
+    prompt: "Which mechanisms address the reliability and loss problems of using Ethernet as a scale-up fabric? (Select all that apply.)"
+    options:
+      - id: a
+        text: "Link-layer retry (LLR), which resends a corrupted frame on the link where the error occurred."
+        correct: true
+        explanation: "LLR hides bit errors from the end-to-end transport, as UALink's link-level replay does."
+      - id: b
+        text: "Credit-based flow control (CBFC), so a sender transmits only when the receiver has buffer."
+        correct: true
+        explanation: "Credits prevent buffer overflow drops, like InfiniBand link-level credits."
+      - id: c
+        text: "Raising the ECMP hash seed so packets avoid congested links."
+        explanation: "Hash changes affect path selection, not link-level loss or reliability."
+      - id: d
+        text: "Increasing the RoCE retransmission timeout so lost packets are recovered end to end."
+        explanation: "Longer end-to-end timeouts make recovery slower, the opposite of what scale-up needs."
+    tags: [llr, cbfc]
+  - id: q7
+    type: scenario
+    prompt: "A proposal claims that an announced rack with 260 TB/s of aggregate scale-up bandwidth is twice as good as an installed rack with 130 TB/s. What should you do first?"
+    options:
+      - id: a
+        text: "Normalize both to per-accelerator, per-direction bandwidth and confirm which rack actually ships."
+        correct: true
+        explanation: "Aggregate figures mix accelerator count, generation and bidirectional counting; roadmap products need availability checks."
+      - id: b
+        text: "Accept the claim, since aggregate rack bandwidth is the standard way to compare domains."
+        explanation: "Aggregates hide per-accelerator differences and the bidirectional convention."
+      - id: c
+        text: "Reject the claim, since open scale-up fabrics cannot reach NVLink-class bandwidth."
+        explanation: "Dismissing it without arithmetic is as wrong as accepting it; compare like for like."
+      - id: d
+        text: "Compare the scale-out NIC speeds instead, because they decide scale-up bandwidth."
+        explanation: "Scale-out NICs serve a different network; scale-up bandwidth is set by the scale-up links."
+    tags: [evaluation]
+  - id: q8
+    type: single
+    prompt: "How does Google's TPU interconnect on v4, v5p and TPU7x, as described in Google Cloud documentation, differ from switched designs such as NVLink Switch or UALink?"
+    options:
+      - id: a
+        text: "TPU chips use direct ICI links in a torus, with optical circuit switches joining 64-chip cubes."
+        correct: true
+        explanation: "Google describes 4x4x4 cubes of copper ICI links joined by optical links and reconfigurable OCS into a 3D torus."
+      - id: b
+        text: "TPU chips attach to UALink switches, one port per chip per plane, in pods of 1,024."
+        explanation: "That is the UALink model, not Google's documented TPU interconnect."
+      - id: c
+        text: "TPU chips exchange all traffic through RoCEv2 NICs on a rail-optimized Ethernet leaf-spine."
+        explanation: "Google describes dedicated ICI links within slices, not RoCE NICs for chip-to-chip traffic."
+      - id: d
+        text: "TPU chips share one NVLink Fusion domain through NVLink-C2C chiplets in every tray."
+        explanation: "NVLink Fusion is NVIDIA's offering; Google's documentation describes ICI."
+    tags: [tpu, topology]

@@ -12,7 +12,7 @@ questions:
         correct: true
         explanation: Each GPU computes gradients on its own data slice; they must be averaged so every model copy applies the same update.
       - id: b
-        text: During the forward pass, when each GPU sends its input batch to every other GPU.
+        text: During the forward pass, when each GPU sends its own input batch to every other GPU in the job.
         explanation: In data parallelism each GPU processes its own data; inputs are not exchanged between GPUs.
       - id: c
         text: Only at the end of training, when the final model is saved.
@@ -65,17 +65,17 @@ questions:
       NIC affect the whole job?
     options:
       - id: a
-        text: Every step ends with collectives that include that NIC, and synchronous training cannot start the next step until the slowest participant finishes.
+        text: Every step ends with collectives that include that NIC, and the next step cannot start until the slowest participant finishes.
         correct: true
-        explanation: The straggler sets the step time for all 512 GPUs.
+        explanation: In synchronous training the straggler sets the step time for all 512 GPUs.
       - id: b
-        text: The slow NIC broadcasts errors that slow every other NIC.
+        text: The slow NIC floods the fabric with link errors and retransmissions, which slow every other NIC in the job to its speed.
         explanation: A slow link does not degrade other links; the others simply wait for it.
       - id: c
-        text: The job scheduler reduces all GPUs to the slowest NIC's speed as a policy.
+        text: The job scheduler throttles all GPUs to the speed of the slowest NIC as a policy, to keep the ranks in lock-step.
         explanation: There is no such policy; the slowdown is a natural consequence of synchronisation.
       - id: d
-        text: It cannot; the slowdown must come from the GPUs.
+        text: It cannot; a 200 Gb/s NIC still exceeds what the GPUs need, so the slowdown must come from the GPUs themselves.
         explanation: Compute time is unchanged, so the extra 0.3 s is exposed communication.
     tags: [straggler, synchronous]
   - id: q5
@@ -108,14 +108,14 @@ questions:
         correct: true
         explanation: Periodic, cluster-wide stalls with a quiet compute fabric point to checkpoint I/O.
       - id: b
-        text: An ECMP hash collision on the back-end fabric.
+        text: An ECMP hash collision on the back-end fabric that stalls every all-reduce until the colliding flows are rehashed.
         explanation: A collision would show traffic on the back-end and would not repeat on a strict 30-minute period.
       - id: c
-        text: A GPU overheating on one node.
-        explanation: That would cause a straggler on every step, not a periodic global stall.
+        text: A GPU overheating on one node, which throttles its clocks and periodically halts every other rank in the job.
+        explanation: A throttled GPU would cause a straggler on every step, not a periodic global stall.
       - id: d
-        text: The optimizer step taking two minutes.
-        explanation: The optimizer step is part of every training step and takes milliseconds.
+        text: The optimizer step, which applies the accumulated gradients and needs two minutes for a model of this size.
+        explanation: The optimizer step is part of every training step and takes milliseconds, not minutes every half hour.
     tags: [checkpointing, storage]
   - id: q7
     type: single
@@ -126,12 +126,12 @@ questions:
         correct: true
         explanation: MFU summarises how much of the expensive compute is wasted waiting, including waiting on the network.
       - id: b
-        text: The fraction of network bandwidth used by the model.
+        text: The fraction of back-end network bandwidth used by model traffic, which rises as the collectives get better tuned.
         explanation: MFU is a compute metric, not a network utilisation metric.
       - id: c
-        text: The memory footprint of the model in GPU memory.
-        explanation: That is memory usage, not FLOPs utilisation.
+        text: The model's footprint as a share of GPU memory, which network engineers use to size NIC and switch buffers.
+        explanation: That is memory usage, not FLOPs utilisation, and it does not size network buffers.
       - id: d
-        text: The number of model files stored on the storage system.
-        explanation: MFU has nothing to do with file counts.
+        text: The rate at which model files are written to storage during checkpoints, which sizes the storage network.
+        explanation: MFU has nothing to do with checkpoint write rates or file counts.
     tags: [mfu]

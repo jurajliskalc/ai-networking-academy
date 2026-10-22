@@ -104,7 +104,7 @@ function Seg<T extends string | number>({ label, value, options, onChange, rende
   return (
     <div>
       <div className="mb-1 font-mono text-[10px] uppercase tracking-[0.14em] text-muted">{label}</div>
-      <div className="flex flex-wrap gap-1">
+      <div className="flex flex-wrap gap-1" role="group" aria-label={label}>
         {options.map((o) => (
           <button key={String(o)} type="button" onClick={() => onChange(o)} aria-pressed={o === value}
             className={`rounded-md border px-2 py-1 font-mono text-xs transition ${o === value ? 'border-accent bg-accent-soft text-accent' : 'border-line bg-panel hover:bg-panel-2'}`}>
@@ -150,7 +150,7 @@ function Diagram({ d }: { d: Design }) {
   const gapY = 70;
   const h = rows.length * gapY + 10;
   return (
-    <svg viewBox={`0 0 760 ${h}`} className="w-full" role="img" aria-label="Fabric tiers diagram">
+    <svg viewBox={`0 0 760 ${h}`} className="w-full" role="img" aria-label={`Fabric tiers diagram: ${rows.map((r) => `${fmt(r.count)} ${r.label}`).join(', ')}`}>
       {rows.slice(0, -1).map((r, i) => {
         const a = rowCenters(r.count), b = rowCenters(rows[i + 1].count);
         return (
@@ -195,7 +195,7 @@ export default function FabricSizer() {
           <div className="mb-1 flex items-baseline justify-between font-mono text-[10px] uppercase tracking-[0.14em] text-muted">
             <span>GPUs</span><span className="text-base font-semibold normal-case tracking-normal text-fg">{fmt(gpus)}</span>
           </div>
-          <input type="range" min={0} max={GPU_OPTIONS.length - 1} step={1} value={gIdx} aria-label="Number of GPUs"
+          <input type="range" min={0} max={GPU_OPTIONS.length - 1} step={1} value={gIdx} aria-label="Number of GPUs" aria-valuetext={`${fmt(gpus)} GPUs`}
             onChange={(e) => setGpus(GPU_OPTIONS[Number(e.target.value)])} className="w-full accent-[var(--accent)]" />
         </div>
         <Seg label="GPUs per server" value={perServer} options={[8, 4] as const} onChange={setPerServer} />
@@ -216,9 +216,10 @@ export default function FabricSizer() {
       </div>
 
       {d.overflow && (
-        <div className="rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger" role="alert">⚠ {d.overflow}</div>
+        <div className="rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger" role="alert"><span aria-hidden>⚠ </span>{d.overflow}</div>
       )}
 
+      <p className="sr-only" aria-live="polite">{`${fmt(gpus)} GPUs: ${d.tiers === 1 ? 'single switch' : `${d.tiers}-tier fat tree`}, ${fmt(d.switches)} switches, ${fmt(d.totalLinks)} links, ${fmt(d.transceivers)} transceivers.`}</p>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <Out label="Servers" value={fmt(d.servers)} />
         <Out label={rail ? `Leaves (${fmt(d.leavesPerRail)}/rail)` : 'Leaves'} value={fmt(d.leaves)} tone="text-accent" />

@@ -124,7 +124,7 @@ The Subnet Manager log (for OpenSM, typically `/var/log/opensm.log`; for UFM, th
 ### Step 1: the host
 
 ```text
-$ ibstat mlx5_3 | grep -E "State|Rate|Base lid|SM lid"
+$ ibstat mlx5_3 | grep -E "State|Physical|Rate|Base lid|SM lid"
                 State: Active
                 Physical state: LinkUp
                 Rate: 400

@@ -70,14 +70,14 @@ questions:
         correct: true
         explanation: On IB the physical link trains on its own, but the logical state needs the SM.
       - id: b
-        text: The netdev MTU is set to 1500.
-        explanation: There is no Ethernet netdev MTU involved on a native IB port.
+        text: The netdev MTU is still 1500, so the port cannot finish training to Active.
+        explanation: There is no Ethernet netdev MTU involved in a native IB port's state.
       - id: c
-        text: The GID index is wrong.
+        text: The GID index is wrong, so the port refuses to leave the Init state.
         explanation: GID index is a QP attribute and does not affect port state.
       - id: d
-        text: The memlock limit is too low.
-        explanation: memlock affects memory registration, not port state.
+        text: The memlock limit is too low for the driver to register the port's receive buffers.
+        explanation: memlock limits user-space memory registration; it does not affect port state.
     tags: [port-state, subnet-manager]
   - id: q5
     type: scenario
@@ -86,14 +86,14 @@ questions:
       which show active_mtu 4096. What should you check?
     options:
       - id: a
-        text: The MTU of the associated Ethernet netdev; it is probably still 1500 instead of a jumbo value.
+        text: The MTU of the associated Ethernet netdev; it is probably still 1500, not a jumbo value.
         correct: true
         explanation: On RoCE the RDMA active MTU is derived from the netdev MTU; 1500 gives 1024.
       - id: b
-        text: The Subnet Manager's MTU setting.
+        text: The Subnet Manager's MTU setting, which caps the active_mtu advertised to each RoCE port.
         explanation: RoCE fabrics do not have a Subnet Manager.
       - id: c
-        text: The number of QPs.
+        text: The number of QPs, since active_mtu shrinks when many QPs share the port.
         explanation: QP count does not change the port's active MTU.
     tags: [mtu, roce]
   - id: q6
@@ -103,14 +103,14 @@ questions:
       The pod image was built from a minimal base. Which pair of causes is most plausible?
     options:
       - id: a
-        text: The /dev/infiniband device files were not passed into the pod, or the image lacks rdma-core and the mlx5 provider library.
+        text: The /dev/infiniband device files were not passed into the pod, or the image lacks rdma-core and the mlx5 provider.
         correct: true
         explanation: The pod needs both the device files and matching user-space libraries.
       - id: b
-        text: The switch ports are in the wrong VLAN, or PFC is disabled.
+        text: The node's switch ports are in the wrong VLAN, or PFC is disabled for the pod's traffic class.
         explanation: Fabric settings affect traffic, not whether devices are listed locally.
       - id: c
-        text: The GID index is wrong, or the timeout value is too small.
+        text: The pod uses the wrong GID index, or its QP timeout value is too small to see the devices.
         explanation: These are QP attributes; they do not affect device enumeration.
     tags: [containers]
   - id: q7
@@ -139,9 +139,9 @@ questions:
         correct: true
         explanation: These transport counters rise when the reliable transport detects gaps and missing ACKs.
       - id: b
-        text: The application is not posting receive buffers fast enough.
+        text: The application is not posting receive buffers fast enough, so the responder drops incoming sends.
         explanation: That would raise RNR-related counters, not sequence and ACK timeout counters.
       - id: c
-        text: The counters always increase during benchmarks and can be ignored.
+        text: These counters always rise during benchmarks as part of normal RoCE congestion control and can safely be ignored.
         explanation: On a healthy lossless fabric these should be zero or close to it.
     tags: [counters, troubleshooting]

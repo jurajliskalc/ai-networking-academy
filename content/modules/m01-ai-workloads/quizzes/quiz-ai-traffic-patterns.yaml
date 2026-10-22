@@ -50,18 +50,18 @@ questions:
       cause?
     options:
       - id: a
-        text: ECMP hash collisions placing several elephant flows on the same uplinks, so the colliding flows run at about half speed and the collective waits for them.
+        text: ECMP hash collisions stack elephant flows on a few uplinks, so those flows run at about half speed and stall the collective.
         correct: true
-        explanation: Uneven per-member bytes plus a ~2x collective slowdown is the classic collision fingerprint.
+        explanation: Uneven per-member bytes plus a ~2x collective slowdown is the classic collision fingerprint; the colliding flows share an uplink and the collective waits for them.
       - id: b
-        text: The fabric is oversubscribed, so all uplinks are saturated.
-        explanation: The fabric is non-blocking and several uplinks are nearly idle.
+        text: The fabric is oversubscribed after all, so every spine uplink is saturated whenever the all-reduce phase of a step runs.
+        explanation: The fabric is non-blocking and several uplinks are nearly idle, which rules out uniform saturation.
       - id: c
-        text: The 35 % average proves the network is not the bottleneck; look at the GPUs.
+        text: The 35 % average proves the network is not the bottleneck, so the slowdown must be in GPU compute or the framework.
         explanation: Averages hide bursts and uneven spreading; the per-uplink imbalance points at the network.
       - id: d
-        text: The MTU is too small on the idle uplinks.
-        explanation: MTU problems cause drops or failures, not a pattern of hashed traffic avoiding certain links.
+        text: The MTU is too small on the three idle uplinks, so the leaf stops forwarding over them and shifts their traffic elsewhere.
+        explanation: MTU problems cause drops or failures; the leaf does not steer hashed traffic away from links because of their MTU.
     tags: [ecmp, troubleshooting]
   - id: q4
     type: single
@@ -72,13 +72,13 @@ questions:
         correct: true
         explanation: Collective time is the maximum of flow completion times, not the average.
       - id: b
-        text: The slow flow causes all other flows to retransmit.
+        text: The slow flow triggers retransmissions in all the other flows of the collective, multiplying the traffic.
         explanation: Other flows are not affected directly; they simply finish and wait.
       - id: c
-        text: The scheduler cancels the job if any flow is slower than average.
+        text: The scheduler cancels and restarts the step whenever any flow runs slower than the average of the others.
         explanation: There is no such mechanism; the job just runs slower.
       - id: d
-        text: It does not matter; 999 fast flows dominate the average.
+        text: It barely matters, since the 999 fast flows dominate the average throughput that the job sees.
         explanation: Averages are the wrong metric for synchronous workloads.
     tags: [tail-latency]
   - id: q5
@@ -106,34 +106,34 @@ questions:
       collective throughput falls far more than 0.01 %. What best explains the gap?
     options:
       - id: a
-        text: RDMA loss recovery (go-back-N style on many NICs, plus timeouts) multiplies the cost of each drop, and the stalled flow delays the whole collective.
+        text: Each drop triggers costly RDMA recovery (often go-back-N, or a timeout), and the stalled flow holds up the whole collective.
         correct: true
-        explanation: One drop can trigger retransmission of many packets or a timeout, and synchronous collectives amplify that.
+        explanation: On many NICs one drop causes retransmission of many packets or a timeout, and synchronous collectives amplify that.
       - id: b
-        text: Each dropped packet must be recomputed by the GPU.
+        text: Each dropped packet has to be recomputed by the GPU that produced it, so every drop costs a kernel launch.
         explanation: The NIC retransmits data; GPUs do not recompute dropped packets.
       - id: c
-        text: The drop counter is wrong; RoCE packets cannot be dropped.
-        explanation: Without lossless configuration, RoCE packets are dropped like any other.
+        text: The drop counter must be wrong, because RoCEv2 marks its packets as non-droppable for every switch on the path.
+        explanation: There is no such per-packet marking; without lossless configuration, RoCE packets are dropped like any other.
       - id: d
-        text: Dropped packets cause the MTU to shrink automatically.
-        explanation: RDMA does not adapt its MTU in response to loss.
+        text: Each drop makes the NIC lower the path MTU for that queue pair, so every later packet carries less payload.
+        explanation: RDMA does not adapt its MTU in response to loss; the path MTU is fixed at queue-pair setup.
     tags: [rdma, loss]
   - id: q7
     type: single
     prompt: Why do AI fabric operators favour fine-grained telemetry (sub-second counters, buffer watermarks, ECN and PFC counts) over 1-minute utilisation averages?
     options:
       - id: a
-        text: AI traffic alternates between idle and line-rate bursts on microsecond-to-millisecond time scales, which long averages smooth away.
+        text: AI traffic alternates between idle and line-rate bursts lasting microseconds to milliseconds, which long averages smooth away.
         correct: true
         explanation: A link can be saturated with a growing queue during every burst and still average 30-40 %.
       - id: b
-        text: 1-minute averages are not supported by switches.
-        explanation: Switches support them; they just hide the relevant behaviour.
+        text: Most switches cannot export 1-minute averages at all, so per-second counters are the only telemetry they offer.
+        explanation: Switches support averages; they just hide the relevant behaviour.
       - id: c
-        text: Fine-grained telemetry reduces congestion.
-        explanation: Telemetry observes congestion; it does not reduce it.
+        text: Fine-grained telemetry itself reduces congestion, because switches mark ECN earlier when their counters are polled often.
+        explanation: Telemetry observes congestion; it does not reduce it, and polling counters does not change ECN marking thresholds.
       - id: d
-        text: Averages overstate utilisation for AI traffic.
-        explanation: They understate how loaded links are during the bursts that matter.
+        text: One-minute averages overstate AI link utilisation, since the idle gaps get counted as though they were busy line-rate time.
+        explanation: Averages understate how loaded links are during the bursts that matter; idle time pulls the average down, not up.
     tags: [telemetry, bursts]

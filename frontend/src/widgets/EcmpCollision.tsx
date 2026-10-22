@@ -85,19 +85,19 @@ export default function EcmpCollision() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
         <label className="flex items-center gap-2 text-xs"><span className="text-muted">Spines S</span>
-          <input type="range" min={2} max={8} value={S} onChange={(e) => setS(+e.target.value)} className="w-24 accent-[var(--accent)]" /><span className="w-4 font-mono">{S}</span></label>
+          <input type="range" min={2} max={8} value={S} onChange={(e) => setS(+e.target.value)} aria-valuetext={`${S} spines`} className="w-24 accent-[var(--accent)]" /><span className="w-4 font-mono">{S}</span></label>
         <label className="flex items-center gap-2 text-xs"><span className="text-muted">Elephant flows F</span>
-          <input type="range" min={1} max={16} value={F} onChange={(e) => setF(+e.target.value)} className="w-24 accent-[var(--accent)]" /><span className="w-5 font-mono">{F}</span></label>
-        <div className="inline-flex flex-wrap overflow-hidden rounded-lg border border-line">
+          <input type="range" min={1} max={16} value={F} onChange={(e) => setF(+e.target.value)} aria-valuetext={`${F} flows`} className="w-24 accent-[var(--accent)]" /><span className="w-5 font-mono">{F}</span></label>
+        <div className="inline-flex flex-wrap overflow-hidden rounded-lg border border-line" role="group" aria-label="Load-balancing mode">
           {([['ecmp', 'Static ECMP'], ['ar', 'Adaptive routing'], ['spray', 'Packet spraying']] as [Mode, string][]).map(([m, l]) => (
-            <button key={m} type="button" onClick={() => setMode(m)} className={`px-2.5 py-1 text-xs ${mode === m ? 'bg-accent-soft text-accent' : 'bg-panel text-muted hover:text-fg'}`}>{l}</button>
+            <button key={m} type="button" onClick={() => setMode(m)} aria-pressed={mode === m} className={`px-2.5 py-1 text-xs ${mode === m ? 'bg-accent-soft text-accent' : 'bg-panel text-muted hover:text-fg'}`}>{l}</button>
           ))}
         </div>
         <Button variant="ghost" className="!px-3 !py-1 text-xs" onClick={() => setSeed((x) => x + 1)} disabled={mode !== 'ecmp'}>Reshuffle ports</Button>
         <label className="inline-flex items-center gap-1.5 text-xs"><input type="checkbox" checked={degrade} onChange={(e) => setDegrade(e.target.checked)} className="accent-[var(--accent)]" />Spine 0 uplink degraded to 50%</label>
       </div>
 
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label="Leaf-spine fabric with per-uplink load">
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label={`Leaf-spine fabric, ${S} spines, ${F} elephant flows from leaf A to leaf B, ${mode === 'ecmp' ? 'static ECMP' : mode === 'ar' ? 'adaptive routing' : 'packet spraying'}. Uplink load: ${util.map((u, j) => `S${j} ${(u * 100).toFixed(0)}%${u > 1.001 ? ' overloaded' : ''}`).join(', ')}.`}>
         {/* faint links for leaves C, D */}
         {[2, 3].map((l) => Array.from({ length: S }, (_, j) => <line key={`${l}-${j}`} x1={leafX(l)} y1={lfY} x2={spineX(j)} y2={spY} stroke="var(--border)" strokeWidth={1} />))}
         {[0, 1].map((l) => Array.from({ length: S }, (_, j) => {
@@ -109,7 +109,7 @@ export default function EcmpCollision() {
           <g key={j}>
             <rect x={spineX(j) - 24} y={spY - 18} width={48} height={26} rx={6} fill="var(--panel-2)" stroke={util[j] > 1.001 ? 'var(--danger)' : 'var(--border)'} strokeWidth={1.5} />
             <text x={spineX(j)} y={spY - 1} textAnchor="middle" fontSize={11} fontFamily="var(--font-mono)" fill="var(--text)">S{j}</text>
-            <text x={spineX(j)} y={spY - 24} textAnchor="middle" fontSize={10} fontFamily="var(--font-mono)" fill={loadColor(util[j])}>{load[j] % 1 === 0 ? load[j] : load[j].toFixed(2)}{degrade && j === 0 ? ' @½' : ''}</text>
+            <text x={spineX(j)} y={spY - 24} textAnchor="middle" fontSize={10} fontFamily="var(--font-mono)" fill={util[j] > 0 ? loadColor(util[j]) : 'var(--muted)'}>{load[j] % 1 === 0 ? load[j] : load[j].toFixed(2)}{degrade && j === 0 ? ' @½' : ''}</text>
           </g>
         ))}
         {['A', 'B', 'C', 'D'].map((n, l) => (
@@ -130,15 +130,15 @@ export default function EcmpCollision() {
           {util.map((u, j) => (
             <div key={j} className="flex items-center gap-2 text-xs">
               <span className="w-6 font-mono text-muted">S{j}</span>
-              <div className="relative h-3 flex-1 overflow-hidden rounded-full bg-panel-2">
+              <div className="relative h-3 flex-1 overflow-hidden rounded-full bg-panel-2" aria-hidden>
                 <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(100, (u / Math.max(2, maxU)) * 100)}%`, background: loadColor(u) }} />
                 <div className="absolute inset-y-0 w-px bg-[var(--muted)]" style={{ left: `${(1 / Math.max(2, maxU)) * 100}%` }} />
               </div>
-              <span className="w-12 text-right font-mono">{(u * 100).toFixed(0)}%</span>
+              <span className="w-12 text-right font-mono">{(u * 100).toFixed(0)}%{u > 1.001 && <span className="sr-only"> overloaded</span>}</span>
             </div>
           ))}
         </div>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-2 gap-2" aria-live="polite">
           <Stat label="Max link load" value={`${(maxU * 100).toFixed(0)}%`} tone={maxU > 1.001 ? 'text-danger' : 'text-accent'} />
           <Stat label="Collective step time" value={`${slow.toFixed(2)}×`} sub="vs ideal; slowest flow decides" tone={slow > 1.01 ? 'text-warn' : 'text-accent'} />
           <Stat label="P(≥1 collision)" value={`${(pColl * 100).toFixed(1)}%`} sub={`static ECMP, ${F} flows on ${S} links`} />
@@ -147,7 +147,7 @@ export default function EcmpCollision() {
       </div>
 
       {mode === 'ecmp' && (
-        <div className="overflow-x-auto rounded-lg border border-line">
+        <div className="overflow-x-auto rounded-lg border border-line" tabIndex={0} role="region" aria-label="ECMP hash of each flow">
           <table className="w-full text-left font-mono text-[11px]">
             <thead className="bg-panel-2 text-muted"><tr><th className="px-2 py-1">flow</th><th className="px-2 py-1">5-tuple (src, dst, 17, sport, 4791)</th><th className="px-2 py-1">hash</th><th className="px-2 py-1">mod {S}</th></tr></thead>
             <tbody>

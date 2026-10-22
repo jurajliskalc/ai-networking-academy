@@ -1,0 +1,151 @@
+id: quiz-inference-cluster-design
+title: "Knowledge check: Inference cluster design"
+lesson: inference-cluster-design
+pass_pct: 70
+questions:
+  - id: q1
+    type: scenario
+    prompt: "A 70B-class model has about 320 KiB (327,680 bytes) of KV cache per token. The cluster serves 100 requests/s with 8,192-token prompts in disaggregated mode, transferring the full prompt KV to decode. What is the aggregate KV traffic from the prefill pool to the decode pool?"
+    options:
+      - id: a
+        text: "About 268 GB/s (roughly 2.1 Tb/s): 2.68 GB per request times 100 requests/s."
+        correct: true
+        explanation: "8,192 x 327,680 B = 2.68 GB per request; times 100/s gives about 268 GB/s, or about 2.15 Tb/s."
+      - id: b
+        text: "About 27 GB/s (roughly 0.2 Tb/s): 0.27 GB per request times 100 requests/s."
+        explanation: "This is a factor of ten too small; the per-request KV is 2.68 GB, not 0.27 GB."
+      - id: c
+        text: "About 33.5 GB/s (roughly 0.27 Tb/s): the KV bytes counted in bits instead of bytes."
+        explanation: "268 GB/s converts to about 2.1 Tb/s; dividing bytes by eight again mixes units."
+      - id: d
+        text: "About 2.1 TB/s (roughly 17 Tb/s): KV counted per GPU of a TP8 instance."
+        explanation: "That is 8 x 268 GB/s. With TP8 each GPU holds a slice of the KV; the slices sum to the request's KV, they do not multiply it."
+    tags: [kv-cache, sizing]
+  - id: q2
+    type: scenario
+    prompt: "Continuing the design, each prefill instance is TP8 with one 400G NIC (50 GB/s) per GPU. Average KV egress is under 5% of each NIC, yet TTFT rises sharply when disaggregation is enabled. Logs show each request's KV leaving through a single NIC after prefill completes. What is the best fix?"
+    options:
+      - id: a
+        text: "Send each GPU's KV slice through its own NIC in parallel and stream it layer by layer during prefill."
+        correct: true
+        explanation: "A 2.68 GB transfer takes about 54 ms through one NIC but about 6.7 ms over eight, and layer-wise streaming hides most of what remains."
+      - id: b
+        text: "Upgrade every NIC to 800G, because a 5% average load shows the links are saturated during peaks."
+        explanation: "Doubling one NIC's speed halves the time but leaves seven NICs idle; the problem is how the transfer is spread and when it starts."
+      - id: c
+        text: "Enable PFC on the KV traffic class, since TTFT growth is a symptom of packet loss on the rails."
+        explanation: "Nothing in the evidence points to loss; the transfer is serialized through one NIC after compute."
+      - id: d
+        text: "Move KV transfer to the front-end network so that it no longer competes with expert all-to-all."
+        explanation: "The front-end is slower and not RDMA-optimised; this would make TTFT worse."
+    tags: [kv-transfer, ttft]
+  - id: q3
+    type: scenario
+    prompt: "After enabling disaggregation, spine utilisation in a rail-optimized fabric rises noticeably, even though prefill and decode pools are in the same scalable unit. Prefill runs TP8; decode runs wide expert parallelism with data-parallel attention, so each request's KV lands on one decode GPU. What explains the spine traffic?"
+    options:
+      - id: a
+        text: "The eight prefill ranks on eight rails all send to one decode GPU on one rail, so seven slices cross rails."
+        correct: true
+        explanation: "Only matching layouts give rank-k-to-rank-k, rail-aligned transfers; here most slices change rail and go through the spine (or need NVLink forwarding at the receiver)."
+      - id: b
+        text: "Adaptive routing on the leaves sprays every KV transfer over the spines even when source and destination share a leaf."
+        explanation: "Traffic between two ports on the same leaf does not go up to the spine because of adaptive routing."
+      - id: c
+        text: "KV cache transfers always use TCP, whose ECMP hashing ignores rails and selects spine paths for every flow."
+        explanation: "KV transfers normally use RDMA, and hashing does not move same-leaf traffic to the spine."
+      - id: d
+        text: "Decode GPUs fetch every KV block from remote storage through the spine instead of receiving it from prefill."
+        explanation: "Cache reads use the tiers on a hit; they do not replace the prefill-to-decode transfer."
+    tags: [rail-alignment, placement]
+  - id: q4
+    type: single
+    prompt: "What does NIXL (NVIDIA Inference Xfer Library) provide to a serving framework such as Dynamo?"
+    options:
+      - id: a
+        text: "One point-to-point transfer API over CPU and GPU memory and storage, with transports as plugins (UCX, GDS and others)."
+        correct: true
+        explanation: "NIXL abstracts memory and storage types behind agents and a plugin architecture; UCX is the transport most examples use."
+      - id: b
+        text: "A collective library that replaces NCCL for all-reduce and all-to-all in tensor- and expert-parallel layers."
+        explanation: "NIXL targets point-to-point transfers in inference, not collectives."
+      - id: c
+        text: "A switch-side congestion control algorithm that prioritizes KV packets over expert all-to-all in the fabric."
+        explanation: "NIXL is a host library; it does not run on switches."
+      - id: d
+        text: "A Kubernetes endpoint picker that routes requests to the replica holding the longest cached prefix."
+        explanation: "That describes inference gateway routing (endpoint pickers, Dynamo's router), not NIXL."
+    tags: [nixl, kv-transfer]
+  - id: q5
+    type: scenario
+    prompt: "An MoE model is served with EP across 128 GPUs. Measured dispatch plus combine latency is about 400 us per MoE layer, the model has 50 MoE layers, and the target is 25 output tokens/s per sequence. What should the network architect conclude?"
+    options:
+      - id: a
+        text: "Unhidden all-to-all would take about 20 of the 40 ms per token, so overlap and tail latency are critical."
+        correct: true
+        explanation: "50 x 0.4 ms = 20 ms against a 40 ms budget per token: half the budget, before any compute, so overlap and latency control are essential."
+      - id: b
+        text: "All-to-all uses only about 2 of the 40 ms per token, so the design should focus on raw link bandwidth instead."
+        explanation: "50 x 400 us is 20 ms, not 2 ms; small decode messages are latency-bound, not bandwidth-bound."
+      - id: c
+        text: "All-to-all needs about 200 of the 40 ms per token, so wide EP over a scale-out fabric cannot work at all."
+        explanation: "The arithmetic is off by ten; 20 ms is tight but workable with microbatch overlap, as DeepSeek's deployment shows."
+      - id: d
+        text: "The per-token budget is 400 ms at 25 tokens/s, so communication latency of this size is irrelevant."
+        explanation: "25 tokens/s means 40 ms per token, not 400 ms."
+    tags: [expert-parallelism, latency]
+  - id: q6
+    type: multi
+    prompt: "Which fabric measures are consistent with the network notes in DeepEP's documentation for expert-parallel traffic? (Select all that apply.)"
+    options:
+      - id: a
+        text: "Isolating expert-parallel traffic from other workloads using InfiniBand virtual lanes."
+        correct: true
+        explanation: "The README states that traffic isolation is supported through virtual lanes and recommends separating EP traffic."
+      - id: b
+        text: "Using adaptive routing at least under heavy network load."
+        correct: true
+        explanation: "v1.2.1 recommends it under heavy load; the current README recommends it under all load conditions."
+      - id: c
+        text: "Treating disabled congestion control as a choice made on a validated, dedicated fabric."
+        correct: true
+        explanation: "DeepSeek disabled it because it saw no significant congestion; the current README says to disable it only after validating the fabric."
+      - id: d
+        text: "Running expert-parallel traffic over the front-end TCP network to keep the RDMA fabric free."
+        explanation: "EP all-to-all uses NVLink and RDMA; TCP on the front-end would add far too much latency."
+    tags: [deepep, qos]
+  - id: q7
+    type: single
+    prompt: "Why do KV cache tiers (CPU memory, SSD, remote storage) make the storage network part of the inference latency path?"
+    options:
+      - id: a
+        text: "A cache hit only saves time if reading the KV blocks back is faster than recomputing the prefix within the TTFT budget."
+        correct: true
+        explanation: "Reuse replaces prefill compute with a read, so the read bandwidth and latency of the tier directly set TTFT for cache hits."
+      - id: b
+        text: "Decode GPUs write every generated token to remote storage synchronously before streaming it to the user."
+        explanation: "Tokens are streamed directly; tiers hold KV blocks for reuse, not a synchronous write of every token."
+      - id: c
+        text: "Model weights must be reloaded from storage for every request because GPU memory is reserved for KV cache."
+        explanation: "Weights stay resident; reloading happens at cold start or scale-up, not per request."
+      - id: d
+        text: "KV cache tiers require PFC on the storage network, and PFC pauses add latency to every inference request."
+        explanation: "Tiering does not imply PFC, and the latency effect comes from the read path on cache hits."
+    tags: [kv-cache, storage]
+  - id: q8
+    type: single
+    prompt: "A workload shifts from short chat answers to reasoning traces with thousands of output tokens per request, at the same prompt lengths and request rate. How should the split between prefill and decode capacity change?"
+    options:
+      - id: a
+        text: "More capacity to decode, because output tokens per request rise while input tokens stay the same."
+        correct: true
+        explanation: "Pool sizes follow token budgets: decode work scales with output tokens, prefill work with input tokens."
+      - id: b
+        text: "More capacity to prefill, because longer outputs make every KV cache transfer between the pools larger."
+        explanation: "The transferred KV covers the prompt; it grows with input length, which has not changed."
+      - id: c
+        text: "No change, because the prefill-to-decode ratio is a property of the model and not of the workload."
+        explanation: "The ratio depends on input and output token counts and per-pool throughput, which is why autoscalers resize pools."
+      - id: d
+        text: "Merge the pools, because disaggregation only helps when outputs are shorter than prompts."
+        explanation: "Disaggregation separates the phases' interference; long outputs do not invalidate it."
+    tags: [disaggregation, capacity]

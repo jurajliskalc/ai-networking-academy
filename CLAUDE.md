@@ -21,6 +21,7 @@ cd frontend
 npm run validate   # must print "Content OK"
 npm test           # all tests pass (includes replaying every sim lab's fix)
 npm run build      # tsc + vite build
+npm run e2e        # Playwright browser tests against dist/ (installed Chrome; after build)
 for f in ../labs/**/*.sh ../scripts/*.sh; do bash -n "$f"; done
 ```
 Update `IMPLEMENTATION_STATUS.md` / `NEXT_STEPS.md` when status changes.
@@ -31,3 +32,5 @@ Update `IMPLEMENTATION_STATUS.md` / `NEXT_STEPS.md` when status changes.
 - New sim fault types or checks go in `src/sim/fabric.ts` (`FAULT_TYPES`, `CHECKS`) and `docs/SIMULATOR.md`.
 - `frontend/public/content/` is generated; never edit it.
 - vitest 2 bundles its own vite; keep test config in `vitest.config.ts`, not `vite.config.ts`.
+- Browser tests are Playwright (`frontend/e2e/*.spec.ts`, `playwright.config.ts`), not vitest. They use the
+  installed Chrome; install with `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1`. Select by role, label or text.

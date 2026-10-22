@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# aina-hw: wrapper so the toolkit can be called as a command. See README.md or "aina-hw --help".
+#   Optional: sudo ln -s "$PWD/aina-hw" /usr/local/bin/aina-hw
+set -euo pipefail
+HERE=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)
+command -v python3 >/dev/null 2>&1 || { echo "aina-hw needs python3 (3.8 or newer)" >&2; exit 1; }
+exec python3 "$HERE/aina_hw.py" "$@"

@@ -15,7 +15,11 @@ const WORDS = [
   ...Array.from({ length: 8 }, (_, i) => `swp${i + 1}`), 'swp31', 'swp32',
 ];
 
-export default function Terminal({ state, start, onChange, banner, autorun }: { state: FabricState; start: string; onChange: () => void; banner?: string; autorun?: string[] }) {
+export default function Terminal({ state, start, onChange, banner, autorun, autoFocus = false }: {
+  state: FabricState; start: string; onChange: () => void; banner?: string; autorun?: string[];
+  /** Focus the input on mount (the sandbox page); lab pages leave focus alone so the ticket is read first. */
+  autoFocus?: boolean;
+}) {
   const [host, setHost] = useState(start);
   const [lines, setLines] = useState<Line[]>(() => [{ kind: 'out', text: banner ?? 'Fabric Simulator. Type "help" for the command list.' }]);
   const [input, setInput] = useState('');
@@ -23,6 +27,8 @@ export default function Terminal({ state, start, onChange, banner, autorun }: { 
   const [hpos, setHpos] = useState<number | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const field = useRef<HTMLInputElement>(null);
+  // Tab completes commands. Escape releases the keyboard so the next Tab leaves the terminal (no keyboard trap).
+  const released = useRef(false);
 
   useEffect(() => {
     scroller.current?.scrollTo({ top: scroller.current.scrollHeight });
@@ -61,6 +67,15 @@ export default function Terminal({ state, start, onChange, banner, autorun }: { 
   };
 
   const onKey = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Escape') {
+      released.current = true;
+      return;
+    }
+    if (e.key === 'Tab' && (released.current || e.shiftKey || !input.trim())) {
+      released.current = false;
+      return; // normal focus navigation
+    }
+    released.current = false;
     if (e.key === 'Enter') {
       run(input);
       setInput('');
@@ -107,17 +122,18 @@ export default function Terminal({ state, start, onChange, banner, autorun }: { 
   return (
     <div className="term flex h-full min-h-[420px] flex-col overflow-hidden rounded-xl border border-line" onClick={() => !window.getSelection()?.toString() && field.current?.focus()}>
       <div className="flex items-center gap-2 border-b border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] text-[#8b97ab]">
-        <span className="h-2.5 w-2.5 rounded-full bg-[#f87171]" /><span className="h-2.5 w-2.5 rounded-full bg-[#fbbf24]" /><span className="h-2.5 w-2.5 rounded-full bg-[#4ade80]" />
+        <span aria-hidden className="h-2.5 w-2.5 rounded-full bg-[#f87171]" /><span aria-hidden className="h-2.5 w-2.5 rounded-full bg-[#fbbf24]" /><span aria-hidden className="h-2.5 w-2.5 rounded-full bg-[#4ade80]" />
         <span className="ml-2">ssh {host} · simulated</span>
       </div>
-      <div ref={scroller} className="flex-1 overflow-auto p-3" role="log" aria-live="polite">
+      <p id="term-help" className="sr-only">Type a command and press Enter. Up and Down recall history. Tab completes a command; to leave the terminal press Escape, then Tab.</p>
+      <div ref={scroller} className="flex-1 overflow-auto p-3" role="log" aria-label="Terminal output" aria-live="polite" tabIndex={-1}>
         {lines.map((l, i) => l.kind === 'in'
           ? <div key={i} className="whitespace-pre-wrap break-all"><span className="prompt">{l.prompt}</span> {l.text}</div>
           : <pre key={i} className={`whitespace-pre font-[inherit] ${/command not found|WARN|failure|Failed|error/i.test(l.text) ? '' : ''}`}>{highlight(l.text)}</pre>)}
         <div className="flex items-center">
           <span className="prompt whitespace-nowrap">{promptFor(host)}</span>&nbsp;
           <input ref={field} value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={onKey} spellCheck={false} autoCapitalize="off" autoComplete="off"
-            aria-label="Terminal input" className="flex-1 bg-transparent text-[#e3f5ea] outline-none caret-[#4ade80]" autoFocus />
+            aria-label="Terminal input" aria-describedby="term-help" className="flex-1 bg-transparent text-[#e3f5ea] outline-none caret-[#4ade80]" autoFocus={autoFocus} />
         </div>
       </div>
     </div>

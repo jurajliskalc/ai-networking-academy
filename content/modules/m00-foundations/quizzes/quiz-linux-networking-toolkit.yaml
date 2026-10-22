@@ -12,14 +12,14 @@ questions:
         correct: true
         explanation: It performs a real lookup, honouring ip rule entries and per-NIC tables.
       - id: b
-        text: ip route show
-        explanation: That prints the main table only and leaves you to guess which entry wins, ignoring policy rules.
+        text: ip route show table all
+        explanation: That prints every table's entries but performs no lookup, so it leaves you to guess which rule and entry win.
       - id: c
-        text: ethtool -S
-        explanation: ethtool shows NIC statistics, not routing decisions.
+        text: ethtool -S ens3f0np0
+        explanation: ethtool -S shows NIC statistics, not routing decisions.
       - id: d
-        text: ip neigh show
-        explanation: That shows ARP/neighbour entries, not which route is chosen.
+        text: ip neigh show 10.4.7.25 dev ens3f0np0
+        explanation: That shows ARP/neighbour entries, not which route is chosen; a remote address is not even an on-link neighbour.
     tags: [ip, routing]
   - id: q2
     type: single
@@ -46,18 +46,18 @@ questions:
       switch reports the port near line rate. What is the correct interpretation?
     options:
       - id: a
-        text: RDMA traffic is handled in NIC hardware and bypasses the kernel, so kernel interface counters do not include it; check ethtool -S physical-port counters.
+        text: RDMA is handled in NIC hardware and bypasses the kernel, so kernel counters miss it; check ethtool -S port counters.
         correct: true
-        explanation: Kernel-bypass is the reason; NIC-level counters reflect the real traffic.
+        explanation: Kernel bypass is the reason; the physical-port counters in ethtool -S reflect the real traffic on the wire.
       - id: b
-        text: The switch counters must be wrong.
-        explanation: Switch counters count frames on the wire and are trustworthy here.
+        text: The switch counters are wrong, because they also count PFC pause frames and idle fill as transmitted data.
+        explanation: Switch port counters count frames on the wire (idle fill is not a frame) and are trustworthy here.
       - id: c
-        text: The job is running over the front-end network instead.
+        text: The job's traffic is running over the front-end network instead, so this back-end NIC really is almost completely idle.
         explanation: The switch port for this back-end NIC is busy, so the traffic is on this link.
       - id: d
-        text: The kernel counters wrapped around.
-        explanation: Modern 64-bit counters do not wrap that quickly, and a wrap would not explain the pattern.
+        text: The kernel's interface counters have wrapped around, which happens within seconds at 400 Gb/s.
+        explanation: Modern 64-bit counters take years to wrap even at 400 Gb/s, and a wrap would not explain the pattern.
     tags: [rdma, counters]
   - id: q4
     type: multi
@@ -89,32 +89,32 @@ questions:
         correct: true
         explanation: Rail designs depend on NIC n reaching the rail-n leaf; LLDP is the quickest way to catch swaps.
       - id: b
-        text: Nothing; LLDP neighbour names are arbitrary.
-        explanation: Names follow the cabling plan, and a mismatch is a real defect.
+        text: Nothing is wrong, because LLDP system names are free-form labels that need not match the cabling plan.
+        explanation: Names follow the cabling plan, and a mismatch with every other NIC's pattern is a real defect.
       - id: c
-        text: The NIC firmware is faulty because it reports a rail-5 neighbour.
-        explanation: LLDP reports what the neighbour advertises; it reflects the physical cable.
+        text: The NIC firmware is faulty, since a correctly working NIC can only ever learn the leaf of its own rail through LLDP.
+        explanation: LLDP reports what the neighbour advertises on the other end of the cable; it reflects the physical cabling, not firmware rules.
       - id: d
-        text: ECMP has rerouted NIC 2 through rail 5.
-        explanation: ECMP changes routed paths, not which switch a cable physically plugs into.
+        text: ECMP has moved NIC 2's traffic onto rail 5, and LLDP shows whichever leaf currently carries it.
+        explanation: ECMP changes routed paths, not which switch a cable physically plugs into; LLDP is per physical link.
     tags: [lldp, cabling]
   - id: q6
     type: single
     prompt: Why is iperf3 a poor tool for judging whether a 400 Gb/s RoCE link performs correctly?
     options:
       - id: a
-        text: It measures TCP through the kernel, which is often CPU-limited well below 400 Gb/s on one host; perftest tools drive RDMA directly.
+        text: It tests TCP through the kernel, often CPU-limited well below 400 Gb/s on one host; perftest drives RDMA directly.
         correct: true
         explanation: Use ib_write_bw and friends for RDMA, and iperf3 only to validate the TCP/IP path.
       - id: b
-        text: iperf3 cannot send packets larger than 1500 bytes.
-        explanation: iperf3 uses the interface MTU like any TCP application.
+        text: iperf3 sends UDP by default, and RoCE switches drop non-RDMA UDP arriving on the lossless traffic class.
+        explanation: iperf3 uses TCP unless told otherwise, and its traffic is normally not classified into the RDMA class at all.
       - id: c
-        text: iperf3 only works on InfiniBand.
-        explanation: iperf3 runs over ordinary TCP/UDP sockets on any IP network.
+        text: iperf3 only runs over InfiniBand verbs, so on a RoCE Ethernet link it falls back to a slow emulated path.
+        explanation: iperf3 does not use verbs at all; it runs over ordinary TCP/UDP sockets on any IP network.
       - id: d
-        text: iperf3 disables jumbo frames automatically.
-        explanation: It does no such thing.
+        text: iperf3 disables jumbo frames automatically and ignores the interface MTU to stay safe on WAN paths.
+        explanation: It does no such thing; like any TCP application it uses the interface MTU.
     tags: [iperf3, rdma]
   - id: q7
     type: scenario
@@ -123,16 +123,16 @@ questions:
       is normal. What is the best interpretation?
     options:
       - id: a
-        text: The spine's control plane is rate-limiting ICMP replies; data-plane forwarding is fine because the final hop shows no loss.
+        text: The spine's control plane is rate-limiting ICMP replies; forwarding is fine, as the final hop shows no loss.
         correct: true
         explanation: Loss that does not persist to the destination is almost always ICMP generation limits.
       - id: b
-        text: The spine is dropping 40 % of all traffic and must be replaced.
-        explanation: If it were, the final hop and NCCL would show loss too.
+        text: The spine is dropping 40 % of all forwarded traffic, and the NICs hide it from NCCL by retransmitting.
+        explanation: If it were, the final hop would show loss too, and retransmitting 40 % of RDMA traffic would collapse NCCL performance.
       - id: c
-        text: The TTL is misconfigured on the GPU node.
-        explanation: TTL issues would not produce intermittent loss at one middle hop only.
+        text: The TTL on the GPU node is set too low, so probes expire at hop 2 before the spine can forward them.
+        explanation: mtr sets the TTL of each probe itself, and a TTL problem would not leave the final hop loss-free.
       - id: d
-        text: MTU is mismatched on hop 2.
-        explanation: mtr uses small probes by default, so MTU would not cause this pattern.
+        text: MTU is mismatched on hop 2, so the spine silently drops the larger mtr probes that are sent to it.
+        explanation: mtr uses small probes by default, so MTU would not cause this pattern, and the final hop is reached fine.
     tags: [mtr, icmp]

@@ -12,13 +12,13 @@ questions:
         correct: true
         explanation: "The list is per priority, 0 to 7. Only the fourth entry (priority 3) is enabled."
       - id: b
-        text: "PFC enabled on traffic class 4"
+        text: "PFC enabled on traffic class 4 (the list is 1-based)"
         explanation: "The vector is indexed by priority starting at 0, and it configures priorities rather than TCs."
       - id: c
-        text: "DSCP 3 mapped to priority 1"
-        explanation: "DSCP mapping uses trust and dscp2prio settings, not the --pfc vector."
+        text: "Priority 3 mapped to DSCP 26 on that interface"
+        explanation: "DSCP mapping uses the trust and dscp2prio settings, not the --pfc vector."
       - id: d
-        text: "ECN enabled on priority 3"
+        text: "ECN marking enabled for priority 3 traffic only"
         explanation: "ECN/DCQCN is configured separately, for example through the NIC congestion-control settings."
     tags: [mlnx_qos, pfc]
   - id: q2
@@ -30,14 +30,14 @@ questions:
         correct: true
         explanation: "mlnx_qos, sysfs and ethtool settings are lost at reboot unless a boot-time mechanism reapplies them."
       - id: b
-        text: "The switches lost their RoCE profile during the maintenance window."
-        explanation: "Host-side counters and mlnx_qos output show the hosts themselves are unconfigured."
+        text: "The switches lost their RoCE QoS profile during the maintenance window and reverted to defaults."
+        explanation: "Host-side counters and mlnx_qos output show the hosts themselves are unconfigured, whatever the switches do."
       - id: c
-        text: "NCCL_IB_TC was removed from the job template."
-        explanation: "That would not explain mlnx_qos showing no PFC configuration."
+        text: "NCCL_IB_TC was removed from the job template, so NCCL traffic fell back to priority 0."
+        explanation: "That could move NCCL traffic to priority 0, but it would not explain mlnx_qos showing no PFC configuration."
       - id: d
-        text: "The NIC firmware automatically resets QoS every 30 days."
-        explanation: "There is no such behaviour. The reboot is the trigger."
+        text: "The NIC firmware resets its QoS tables on a schedule, and the window coincided with that reset."
+        explanation: "There is no such scheduled reset. The reboot is the trigger, and runtime-only settings did not survive it."
     tags: [persistence, operations]
   - id: q3
     type: single
@@ -62,17 +62,17 @@ questions:
     prompt: "A fabric mixes SONiC leaves running community default QoS templates with NVIDIA-convention hosts (DSCP 26 to priority 3). PFC works on some links and not others. What is the best fix?"
     options:
       - id: a
-        text: "Define one QoS contract and explicitly configure every NOS and host to it, including DSCP maps and the pfc_enable list."
+        text: "Define one QoS contract and configure every NOS and host to it explicitly, including DSCP maps and pfc_enable."
         correct: true
         explanation: "SONiC defaults have traditionally used different lossless priorities and DSCP maps. Mixed defaults cause inconsistent classification."
       - id: b
-        text: "Disable PFC on all SONiC devices."
-        explanation: "That turns the class lossy on those hops without fixing the mapping inconsistency."
+        text: "Disable PFC on all SONiC devices and rely on ECN alone, so that the inconsistent maps no longer matter."
+        explanation: "That turns the class lossy on those hops, and the inconsistent maps still put RoCE in the wrong queues."
       - id: c
-        text: "Change the hosts to trust PCP."
-        explanation: "That does not align switch maps and breaks classification on untagged routed links."
+        text: "Change the hosts to trust PCP, so that classification no longer depends on each switch's DSCP map."
+        explanation: "Host trust mode does not align the switch maps, and PCP-based classification breaks on untagged routed links."
       - id: d
-        text: "Increase the ECN thresholds on the SONiC leaves."
+        text: "Raise the ECN thresholds on the SONiC leaves so that they mark later, matching the NVIDIA host defaults better."
         explanation: "Thresholds do not fix packets landing in the wrong priority."
     tags: [sonic, consistency]
   - id: q5
@@ -100,34 +100,34 @@ questions:
     prompt: "In a server with eight back-end NICs, nccl-tests all-reduce bandwidth is low, and per-NIC counters show retransmissions and sequence errors only on mlx5_5. The other seven NICs are clean. What is the most likely cause?"
     options:
       - id: a
-        text: "Host QoS (trust, PFC or ECN) or MTU was not applied to mlx5_5, or its rail's switch port differs from the contract."
+        text: "Host QoS (trust, PFC or ECN) or MTU was not applied to mlx5_5, or its rail's switch port is off-contract."
         correct: true
         explanation: "Configuration that misses one NIC or one rail is common. The collective then runs at the speed of the bad rail."
       - id: b
-        text: "NCCL_IB_TC is set per NIC and is missing for mlx5_5."
+        text: "NCCL_IB_TC is set per NIC and is missing for mlx5_5, so its QPs use the default priority 0."
         explanation: "NCCL_IB_TC applies to all NCCL QPs in the process, not per NIC."
       - id: c
-        text: "All-reduce always stresses one NIC more than the others."
-        explanation: "Rail-optimised all-reduce spreads traffic across NICs. Errors on one NIC indicate a fault there."
+        text: "All-reduce always stresses one NIC more than the others, and in this topology mlx5_5 is the busiest by design."
+        explanation: "Rail-optimised all-reduce spreads traffic evenly across NICs. Errors on one NIC indicate a fault there."
       - id: d
-        text: "The GPUs attached to mlx5_5 are slower."
-        explanation: "Slower GPUs would not cause sequence errors on the NIC."
+        text: "The GPUs attached to mlx5_5 are slower, so its queue pairs time out and retransmit more often."
+        explanation: "Slower GPUs reduce how fast data is produced; they do not cause sequence errors or retransmissions on the NIC."
     tags: [rails, validation]
   - id: q7
     type: single
     prompt: "Why is a continuous static audit (stage 0) part of the validation plan rather than a one-time step?"
     options:
       - id: a
-        text: "Configuration drifts: reimaged hosts, replaced switches and firmware upgrades can silently revert settings."
+        text: "Configuration drifts: reimaged hosts, replaced switches and firmware upgrades can silently revert it."
         correct: true
         explanation: "Continuous auditing catches drift before a training job suffers."
       - id: b
-        text: "PFC settings expire after a fixed time."
+        text: "PFC and DSCP settings on the NICs expire after a fixed lease time and must be renewed by a periodic job."
         explanation: "PFC settings do not expire. They are lost on reboot or reset, or changed by drift."
       - id: c
-        text: "Audits are required to compute headroom."
-        explanation: "Headroom comes from speed, cable length and MTU, which the switch calculates."
+        text: "Audits feed the cable lengths that the switch needs to recompute headroom whenever a link flaps."
+        explanation: "Headroom comes from speed, cable length and MTU configured on the switch. A link flap does not require an audit."
       - id: d
-        text: "NCCL refuses to run without a recent audit."
-        explanation: "NCCL has no such dependency."
+        text: "NCCL checks the audit timestamp at start-up and refuses to run if the last audit is too old."
+        explanation: "NCCL has no such dependency on audits."
     tags: [automation, operations]

@@ -11,11 +11,15 @@
   --border: #dde2ea;
   --text: #0f172a;
   --muted: #5b6577;
-  --accent: #0f9d58;
+  /* Light-theme signal colours are darkened so text in them reaches 4.5:1 on every surface (WCAG AA). */
+  --accent: #07733f;
   --accent-soft: #e3f5ea;
-  --data: #0891b2;
-  --warn: #b45309;
-  --danger: #dc2626;
+  --on-accent: #ffffff;
+  --data: #0c6f8a;
+  --warn: #a64b07;
+  --danger: #b91c1c;
+  --analogy: #6d28d9;
+  --interview: #be185d;
   --code-bg: #0b1220;
   --code-text: #dbe4f0;
 }
@@ -29,9 +33,12 @@
   --muted: #8b97ab;
   --accent: #4ade80;
   --accent-soft: #11291c;
+  --on-accent: #04120a;
   --data: #22d3ee;
   --warn: #fbbf24;
   --danger: #f87171;
+  --analogy: #a78bfa;
+  --interview: #f472b6;
   --code-bg: #060a11;
   --code-text: #d5deea;
 }
@@ -46,6 +53,7 @@
   --color-muted: var(--muted);
   --color-accent: var(--accent);
   --color-accent-soft: var(--accent-soft);
+  --color-on-accent: var(--on-accent);
   --color-data: var(--data);
   --color-warn: var(--warn);
   --color-danger: var(--danger);
@@ -97,6 +105,8 @@ body {
 .prose th, .prose td { border: 1px solid var(--border); padding: .5em .7em; text-align: left; vertical-align: top; }
 .prose th { background: var(--panel-2); font-weight: 650; }
 .prose blockquote { border-left: 3px solid var(--border); padding-left: 1em; color: var(--muted); }
+/* Widgets embedded in lessons sit in .not-prose: their tables lay out as tables, not as prose scroll boxes. */
+.prose .not-prose table { display: table; overflow: visible; }
 
 .callout { border: 1px solid var(--border); border-left-width: 4px; border-radius: 10px; padding: .85rem 1.1rem; background: var(--panel); }
 .callout > * + * { margin-top: .6em; }
@@ -104,11 +114,11 @@ body {
 .callout-note { border-left-color: var(--data); } .callout-note .callout-title { color: var(--data); }
 .callout-tip { border-left-color: var(--accent); } .callout-tip .callout-title { color: var(--accent); }
 .callout-warning { border-left-color: var(--warn); } .callout-warning .callout-title { color: var(--warn); }
-.callout-analogy { border-left-color: #a78bfa; } .callout-analogy .callout-title { color: #a78bfa; }
-.callout-interview { border-left-color: #f472b6; } .callout-interview .callout-title { color: #f472b6; }
+.callout-analogy { border-left-color: var(--analogy); } .callout-analogy .callout-title { color: var(--analogy); }
+.callout-interview { border-left-color: var(--interview); } .callout-interview .callout-title { color: var(--interview); }
 
 /* highlight.js tokens (works on the always-dark code background) */
-.hljs-comment, .hljs-quote { color: #6b7a90; font-style: italic; }
+.hljs-comment, .hljs-quote { color: #8190a6; font-style: italic; }
 .hljs-keyword, .hljs-selector-tag, .hljs-built_in { color: #c792ea; }
 .hljs-string, .hljs-attr + .hljs-string, .hljs-addition { color: #a5e07d; }
 .hljs-number, .hljs-literal { color: #f9a65a; }
@@ -121,8 +131,23 @@ body {
 .term { font-variant-ligatures: none; font-family: var(--font-mono); font-size: .84rem; line-height: 1.5; background: #05080e; color: #cfe3d6; }
 .term .prompt { color: #4ade80; }
 .term .err { color: #f87171; }
-.term .dim { color: #6b7a90; }
+.term .dim { color: #8190a6; }
 
 @keyframes flow { to { stroke-dashoffset: -24; } }
 .flow-dash { stroke-dasharray: 6 6; animation: flow .8s linear infinite; }
-@media (prefers-reduced-motion: reduce) { .flow-dash { animation: none; } }
+
+/* Keyboard hint chips (search button and dialog) */
+.kbd { font-family: var(--font-mono); font-size: 10.5px; line-height: 1; padding: 3px 5px; border-radius: 5px; border: 1px solid var(--border); background: var(--panel-2); color: var(--muted); }
+
+/* ---------- Accessibility ---------- */
+/* A visible focus ring for every keyboard-focused control. Unlayered, so it wins over utility classes such
+   as outline-none; elements focused only programmatically (tabindex="-1": <main>, deep-linked headings) skip it. */
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+[tabindex="-1"]:focus-visible { outline: none; }
+input:focus-visible, textarea:focus-visible, select:focus-visible { outline-offset: 0; }
+
+/* Honour the OS "reduce motion" setting everywhere: no animation loops, no smooth scrolling, instant transitions. */
+@media (prefers-reduced-motion: reduce) {
+  .flow-dash { animation: none; }
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+}

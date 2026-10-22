@@ -26,17 +26,17 @@ questions:
     prompt: Why do data center fabrics commonly use /31 prefixes on switch-to-switch links?
     options:
       - id: a
-        text: RFC 3021 allows both addresses of a /31 to be used on point-to-point links, so no addresses are wasted on network and broadcast.
+        text: RFC 3021 lets both addresses of a /31 be used on a point-to-point link, so none are lost to network and broadcast.
         correct: true
         explanation: With thousands of links, /31 halves the address consumption compared with /30.
       - id: b
-        text: A /31 enables ECMP, which is impossible with other prefix lengths.
-        explanation: ECMP depends on having several equal-cost routes, not on the prefix length of the links.
+        text: Leaves only install ECMP routes over /31 links, because each such link then has exactly one possible next hop.
+        explanation: ECMP depends on having several equal-cost routes to a prefix, not on the prefix length of the links.
       - id: c
-        text: A /31 makes the link lossless.
-        explanation: Losslessness is a link-layer property (PFC or IB credits), unrelated to IP addressing.
+        text: A /31 marks the link as point-to-point, which lets the switch run it lossless with PFC without any further setup.
+        explanation: Losslessness is a link-layer property (PFC configured per priority, or IB credits), unrelated to IP addressing.
       - id: d
-        text: A /31 is required by BGP.
+        text: BGP requires a /31 on every peering link, since the two session endpoints must share the smallest possible subnet.
         explanation: BGP works on any prefix length, and BGP unnumbered can even run with no IPv4 address on the link.
     tags: [subnetting, fabric]
   - id: q3
@@ -54,7 +54,7 @@ questions:
         text: 10.0.0.0/8, because it was probably installed first.
         explanation: Installation order does not decide among different prefix lengths.
       - id: d
-        text: All three, load-balanced with ECMP.
+        text: All three, load-balanced with ECMP across their next hops.
         explanation: ECMP balances across several next hops of the same prefix, not across different prefixes.
     tags: [routing]
   - id: q4
@@ -88,14 +88,14 @@ questions:
         correct: true
         explanation: Without policy routing the main table picks one best route for all sources, so NIC 2's traffic leaves via NIC 1 and is dropped by reverse-path checks or the leaf.
       - id: b
-        text: Increase the MTU on NIC 2.
-        explanation: A small ping is not affected by MTU; this is a path selection problem.
+        text: Raise the MTU on NIC 2 to 9000 so that its frames are no longer dropped by the rail leaf as oversized.
+        explanation: A small ping is not affected by MTU, and ip route get already shows the packet leaving via the wrong NIC; this is a path selection problem.
       - id: c
-        text: Change NIC 2's prefix to /8 so it covers all destinations.
+        text: Change NIC 2's prefix to /8 so that its connected route covers every destination and wins the route lookup.
         explanation: That creates overlapping, incorrect on-link routes and would make the host ARP for remote addresses.
       - id: d
-        text: Disable ECMP on the spines.
-        explanation: The output shows the host itself choosing the wrong interface; the fabric is not involved yet.
+        text: Disable ECMP on the spines so replies for 10.0.0.13 stop being hashed back towards NIC 1 of the GPU server.
+        explanation: The output shows the host itself choosing the wrong egress interface; the fabric is not involved yet.
     tags: [multi-nic, policy-routing, troubleshooting]
   - id: q6
     type: single
@@ -106,14 +106,14 @@ questions:
         correct: true
         explanation: The destination port is always 4791 and addresses repeat between the same GPU pairs, so the source port supplies entropy.
       - id: b
-        text: The IP TTL.
+        text: The IP TTL, which varies with the number of hops a flow takes.
         explanation: TTL is not normally part of the hash and is identical for flows of the same path length.
       - id: c
-        text: The ECN bits.
-        explanation: ECN reflects congestion state and is not used for path selection.
+        text: The ECN bits, which change as each flow meets congestion.
+        explanation: ECN reflects congestion state and is not used for path selection; hashing on it would also move a flow between paths mid-stream.
       - id: d
-        text: The Ethernet FCS.
-        explanation: The FCS is a checksum recomputed per hop and is not a hashing input.
+        text: The Ethernet FCS, which is different for almost every frame.
+        explanation: The FCS is a checksum recomputed per hop and is not a hashing input; per-frame variation would also scatter one flow's packets and reorder them.
     tags: [ecmp, rocev2]
   - id: q7
     type: scenario
@@ -122,16 +122,16 @@ questions:
       server. Traffic for those rails is arriving on the wrong NIC. What is the best explanation?
     options:
       - id: a
-        text: Linux's default ARP behaviour lets any interface answer for any local address (ARP flux); arp_ignore and arp_announce should be tuned.
+        text: "ARP flux: by default Linux lets any interface answer ARP for any local address; tune arp_ignore and arp_announce."
         correct: true
         explanation: On multi-homed hosts this default causes exactly this symptom; vendor multi-NIC guides recommend restricting it.
       - id: b
-        text: The four NICs physically share one MAC address by design.
+        text: The four NICs share one burned-in MAC address by design, so the leaf cannot tell the four rails apart from each other.
         explanation: Each NIC port has its own MAC; the shared MAC in the table comes from wrong ARP replies.
       - id: c
-        text: The leaf's ECMP hash is mapping several IPs to one MAC.
-        explanation: ECMP selects next hops for routed traffic; it does not create ARP entries.
+        text: The leaf's ECMP hash maps the four IPs onto one next-hop MAC to spread load across the rails.
+        explanation: ECMP selects next hops for routed traffic; it does not create or rewrite ARP entries.
       - id: d
-        text: The IP TTL is too low for ARP to reach the right NIC.
-        explanation: ARP is not an IP packet and has no TTL.
+        text: The IP TTL of the ARP replies is too low, so only replies from the nearest NIC reach the leaf.
+        explanation: ARP is not an IP packet and has no TTL, and every NIC is one hop from its leaf anyway.
     tags: [arp, multi-nic]

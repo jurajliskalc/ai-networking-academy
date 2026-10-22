@@ -174,6 +174,26 @@ building everything. The spec describes AI-oriented profiles (an "AI Base" and a
 and an HPC profile with more extensive semantics such as richer tag matching. Always check which
 profile a product claims.
 
+### What Specification 1.1 adds (October 2026)
+
+The consortium released **Specification 1.1** in October 2026 (its announcement page is dated
+2026-10-12; the specification history page lists 1.0.1 to 1.0.3 as point releases in between).
+Per the consortium's release announcement, 1.1 adds, among other items:
+
+| Addition | What it is (per the UEC announcement) |
+|---|---|
+| Scale-up optimizations | Less per-packet overhead for small transfers between accelerators (**scale-up** links, compare `open-scale-up-fabrics`), including a reduced inter-packet gap |
+| Unified Forwarding Header (UFH) | A header that overlays the Ethernet header and saves about 20 bytes compared with a conventional IP packet, while keeping IP routing and coexisting with standard Ethernet |
+| Unified Local profile | A simplified, UET-compatible transport for scale-up endpoints with write, read and atomic operations and lighter headers (trade press reports it targets lossless fabrics built with PFC or CBFC) |
+| In-network collectives (INC) | Switches reduce data in flight and broadcast the result, the same idea as SHARP (`sharp-in-network-computing`); the consortium cites up to 2x for large all-reduce |
+| CSIG (Congestion Signaling) | A 4- or 8-byte Layer-2 tag that switches update along the path to report congestion magnitude and location; NSCC and RCCC can use it |
+| PCM (Programmable Congestion Management) | A common language and APIs exposed by NICs so that custom congestion-control and load-balancing algorithms can be written once and run on any PCM-capable NIC |
+| UET Verbs | A verbs mapping for the AI Base profile, to ease porting of applications written to a verbs-style interface, alongside the libfabric-aligned semantics |
+
+These are brand-new features: treat any product claim of 1.1 support as something to verify
+feature by feature, and read the specification itself rather than summaries (including this one).
+`congestion-control-algorithms` covers NSCC, RCCC, CSIG and PCM in more depth.
+
 ## In practice
 
 ### Positioning UEC against the alternatives
@@ -254,3 +274,7 @@ answers to all four will behave well on AI traffic, whatever brand it is.
   control; packet trimming, LLR and CBFC are optional helpers.
 - It is not wire-compatible with RoCEv2; evaluate products by profile, implemented modes and
   software support.
+- Specification 1.1 (October 2026) adds scale-up optimizations (Unified Local profile, Unified
+  Forwarding Header), in-network collectives, CSIG telemetry, programmable congestion management
+  and a verbs mapping;
+  verify each feature in products rather than assuming it.

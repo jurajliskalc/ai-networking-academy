@@ -130,7 +130,7 @@ export default function QpStateMachine() {
         <Pill className="ml-auto">current: <span className="font-mono text-accent">{state}</span></Pill>
       </div>
 
-      <svg viewBox="0 0 740 290" className="w-full" role="img" aria-label={`QP state diagram, current state ${state}`}>
+      <svg viewBox="0 0 740 290" className="w-full" role="img" aria-label={`QP state diagram (${transport}), current state ${state}; valid next states: ${[...nextStates].filter((x) => x !== state).join(', ') || 'none'}. Any state can go to RESET; errors go to ERR.`}>
         <defs>
           <marker id="qp-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
             <path d="M0 0 L10 5 L0 10 z" fill="var(--muted)" />
@@ -166,7 +166,7 @@ export default function QpStateMachine() {
 
       <div className="grid gap-3 md:grid-cols-2">
         <div className="space-y-3">
-          <div className="rounded-lg border border-line bg-panel-2 p-3 text-sm">
+          <div className="rounded-lg border border-line bg-panel-2 p-3 text-sm" aria-live="polite">
             <div className="mb-1 font-mono text-[10px] uppercase tracking-[0.14em] text-muted">In {state}</div>
             <div className="flex flex-wrap gap-2 font-mono text-xs">
               <span>post_recv: <span className={CAN[state].recv.startsWith('yes') ? 'text-accent' : 'text-danger'}>{CAN[state].recv}</span></span>
@@ -178,7 +178,7 @@ export default function QpStateMachine() {
             <div className="mb-1 font-mono text-[10px] uppercase tracking-[0.14em] text-muted">Valid transitions</div>
             <div className="flex flex-wrap gap-1.5">
               {txs.map((t, i) => (
-                <button key={i} type="button" onMouseEnter={() => setSel(t)} onFocus={() => setSel(t)} onClick={() => apply(t)}
+                <button key={i} type="button" onMouseEnter={() => setSel(t)} onFocus={() => setSel(t)} onClick={() => apply(t)} aria-label={`Modify QP to ${t.to}`}
                   className={`rounded-md border px-2 py-1 font-mono text-xs transition ${t.to === 'ERR' ? 'border-danger/40 text-danger hover:bg-danger/10' : t.to === 'RESET' ? 'border-line text-muted hover:bg-panel-2' : 'border-accent/50 text-accent hover:bg-accent-soft'}`}>
                   → {t.to}
                 </button>
@@ -195,7 +195,7 @@ export default function QpStateMachine() {
         <div className="space-y-3">
           <div>
             <div className="mb-1 font-mono text-[10px] uppercase tracking-[0.14em] text-muted">{state} → {show.to} ({transport})</div>
-            <pre className="overflow-x-auto rounded-lg p-3 font-mono text-[11.5px] leading-relaxed" style={{ background: 'var(--code-bg)', color: 'var(--code-text)' }}>{code}</pre>
+            <pre className="overflow-x-auto rounded-lg p-3 font-mono text-[11.5px] leading-relaxed" style={{ background: 'var(--code-bg)', color: 'var(--code-text)' }} tabIndex={0} role="region" aria-label={`ibv_modify_qp call for ${state} to ${show.to}`}>{code}</pre>
             <p className="mt-1.5 text-sm text-muted">{show.why}</p>
           </div>
           <div className="rounded-lg border border-line bg-panel p-2 font-mono text-[11px] leading-relaxed" aria-live="polite">

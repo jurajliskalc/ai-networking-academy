@@ -97,18 +97,18 @@ questions:
     prompt: "A 1:1 leaf with 16 x 800G uplinks loses two uplinks to bad optics. Jobs on that leaf are now consistently a few percent slower, and the remaining uplinks run hotter. What is the best operational response?"
     options:
       - id: a
-        text: Treat it as raised effective oversubscription (16:14); repair the optics promptly, and alarm on effective ratio per leaf in future.
+        text: Treat it as higher effective oversubscription (16:14); repair the optics promptly and alarm on effective ratio per leaf.
         correct: true
         explanation: Failures silently change the ratio and ECMP concentrates flows on the remaining links.
       - id: b
-        text: Ignore it; with ECMP the remaining links absorb the traffic at no cost.
+        text: Ignore it; ECMP spreads the traffic over the remaining 14 links, which absorb it at no cost on a 1:1 leaf.
         explanation: The remaining links have less total capacity, so synchronized jobs slow down.
       - id: c
-        text: Shut down the leaf's downlinks to restore 1:1.
+        text: Shut down two of the leaf's downlinks so the ratio of downlink to uplink capacity returns to exactly 1:1.
         explanation: That disconnects GPUs and is far worse than a small slowdown.
       - id: d
-        text: Increase the MTU on the remaining uplinks.
-        explanation: MTU does not add capacity lost with the failed links.
+        text: Raise the MTU on the remaining uplinks so each carries more payload per packet and recovers the lost capacity.
+        explanation: A larger MTU slightly reduces header overhead but cannot replace capacity lost with the failed links.
     tags: [operations, oversubscription]
   - id: q7
     type: single

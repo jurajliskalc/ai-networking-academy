@@ -185,7 +185,7 @@ On native InfiniBand the `-g` option is not needed. perftest (see `perftest-benc
 
 ### Recognising transports in captures and logs
 
-- In a RoCEv2 packet capture (Wireshark's InfiniBand dissector decodes UDP port 4791), the BTH opcode name tells you the transport and operation, for example "RC RDMA WRITE First" or "UD SEND only".
+- In a RoCEv2 packet capture (Wireshark's InfiniBand dissector decodes UDP port 4791), the BTH opcode name tells you the transport and operation, for example "RC RDMA Write First" or "UD Send Only".
 - In NCCL debug output, the IB transport reports how many QPs it uses per connection and which devices; all of them are RC.
 - `rdma resource show qp` lists each QP's `type` (RC, UC, UD, XRC_INI, XRC_TGT and, on NVIDIA adapters, driver-specific types for DC).
 

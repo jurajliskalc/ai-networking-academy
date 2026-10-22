@@ -7,13 +7,17 @@ estimated_minutes: 90
 environment: containerlab
 lessons: [clos-leaf-spine, bgp-in-the-data-center, ecmp-hashing]
 files: labs/hol-clos-bgp-unnumbered
-verified: false
+verified: true
+tier: 0
+fabric: any
+requires: [linux-vm]
+summary: "Six FRR routers in containerlab: eBGP unnumbered over IPv6 link-local, ECMP across two spines, and reconvergence when links fail."
 ---
 
 > [!NOTE]
-> This lab has been syntax-checked (`bash -n` on the scripts, the topology parsed as YAML) but has
-> not yet been executed end to end. FRR output formats differ slightly between versions; treat all
-> output below as illustrative.
+> Verified end to end (every task, `check.sh` and the clean-up) with containerlab 0.81.1 and FRR
+> 10.2.1 on Ubuntu 24.04 under WSL2 (kernel 6.6.87.2-microsoft-standard-WSL2) on 2026-10-22; see `labs/README.md` for the exact versions and the caveats of WSL2. FRR output formats differ slightly between versions; treat all output below as
+> illustrative.
 
 ## Goal
 
@@ -186,18 +190,22 @@ Illustrative traceroute:
 another local address, typically its loopback; that is how you can tell which spine a hop is.
 
 All three probes per hop normally take the same spine because Linux hashes only on source and
-destination IP by default (`fib_multipath_hash_policy=0`). Switch leaf1 to a 5-tuple hash and
-traceroute again (traceroute changes the UDP destination port per probe, so probes become different
-"flows"):
+destination IP by default (`fib_multipath_hash_policy=0`). Switch leaf1 to a 5-tuple hash and run
+traceroute a few times (each run uses a new UDP source port, so each run is a different "flow"):
 
 ```bash
 cnet leaf1 sysctl -w net.ipv4.fib_multipath_hash_policy=1
-docker exec clab-hol-clos-h1 traceroute -n 192.168.14.10
+for i in 1 2 3 4 5; do docker exec clab-hol-clos-h1 traceroute -n 192.168.14.10 | sed -n 3p; done
 cnet leaf1 sysctl -w net.ipv4.fib_multipath_hash_policy=0
 ```
 
-You may now see both `10.0.0.1` and `10.0.0.2` at hop 2. The `hol-ecmp-entropy` lab explores
-hashing in depth.
+Usually some runs now show `10.0.0.1` and others `10.0.0.2` at hop 2 (with 5 runs, all of them
+pick the same spine about one time in 16). Traceroute also changes the UDP destination port for
+every probe, yet in this lab all probes of one run normally take the same spine. The most likely
+reason: with policy 1, a forwarding Linux router reuses an L4 flow hash that is already attached to
+the packet (computed on the sending host and carried across the veth links) instead of hashing the
+headers again. A hardware switch hashes the headers it receives, so there the probes of one hop can
+spread over both spines. The `hol-ecmp-entropy` lab explores hashing in depth.
 
 ### Task 6: Hard failure: the leaf sees the link go down
 
@@ -217,7 +225,8 @@ date +%T; cnet leaf1 ip link set eth1 up
 ```
 
 **What to observe and why:** the route drops to a single next hop (`eth2`) essentially
-immediately. When an interface goes down, FRR tears down the BGP session at once (fast external
+immediately (FRR may briefly list the `eth1` next hop as `inactive` before BGP removes it). When
+an interface goes down, FRR tears down the BGP session at once (fast external
 fallover) and zebra removes the next hop from the kernel. When the link comes back, the session
 needs a few seconds to re-establish and readvertise (router advertisements, TCP connect, OPEN,
 UPDATE), so recovery is slower than failure. Note that the veth peer on spine1 also sees the link
@@ -280,7 +289,9 @@ exit
 
 Repeat Task 7. With FRR's default BFD timers (300 ms intervals, detect multiplier 3; check
 `show bfd peers` for the values in your version), the session should drop in roughly a second
-instead of the hold time.
+instead of the hold time. On leaf1, the BFD session towards spine2 stays `down` because spine2 has
+no BFD configured; when this lab was tested, that did not affect the Established leaf1-spine2 BGP
+session (check `show bgp summary`).
 
 ## Verify
 

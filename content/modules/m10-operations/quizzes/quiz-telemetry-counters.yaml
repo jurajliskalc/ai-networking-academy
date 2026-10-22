@@ -12,18 +12,18 @@ questions:
       most likely conclusion?
     options:
       - id: a
-        text: Node B's path is losing packets, so its RC transport is retransmitting; look for drops or link errors on that path.
+        text: Node B's path is losing packets and RC is retransmitting; look for drops or link errors on that path.
         correct: true
         explanation: Sequence errors and ACK timeouts are the transport's reaction to loss. Congestion signals are equal, so the difference is loss, not congestion.
       - id: b
-        text: Node B has DCQCN disabled, which is why it sees more congestion.
+        text: Node B has DCQCN disabled, so it never slows down and overruns its receive queues.
         explanation: Node B handles CNPs (rp_cnp_handled is similar to node A), so congestion control is active on both.
       - id: c
-        text: Both nodes are healthy; sequence errors are a normal side effect of ECN marking.
+        text: Both nodes are healthy; sequence errors are a normal side effect of heavy ECN marking.
         explanation: ECN marking does not drop or reorder packets. Sequence errors indicate loss or reordering.
       - id: d
-        text: Node A is the problem because it shows no sequence errors at all.
-        explanation: Zero sequence errors is the expected healthy state for an RC transport on a lossless fabric.
+        text: "Node A is the problem: zero sequence errors means its counters are not being updated."
+        explanation: Zero sequence errors is the expected healthy state for an RC transport on a lossless fabric, and node A's congestion counters are clearly updating.
     tags: [rdma, counters]
   - id: q2
     type: scenario
@@ -32,18 +32,18 @@ questions:
       congestion towards the host. What should you suspect first?
     options:
       - id: a
-        text: The host cannot drain received traffic fast enough, for example a PCIe link downtrained to fewer lanes or receive starvation.
+        text: The host cannot drain received traffic fast enough, for example a downtrained PCIe link or receive starvation.
         correct: true
         explanation: A NIC transmits pauses when its own receive buffer fills. That points inside the host, at the path from NIC to memory or at the consumer.
       - id: b
-        text: The spine is congested and pausing the host.
-        explanation: Spine congestion would show as pauses received by the host (rx_prio3_pause), not transmitted by it.
+        text: The spine is congested and is pausing the host through the leaf, which relays those pause frames down to the host.
+        explanation: PFC is hop by hop and is not forwarded; spine congestion would show as pauses received by the host (rx_prio3_pause), not transmitted by it.
       - id: c
-        text: ECN is disabled on the leaf.
-        explanation: ECN configuration affects marking on the switch; it does not explain the host originating pauses.
+        text: ECN is disabled on the leaf, so the NIC falls back to sending PFC pauses instead of CNPs.
+        explanation: ECN configuration affects marking on the switch; it does not make the host originate pauses, which come from its own receive buffer filling.
       - id: d
-        text: The optic on the host port has a high pre-FEC BER.
-        explanation: Physical errors cause corrupted or dropped frames, not a host sending PFC pauses.
+        text: The optic on the host port has a high pre-FEC BER, and the NIC pauses to slow the errors.
+        explanation: Physical errors cause corrected, corrupted or dropped frames, not a host sending PFC pauses.
     tags: [pfc, host]
   - id: q3
     type: single
@@ -54,10 +54,10 @@ questions:
         correct: true
         explanation: A large absolute pause count may be years of normal operation. The rate over a window is what reflects current behaviour.
       - id: b
-        text: They reset every second, so absolute values are always near zero.
+        text: They reset every second in hardware, so an absolute reading is always close to zero.
         explanation: Hardware counters do not reset each second; they accumulate.
       - id: c
-        text: Prometheus cannot store integers larger than 32 bits.
+        text: Prometheus cannot store integers larger than 32 bits, so raw counter values overflow.
         explanation: Prometheus stores samples as 64-bit floats; storage width is not the reason.
     tags: [telemetry]
   - id: q4
@@ -71,14 +71,14 @@ questions:
         correct: true
         explanation: In a well-tuned fabric ECN marks and CNPs appear before PFC is needed. No marks at all while pauses rise indicates ECN is off or thresholded above XOFF.
       - id: b
-        text: The fabric is perfectly healthy; zero CNPs means no congestion.
+        text: The fabric is healthy; zero CNPs means there is no congestion, and the pauses are just routine flow control.
         explanation: The pauses prove there is congestion. Zero CNPs means the end-to-end signal is missing.
       - id: c
-        text: The optics are failing and causing retransmissions.
+        text: The optics are failing and causing retransmissions that show up as pause frames.
         explanation: Physical errors show as symbol, CRC or FEC uncorrectable counters, not as a pattern of pauses with no ECN.
       - id: d
-        text: The GPUs are thermally throttling.
-        explanation: GPU throttling reduces offered load; it does not suppress ECN marking.
+        text: The GPUs are thermally throttling, which suppresses ECN marking on the switches.
+        explanation: GPU throttling reduces offered load; it has no effect on ECN marking in switch queues.
     tags: [ecn, pfc, dcqcn]
   - id: q5
     type: scenario
@@ -87,18 +87,18 @@ questions:
       polls, while every other port on the same switch is clean. What is the best next step?
     options:
       - id: a
-        text: Check the link's BER with mlxlink, then reseat or replace the cable/transceiver on that link and clear counters to verify.
+        text: Check the link's BER with mlxlink, reseat or replace the cable or transceiver, then clear counters and re-check.
         correct: true
         explanation: Errors isolated to one port point at its physical link (cable, optic or far-end port). Fix, clear and re-measure under load.
       - id: b
-        text: Restart the Subnet Manager to recompute routes.
-        explanation: Routing does not cause symbol errors; the problem is physical.
+        text: Restart the Subnet Manager so it recomputes routes away from the erroring port.
+        explanation: Routing does not cause symbol errors; the problem is physical and stays until the link is fixed.
       - id: c
-        text: Increase PortXmitWait thresholds so the alert stops.
-        explanation: PortXmitWait measures credit starvation and is unrelated to symbol errors; silencing alerts hides a real fault.
+        text: Raise the PortXmitWait alert threshold on that port, since symbol errors there usually come from link congestion.
+        explanation: PortXmitWait measures credit starvation and is unrelated to symbol errors, which are physical-layer errors; silencing alerts hides a real fault.
       - id: d
-        text: Enable PFC on the port.
-        explanation: InfiniBand uses credit-based flow control; PFC is an Ethernet mechanism.
+        text: Enable PFC on the port so the switch pauses senders instead of corrupting packets.
+        explanation: InfiniBand uses credit-based flow control; PFC is an Ethernet mechanism, and flow control does not prevent bit errors.
     tags: [infiniband, perfquery]
   - id: q6
     type: single
@@ -148,12 +148,12 @@ questions:
         correct: true
         explanation: Clean network counters plus GPU clock drops point at thermal or power throttling, which DCGM reports directly.
       - id: b
-        text: Increase the PFC headroom on the leaf.
+        text: Increase the PFC headroom on the leaf port facing that node to absorb its bursts.
         explanation: There is no evidence of drops or pauses; buffer changes will not fix slow GPUs.
       - id: c
-        text: Replace the node's network optics.
+        text: Replace the node's network optics and re-run nccl-tests.
         explanation: Link counters are clean, so the optics are not implicated.
       - id: d
-        text: Disable ECN to reduce CNPs.
+        text: Disable ECN so the node's NICs stop reacting to CNPs.
         explanation: Congestion signals match peers; disabling ECN would only make the fabric worse.
     tags: [dcgm, gpu]

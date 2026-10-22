@@ -7,13 +7,17 @@ estimated_minutes: 75
 environment: linux-vm
 lessons: [ecmp-hashing, flow-collisions-entropy]
 files: labs/hol-ecmp-entropy
-verified: false
+verified: true
+tier: 0
+fabric: any
+requires: [linux-vm]
+summary: "Kernel multipath routing between namespaces shows how a handful of elephant flows collide on one ECMP path."
 ---
 
 > [!NOTE]
-> This lab has been syntax-checked (`bash -n` on every script) but has not yet been executed end
-> to end on a real VM. Your exact numbers will differ from any example: hashing results depend on
-> the kernel version, a random per-boot hash key and the ephemeral ports your flows get.
+> Verified end to end (every task, `check.sh` and `cleanup.sh`) on Ubuntu 24.04 under WSL2 (kernel 6.6.87.2-microsoft-standard-WSL2) on 2026-10-22; see `labs/README.md` for the exact versions and the caveats of WSL2.
+> Your exact numbers will differ from any example: hashing results depend on the kernel version, a
+> random per-boot hash key and the ephemeral ports your flows get.
 
 ## Goal
 

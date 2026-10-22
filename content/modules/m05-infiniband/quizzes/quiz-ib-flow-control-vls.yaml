@@ -8,17 +8,17 @@ questions:
     prompt: What fundamentally distinguishes InfiniBand link-level flow control from Ethernet PFC?
     options:
       - id: a
-        text: IB senders transmit only into buffer space the receiver has advertised (credits); PFC lets senders transmit until the receiver sends a pause.
+        text: IB senders transmit only into buffer space the receiver has advertised as credits; PFC senders transmit until told to pause.
         correct: true
         explanation: Credit flow is proactive; PFC is reactive and needs headroom for data in flight.
       - id: b
-        text: IB pauses the whole link while PFC pauses one priority.
+        text: IB pauses the whole physical link when any receive buffer fills, while PFC pauses only the congested priority.
         explanation: IB credits are per virtual lane, so IB is also per-class.
       - id: c
-        text: IB drops packets early to avoid congestion, PFC never drops.
+        text: IB drops packets early, as RED does, to avoid congestion, while PFC guarantees that no packet is ever dropped on any link.
         explanation: IB does not drop for lack of buffer; PFC can drop if headroom is insufficient.
       - id: d
-        text: There is no difference; both are implementations of 802.1Qbb.
+        text: There is no real difference; both are implementations of IEEE 802.1Qbb on different media.
         explanation: 802.1Qbb is Ethernet PFC only.
     tags: [credits, pfc]
   - id: q2
@@ -64,17 +64,17 @@ questions:
       interpretation?
     options:
       - id: a
-        text: The link is healthy but congested; the downstream side is not returning credits fast enough. Look at downstream hot spots, routing balance and congestion control.
+        text: The link is healthy but congested; downstream returns credits slowly. Check hot spots, routing balance and congestion control.
         correct: true
         explanation: PortXmitWait measures waiting for credits; with no error counters, this is congestion, not a link fault.
       - id: b
-        text: The cable is failing and should be replaced.
-        explanation: Physical errors would show in symbol and link recovery counters.
+        text: The cable is failing and should be replaced, because the port keeps waiting to resend corrupted packets.
+        explanation: Physical errors would show in symbol and link recovery counters, and both are zero.
       - id: c
-        text: The port is dropping packets because of buffer overflow.
+        text: The port is dropping packets on buffer overflow, and PortXmitWait counts each packet the switch discarded from its full output queue.
         explanation: Credit flow prevents buffer-overflow drops; waiting is the symptom instead.
       - id: d
-        text: PortXmitWait always grows on busy links and can be ignored.
+        text: PortXmitWait always grows on busy links, so with no error counters set there is nothing here to investigate or fix.
         explanation: Some wait is normal under load, but steady high growth on one port signals a congestion point.
     tags: [portxmitwait, congestion]
   - id: q5
@@ -85,14 +85,14 @@ questions:
       fraction of line rate. Why?
     options:
       - id: a
-        text: The receiver's buffer cannot advertise enough credits to cover the long round-trip time, so the sender spends most of its time waiting for credits.
+        text: The receiver cannot advertise enough credits to cover the long round-trip time, so the sender mostly waits for credits.
         correct: true
         explanation: Full rate needs buffer of about rate x RTT; long-haul needs extension products with deep buffers.
       - id: b
-        text: InfiniBand cannot run over single-mode fibre.
-        explanation: Single-mode optics are common for longer IB links.
+        text: InfiniBand cannot run at full rate over single-mode fibre, so the optics fall back to a low-rate compatibility mode.
+        explanation: Single-mode optics are common for longer IB links, and there is no such fallback mode.
       - id: c
-        text: The SM does not support links longer than 100 m.
+        text: The SM does not support links longer than 100 m, and it throttles any longer link it discovers to a fraction of line rate.
         explanation: The limit is buffer versus round-trip time, not an SM rule.
     tags: [credits, distance]
   - id: q6
@@ -100,14 +100,14 @@ questions:
     prompt: In InfiniBand Congestion Control, what is the role of FECN and BECN?
     options:
       - id: a
-        text: A congested switch marks FECN on packets; the destination returns BECN to the source, which reduces its injection rate.
+        text: A congested switch marks FECN; the destination returns BECN to the source, which then lowers its injection rate.
         correct: true
         explanation: This end-to-end loop throttles sources so back-pressure does not spread.
       - id: b
-        text: FECN pauses the link and BECN resumes it.
+        text: FECN pauses the link toward the congested switch, and BECN resumes it once the switch's output queue has drained.
         explanation: Pause/resume describes PFC-like behaviour, not IB congestion control.
       - id: c
-        text: They are error flags that cause packets to be dropped.
+        text: They are error flags that make switches drop the marked packets, so the sources detect the loss and slow down.
         explanation: They are congestion notifications, not drop signals.
     tags: [congestion-control]
   - id: q7
@@ -119,17 +119,17 @@ questions:
       was never applied. What is happening?
     options:
       - id: a
-        text: Both classes are probably using the default SL, so they share one VL and storage bursts cause head-of-line blocking for collectives.
+        text: Both classes probably use the default SL, so they share one VL and storage bursts cause head-of-line blocking for collectives.
         correct: true
         explanation: The QoS design only works if applications actually mark the intended SLs.
       - id: b
-        text: VL 1 has higher priority than VL 0 by definition.
+        text: VL 1 has higher priority than VL 0 by definition, so storage on VL 1 always pre-empts the collectives on VL 0.
         explanation: VL priority is set by arbitration tables, not by VL number.
       - id: c
-        text: Storage traffic is being dropped and retransmitted.
+        text: Storage traffic is being dropped by the switches and retransmitted, and the retransmissions crowd out the collectives on VL 0.
         explanation: Credit flow prevents buffer-overflow drops; the issue is sharing a lane.
       - id: d
-        text: The SM must be rebooted to apply QoS.
+        text: The SM must be restarted before its QoS tables take effect, so no class is separated yet.
         explanation: The SM programmed the tables; the applications are not using the SLs.
     tags: [qos, sl]
   - id: q8
@@ -141,9 +141,9 @@ questions:
         correct: true
         explanation: Separate VLs break cycles in buffer dependencies.
       - id: b
-        text: To increase the link's raw bandwidth.
+        text: To increase the link's raw bandwidth by carrying several lanes' traffic in parallel.
         explanation: VLs share the link; they do not add bandwidth.
       - id: c
-        text: To carry management packets.
+        text: To carry the extra management packets these engines exchange with the switches.
         explanation: Management uses VL15 regardless of routing engine.
     tags: [deadlock, routing]

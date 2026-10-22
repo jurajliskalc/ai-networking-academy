@@ -106,7 +106,7 @@ function Slider({ label, value, min, max, step = 1, unit, onChange }: { label: s
   return (
     <label className="block text-xs">
       <div className="flex justify-between gap-2"><span className="text-muted">{label}</span><span className="font-mono">{value} {unit}</span></div>
-      <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(+e.target.value)} className="w-full accent-[var(--accent)]" />
+      <input type="range" min={min} max={max} step={step} value={value} aria-valuetext={`${value} ${unit}`} onChange={(e) => onChange(+e.target.value)} className="w-full accent-[var(--accent)]" />
     </label>
   );
 }
@@ -173,7 +173,8 @@ export default function PfcEcnSim() {
       <QueueChart s={shown} P={P} limitKB={limitKB} />
       <RateChart s={shown} k={k} />
 
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+      {/* Announce the counters when they settle, not on every animation frame. */}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6" aria-live={playing ? 'off' : 'polite'}>
         {[
           ['ECN-marked pkts', c.marked, 'text-data'], ['CNPs', c.cnps, 'text-data'], ['Pause frames', c.pauses, 'text-warn'],
           ['Drops', c.drops, c.drops ? 'text-danger' : ''], ['Avg egress util.', `${thr.toFixed(1)} %`, 'text-accent'], ['Mark prob. now', `${((cur?.p ?? 0) * 100).toFixed(1)} %`, ''],
@@ -217,7 +218,8 @@ function QueueChart({ s, P, limitKB }: { s: Sample[]; P: Params; limitKB: number
   return (
     <div>
       <div className="mb-1 flex flex-wrap gap-x-4 font-mono text-[10px] text-muted"><span>egress queue depth (KB)</span><span className="text-warn">■ PFC pause asserted</span><span className="text-danger">| drops</span></div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label="Queue depth over time">
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img"
+        aria-label={`Egress queue depth over ${s.length} µs: peak ${Math.round(Math.max(0, ...s.map((d) => d.q)))} KB, now ${Math.round(s[s.length - 1]?.q ?? 0)} KB; PFC pause asserted ${bands.length} time${bands.length === 1 ? '' : 's'}; drops in ${s.filter((d) => d.drop > 0).length} µs; buffer limit ${limitKB} KB.`}>
         {bands.map(([a, b]) => <rect key={a} x={X(a)} y={PADT} width={Math.max(0.8, X(b) - X(a))} height={H - PADT - PADB} fill="var(--warn)" opacity={0.15} />)}
         <line x1={PADL} x2={PADL} y1={PADT} y2={H - PADB} stroke="var(--border)" />
         <line x1={PADL} x2={W - PADR} y1={H - PADB} y2={H - PADB} stroke="var(--border)" />
@@ -243,7 +245,8 @@ function RateChart({ s, k }: { s: Sample[]; k: number }) {
   return (
     <div>
       <div className="mb-1 flex flex-wrap gap-x-4 font-mono text-[10px] text-muted"><span className="text-accent">— aggregate sender rate (Gb/s)</span><span className="text-data">— sender 0</span><span>- - egress capacity 400 Gb/s</span></div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label="Sender rates over time">
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img"
+        aria-label={`Sender rates over ${s.length} µs: aggregate now ${Math.round(s[s.length - 1]?.rate ?? 0)} Gb/s against 400 Gb/s egress capacity, sender 0 now ${Math.round(s[s.length - 1]?.r0 ?? 0)} Gb/s.`}>
         <line x1={PADL} x2={PADL} y1={PADT} y2={H - PADB} stroke="var(--border)" />
         <line x1={PADL} x2={W - PADR} y1={H - PADB} y2={H - PADB} stroke="var(--border)" />
         <line x1={PADL} x2={W - PADR} y1={Y(LINE)} y2={Y(LINE)} stroke="var(--muted)" strokeDasharray="4 3" />

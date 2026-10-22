@@ -14,14 +14,14 @@ questions:
         correct: true
         explanation: Slow with every partner localizes the fault to that NIC or host. About half bandwidth with a healthy link is the signature of a PCIe link that trained at half width or a lower generation.
       - id: b
-        text: The spine uplinks, because cross-leaf paths are oversubscribed.
-        explanation: A spine problem would affect many pairs crossing it, not one NIC with all partners including same-leaf ones.
+        text: The leaf-to-spine uplinks, because cross-leaf paths are oversubscribed and cap this NIC's flows.
+        explanation: A spine or uplink problem would affect many pairs crossing it, not one NIC with every partner, including partners on the same leaf.
       - id: c
-        text: The NCCL version on the node.
-        explanation: ib_write_bw does not use NCCL.
+        text: The NCCL version and NCCL_IB_HCA setting on the node, since a wrong HCA list halves bandwidth.
+        explanation: ib_write_bw is a perftest tool that uses the verbs layer directly; the NCCL version and NCCL_* variables play no part in its result.
       - id: d
-        text: The ECN thresholds on the leaf.
-        explanation: ECN tuning would not cap a single NIC at half rate with every partner.
+        text: The leaf's ECN marking thresholds, since early marking makes DCQCN throttle this NIC to half rate.
+        explanation: The other NICs on the same fabric reach full rate, and congestion control reacts to congestion on shared paths; it would not cap a single NIC at half rate with every partner.
     tags: [perftest, pcie]
   - id: q2
     type: scenario
@@ -30,33 +30,33 @@ questions:
       scalable unit, but drops by 20 % when two scalable units are combined. Where is the problem most likely?
     options:
       - id: a
-        text: In the layer that joins scalable units (spines or their uplinks), for example a miscabled or failed uplink or load-balancing collisions.
+        text: The layer that joins scalable units, such as a failed or miscabled spine uplink or ECMP hash collisions.
         correct: true
-        explanation: Scaling in steps localizes faults to the layer added at the step where performance drops.
+        explanation: Scaling in steps localizes faults to the layer added at the step where performance drops; combining two scalable units is the first step that uses the spine layer between them.
       - id: b
-        text: In NVLink inside one node.
-        explanation: Single-node and small-scale tests passed, which exercises NVLink.
+        text: Inside the nodes on NVLink, because more nodes push more intra-node traffic through NVSwitch.
+        explanation: Single-node and one-SU tests passed and exercise NVLink the same way; intra-node load per GPU does not grow with node count.
       - id: c
-        text: In the GPU driver on all nodes.
-        explanation: A driver problem would show at small scales too.
+        text: In the GPU driver or CUDA version on the nodes, which limits how many peers each rank can reach.
+        explanation: A driver problem would show at small scales too, and drivers impose no peer limit that appears only at two scalable units.
       - id: d
-        text: It is expected; busbw always halves when scale doubles.
-        explanation: For a well-built non-blocking fabric large-message busbw should stay roughly flat with scale.
+        text: Nowhere; in a ring all-reduce busbw is expected to fall roughly in proportion to the number of nodes added.
+        explanation: busbw is normalized for the algorithm. For a well-built non-blocking fabric large-message busbw should stay roughly flat with scale.
     tags: [nccl-tests, scale]
   - id: q3
     type: single
     prompt: Why must cabling be validated against a plan even when every link is up at the right speed?
     options:
       - id: a
-        text: Swapped or misplaced cables (for example a node on the wrong rail's leaf) still come up but break the intended topology and performance.
+        text: Swapped or misplaced cables (for example a NIC on another rail's leaf) still link up but break the intended topology.
         correct: true
-        explanation: Link state says nothing about where a cable lands. LLDP or IB topology discovery compared to the source of truth catches misplacement.
+        explanation: Link state says nothing about where a cable lands, yet misplacement breaks rail alignment and performance. LLDP or IB topology discovery compared to the source of truth catches it.
       - id: b
-        text: Links that are up can still be at the wrong MTU.
-        explanation: MTU is a configuration issue, not a cabling placement issue, and is checked separately.
+        text: Links that are up can still have the wrong MTU, which only a comparison with the cabling plan reveals.
+        explanation: MTU is a configuration setting checked separately; a cabling-plan comparison says nothing about MTU.
       - id: c
-        text: The plan is required to enable FEC.
-        explanation: FEC mode is negotiated or configured per link; it does not depend on a cabling plan.
+        text: The cabling plan defines which FEC mode each link uses, so FEC stays disabled until it is validated.
+        explanation: FEC mode is negotiated or configured per link; it does not depend on validating a cabling plan.
     tags: [cabling]
   - id: q4
     type: scenario
@@ -69,13 +69,13 @@ questions:
         correct: true
         explanation: Few bits observed on a cool idle link cannot detect low error rates; marginal optics often degrade as they heat up.
       - id: b
-        text: Disable FEC so errors are visible sooner.
-        explanation: Disabling FEC on PAM4 links makes them unusable; FEC is required.
+        text: Disable FEC during burn-in so that bit errors show up as CRC errors sooner.
+        explanation: Disabling FEC on PAM4 links makes them unusable; FEC is required, and the test must reflect the production configuration.
       - id: c
-        text: Skip burn-in to avoid stressing optics.
-        explanation: Finding failures during burn-in is exactly the goal; skipping it moves them into production.
+        text: Shorten burn-in to a few hours so that marginal optics are not stressed into failure.
+        explanation: Exposing marginal optics during burn-in is exactly the goal; shortening it moves those failures into production.
       - id: d
-        text: Ignore it; flaps are normal during burn-in.
+        text: Accept it; flaps on new optics are normal during burn-in and settle down once the transceivers have aged in.
         explanation: Flaps are a failure criterion; the optic or cable must be replaced and the link retested.
     tags: [ber, burn-in]
   - id: q5
@@ -87,10 +87,10 @@ questions:
         correct: true
         explanation: Large-message busbw reflects bandwidth capability normalized for the algorithm; small sizes measure latency.
       - id: b
-        text: The "Avg bus bandwidth" summary line only.
+        text: The "Avg bus bandwidth" line at the end, since it summarizes every message size.
         explanation: It averages over all sizes including latency-bound small messages, so it mixes two different properties.
       - id: c
-        text: The algbw at 8 bytes.
+        text: The algbw at the smallest message size, since it shows the raw link speed.
         explanation: Tiny messages are latency-bound and say nothing about bandwidth.
     tags: [nccl-tests]
   - id: q6
@@ -104,13 +104,13 @@ questions:
         correct: true
         explanation: One pair at a time never stresses shared links or buffers; many-to-many concurrent load is needed to expose congestion and lossless misconfigurations.
       - id: b
-        text: Longer message sizes in the single-pair test.
-        explanation: Message size does not create contention on shared uplinks.
+        text: Larger message sizes in the single-pair test, so each pair runs long enough to fill buffers.
+        explanation: Message size does not create contention on shared uplinks; a single pair still cannot congest them.
       - id: c
-        text: An ib_write_lat run on every pair.
-        explanation: Latency tests are useful but do not load the fabric.
+        text: An ib_write_lat run on every pair, since latency outliers reveal congested switch queues.
+        explanation: Latency tests barely load the fabric, and run one pair at a time they share nothing, so no queue builds up.
       - id: d
-        text: Nothing; drops are expected in production.
+        text: Nothing; some drops on the RoCE priority are expected once production traffic arrives.
         explanation: Drops on the lossless class are a defect.
     tags: [bisection]
   - id: q7
@@ -138,13 +138,13 @@ questions:
     prompt: What is the main purpose of running HPL during burn-in?
     options:
       - id: a
-        text: To drive GPUs to sustained maximum power and heat, exposing unstable GPUs, HBM and power or cooling problems.
+        text: To hold GPUs at sustained maximum power and heat, exposing unstable GPUs, HBM, power or cooling.
         correct: true
-        explanation: HPL is a demanding compute stress that triggers infant-mortality hardware failures.
+        explanation: HPL is a demanding compute stress that triggers infant-mortality hardware failures in GPUs, HBM and the power and cooling path.
       - id: b
-        text: To measure all-reduce bus bandwidth.
+        text: To measure all-reduce bus bandwidth across the cluster before nccl-tests are run.
         explanation: That is what nccl-tests measure; HPL is primarily a compute stress.
       - id: c
-        text: To verify cabling against the plan.
-        explanation: Cabling is validated with LLDP or IB topology discovery.
+        text: To verify cabling against the plan by checking which nodes exchange data with which during the run.
+        explanation: HPL reports compute performance, not link placement; cabling is validated with LLDP or IB topology discovery.
     tags: [burn-in, hpl]

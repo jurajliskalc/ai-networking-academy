@@ -7,13 +7,17 @@ estimated_minutes: 90
 environment: containerlab
 lessons: [evpn-vxlan-frontend]
 files: labs/hol-evpn-vxlan
-verified: false
+verified: true
+tier: 0
+fabric: any
+requires: [linux-vm]
+summary: "Two FRR VTEPs and a spine in containerlab stretch one Layer 2 segment over a routed underlay with EVPN type-2 and type-3 routes."
 ---
 
 > [!NOTE]
-> This lab has been syntax-checked (`bash -n` on the scripts, the topology parsed as YAML) but has
-> not yet been executed end to end. FRR output formats differ slightly between versions; treat all
-> output below as illustrative.
+> Verified end to end (every task, `check.sh` and the clean-up) with containerlab 0.81.1 and FRR
+> 10.2.1 on Ubuntu 24.04 under WSL2 (kernel 6.6.87.2-microsoft-standard-WSL2) on 2026-10-22; see `labs/README.md` for the exact versions and the caveats of WSL2. FRR output formats differ slightly between versions; treat all output below as
+> illustrative.
 
 ## Goal
 
@@ -170,7 +174,9 @@ vt leaf1 "show bgp l2vpn evpn route rd 10.0.0.12:100"
 **Observe in the output:** the route distinguisher (makes the route unique per VTEP), the AS path
 (`65000 65102`), the next hop **10.0.0.12** (the remote VTEP, unchanged by the spine), the label
 (VNI 100), and extended communities such as the route target `RT:65000:100` and the encapsulation
-type (VXLAN). The route target is what decides that leaf1 imports this route into VNI 100.
+type (FRR prints it as `ET:8`; 8 is the BGP tunnel encapsulation type for VXLAN). The type-3 route
+also carries a `PMSI Tunnel Type: Ingress Replication` attribute: that is how leaf2 asks for
+head-end replication. The route target is what decides that leaf1 imports this route into VNI 100.
 
 ### Task 6: See VXLAN on the wire
 

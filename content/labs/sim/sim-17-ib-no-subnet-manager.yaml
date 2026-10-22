@@ -1,0 +1,61 @@
+id: sim-17-ib-no-subnet-manager
+title: "InfiniBand: links up, ports stuck in INIT"
+level: 3
+estimated_minutes: 35
+lessons: [subnet-manager-routing, ib-architecture, ib-tools-diagnostics, nccl-debugging]
+summary: InfiniBand variant. Every link trains, but no port leaves INIT and NCCL quietly falls back to sockets.
+start: node01
+ticket: |
+  **INC-4901 · Sev1 · InfiniBand cluster about 140x slower after the patch window**
+
+  > This is the InfiniBand cluster (same layout as the RoCE one: 4 nodes, 8 NDR HCAs each, 8 rail leaves,
+  > 2 spines, all NVIDIA Quantum-2). After last night's OS patch window every node and switch came back,
+  > every link LED is green, and jobs start, but `all_reduce_perf` reaches about 2.6 GB/s. `ib_write_bw`
+  > fails immediately on every HCA. The patch included the head node, node01. - HPC operations
+
+  Restore the fabric and explain why the links are up but nothing works.
+faults:
+  - { type: ib_fabric }
+  - { type: sm_down, enabled: false }
+hints:
+  - "`Physical state: LinkUp` only means the cable trained. Read the logical `State:` in `ibstat` as well. What moves an InfiniBand port from INIT to ACTIVE?"
+  - "`ibstat` shows `Base lid` and `SM lid` for each port, and `sminfo` asks the subnet manager to identify itself. `iblinkinfo` still works without one, because it discovers the fabric by directed routes."
+  - "On an OpenSM cluster the subnet manager runs as a service on a host. Check `systemctl status opensm` on the nodes."
+diagnosis:
+  prompt: What is the root cause?
+  options:
+    - id: a
+      text: No subnet manager is running. opensm on node01 is stopped and disabled after the patch, so no port gets a LID or leaves INIT, and NCCL falls back to sockets.
+      correct: true
+      explanation: An InfiniBand port trains physically on its own (LinkUp), but only a subnet manager assigns LIDs, programs the switch forwarding tables and moves ports through ARMED to ACTIVE. ibstat shows State Initializing, Base lid 0 and SM lid 0 everywhere, sminfo fails, and systemctl shows opensm inactive and disabled on node01, so the reboot after patching left the subnet unmanaged. perftest refuses a non-ACTIVE port, and NCCL's IB transport skips non-ACTIVE ports, finds no device and silently uses TCP sockets over eno1.
+    - id: b
+      text: The patch reset the HCAs to Ethernet link layer, so the ports cannot reach ACTIVE on an InfiniBand switch and NCCL has to use TCP sockets instead.
+      explanation: ibstat and ibv_devinfo report Link layer InfiniBand and the links train to 4X NDR on the Quantum switches. A port in Ethernet mode would not train against an InfiniBand switch port at all.
+    - id: c
+      text: A partition key mismatch after the patch keeps every HCA out of the default partition, so the subnet manager will not move the ports to ACTIVE.
+      explanation: Partition problems show up with ports ACTIVE and LIDs assigned, and then fail at connection setup. Here sminfo gets no answer and every SM lid is 0, so no subnet manager is talking to the ports at all.
+    - id: d
+      text: NCCL_IB_HCA in the patched nccl.conf no longer matches any HCA, so NCCL ignores InfiniBand and runs all collectives over the management network.
+      explanation: NCCL_IB_HCA=mlx5 still matches all eight HCAs, and ib_write_bw fails too, without NCCL involved. NCCL reports "No device found" because no port is ACTIVE.
+checks:
+  - { description: "a subnet manager is running", check: sm_running }
+  - { description: "opensm is enabled, so it starts again after the next reboot", check: sm_enabled }
+  - { description: "every HCA port is ACTIVE", check: ib_ports_active, args: { node: all } }
+  - { description: "all_reduce bus bandwidth is above 360 GB/s", check: allreduce_min_busbw, args: { value: 360 } }
+solution: |
+  `ibstat` on any node shows `State: Initializing`, `Physical state: LinkUp`, `Base lid: 0`, `SM lid: 0`.
+  `ibstatus` reads `2: INIT` from sysfs, `rdma link` shows `state INIT physical_state LINK_UP`, and
+  `ibdev2netdev` shows the IPoIB netdevs Down. `ib_write_bw` stops at `Port number 1 state is Init`.
+  `sminfo` fails, and `iblinkinfo` (which discovers by directed route, without LIDs) shows every link as
+  `4X 106.25 Gbps Initialize/ LinkUp` with LID 0. With `NCCL_DEBUG=INFO`, NCCL logs `NET/IB : No device
+  found.` and `Using network Socket`.
+
+  On node01, `systemctl status opensm` shows the service inactive and disabled. Fix:
+  `systemctl enable --now opensm`. Within one sweep every port goes ACTIVE with a LID (the SM's own port
+  gets LID 11 in this lab), `sminfo` answers with `SMINFO_MASTER`, and the collective returns to ~370 GB/s.
+
+  Lesson: on InfiniBand, link up is not port up. Production fabrics run at least two SMs (a master and a
+  standby, often in UFM or on managed switches) so that one host's reboot cannot take the subnet down,
+  and monitor `sminfo`, not only link LEDs.
+fix:
+  - "node01: systemctl enable --now opensm"

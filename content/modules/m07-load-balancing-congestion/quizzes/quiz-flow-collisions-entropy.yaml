@@ -48,13 +48,13 @@ questions:
         correct: true
         explanation: "Uneven member utilization plus run-to-run variance is the fingerprint of per-flow hashing of a few elephant flows."
       - id: b
-        text: "A PFC storm caused by a faulty NIC."
+        text: "A PFC storm from a faulty NIC that comes and goes depending on which node gets that rank."
         explanation: "A PFC storm would show pause counters and stalls, not idle ECMP members with others at line rate."
       - id: c
-        text: "An MTU mismatch between leaf and spine."
+        text: "An MTU mismatch between leaf and spine that only affects some uplinks of the ECMP group."
         explanation: "An MTU mismatch causes drops or failures consistently, not a restart-dependent pattern."
       - id: d
-        text: "Insufficient GPU memory bandwidth on some nodes."
+        text: "Insufficient GPU memory bandwidth on some nodes, depending on where the scheduler places ranks."
         explanation: "This would not produce idle uplinks next to saturated ones in the same ECMP group."
     tags: [ecmp, troubleshooting]
   - id: q4
@@ -62,17 +62,17 @@ questions:
     prompt: "What is hash polarization?"
     options:
       - id: a
-        text: "Successive tiers using the same hash function and seed, so flows already sorted by one tier all pick the same member at the next."
+        text: "Successive tiers sharing hash function and seed, so flows one tier has sorted all pick the same member at the next."
         correct: true
         explanation: "The first tier consumes the entropy; the second tier sees flows with identical hash bits and cannot spread them."
       - id: b
-        text: "A hash that prefers even-numbered ports over odd-numbered ones."
+        text: "A hash that systematically prefers even-numbered member ports over odd ones because of how the bits are folded."
         explanation: "That is a biased hash, not polarization; polarization is about correlation between tiers."
       - id: c
-        text: "Traffic flowing only in one direction across an ECMP group."
-        explanation: "Direction of traffic is unrelated to polarization."
+        text: "Traffic flowing only in one direction across an ECMP group, so the return path is hashed onto different members."
+        explanation: "Traffic direction and path asymmetry are unrelated to polarization, which is about correlation between tiers."
       - id: d
-        text: "The change of hash results when an ECMP member fails."
+        text: "The reshuffling of hash results across all members when one ECMP member fails or is added back."
         explanation: "That is rehashing on membership change, addressed by resilient hashing."
     tags: [polarization]
   - id: q5
@@ -100,34 +100,34 @@ questions:
     prompt: "Your team raised NCCL_IB_QPS_PER_CONNECTION from 1 to 8. Average all-reduce bandwidth rose a little, run-to-run variance fell, but job start-up got slower and small-message latency got slightly worse. How should you interpret this?"
     options:
       - id: a
-        text: "Expected trade-off: more QPs improve hash odds but add QP state, setup time and message splitting; tune to a measured sweet spot or move to adaptive routing."
+        text: "An expected trade-off: more QPs improve hashing odds but add QP state, setup time and message splitting."
         correct: true
-        explanation: "Entropy improves the statistics of hashing but has costs; it is not a structural fix."
+        explanation: "Entropy improves the statistics of hashing but has costs; it is not a structural fix. Tune to a measured sweet spot, or move to adaptive routing."
       - id: b
-        text: "The change is broken; more QPs should always improve every metric."
+        text: "The change is broken: more QPs should improve every metric, so a NIC or driver bug must be adding latency."
         explanation: "More QPs carry overhead in NIC resources and per-QP message size, so trade-offs are normal."
       - id: c
-        text: "It proves the fabric is oversubscribed."
+        text: "It proves the fabric is oversubscribed, because the extra QPs raised average bandwidth only slightly."
         explanation: "Oversubscription would cap throughput even with perfect balancing; the observations point to hashing statistics."
       - id: d
-        text: "It means PFC is misconfigured on the spine."
-        explanation: "Nothing in the observations points to pause behaviour."
+        text: "It means PFC is misconfigured on the spine, since the extra QPs trigger more pauses that slow start-up."
+        explanation: "Nothing in the observations points to pause behaviour; start-up time grows with QP setup, not with PFC."
     tags: [nccl, entropy]
   - id: q7
     type: single
     prompt: "Why do hash collisions hurt AI training much more than typical enterprise traffic?"
     options:
       - id: a
-        text: "Training uses few, large, synchronized flows and the collective completes at the speed of its slowest flow."
+        text: "Training uses few, large, synchronized flows, and a collective finishes at the speed of its slowest flow."
         correct: true
         explanation: "One flow at half speed slows the whole collective and all GPUs waiting on it."
       - id: b
-        text: "AI traffic uses TCP, which reacts badly to collisions."
+        text: "AI traffic mostly uses TCP, whose congestion control backs off hard whenever two flows share a link."
         explanation: "Collective traffic in AI fabrics is predominantly RDMA (RoCE or InfiniBand), and the problem is about flow counts, not TCP."
       - id: c
-        text: "Enterprise switches use a better hash function than AI switches."
+        text: "Enterprise switches use a stronger hash function than AI switches, which are tuned for latency instead."
         explanation: "The hash functions are similar; the traffic mix is what differs."
       - id: d
-        text: "AI clusters always run oversubscribed fabrics."
-        explanation: "Many AI back-end fabrics are non-blocking; collisions hurt even there."
+        text: "AI clusters always run oversubscribed fabrics, so every collision immediately turns into packet loss."
+        explanation: "Many AI back-end fabrics are non-blocking, and collisions hurt even there by halving the speed of the colliding flows."
     tags: [ai-traffic]

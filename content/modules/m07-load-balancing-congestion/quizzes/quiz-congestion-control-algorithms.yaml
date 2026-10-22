@@ -1,0 +1,151 @@
+id: quiz-congestion-control-algorithms
+title: "Knowledge check: Congestion control beyond DCQCN"
+lesson: congestion-control-algorithms
+pass_pct: 70
+questions:
+  - id: q1
+    type: single
+    prompt: "Which pairing of signal and control variable describes HPCC?"
+    options:
+      - id: a
+        text: "Per-hop in-band telemetry (queue length, transmitted bytes) controlling a window of bytes in flight."
+        correct: true
+        explanation: "HPCC reads INT from every switch and sizes the window so the most loaded link runs near a target utilisation."
+      - id: b
+        text: "ECN marks returned as CNPs controlling the sending rate, with timer-based recovery of that rate."
+        explanation: "That is DCQCN, the algorithm HPCC was designed to improve on."
+      - id: c
+        text: "The RTT gradient measured with NIC timestamps controlling the sending rate, with Tlow and Thigh guards."
+        explanation: "That is TIMELY: delay-based and rate-based, with no switch telemetry."
+      - id: d
+        text: "Grants issued by the receiver controlling which scheduled packets a sender may transmit next."
+        explanation: "That is a receiver-driven design such as Homa, not HPCC."
+    tags: [hpcc, int]
+  - id: q2
+    type: scenario
+    prompt: "An HPCC sender receives telemetry from its bottleneck link: queue length 1,000,000 bytes, txRate equal to the 400 Gb/s line rate, base RTT 10 us (so B x T = 500,000 bytes), eta = 0.95. Ignoring the additive term, what happens to its window?"
+    options:
+      - id: a
+        text: "U = 2 + 1 = 3, so the window becomes W x 0.95 / 3, about a third of its old value."
+        correct: true
+        explanation: "U = qlen/(B x T) + txRate/B = 2 + 1 = 3; W_new = W / (U / eta) = 0.317 W."
+      - id: b
+        text: "U = 1,000,000 / 500,000 = 2, so the window halves to W / 2 and the txRate term is ignored."
+        explanation: "The txRate term counts the bytes in the pipeline; leaving it out underestimates the load."
+      - id: c
+        text: "U = 1 because txRate equals line rate, so the window stays the same until the queue drains."
+        explanation: "A full link with a 1 MB queue is overloaded; HPCC cuts the window sharply."
+      - id: d
+        text: "The window is cut by a fixed factor of one half, the same for any queue length above zero."
+        explanation: "HPCC scales the cut to the measured overload; a fixed halving is classic TCP-style behaviour."
+    tags: [hpcc, calculation]
+  - id: q3
+    type: scenario
+    prompt: "512 GPUs send to one receiver at the same moment over 400 Gb/s links with a 10 us base RTT (BDP 500,000 bytes) and a 4 KiB RDMA MTU. Each sender's congestion control cannot go below one packet in flight. What is the likely result?"
+    options:
+      - id: a
+        text: "About 2 MiB is injected per RTT, about 4x the BDP, so a queue builds that CC alone cannot prevent."
+        correct: true
+        explanation: "The fair share is about 977 bytes per sender, below one packet; this is why Swift allows sub-packet windows with pacing."
+      - id: b
+        text: "Each sender gets about 977 bytes per RTT, which the NIC enforces exactly, so no queue forms."
+        explanation: "About 977 bytes is the fair share, but a one-packet minimum means each sender actually injects 4 KiB."
+      - id: c
+        text: "Spine ECMP spreads the 512 flows over many paths, so the receiver's leaf port sees no queue."
+        explanation: "All flows converge on the receiver's single downlink; path spreading does not help last-hop incast."
+      - id: d
+        text: "The receiver's NIC drops the excess silently, so throughput falls but no switch queue forms."
+        explanation: "The excess queues in the receiver's leaf switch egress (and triggers PFC on a lossless class)."
+    tags: [incast, bdp]
+  - id: q4
+    type: single
+    prompt: "Why do window-based algorithms (Swift, HPCC, NSCC) cope better than pure rate-based ones with feedback that is delayed by congestion?"
+    options:
+      - id: a
+        text: "A window caps the bytes in flight, so a sender stops once it is full even if feedback is late."
+        correct: true
+        explanation: "The HPCC authors make exactly this argument against rate-only control during incast."
+      - id: b
+        text: "A window lets the sender skip the base RTT measurement, so it reacts a full RTT sooner."
+        explanation: "Windowed schemes still depend on ACK timing; they do not skip RTT."
+      - id: c
+        text: "A window forces switches to send pause frames earlier, which protects the queue from growing."
+        explanation: "Windows are an endpoint mechanism and do not change switch PFC thresholds."
+      - id: d
+        text: "A window makes ECN marking unnecessary because each ACK reports the exact queue depth."
+        explanation: "Only telemetry-based schemes get queue depth; Swift and NSCC still use delay and ECN."
+    tags: [window, rate]
+  - id: q5
+    type: multi
+    prompt: "Which statements about Ultra Ethernet congestion management in Specification 1.1 are accurate? (Select all that apply.)"
+    options:
+      - id: a
+        text: "NSCC keeps one congestion window for a transfer that is sprayed across many paths."
+        correct: true
+        explanation: "The spec describes a single window tracking the aggregate capacity of all paths."
+      - id: b
+        text: "NSCC deliberately does not reduce its window when it sees ECN marks but low queueing delay."
+        correct: true
+        explanation: "Light ECN with low delay is often a load-balancing symptom, so path selection reacts first."
+      - id: c
+        text: "RCCC is expected to need a complementary mechanism such as NSCC in oversubscribed networks."
+        correct: true
+        explanation: "Receiver credits handle incast but cannot see core congestion."
+      - id: d
+        text: "CSIG requires a full per-hop telemetry stack that grows by 8 bytes at every switch, as in HPCC."
+        explanation: "CSIG uses a fixed-size tag (4-byte compact or 8-byte wide) that switches update in place."
+    tags: [uec, nscc, rccc, csig]
+  - id: q6
+    type: scenario
+    prompt: "A team enables an RTT-based congestion control on its NICs with no switch changes. Incast tests improve, but they cannot tell from the CC itself which switch hop is congested. Why?"
+    options:
+      - id: a
+        text: "RTT measures total queueing along the path; it does not say which hop the delay came from."
+        correct: true
+        explanation: "This is the attribution weakness of delay signals; per-hop telemetry or switch counters locate the hop."
+      - id: b
+        text: "RTT-based CC works only on InfiniBand, so on Ethernet it falls back to ECN marks per hop."
+        explanation: "Delay-based CC is designed for Ethernet (TIMELY, Swift, RTTCC) and needs no switch support."
+      - id: c
+        text: "The NIC clears its RTT samples after each update, so no history is left to analyse later."
+        explanation: "Sample retention is not the issue; even a full history only shows end-to-end delay."
+      - id: d
+        text: "Switches strip the NIC timestamps on each hop, so only the last hop's delay is measured."
+        explanation: "Switches do not strip NIC timestamps; the RTT is measured end to end at the sender."
+    tags: [delay, troubleshooting]
+  - id: q7
+    type: scenario
+    prompt: "An incast sweep shows receiver throughput near line rate at 8, 32 and 128 senders, but at 128 senders the leaf queue watermark jumps, pause frames appear, and a victim flow's p99 latency rises tenfold. What is the best reading?"
+    options:
+      - id: a
+        text: "Congestion control is not keeping up at that fan-in, so PFC is acting as the backstop."
+        correct: true
+        explanation: "Throughput holds because PFC prevents loss, but the queue and pauses show CC falling behind."
+      - id: b
+        text: "A link to the receiver is flapping, so the pause frames are retransmissions after link resets."
+        explanation: "Pause frames are not retransmissions, and line-rate throughput argues against a flapping link."
+      - id: c
+        text: "The victim flow's NIC is misconfigured, because a healthy fabric never affects other flows."
+        explanation: "Victim latency rising with incast load is the classic signature of shared queues and PFC spreading."
+      - id: d
+        text: "ECMP polarization on the spine is concentrating the 128 flows on one uplink at the source."
+        explanation: "The congestion is at the receiver's leaf port (incast), not on spine uplinks."
+    tags: [validation, incast, pfc]
+  - id: q8
+    type: single
+    prompt: "What does NVIDIA's DOCA PCC (Programmable Congestion Control) provide on BlueField-3?"
+    options:
+      - id: a
+        text: "A framework for writing your own CC algorithm, run on the NIC's datapath accelerator (DPA)."
+        correct: true
+        explanation: "The DOCA PCC guide describes user-written algorithms on the DPA, with reference RTT and switch-telemetry examples."
+      - id: b
+        text: "A switch feature that rewrites ECN thresholds on Spectrum switches from the host at runtime."
+        explanation: "PCC runs on the NIC, not the switch; ECN thresholds are switch QoS configuration."
+      - id: c
+        text: "A fixed vendor algorithm that replaces DCQCN on every ConnectX NIC with no further setup."
+        explanation: "PCC is a programmable development framework with specific firmware and tool requirements."
+      - id: d
+        text: "A libfabric provider that implements the Ultra Ethernet NSCC algorithm in host software."
+        explanation: "DOCA PCC is NVIDIA's NIC programming framework, not a UEC libfabric provider."
+    tags: [programmable-cc, doca]

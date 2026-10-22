@@ -69,14 +69,14 @@ questions:
       clean (no symbol or receive errors). What is the most likely category of problem?
     options:
       - id: a
-        text: Routing or configuration - for example packets addressed to a DLID with no LFT entry or an invalid VL mapping.
+        text: Routing or configuration, for example packets to a DLID with no LFT entry or an invalid VL mapping.
         correct: true
         explanation: Relay errors mean the switch received a packet it could not forward.
       - id: b
-        text: A dirty optic on that port.
+        text: A dirty optic on that port, corrupting packets so the switch cannot read their headers.
         explanation: Physical problems show as symbol and receive errors, which are clean here.
       - id: c
-        text: Normal congestion.
+        text: Normal congestion, where the switch relays packets late because the output port lacks credits.
         explanation: Congestion shows as PortXmitWait, not relay errors.
     tags: [counters, routing]
   - id: q5
@@ -84,14 +84,14 @@ questions:
     prompt: Why should you prefer perfquery -x when measuring traffic volume?
     options:
       - id: a
-        text: It reads the 64-bit extended data and packet counters; the classic 32-bit counters saturate quickly at modern speeds.
+        text: It reads the 64-bit extended data and packet counters; the classic 32-bit ones saturate quickly at modern speeds.
         correct: true
         explanation: A saturated counter stuck at its maximum value gives no rate information.
       - id: b
-        text: It resets all counters fabric-wide.
+        text: It resets all port counters fabric-wide first, so that every reading starts from a clean zero baseline on each port.
         explanation: -x selects extended counters; resetting is a separate option.
       - id: c
-        text: It converts the data counters from bytes to bits.
+        text: It converts the data counters from 4-byte words to bits, so they can be read directly as Gb/s.
         explanation: Data counters are in units of 4 bytes; -x does not change units.
     tags: [perfquery]
   - id: q6
@@ -106,13 +106,13 @@ questions:
         correct: true
         explanation: Miscabling breaks fat-tree symmetry and ftree balance without causing any errors.
       - id: b
-        text: Replace all cables touched over the weekend.
+        text: Replace every cable that was touched over the weekend, since the recabling is the only change that could explain the drop.
         explanation: Without evidence of physical errors, this wastes time and may introduce new faults.
       - id: c
-        text: Clear all counters and wait a week.
+        text: Clear all counters and collect a week of data to find the port whose errors cause the imbalance.
         explanation: Counters are clean already; the problem is topology, not errors.
       - id: d
-        text: Increase the SM sweep interval.
+        text: Increase the SM sweep interval so routing stops being recomputed while the jobs are running.
         explanation: Sweep timing does not fix an imbalanced topology.
     tags: [topology, miscabling]
   - id: q7
@@ -120,31 +120,31 @@ questions:
     prompt: What does ibping verify?
     options:
       - id: a
-        text: MAD-level reachability between two InfiniBand ports over the IB path, independent of IP and the application.
+        text: MAD-level reachability between two IB ports over the IB path, independent of IP and the application.
         correct: true
         explanation: The target runs ibping -S; the client pings it by LID or GUID.
       - id: b
-        text: ICMP reachability over IPoIB.
-        explanation: That is ordinary ping over an ib0 interface, not ibping.
+        text: ICMP reachability between hosts over IPoIB, the same check as ping on an ib0 interface.
+        explanation: That is ordinary ping over an ib0 interface; ibping uses MADs and does not involve IP.
       - id: c
-        text: RDMA Write bandwidth.
-        explanation: Use perftest for bandwidth.
+        text: RDMA Write bandwidth and latency between two HCAs, like a lightweight perftest.
+        explanation: ibping does not measure RDMA bandwidth; use perftest for that.
     tags: [ibping]
   - id: q8
     type: scenario
     prompt: >
       Users report brief stalls across the whole fabric every 20-30 minutes. No single port shows large
-      error totals, but the timestamps line up with the stalls. Which source of evidence is most likely to
+      error totals, and per-port counter snapshots show nothing unusual. Which source of evidence is most likely to
       explain the pattern?
     options:
       - id: a
-        text: The Subnet Manager log (or UFM events), which will show topology changes and heavy sweeps, for example from a flapping link.
+        text: The Subnet Manager log (or UFM events), showing topology changes and heavy sweeps, for example from a flapping link.
         correct: true
         explanation: Fabric-wide periodic hiccups often correlate with heavy sweeps; the SM log tells you when and why.
       - id: b
-        text: perftest results from one pair of hosts.
+        text: perftest results from one pair of hosts, repeated every few minutes so that one of the runs catches a stall as it happens.
         explanation: A single pair test does not reveal fabric-wide periodic events.
       - id: c
-        text: The HCA firmware version string.
-        explanation: Version information alone does not explain periodic stalls.
+        text: The HCA firmware version strings, to find nodes running a release with a known periodic stall.
+        explanation: Version information alone does not explain fabric-wide periodic stalls; it does not show when or why they happen.
     tags: [subnet-manager, troubleshooting]

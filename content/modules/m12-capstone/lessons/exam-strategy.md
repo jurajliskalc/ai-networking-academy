@@ -18,6 +18,8 @@ tags: [career, certification, study-skills, spaced-repetition, mock-exams]
 further_reading:
   - title: NVIDIA certification program (official catalogue, exam guides and policies)
     url: https://www.nvidia.com/en-us/learn/certification/
+  - title: "NVIDIA-Certified Professional: AI Networking (NCP-AIN) exam page and blueprint"
+    url: https://www.nvidia.com/en-us/learn/certification/ai-networking-professional/
   - title: NVIDIA Academy / training courses
     url: https://academy.nvidia.com/
   - title: "Roediger and Karpicke (2006): Test-enhanced learning (retrieval practice)"
@@ -86,6 +88,31 @@ the academy lesson(s) that cover it, your confidence (1-5), and your last practi
 Weight your study time by `blueprint weight × (5 − confidence)`. A 25% domain at confidence 2 deserves
 far more time than a 10% domain at confidence 4.
 
+### Worked example: the NCP-AIN blueprint mapped to this academy
+
+As a worked example, here is the blueprint of NVIDIA's professional AI networking exam (NCP-AIN) **as
+published on NVIDIA's certification page when this lesson was last updated (2026-10-22)**. At that
+time the page listed a two-hour exam of 70-75 questions, pass/fail scoring, two-year validity and no
+formal prerequisites (with 2-3 years of data centre networking experience recommended), and announced
+that lab exercises would be added to the exam from 1 November. Treat all of this as a snapshot and
+re-check the official page before you plan.
+
+| Domain (weight as published) | Blueprint tasks, paraphrased | Academy lessons |
+|---|---|---|
+| AI data center design and optimization (5%) | AI factory architecture and components (GPUs, BlueField, scalable units, switches); rail-optimized topologies; GPU-to-GPU communication | `four-networks-of-an-ai-cluster`, `superpod-reference-architecture`, `rail-optimized-topology`, `nvlink-nvswitch`, `nics-dpus-supernics` |
+| NVIDIA Spectrum networking (30%) | Configure Spectrum-X switches for RoCE; enable and verify QoS, ECN, PFC, adaptive routing and telemetry; multi-tenant BGP-EVPN; simulate with NVIDIA DSX Air; diagnose congestion and loss with in-band telemetry and WJH; monitor with NetQ; install DOCA; configure SuperNIC functions | `rocev2-configuration-end-to-end`, `qos-trust-and-mapping`, `pfc-priority-flow-control`, `ecn-and-dcqcn`, `evpn-vxlan-frontend`, `multi-tenancy-isolation`, `spectrum-x-architecture`, `adaptive-routing-packet-spraying`, `drop-reasons-in-band-telemetry`, `ufm-netq-management`, `network-automation-for-ai`, `rdma-on-linux` |
+| NVIDIA InfiniBand networking (30%) | Initial configuration and provisioning including high availability; P_Keys for multi-tenancy; QoS and adaptive routing; UFM monitoring of link status and bandwidth | `ib-architecture`, `subnet-manager-routing`, `ib-flow-control-vls`, `multi-tenancy-isolation`, `ai-fabric-security`, `ufm-netq-management` |
+| Kubernetes integration (5%) | Deploy and verify the NVIDIA Network Operator for RDMA and InfiniBand in Kubernetes | `kubernetes-network-operator` |
+| Troubleshooting tools (20%) | `cl-resource-query`; WJH; verifying GPU, CPU and storage interconnects; UFM system health; `ib_write_lat`, `ib_write_bw`, `ibping`, `ibstat`, `ibdiagnet`, `ibnodes`, `iblinkinfo` | `drop-reasons-in-band-telemetry`, `ib-tools-diagnostics`, `perftest-benchmarking`, `reading-server-topology`, `ufm-netq-management`, `troubleshooting-methodology` |
+| Automation and configuration (10%) | NVUE templates for Spectrum-X switches; Ansible playbooks for tasks such as VLAN or RoCE configuration | `network-automation-for-ai`, `rocev2-configuration-end-to-end` |
+
+Two observations a study plan should act on. First, 60% of the published weight sits in the two
+vendor-platform domains, and many tasks are procedural ("install", "configure", "use"): this academy
+explains the mechanisms and the verification, but product procedures such as installing DOCA,
+configuring SuperNIC features or building a DSX Air simulation are best practised with NVIDIA's own
+documentation, courses and lab environments. Second, the announced lab exercises reward hands-on
+fluency with real tool output, so pair the lessons above with the simulator labs and the Real HW labs.
+
 ### How memory actually works (the short version)
 
 Two findings from learning science matter most for exam preparation:
@@ -137,9 +164,9 @@ The academy ships three original practice exams (they are not questions from any
 
 | Exam | Level | Questions / time | Use it |
 |---|---|---|---|
-| `exam-ai-fabric-1` | Fundamentals-weighted | 40 questions, 60 min | After modules m00-m04, as a baseline |
-| `exam-ai-fabric-2` | Engineer | 50 questions, 90 min | After m05-m08 |
-| `exam-ai-fabric-3` | Master: troubleshooting, design, calculations | 50 questions, 120 min | After m09-m11, and again a week before a real exam |
+| `exam-ai-fabric-1` | Fundamentals-weighted | 44 questions, 66 min | After modules m00-m04, as a baseline |
+| `exam-ai-fabric-2` | Engineer | 56 questions, 100 min | After m05-m08 |
+| `exam-ai-fabric-3` | Master: troubleshooting, design, calculations | 56 questions, 135 min | After m09-m11, and again a week before a real exam |
 
 All three tag every question with one of seven domains: foundations, server, fabric, rdma, roce,
 collectives and ops. The domain breakdown of your score is worth more than the total.
@@ -202,8 +229,8 @@ The diagnostic loop:
 
 ```text
 # illustrative study log entry
-2026-10-14  exam-ai-fabric-2 (timed): 37/50 (74%)
-  foundations 5/5  server 5/6  fabric 7/8  rdma 6/8  roce 5/9  collectives 6/8  ops 3/6
+2026-10-14  exam-ai-fabric-2 (timed): 43/56 (77%)
+  foundations 5/5  server 5/6  fabric 8/9  rdma 7/9  roce 7/11  collectives 6/8  ops 5/8
   misses: roce x4 (2 knowledge: headroom math, CNP priority; 2 misread: "NOT")
           ops x3 (time pressure on last 3 questions)
   actions: reread buffers-headroom-ets; 4 new cards; pace drill 1.5 min/question

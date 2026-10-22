@@ -12,13 +12,13 @@ questions:
         correct: true
         explanation: The switch indexes its linear forwarding table with the DLID.
       - id: b
-        text: The 64-bit destination port GUID.
+        text: The 64-bit destination port GUID carried in each packet.
         explanation: GUIDs identify devices; they are not carried in the LRH for forwarding.
       - id: c
-        text: The destination GID in the GRH.
+        text: The destination GID in the Global Route Header.
         explanation: GIDs are used by routers between subnets; switches forward on LID.
       - id: d
-        text: A learned MAC address table.
+        text: A MAC address table learned from source addresses.
         explanation: InfiniBand switches do not learn addresses; the SM programs their tables.
     tags: [lid, forwarding]
   - id: q2
@@ -48,32 +48,32 @@ questions:
       state: LinkUp". The rest of the fabric works. What is the most likely explanation?
     options:
       - id: a
-        text: The Subnet Manager has not yet configured this port (no LID assigned, not moved to Active), for example because no SM sweep reached it.
+        text: "The Subnet Manager has not configured this port yet: no LID assigned and not moved to Active."
         correct: true
-        explanation: Physical training succeeded; the logical state waits on the SM.
+        explanation: Physical training succeeded; the logical state waits on the SM, for example because no SM is running or its sweep has not reached the port.
       - id: b
-        text: The cable is faulty.
+        text: The cable is faulty, so the port keeps retraining and never completes link bring-up.
         explanation: A faulty cable would usually prevent LinkUp or cause errors; LinkUp means training succeeded.
       - id: c
-        text: The port's P_Key table is empty, which keeps the physical link down.
+        text: The port's P_Key table is empty, which keeps the physical link from coming fully up.
         explanation: P_Keys affect which partitions it can use, not its physical or logical bring-up in this way.
       - id: d
-        text: The host's IP address is not configured.
-        explanation: Native IB ports do not need an IP address to become Active.
+        text: The host's IP address is not configured yet, so the port waits for IPoIB to come up before going Active.
+        explanation: Native IB ports do not need an IP address or IPoIB to become Active.
     tags: [port-state, subnet-manager]
   - id: q4
     type: single
     prompt: Why do Subnet Management Packets travel on VL15?
     options:
       - id: a
-        text: VL15 is a dedicated management lane outside data-lane flow control, so the SM can manage the fabric even when data lanes are congested or misconfigured.
+        text: It is a management-only lane outside credit flow control, so SMPs get through even when data lanes are stuck.
         correct: true
         explanation: VL15 is not subject to credit flow control and is reserved for SMPs.
       - id: b
-        text: VL15 has the highest bandwidth of all lanes.
+        text: It has the highest bandwidth of all the lanes, so SM sweeps of large fabrics finish much faster than on data VLs.
         explanation: VLs do not have different link bandwidths; VL15 is about isolation and priority.
       - id: c
-        text: VL15 carries all RDMA traffic by default.
+        text: It is the default lane for all RDMA traffic, so SMPs reach every port without any SL2VL setup.
         explanation: Data traffic uses VL0-VL14; VL15 is management only.
     tags: [vl15, management]
   - id: q5
@@ -89,13 +89,13 @@ questions:
         correct: true
         explanation: Communication requires a shared partition with at least one full member, which is satisfied here. Note that 0x7fff on both is a limited default membership.
       - id: b
-        text: Yes - both are limited members of partition 0x0002.
+        text: Yes - both are limited members of partition 0x0002, and two limited members cannot communicate.
         explanation: A has 0x8002, whose top bit marks full membership.
       - id: c
-        text: Yes - the keys must match exactly, including the membership bit.
+        text: Yes - the keys must match exactly, including the membership bit, so 0x8002 and 0x0002 differ.
         explanation: Only the low 15 bits identify the partition; the top bit is the membership type.
       - id: d
-        text: No - P_Keys only apply to UD traffic, so they cannot matter here.
+        text: No - P_Keys only apply to UD traffic, so they cannot affect an RDMA connection here.
         explanation: P_Keys are carried in every BTH and checked for all transports.
     explanation: Partition checks compare the low 15 bits; at least one side must be a full member.
     tags: [partitions, pkey]
@@ -108,10 +108,10 @@ questions:
         correct: true
         explanation: 2^LMC LIDs are assigned; each can have different routes.
       - id: b
-        text: Two GUIDs.
+        text: Two GUIDs, so the port appears as two separate nodes to the SM.
         explanation: GUIDs are burned in; LMC affects LIDs.
       - id: c
-        text: Two virtual lanes.
+        text: Two virtual lanes reserved for the port's traffic on every link.
         explanation: VLs are configured separately and are unrelated to LMC.
     tags: [lmc]
   - id: q7
@@ -137,13 +137,13 @@ questions:
       prevents this?
     options:
       - id: a
-        text: Key inventory on node and port GUIDs (plus node descriptions) and treat LIDs as runtime attributes.
+        text: Key inventory on node and port GUIDs (plus node descriptions); treat LIDs as runtime attributes.
         correct: true
         explanation: GUIDs are permanent; LIDs are assigned by whichever SM is master.
       - id: b
-        text: Disable the standby SM so LIDs never change.
+        text: Disable the standby SM so that LIDs can never change after the master assigns them.
         explanation: Removing redundancy is not a fix, and LIDs can change for other reasons.
       - id: c
-        text: Use IPoIB IP addresses as the key.
-        explanation: Switches do not have IPoIB data addresses, and IPs are also configurable rather than permanent.
+        text: Key the inventory on IPoIB addresses instead, because the SM keeps those stable across master failovers.
+        explanation: The SM does not manage IP addresses; switches do not have IPoIB data addresses, and IPs are configurable rather than permanent.
     tags: [operations]

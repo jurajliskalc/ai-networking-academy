@@ -12,7 +12,7 @@ questions:
         correct: true
         explanation: Each GPU sends tokens to whichever GPUs host the chosen experts, and results come back the same way.
       - id: b
-        text: Point-to-point send/recv between neighbouring stages only.
+        text: Point-to-point send/recv of activations between neighbouring stages only.
         explanation: That is pipeline parallelism.
       - id: c
         text: A single gradient all-reduce at the end of the step.
@@ -30,14 +30,14 @@ questions:
         correct: true
         explanation: Per direction, Hopper-generation NVLink offers roughly 9x the per-GPU bandwidth of a 400 Gb/s NIC (more on Blackwell), with lower latency.
       - id: b
-        text: Tensor parallelism only works between GPUs that share a PCIe switch.
+        text: Tensor parallelism only works between GPUs that share one PCIe switch, and an NVLink domain is built around exactly those switches.
         explanation: TP is a software technique; it works over any transport but performs badly on slower links.
       - id: c
-        text: The scale-out fabric cannot carry all-reduce traffic.
-        explanation: The scale-out fabric carries DP all-reduces routinely.
+        text: The scale-out fabric cannot carry all-reduce traffic, because its switches only forward point-to-point RDMA writes.
+        explanation: The scale-out fabric carries DP all-reduces routinely; collectives are built from ordinary point-to-point transfers.
       - id: d
-        text: Tensor parallelism generates no network traffic at all.
-        explanation: TP is the most communication-intensive strategy per layer.
+        text: Tensor parallelism keeps identical weight copies on every GPU, and only NVLink can keep those copies coherent.
+        explanation: TP splits each layer's weights across GPUs rather than replicating them, and it is the most communication-intensive strategy per layer.
     tags: [tensor-parallel, nvlink]
   - id: q3
     type: scenario
@@ -50,13 +50,13 @@ questions:
         correct: true
         explanation: 512 GPUs / (8 x 4) = 16. TP fills a node, so DP groups span nodes and use the back-end fabric.
       - id: b
-        text: 64 replicas; the DP reduction runs over NVLink.
+        text: 64 replicas, one per node; the DP reduction runs over NVLink between the eight GPUs inside each node.
         explanation: 64 is the node count, and DP partners are in different nodes, so NVLink cannot connect them.
       - id: c
-        text: 4 replicas; the DP reduction runs over the front-end network.
+        text: 4 replicas, one per pipeline stage; the DP reduction runs over the front-end network between the different nodes.
         explanation: 4 is the PP size; gradient traffic belongs on the back-end fabric, not the front-end.
       - id: d
-        text: 32 replicas; the DP reduction runs over PCIe.
+        text: 32 replicas, two per pipeline stage; the DP reduction runs over PCIe through each node's switches.
         explanation: The arithmetic is wrong and PCIe does not connect different nodes.
     tags: [parallelism, sizing]
   - id: q4
@@ -108,13 +108,13 @@ questions:
         correct: true
         explanation: All-reduce results say little about all-to-all behaviour, which stresses incast and congestion control.
       - id: b
-        text: Increase the tensor-parallel size so the model uses fewer nodes.
-        explanation: That is an ML-side change that may not fit the model and does not diagnose the network.
+        text: Raise the tensor-parallel size beyond one node, so the expert traffic is replaced by all-reduces the fabric already passed.
+        explanation: TP across nodes moves the heaviest per-layer traffic onto the scale-out fabric, does not remove the EP all-to-all, and diagnoses nothing.
       - id: c
-        text: Disable ECN, because it slows down bursty traffic.
+        text: Disable ECN on the fabric, because ECN marking slows bursty traffic down and is the most likely cause of the shortfall.
         explanation: ECN is a key congestion signal; removing it usually makes incast worse.
       - id: d
-        text: Re-run the same all-reduce benchmark with larger messages.
+        text: Re-run the same all-reduce benchmark with larger messages to confirm the fabric still reaches its full bandwidth.
         explanation: More all-reduce data will not reveal all-to-all problems.
     tags: [moe, validation]
   - id: q7
@@ -126,12 +126,12 @@ questions:
         correct: true
         explanation: More micro-batches per step shrink the idle fraction, roughly (p-1)/m for 1F1B schedules.
       - id: b
-        text: Packet loss on the links between stages.
+        text: Packet loss on the links between pipeline stages, which leaves gaps in the activation stream that later stages have to wait out.
         explanation: Bubbles exist even on a perfect network; they are inherent to the schedule.
       - id: c
-        text: Air bubbles in liquid cooling loops.
+        text: Air bubbles in the liquid-cooling loops of the GPUs, which force thermal throttling on whichever stage is affected.
         explanation: The term is a scheduling concept, not a cooling issue.
       - id: d
-        text: The all-to-all exchange of experts.
-        explanation: That belongs to expert parallelism.
+        text: The all-to-all exchange of experts between stages, which blocks every pipeline stage until all tokens have arrived.
+        explanation: All-to-all token exchange belongs to expert parallelism, not to the pipeline schedule.
     tags: [pipeline-parallel]

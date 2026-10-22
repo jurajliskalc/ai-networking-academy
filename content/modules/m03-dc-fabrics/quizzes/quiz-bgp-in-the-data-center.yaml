@@ -26,15 +26,15 @@ questions:
     prompt: Why does a shared spine ASN eliminate path hunting after a leaf prefix is withdrawn?
     options:
       - id: a
-        text: Any alternative path that has passed through another spine already contains the spine ASN, so every spine rejects it with the AS_PATH loop check.
+        text: A backup path learned via another spine already carries the spine ASN, so every spine drops it in the AS_PATH loop check.
         correct: true
         explanation: Stale paths cannot bounce between spines via leaves, so the withdrawal is final immediately.
       - id: b
-        text: Spines in the same ASN synchronize their routing tables over a dedicated link.
-        explanation: Spines do not connect to each other in a leaf-spine fabric.
+        text: Spines sharing an ASN form an iBGP full mesh among themselves and flush the stale path together as soon as one of them sees the withdrawal.
+        explanation: Spines do not peer with or connect to each other in a leaf-spine fabric; there is no spine-to-spine iBGP mesh.
       - id: c
-        text: The shared ASN disables BGP updates during failures.
-        explanation: Updates are still sent; they are simply rejected when they would loop.
+        text: The shared ASN makes leaves suppress all BGP updates while a failure is in progress, so no stale alternative is advertised upward.
+        explanation: Updates are still sent; paths that would loop through the spine ASN are simply rejected on receipt.
     tags: [bgp, convergence]
   - id: q3
     type: scenario
@@ -45,13 +45,13 @@ questions:
         correct: true
         explanation: BGP knows all eight paths but installs only as many as the multipath width allows.
       - id: b
-        text: Four spines are down.
-        explanation: All sessions are established and BGP sees eight paths.
+        text: Four of the eight spines have failed and are no longer reachable.
+        explanation: All sessions are established and BGP sees eight paths, so all spines are up.
       - id: c
-        text: BFD is disabled.
+        text: BFD is disabled, so only four next hops count as verified.
         explanation: BFD affects failure detection speed, not how many ECMP paths are installed.
       - id: d
-        text: The MTU is too small on four links.
+        text: The MTU is too small on four of the eight uplinks.
         explanation: MTU mismatch typically affects session establishment or data, not the number of installed paths when sessions are up.
     tags: [ecmp, bgp]
   - id: q4
@@ -59,18 +59,18 @@ questions:
     prompt: "A server is dual-homed to leaf A (AS 65101) and leaf B (AS 65102), and advertises its prefix to both. A remote leaf sees two paths of equal length, '65000 65101' and '65000 65102', but installs only one. Which setting is missing?"
     options:
       - id: a
-        text: AS-path multipath-relax (for example bgp bestpath as-path multipath-relax in FRR)
+        text: AS-path multipath-relax (in FRR, bgp bestpath as-path multipath-relax)
         correct: true
         explanation: By default multipath requires identical AS paths; relax allows equal-length paths with different ASNs.
       - id: b
-        text: allowas-in
-        explanation: That permits routes containing the local ASN; it does not combine paths with different ASNs.
+        text: allowas-in on the remote leaf, so it accepts paths from both leaf ASNs
+        explanation: allowas-in permits routes containing the local ASN. Both paths are already accepted; the problem is that they are not combined.
       - id: c
-        text: next-hop-self
+        text: next-hop-self on leaf A and leaf B toward the spines
         explanation: Next-hop handling does not decide multipath eligibility in eBGP.
       - id: d
-        text: A route reflector
-        explanation: RFC 7938 fabrics do not use route reflectors, and they would not fix multipath selection.
+        text: A route reflector on the spines to merge the two paths
+        explanation: RFC 7938 fabrics do not use route reflectors, and a reflector would not fix multipath selection.
     tags: [bgp, multipath]
   - id: q5
     type: multi
@@ -97,18 +97,18 @@ questions:
     prompt: "A spine's line card stops forwarding but its links stay physically up. Fabric BGP uses 60 s keepalive and 180 s hold timers, and BFD is not configured. What will leaves experience, and what is the fix?"
     options:
       - id: a
-        text: Traffic hashed to that spine is blackholed for up to about three minutes until the hold timer expires; enable BFD and use short timers.
+        text: Flows hashed to that spine are blackholed for up to ~180 s until the hold timer expires; enable BFD and shorten timers.
         correct: true
-        explanation: With the link up, only keepalive loss or BFD reveals the failure.
+        explanation: With the link up, only keepalive loss or BFD reveals the failure, so detection takes up to the hold time.
       - id: b
-        text: Nothing; ECMP automatically detects forwarding failures.
-        explanation: ECMP only uses next hops installed by routing; it has no data-plane health check.
+        text: Nothing visible; leaf ECMP notices the dead next hop from the missing return traffic and rehashes the flows within milliseconds.
+        explanation: ECMP only uses next hops installed by routing; it has no data-plane health check of its own.
       - id: c
-        text: The leaves immediately withdraw the spine because link-down is detected.
-        explanation: The links stay physically up, so there is no link-down event.
+        text: Leaves withdraw that spine at once, because the line-card failure is signalled to every attached port as link-down.
+        explanation: The links stay physically up, so there is no link-down event to react to.
       - id: d
-        text: All traffic in the fabric stops until the spine reboots.
-        explanation: Only traffic hashed to the failed spine is affected.
+        text: All traffic in the fabric stops until the spine reboots, because every leaf loses its routes at the same moment.
+        explanation: Only traffic hashed to the failed spine is affected; the other spines keep forwarding.
     tags: [bfd, timers]
   - id: q7
     type: single
@@ -125,6 +125,6 @@ questions:
         text: 1 to 64511
         explanation: These are public ASNs assigned by registries.
       - id: d
-        text: 65535 to 65551
-        explanation: These are reserved values or documentation ranges, not the private-use block.
+        text: 131072 to 4199999999
+        explanation: This is public 32-bit ASN space allocated by the regional registries, not the private-use block.
     tags: [asn]

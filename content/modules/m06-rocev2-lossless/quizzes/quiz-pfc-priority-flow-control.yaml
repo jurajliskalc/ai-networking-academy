@@ -12,14 +12,14 @@ questions:
         correct: true
         explanation: "Each priority has its own 16-bit timer. The class-enable vector says which timers are valid."
       - id: b
-        text: "The DSCP field of the IP header"
-        explanation: "PFC is a MAC control frame. It has no IP header."
+        text: "The DSCP value of the paused traffic, which maps to a pause duration"
+        explanation: "PFC is a MAC control frame. It has no IP header, and DSCP does not encode a pause duration."
       - id: c
-        text: "The MAC control opcode"
-        explanation: "The opcode (0x0101) identifies the frame as PFC. It carries no duration."
+        text: "The MAC control opcode, which encodes one of several fixed pause lengths"
+        explanation: "The opcode (0x0101) only identifies the frame as PFC. It carries no duration."
       - id: d
-        text: "The class-enable vector"
-        explanation: "The vector selects which priorities the frame applies to. The durations are in the timer fields."
+        text: "The class-enable vector, where each set bit adds one quantum of pause time"
+        explanation: "The vector only selects which priorities the frame applies to. The durations are in the per-priority timer fields."
     tags: [pfc, frame]
   - id: q2
     type: single
@@ -48,13 +48,13 @@ questions:
         correct: true
         explanation: "H12 is sending pauses to the switch, so its NIC receive buffer is filling. The bottleneck is inside that host."
       - id: b
-        text: "The leaf's uplinks to the spines, which are oversubscribed"
+        text: "The leaf's uplinks to the spines, which are oversubscribed during all-to-all phases"
         explanation: "Uplink congestion would make the leaf send pauses, not receive them from a host."
       - id: c
-        text: "ECN thresholds on the spine"
-        explanation: "ECN tuning affects how the network signals congestion. It does not explain a host generating pauses."
+        text: "ECN thresholds on the spine, which mark too late and leave PFC to absorb the incast"
+        explanation: "ECN tuning affects how the network signals congestion. It does not explain a host generating pauses toward the leaf."
       - id: d
-        text: "The PFC configuration of the other hosts"
+        text: "The PFC configuration of the other hosts, which are not honouring the leaf's pauses"
         explanation: "The other hosts behave normally (receiving occasional pauses). The anomaly is the host that sends them."
     tags: [pfc, troubleshooting]
   - id: q4
@@ -66,13 +66,13 @@ questions:
         correct: true
         explanation: "PFC is driven by ingress accounting: the switch pauses the neighbour that is filling its buffer."
       - id: b
-        text: "The egress queue 3 on port X dropping a packet"
+        text: "Egress queue 3 on port X overflowing and dropping a packet of the lossless class"
         explanation: "PFC is meant to prevent drops in the lossless class. It is triggered by ingress occupancy before any drop."
       - id: c
-        text: "Receiving an ECN-marked packet on port X"
+        text: "Receiving a CE-marked packet for priority 3 on port X from the neighbour"
         explanation: "ECN marks are end-to-end signals for the receiver NIC. They do not trigger PFC."
       - id: d
-        text: "Any priority on port X exceeding its ETS bandwidth share"
+        text: "Any priority on port X exceeding its configured ETS bandwidth share for a while"
         explanation: "ETS shares govern scheduling, not pausing, and they are minimums rather than limits."
     tags: [pfc, xoff]
   - id: q5
@@ -80,18 +80,18 @@ questions:
     prompt: "RoCE throughput collapses under incast. Hosts show rising out_of_sequence and packet_seq_err counters, and neither hosts nor switches show any PFC frames on any priority. Hosts are configured with PFC on priority 3. What is the most likely cause?"
     options:
       - id: a
-        text: "The switches do not have PFC enabled on the priority RoCE is classified into, so they drop instead of pausing."
+        text: "The switches do not have PFC enabled on the priority RoCE is classified into, so they drop."
         correct: true
-        explanation: "Sequence errors mean loss. No PFC anywhere means the lossless class does not exist on the switches for this traffic."
+        explanation: "Sequence errors mean loss. No PFC anywhere means the lossless class does not exist on the switches for this traffic, so they drop instead of pausing."
       - id: b
-        text: "PFC is working perfectly, and the sequence errors are caused by ECN marks."
-        explanation: "ECN marks do not cause sequence errors. Loss does. And PFC would show counters under incast."
+        text: "PFC is working, and the sequence errors come from ECN marks that the NICs treat as loss."
+        explanation: "ECN marks do not cause sequence errors; loss does. And working PFC would show counters under incast."
       - id: c
-        text: "The PFC timers are too long."
+        text: "The PFC timers on the hosts are too short, so pauses expire before the switch buffers drain."
         explanation: "With no PFC frames at all, timer values cannot matter."
       - id: d
-        text: "The UDP source port entropy is too low."
-        explanation: "Low entropy can cause hot spots, but that does not explain the absence of any PFC under incast."
+        text: "The UDP source port entropy is too low, so incast flows collide on one uplink and overflow it."
+        explanation: "Low entropy can cause hot spots, but it does not explain the absence of any PFC under incast on a class that should be lossless."
     tags: [pfc, misconfiguration]
   - id: q6
     type: multi
@@ -121,12 +121,12 @@ questions:
         correct: true
         explanation: "802.3x has one timer for the whole link. PFC pauses only the affected priority."
       - id: b
-        text: "802.3x frames are routed and can loop around the fabric."
-        explanation: "PAUSE frames are link-local MAC control frames, never forwarded."
+        text: "802.3x PAUSE frames are forwarded by switches, so they can loop around a multi-tier fabric."
+        explanation: "PAUSE frames are link-local MAC control frames and are never forwarded."
       - id: c
-        text: "802.3x uses a different destination MAC that switches cannot receive."
+        text: "802.3x uses a different destination MAC address, which RoCE-capable switch ports cannot receive."
         explanation: "Both 802.3x and PFC use 01-80-C2-00-00-01."
       - id: d
-        text: "802.3x cannot be used on links faster than 10 Gb/s."
+        text: "802.3x cannot be used on links faster than 10 Gb/s, which rules it out on AI fabrics."
         explanation: "There is no such speed limit. It is disabled because of its coarse scope."
     tags: [pause, 802.3x]

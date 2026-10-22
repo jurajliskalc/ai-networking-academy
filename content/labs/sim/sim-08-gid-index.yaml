@@ -19,18 +19,18 @@ diagnosis:
   prompt: Why does node02 fail to connect?
   options:
     - id: a
-      text: node02 sets NCCL_IB_GID_INDEX=1, a link-local (fe80::) GID that cannot be routed across the L3 rail fabric. Index 3 is the RoCE v2 GID of the IPv4 address.
+      text: node02 sets NCCL_IB_GID_INDEX=1, a link-local (fe80::) GID that cannot be routed across the L3 rail fabric.
       correct: true
-      explanation: The GID selects the QP's source address and RoCE version. A link-local GID cannot reach a peer behind a router, so the RTR transition times out.
+      explanation: The GID selects the QP's source address and RoCE version. A link-local GID cannot reach a peer behind a router, so the RTR transition times out. On this system index 3 is the RoCE v2 GID of the IPv4 address.
     - id: b
-      text: node02 has PFC disabled.
-      explanation: PFC affects losses under congestion, not whether a QP can be brought up.
+      text: node02's image ships without PFC on priority 3, so its connection handshakes are dropped and ibv_modify_qp times out.
+      explanation: PFC affects losses under congestion, not whether a QP can be brought up, and mlnx_qos on node02 shows PFC enabled on priority 3.
     - id: c
-      text: The rail leaves block UDP port 4791.
-      explanation: Other nodes connect fine through the same leaves.
+      text: The rail leaves filter UDP port 4791 for node02's new addresses, so its RoCE v2 packets never reach the peers.
+      explanation: node02's addresses follow the same plan as every other node, other nodes connect fine through the same leaves, and the NCCL WARN line points at local GID index 1.
     - id: d
-      text: NCCL_SOCKET_IFNAME points to the wrong interface.
-      explanation: That breaks bootstrap with a different error, before any QP is created.
+      text: node02's NCCL_SOCKET_IFNAME points at the wrong interface, so the peers never learn its QP details.
+      explanation: That breaks bootstrap with a different error, before any QP is created, and node02's nccl.conf sets eno1 like the other nodes.
 checks:
   - { description: "node02 uses GID index 3", check: nccl_conf, args: { node: node02, key: NCCL_IB_GID_INDEX, value: "3" } }
   - { description: "all_reduce bus bandwidth is above 360 GB/s", check: allreduce_min_busbw, args: { value: 360 } }

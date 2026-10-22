@@ -99,11 +99,11 @@ export default function AllReduceSim() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
         <label className="flex items-center gap-2 text-xs"><span className="text-muted">GPUs</span>
-          <input type="range" min={2} max={16} value={n} onChange={(e) => setN(+e.target.value)} className="w-28 accent-[var(--accent)]" />
+          <input type="range" min={2} max={16} value={n} onChange={(e) => setN(+e.target.value)} aria-valuetext={`${n} GPUs`} className="w-28 accent-[var(--accent)]" />
           <span className="w-6 font-mono">{n}</span></label>
         <div className="inline-flex overflow-hidden rounded-lg border border-line">
           {(['ring', 'tree'] as Algo[]).map((a) => (
-            <button key={a} type="button" onClick={() => setAlgo(a)} className={`px-3 py-1 text-xs ${algo === a ? 'bg-accent-soft text-accent' : 'bg-panel text-muted hover:text-fg'}`}>{a === 'ring' ? 'Ring' : 'Double binary tree'}</button>
+            <button key={a} type="button" onClick={() => setAlgo(a)} aria-pressed={algo === a} className={`px-3 py-1 text-xs ${algo === a ? 'bg-accent-soft text-accent' : 'bg-panel text-muted hover:text-fg'}`}>{a === 'ring' ? 'Ring' : 'Double binary tree'}</button>
           ))}
         </div>
         <div className="flex gap-2">
@@ -111,13 +111,13 @@ export default function AllReduceSim() {
           <Button className="!px-3 !py-1 text-xs" onClick={() => { if (step >= total) setStep(0); setPlaying((p) => !p); }}>{playing ? 'Pause' : 'Play'}</Button>
           <Button variant="ghost" className="!px-3 !py-1 text-xs" onClick={() => { setStep(0); setPlaying(false); }}>Reset</Button>
         </div>
-        <span className="font-mono text-xs text-muted">step {step}/{total}</span>
+        <span className="font-mono text-xs text-muted" aria-hidden>step {step}/{total}</span>
       </div>
-      <p className="min-h-[2.5rem] text-sm">{phaseText}</p>
+      <p className="min-h-[2.5rem] text-sm" aria-live={playing ? 'off' : 'polite'}><span className="sr-only">Step {step} of {total}. </span>{phaseText}</p>
 
       {algo === 'ring' ? (
         <div className="grid items-start gap-4 md:grid-cols-2">
-          <svg viewBox="0 0 320 300" className="w-full max-w-md" role="img" aria-label="Ring of GPUs">
+          <svg viewBox="0 0 320 300" className="w-full max-w-md" role="img" aria-label={`Ring all-reduce, ${n} GPUs, step ${step} of ${total}${cur ? (cur.phase === 'rs' ? ', reduce-scatter' : ', all-gather') : ''}`}>
             <defs><marker id="ar-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)" /></marker></defs>
             <circle cx={cx} cy={cy} r={R} fill="none" stroke="var(--border)" strokeWidth={1.5} />
             {cur?.sends.map((m) => {
@@ -140,7 +140,7 @@ export default function AllReduceSim() {
           </svg>
           <div>
             <div className="mb-1 font-mono text-[10px] text-muted">per-GPU buffer (rows) × chunk (cols). Fill = share of GPUs summed in; ring = fully reduced</div>
-            <div className="grid gap-[2px]" style={{ gridTemplateColumns: `2.2rem repeat(${n}, minmax(0, 1fr))` }}>
+            <div className="grid gap-[2px]" role="img" aria-label={`Buffer state: ${buf.flat().filter((v) => v === n).length} of ${n * n} chunks fully reduced`} style={{ gridTemplateColumns: `2.2rem repeat(${n}, minmax(0, 1fr))` }}>
               <div />
               {Array.from({ length: n }, (_, c) => <div key={c} className="text-center font-mono text-[9px] text-muted">{c}</div>)}
               {buf.map((row, g) => [
@@ -166,13 +166,13 @@ export default function AllReduceSim() {
         <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.14em] text-muted">alpha-beta cost model · N = {n}</div>
         <div className="grid gap-3 sm:grid-cols-3">
           <label className="text-xs"><div className="flex justify-between"><span className="text-muted">Message S</span><span className="font-mono">{fmtBytes(S)}</span></div>
-            <input type="range" min={10} max={34} value={logS} onChange={(e) => setLogS(+e.target.value)} className="w-full accent-[var(--accent)]" /></label>
+            <input type="range" min={10} max={34} value={logS} onChange={(e) => setLogS(+e.target.value)} aria-valuetext={fmtBytes(S)} className="w-full accent-[var(--accent)]" /></label>
           <label className="text-xs"><div className="flex justify-between"><span className="text-muted">Link bandwidth B</span><span className="font-mono">{bwGB} GB/s</span></div>
-            <input type="range" min={5} max={400} step={5} value={bwGB} onChange={(e) => setBwGB(+e.target.value)} className="w-full accent-[var(--accent)]" /></label>
+            <input type="range" min={5} max={400} step={5} value={bwGB} onChange={(e) => setBwGB(+e.target.value)} aria-valuetext={`${bwGB} GB/s`} className="w-full accent-[var(--accent)]" /></label>
           <label className="text-xs"><div className="flex justify-between"><span className="text-muted">Latency α</span><span className="font-mono">{alpha} µs</span></div>
-            <input type="range" min={0.5} max={30} step={0.5} value={alpha} onChange={(e) => setAlpha(+e.target.value)} className="w-full accent-[var(--accent)]" /></label>
+            <input type="range" min={0.5} max={30} step={0.5} value={alpha} onChange={(e) => setAlpha(+e.target.value)} aria-valuetext={`${alpha} microseconds`} className="w-full accent-[var(--accent)]" /></label>
         </div>
-        <div className="mt-3 grid gap-2 font-mono text-xs sm:grid-cols-2">
+        <div className="mt-3 grid gap-2 font-mono text-xs sm:grid-cols-2" aria-live="polite">
           {([['Ring', tr, 'var(--data)', '2(N−1)·α + 2(N−1)/N · S/B'], ['Tree', tt, 'var(--warn)', '2·log₂N·α + 2·S/B']] as const).map(([name, t, c, f]) => (
             <div key={name} className="rounded-lg border border-line bg-panel p-2" style={{ borderLeft: `3px solid ${c}` }}>
               <div className="flex justify-between"><span className="font-semibold" style={{ color: c }}>{name}</span><span>{fmtTime(t)}</span></div>
@@ -202,7 +202,7 @@ function TreeView({ nodes, depth, step, n, label }: { nodes: TNode[]; depth: num
   return (
     <div>
       <div className="mb-1 font-mono text-[10px] text-muted">{label}</div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label={label}>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label={`${label}, step ${step} of ${2 * depth}${step === 0 ? '' : step <= depth ? ', reduce phase' : step < 2 * depth ? ', broadcast phase' : ', done'}`}>
         {nodes.filter((t) => t.parent >= 0).map((t) => {
           const a = xy(t.rank), b = xy(t.parent);
           const up = step > 0 && step <= depth && t.depth === reduceLevel;
@@ -231,7 +231,7 @@ function Chart({ n, bw, alpha, logS, crossover }: { n: number; bw: number; alpha
   const decades: number[] = []; for (let d = Math.ceil(ymin); d <= Math.floor(ymax); d++) decades.push(d);
   const cl = crossover > 0 ? Math.log2(crossover) : -1;
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="mt-3 w-full" role="img" aria-label="Time versus message size">
+    <svg viewBox={`0 0 ${W} ${H}`} className="mt-3 w-full" role="img" aria-label={`Time versus message size, log scale. At ${fmtBytes(2 ** logS)}: ring ${fmtTime(ringT(n, 2 ** logS, bw, alpha))}, tree ${fmtTime(treeT(n, 2 ** logS, bw, alpha))}.${cl >= 10 && cl <= 34 ? ` Crossover near ${fmtBytes(crossover)}.` : ''}`}>
       {decades.map((d) => <g key={d}><line x1={L} x2={W - Rp} y1={Y(10 ** d)} y2={Y(10 ** d)} stroke="var(--border)" strokeWidth={0.75} />
         <text x={L - 4} y={Y(10 ** d) + 3} textAnchor="end" fontSize={9} fill="var(--muted)" fontFamily="var(--font-mono)">{fmtTime(10 ** d).replace('.0 ', ' ').replace('.00 ', ' ')}</text></g>)}
       {[10, 20, 30].map((l) => <text key={l} x={X(l)} y={H - 10} textAnchor="middle" fontSize={9} fill="var(--muted)" fontFamily="var(--font-mono)">{fmtBytes(2 ** l)}</text>)}

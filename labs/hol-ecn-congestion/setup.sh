@@ -58,6 +58,16 @@ done
 
 run modprobe tcp_dctcp || echo "WARNING: tcp_dctcp module not available; DCTCP tasks will not work."
 
+# A network namespace other than the initial one may only make a congestion control its
+# default if it is in the host-wide net.ipv4.tcp_allowed_congestion_control list (otherwise
+# "sysctl -w net.ipv4.tcp_congestion_control=dctcp" fails with "Operation not permitted").
+# Add dctcp to that list; cleanup.sh restores the original value.
+allowed=$(sysctl -n net.ipv4.tcp_allowed_congestion_control)
+if grep -qw dctcp /proc/sys/net/ipv4/tcp_available_congestion_control && ! grep -qw dctcp <<<"$allowed"; then
+  echo "$allowed" > /tmp/ecn-allowed-cc.orig
+  run sysctl -w net.ipv4.tcp_allowed_congestion_control="$allowed dctcp"
+fi
+
 for ns in $NSS; do
   run ip netns add "$ns"
   run ip -n "$ns" link set lo up

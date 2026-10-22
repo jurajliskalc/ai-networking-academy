@@ -33,14 +33,14 @@ questions:
         correct: true
         explanation: Communication needs at least one full member; limited-to-limited is blocked.
       - id: b
-        text: All three can talk to each other.
-        explanation: Limited members cannot communicate with other limited members.
+        text: All three can talk to each other, because every port holds a key for the same default partition.
+        explanation: Sharing the partition is not enough; limited members cannot communicate with other limited members.
       - id: c
-        text: Nobody can talk because limited members are blocked entirely.
-        explanation: Limited members can still reach full members of the same partition.
+        text: Nobody can talk over it, because limited members are not allowed to send on a partition.
+        explanation: Limited members can still send to and receive from full members of the same partition.
       - id: d
-        text: Only the two nodes can talk to each other.
-        explanation: That reverses the rule; limited-to-limited is the forbidden case.
+        text: Only the two compute nodes can talk to each other, since both hold the same limited key.
+        explanation: That reverses the rule; limited-to-limited is the forbidden case, and each node can reach the full member.
     tags: [pkey, membership]
   - id: q3
     type: scenario
@@ -70,18 +70,18 @@ questions:
       tenant needs 8 servers. Which allocation gives the new tenant the best performance isolation?
     options:
       - id: a
-        text: 8 servers in the same SU (for example SU 4), so its rail-local traffic stays on rail leaves and never touches the spines.
+        text: All 8 servers in one free SU (for example SU 4), so its rail-local traffic stays on that SU's rail leaves.
         correct: true
-        explanation: Same-SU servers share leaves only on disjoint ports; rail-local traffic does not share links with other tenants.
+        explanation: Rail-local traffic inside one SU never touches the spines, and same-SU servers share leaves only on disjoint ports, so it does not share links with the large tenant.
       - id: b
-        text: 2 servers in each of the 4 SUs to spread load.
-        explanation: Scattering forces rail-local traffic over spines shared with the large tenant's cross-SU traffic.
+        text: 2 servers in each of the 4 SUs, spreading the new tenant's load evenly across all of the rail leaves and spines.
+        explanation: Scattering forces the tenant's rail-local traffic over spines shared with the large tenant's cross-SU traffic.
       - id: c
-        text: Any 8 servers; a 1:1 fabric guarantees no interference.
+        text: Any 8 free servers, because a 1:1 non-blocking fabric guarantees that tenants cannot interfere.
         explanation: 1:1 capacity does not prevent ECMP collisions and shared queues on spines.
       - id: d
-        text: 8 servers inside SU 1, interleaved with the large tenant's servers.
-        explanation: SU 1 is already fully allocated to the 512-GPU tenant.
+        text: 8 servers in SU 1, interleaved with the large tenant's servers so both share the same rail leaves.
+        explanation: SU 1 is already fully allocated to the 512-GPU tenant, and sharing its leaves would add interference rather than remove it.
     tags: [placement, performance-isolation]
   - id: q5
     type: multi
@@ -108,18 +108,18 @@ questions:
     prompt: Why do bare-metal GPU clouds often enforce tenant networking on a BlueField DPU rather than in the host OS?
     options:
       - id: a
-        text: The DPU is a separate trust domain, so a tenant with root on the host cannot change the isolation policy, and encapsulation runs in hardware.
+        text: The DPU is a separate trust domain that a tenant with root on the host cannot reconfigure.
         correct: true
-        explanation: Moving policy off the host is the key property for bare-metal tenancy.
+        explanation: Moving policy off the host is the key property for bare-metal tenancy; as a bonus, the DPU also offloads encapsulation to hardware.
       - id: b
-        text: Host operating systems cannot run VXLAN.
-        explanation: Linux supports VXLAN; the issue is trust, not capability.
+        text: Host operating systems cannot terminate VXLAN tunnels, so a separate processor must do it.
+        explanation: Linux supports VXLAN tunnel endpoints; the issue is trust, not capability.
       - id: c
-        text: DPUs remove the need for an underlay network.
-        explanation: An underlay is still required; DPUs let it stay simple.
+        text: DPUs remove the need for an underlay network, since tenant traffic stays inside the overlay.
+        explanation: An overlay always rides on an underlay; DPUs let the underlay stay simple, not disappear.
       - id: d
-        text: DPUs increase the number of available VLAN IDs.
-        explanation: VLAN ID space is fixed at 12 bits; DPUs typically use VXLAN VNIs.
+        text: DPUs extend the VLAN ID space beyond 4,094, enough to give every tenant its own VLAN.
+        explanation: VLAN ID space is fixed at 12 bits regardless of where tagging happens; DPUs typically use VXLAN VNIs.
     tags: [dpu, bluefield]
   - id: q7
     type: scenario
@@ -129,18 +129,18 @@ questions:
       MTU. What is the most likely cause?
     options:
       - id: a
-        text: The encapsulated packets (about 4,190 bytes at the outer IP layer, 4,204 bytes as frames, with IPv4 VXLAN) exceed the underlay MTU.
+        text: The IPv4 VXLAN packets (about 4,190 bytes at the outer IP layer) exceed the underlay MTU.
         correct: true
-        explanation: The inner IP packet (4,140 bytes) fits 4,150, but adding the inner Ethernet header and VXLAN/UDP/IPv4 gives a 4,190-byte outer IP packet; raise the underlay MTU (jumbo frames on every hop).
+        explanation: The inner IP packet (4,140 bytes) fits 4,150, but adding the inner Ethernet header and VXLAN/UDP/IPv4 gives a 4,190-byte outer IP packet (4,204 bytes as a frame); raise the underlay MTU (jumbo frames on every hop).
       - id: b
-        text: VXLAN cannot carry UDP traffic.
-        explanation: VXLAN carries any inner Ethernet frame, including RoCEv2's UDP packets.
+        text: VXLAN cannot carry RoCEv2, because both use UDP and the inner port 4791 collides with VXLAN.
+        explanation: VXLAN uses outer UDP port 4789 and carries any inner Ethernet frame, including RoCEv2's UDP 4791 packets; there is no collision.
       - id: c
-        text: The EVPN control plane is not advertising MAC routes.
-        explanation: Missing routes would break small messages too.
+        text: The EVPN control plane is not advertising the tenant's MAC/IP routes to remote VTEPs.
+        explanation: Missing routes would break small messages too, not just large transfers.
       - id: d
-        text: PKeys are blocking large messages.
-        explanation: PKeys are an InfiniBand mechanism and do not depend on message size.
+        text: The tenant's PKeys are blocking messages above the partition's size limit.
+        explanation: PKeys are an InfiniBand mechanism, have no size limit, and do not apply to a RoCE overlay.
     tags: [vxlan, mtu, troubleshooting]
   - id: q8
     type: scenario
@@ -149,16 +149,16 @@ questions:
       identifier space fits, and why?
     options:
       - id: a
-        text: VXLAN VNIs, because 24 bits give about 16.7 million identifiers while VLANs offer only 4,094.
+        text: VXLAN VNIs; 24 bits give about 16.7 million identifiers versus 4,094 usable VLANs.
         correct: true
         explanation: 6,000 exceeds the usable 12-bit VLAN space; VNIs (with EVPN) scale far beyond it, subject to per-switch scale limits.
       - id: b
-        text: VLANs, because 12 bits give 6,000 identifiers.
-        explanation: 12 bits give 4,096 values, of which 4,094 are usable.
+        text: VLANs; the 12-bit VLAN ID gives enough identifiers for 6,000 customer segments.
+        explanation: 12 bits give 4,096 values, of which 4,094 are usable, which is fewer than 6,000.
       - id: c
-        text: InfiniBand PKeys on the Ethernet switches.
-        explanation: PKeys are InfiniBand-only.
+        text: InfiniBand PKeys configured on the Ethernet switches, one partition per customer.
+        explanation: PKeys are an InfiniBand-only mechanism; Ethernet switches do not use them.
       - id: d
-        text: DSCP values, one per customer.
-        explanation: DSCP is a 6-bit QoS marking (64 values), not an isolation identifier.
+        text: DSCP values, one per customer, marked by the host and enforced at every leaf switch.
+        explanation: DSCP is a 6-bit QoS marking (64 values), not an isolation identifier, and 64 values are far too few.
     tags: [vxlan, scale]

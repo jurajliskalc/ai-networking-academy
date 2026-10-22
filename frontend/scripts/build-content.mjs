@@ -3,7 +3,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import zlib from 'node:zlib';
 import yaml from 'js-yaml';
+import { buildSearchIndex, parseWidgetRegistry } from './search-index.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const CONTENT = path.join(ROOT, 'content');
@@ -93,6 +95,12 @@ export function checkQuestions(file, questions, { domains } = {}) {
     for (const o of opts) {
       if (typeof o.text !== 'string' || !o.text) err(file, `${where}/${o.id}: option text must be a non-empty string`);
       if (typeof o.explanation !== 'string' || !o.explanation) err(file, `${where}/${o.id}: option explanation must be a non-empty string`);
+    }
+    // The longest option must not give the answer away (see AUTHORING.md: options of similar length)
+    if (q.type !== 'multi' && correct === 1) {
+      const right = String(opts.find((o) => o.correct === true).text ?? '').length;
+      const longestWrong = Math.max(...opts.filter((o) => o.correct !== true).map((o) => String(o.text ?? '').length));
+      if (right > 1.25 * longestWrong) err(file, `${where}: correct option is ${(right / longestWrong).toFixed(2)}x the longest distractor (max 1.25x)`);
     }
     if (domains && !domains.has(q.domain)) err(file, `${where}: unknown domain ${q.domain}`);
   }
@@ -193,9 +201,61 @@ for (const dir of moduleDirs) {
 }
 modules.sort((a, b) => a.order - b.order);
 
+// ---------- real hardware track ----------
+const HW_DIR = path.join(CONTENT, 'hardware');
+const hwFile = path.join(HW_DIR, 'hardware.yaml');
+const hwMeta = loadYaml(hwFile) ?? {};
+const tiers = hwMeta.tiers ?? [];
+const requirements = hwMeta.requirements ?? [];
+const variables = hwMeta.variables ?? [];
+const varNames = new Set(variables.map((v) => v.name));
+for (const v of variables) {
+  if (!/^[A-Z][A-Z0-9_]*$/.test(v.name ?? '')) err(hwFile, `variable name must be SHELL_CASE: ${JSON.stringify(v.name)}`);
+  if (typeof v.label !== 'string') err(hwFile, `${v.name}: label must be a string`);
+  if (v.default === undefined && v.derived === undefined) err(hwFile, `${v.name}: needs a default or a derived formula`);
+  if (v.default !== undefined && typeof v.default !== 'string') err(hwFile, `${v.name}: default must be a string (quote numbers)`);
+  if (v.choices && !v.choices.includes(v.default)) err(hwFile, `${v.name}: default is not one of the choices`);
+}
+if (varNames.size !== variables.length) err(hwFile, 'duplicate variable names');
+const reqIds = new Set(requirements.map((r) => r.id));
+const tierIds = new Set(tiers.map((t) => t.id));
+
+/** `{{NAME}}` placeholders (SHELL_CASE only, so Go templates such as docker's `{{.State.Pid}}` stay
+ *  literal) are replaced in the browser with the learner's lab profile; they must exist. */
+function checkPlaceholders(file, body) {
+  for (const [, name] of body.matchAll(/\{\{([A-Z][A-Z0-9_]*)\}\}/g)) if (!varNames.has(name)) err(file, `unknown placeholder {{${name}}}`);
+}
+
+const guides = [];
+const guideBodies = new Map();
+const GUIDE_DIR = path.join(HW_DIR, 'guides');
+for (const f of list(GUIDE_DIR, '.md')) {
+  const file = path.join(GUIDE_DIR, f);
+  const fm = frontMatter(file);
+  if (!fm) continue;
+  const { meta, body } = fm;
+  if (meta.id !== f.replace(/\.md$/, '')) err(file, 'id != file name');
+  for (const k of ['title', 'order', 'summary']) if (meta[k] === undefined) err(file, `missing key ${k}`);
+  if (typeof meta.title !== 'string' || typeof meta.summary !== 'string') err(file, 'title and summary must be strings');
+  if ((body.match(/```/g) ?? []).length % 2) err(file, 'unbalanced code fences');
+  checkTables(file, body);
+  checkPlaceholders(file, body);
+  for (const [, w] of body.matchAll(/```widget\n([\s\S]*?)\n```/g))
+    if (!WIDGETS.includes(w.trim())) err(file, `unknown embedded widget ${w.trim()}`);
+  guides.push({
+    id: meta.id, title: meta.title, order: meta.order, summary: meta.summary.trim(), words: words(body),
+    toc: [...body.matchAll(/^(##|###) (.+)$/gm)].map((m) => ({ depth: m[1].length, text: m[2].trim() })),
+  });
+  guideBodies.set(meta.id, body);
+}
+guides.sort((a, b) => a.order - b.order);
+
 // ---------- labs ----------
 const labs = [];
 const labBodies = new Map();
+const ENVIRONMENTS = ['linux-vm', 'containerlab', 'hardware'];
+const FABRICS = ['any', 'roce', 'ib'];
+const HW_SECTIONS = ['Goal', 'Before you start', 'Tasks', 'Verify', 'Restore', 'What you learned'];
 const SIM_DIR = path.join(CONTENT, 'labs', 'sim');
 const HOL_DIR = path.join(CONTENT, 'labs', 'handson');
 for (const f of list(SIM_DIR, '.yaml')) {
@@ -214,15 +274,35 @@ for (const f of list(HOL_DIR, '.md')) {
   if (!fm) continue;
   const { meta, body } = fm;
   if (meta.id !== f.replace(/\.md$/, '')) err(file, 'id != file name');
-  for (const k of ['title', 'level', 'estimated_minutes', 'environment', 'lessons'])
+  for (const k of ['title', 'level', 'estimated_minutes', 'environment', 'lessons', 'tier', 'fabric', 'requires', 'summary'])
     if (meta[k] === undefined) err(file, `missing key ${k}`);
+  if (typeof meta.title !== 'string' || typeof meta.summary !== 'string') err(file, 'title and summary must be strings');
   if (meta.files && !fs.existsSync(path.join(ROOT, meta.files))) err(file, `files directory ${meta.files} missing`);
+  if (!ENVIRONMENTS.includes(meta.environment)) err(file, `environment must be one of ${ENVIRONMENTS.join(', ')}`);
+  if (!tierIds.has(meta.tier)) err(file, `unknown tier ${meta.tier}`);
+  if (!FABRICS.includes(meta.fabric)) err(file, `fabric must be one of ${FABRICS.join(', ')}`);
+  for (const r of meta.requires ?? []) if (!reqIds.has(r)) err(file, `unknown requirement ${r}`);
+  if (meta.tier > 0) {
+    if (meta.environment !== 'hardware') err(file, 'labs above tier 0 use environment: hardware');
+    if (!meta.files || !fs.existsSync(path.join(ROOT, meta.files, 'check.sh'))) err(file, 'hardware labs need files: with a check.sh');
+    if (typeof meta.changes_config !== 'boolean') err(file, 'hardware labs must declare changes_config: true|false');
+    let pos = -1;
+    for (const s of HW_SECTIONS) {
+      const i = body.indexOf(`\n## ${s}\n`);
+      if (i < 0) err(file, `missing section "## ${s}"`);
+      else if (i < pos) err(file, `section "## ${s}" out of order`);
+      else pos = i;
+    }
+  }
+  if ((body.match(/```/g) ?? []).length % 2) err(file, 'unbalanced code fences');
   labs.push({
     id: meta.id, kind: 'handson', title: meta.title, level: meta.level, estimated_minutes: meta.estimated_minutes,
     environment: meta.environment, lessons: meta.lessons ?? [], files: meta.files ?? null, verified: meta.verified === true,
+    summary: meta.summary?.trim(), tier: meta.tier, fabric: meta.fabric, requires: meta.requires ?? [], changes_config: meta.changes_config === true,
     toc: [...body.matchAll(/^(##|###) (.+)$/gm)].map((m) => ({ depth: m[1].length, text: m[2].trim() })),
   });
   checkTables(file, body);
+  checkPlaceholders(file, body);
   labBodies.set(meta.id, body);
 }
 const labIds = new Set();
@@ -286,7 +366,7 @@ for (const e of errors) console.error(`ERROR ${e}`);
 const totalWords = [...lessons.values()].reduce((s, l) => s + l.words, 0);
 const totalQuestions = [...quizzes.values()].reduce((s, q) => s + q.questions.length, 0);
 const summary = `${modules.length} modules, ${lessons.size} lessons (${totalWords.toLocaleString('en')} words), ${quizzes.size} quizzes (${totalQuestions} questions), ` +
-  `${labs.length} labs, ${exams.length} exams, ${commands.reduce((s, c) => s + (c.commands?.length ?? 0), 0)} commands, ${glossary.length} glossary terms`;
+  `${labs.filter((l) => l.kind === 'sim').length} simulator labs, ${labs.filter((l) => l.kind === 'handson').length} hands-on/hardware labs, ${guides.length} hardware guides, ${exams.length} exams, ${commands.reduce((s, c) => s + (c.commands?.length ?? 0), 0)} commands, ${glossary.length} glossary terms`;
 if (errors.length) {
   console.error(`\n${errors.length} error(s). ${summary}`);
   process.exit(1);
@@ -295,14 +375,27 @@ console.log(`Content OK: ${summary}`);
 if (CHECK_ONLY) process.exit(0);
 
 fs.rmSync(OUT, { recursive: true, force: true });
-for (const d of ['lessons', 'quizzes', 'exams', 'labs']) fs.mkdirSync(path.join(OUT, d), { recursive: true });
+for (const d of ['lessons', 'quizzes', 'exams', 'labs', 'hardware']) fs.mkdirSync(path.join(OUT, d), { recursive: true });
 const write = (rel, data) => fs.writeFileSync(path.join(OUT, rel), JSON.stringify(data));
 write('index.json', {
   generated: new Date().toISOString(),
   modules, lessons: [...lessons.values()], labs, exams, commands, glossary,
+  hardware: { tiers, requirements, variables, guides },
   quizzes: [...quizzes.values()].map((q) => ({ id: q.id, title: q.title, lesson: q.lesson, count: q.questions.length })),
 });
 for (const [id, body] of lessonBodies) write(`lessons/${id}.json`, { id, body, minutes: minutes(body) });
 for (const [id, q] of quizzes) write(`quizzes/${id}.json`, q);
 for (const [id, ex] of examBodies) write(`exams/${id}.json`, ex);
 for (const [id, body] of labBodies) write(`labs/${id}.json`, { id, body });
+for (const [id, body] of guideBodies) write(`hardware/${id}.json`, { id, body });
+
+// Site-wide search index, fetched lazily the first time the search dialog opens.
+const widgetMeta = parseWidgetRegistry(read(path.join(ROOT, 'frontend', 'src', 'widgets', 'registry.tsx')));
+if (widgetMeta.length !== WIDGETS.length) console.warn(`warn  search: parsed ${widgetMeta.length} widgets from registry.tsx, expected ${WIDGETS.length}`);
+const search = JSON.stringify(buildSearchIndex({
+  modules, lessons: [...lessons.values()], lessonBodies, quizzes: [...quizzes.values()], labs, labBodies, guides, guideBodies,
+  commands, glossary, widgets: widgetMeta, exams,
+}));
+fs.writeFileSync(path.join(OUT, 'search.json'), search);
+const kb = (n) => `${(n / 1024).toFixed(0)} KB`;
+console.log(`search.json: ${JSON.parse(search).d.length} pages, ${JSON.parse(search).e.length} sections, ${kb(Buffer.byteLength(search))} (${kb(zlib.gzipSync(search).length)} gzipped)`);

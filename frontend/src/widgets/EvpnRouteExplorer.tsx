@@ -127,7 +127,7 @@ export default function EvpnRouteExplorer() {
 
   return (
     <div className="space-y-4">
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="EVPN route types">
         <table className="w-full min-w-[560px] text-left text-sm">
           <thead className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted">
             <tr><th className="py-1 pr-3">Type</th><th className="py-1 pr-3">Name</th><th className="py-1 pr-3">Key NLRI fields</th><th className="py-1">Solves</th></tr>
@@ -136,7 +136,7 @@ export default function EvpnRouteExplorer() {
             {ROUTE_TYPES.map((r) => (
               <tr key={r.type} className={`border-t border-line ${r.type === sel ? 'bg-accent-soft' : ''}`}>
                 <td className="py-1.5 pr-3"><button type="button" aria-pressed={r.type === sel} onClick={() => setSel(r.type)}
-                  className={`rounded-md border px-2 py-0.5 font-mono text-xs ${r.type === sel ? 'border-accent text-accent' : 'border-line bg-panel hover:bg-panel-2'}`}>Type {r.type}</button></td>
+                  className={`min-h-6 rounded-md border px-2 py-0.5 font-mono text-xs ${r.type === sel ? 'border-accent text-accent' : 'border-line bg-panel hover:bg-panel-2'}`}>Type {r.type}</button></td>
                 <td className="py-1.5 pr-3">{r.name}</td>
                 <td className="py-1.5 pr-3 font-mono text-[11px] text-muted">{r.fields.map((f) => f.name.replace(' Address', '').replace("Originating Router's IP", 'Orig. router IP')).join(' · ')}</td>
                 <td className="py-1.5 text-xs text-muted">{['', 'multihoming: aliasing, mass withdraw', 'host MAC/IP reachability, ARP suppression', 'BUM flood list per VNI', 'DF election on a segment', 'prefixes in a tenant VRF'][r.type]}</td>
@@ -146,7 +146,7 @@ export default function EvpnRouteExplorer() {
         </table>
       </div>
 
-      <div className="rounded-lg border border-line bg-panel-2 p-3">
+      <div className="rounded-lg border border-line bg-panel-2 p-3" aria-live="polite">
         <div className="flex flex-wrap items-baseline gap-2">
           <span className={`font-mono text-lg font-bold ${typeTone[rt.type]}`}>Type {rt.type}</span>
           <span className="font-semibold">{rt.name}</span>
@@ -159,7 +159,7 @@ export default function EvpnRouteExplorer() {
             <p className="text-danger"><span className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted">Without it </span>{rt.breaks}</p>
             <p className="text-xs text-muted">Path attributes: {rt.attrs.join('; ')}.</p>
           </div>
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto" tabIndex={0} role="region" aria-label={`Type ${rt.type} NLRI fields`}>
             <table className="w-full text-left text-xs">
               <thead className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted"><tr><th className="pb-1 pr-2">NLRI field</th><th className="pb-1 pr-2">Bytes</th><th className="pb-1">In VXLAN fabrics</th></tr></thead>
               <tbody>{rt.fields.map((f) => <tr key={f.name} className="border-t border-line"><td className="py-1 pr-2 font-mono">{f.name}</td><td className="py-1 pr-2 font-mono tabular-nums">{f.bytes}</td><td className="py-1 text-muted">{f.note}</td></tr>)}</tbody>
@@ -173,19 +173,19 @@ export default function EvpnRouteExplorer() {
           <div className="text-sm font-semibold">Scenario: host H1 joins VNI 10100 behind leaf1 (VTEP {VTEP}, VRF tenant-a, L3 VNI 50001)</div>
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={mh} onChange={(e) => { setMh(e.target.checked); setStep(0); }} className="accent-[var(--accent)]" />H1 dual-homed (ESI)</label>
         </div>
-        <div className="mt-2 flex flex-wrap gap-1">
-          {steps.map((s, i) => <button key={s.title} type="button" aria-pressed={i === cur} onClick={() => setStep(i)}
+        <div className="mt-2 flex flex-wrap gap-1" role="group" aria-label="Scenario steps">
+          {steps.map((s, i) => <button key={s.title} type="button" aria-current={i === cur ? 'step' : undefined} onClick={() => setStep(i)}
             className={`rounded-md border px-2 py-1 font-mono text-xs ${i === cur ? 'border-accent bg-accent-soft text-accent' : i < cur ? 'border-line bg-panel-2' : 'border-line bg-panel hover:bg-panel-2'}`}>{i + 1}. {s.title}</button>)}
         </div>
         <div className="mt-2 flex gap-2">
-          <button type="button" onClick={() => setStep(Math.max(0, cur - 1))} disabled={cur === 0} className="rounded-md border border-line bg-panel px-3 py-1 text-xs hover:bg-panel-2 disabled:opacity-40">◀ Back</button>
-          <button type="button" onClick={() => setStep(Math.min(steps.length - 1, cur + 1))} disabled={cur === steps.length - 1} className="rounded-md border border-line bg-panel px-3 py-1 text-xs hover:bg-panel-2 disabled:opacity-40">Next ▶</button>
+          <button type="button" onClick={() => setStep(Math.max(0, cur - 1))} disabled={cur === 0} className="rounded-md border border-line bg-panel px-3 py-1 text-xs hover:bg-panel-2 disabled:opacity-40"><span aria-hidden>◀ </span>Back</button>
+          <button type="button" onClick={() => setStep(Math.min(steps.length - 1, cur + 1))} disabled={cur === steps.length - 1} className="rounded-md border border-line bg-panel px-3 py-1 text-xs hover:bg-panel-2 disabled:opacity-40">Next<span aria-hidden> ▶</span></button>
         </div>
-        <p className="mt-2 text-sm text-muted"><span className="text-fg">Trigger:</span> {steps[cur].trigger}</p>
+        <p className="mt-2 text-sm text-muted" aria-live="polite"><span className="sr-only">Step {cur + 1} of {steps.length}: {steps[cur].title}. </span><span className="text-fg">Trigger:</span> {steps[cur].trigger}</p>
         <ul className="mt-2 space-y-2">
           {steps[cur].routes.map((r) => (
             <li key={r.nlri} className="rounded-md border border-line bg-panel-2 px-3 py-2 text-sm">
-              <button type="button" onClick={() => setSel(r.type)} className={`font-mono text-xs font-semibold underline-offset-2 hover:underline ${typeTone[r.type]}`}>Type {r.type}</button>
+              <button type="button" onClick={() => setSel(r.type)} aria-label={`Type ${r.type}: show route type details`} className={`min-h-6 font-mono text-xs font-semibold underline-offset-2 hover:underline ${typeTone[r.type]}`}>Type {r.type}</button>
               <div className="break-all font-mono text-xs text-fg">{r.nlri}</div>
               <div className="text-xs text-muted">{r.detail}</div>
               <div className="mt-0.5 text-xs">→ {r.effect}</div>

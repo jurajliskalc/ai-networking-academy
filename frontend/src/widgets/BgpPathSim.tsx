@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { Pill } from '../components/ui';
 
 // ---------- pure model (eBGP path-vector on a 2-tier Clos, RFC 7938 numbering) ----------
@@ -95,7 +95,7 @@ function Seg<T extends string | number>({ label, value, options, onChange, rende
   return (
     <div>
       <div className="mb-1 font-mono text-[10px] uppercase tracking-[0.14em] text-muted">{label}</div>
-      <div className="flex flex-wrap gap-1">
+      <div className="flex flex-wrap gap-1" role="group" aria-label={label}>
         {options.map((o) => (
           <button key={String(o)} type="button" onClick={() => onChange(o)} aria-pressed={o === value}
             className={`rounded-md border px-2 py-1 font-mono text-xs transition ${o === value ? 'border-accent bg-accent-soft text-accent' : 'border-line bg-panel hover:bg-panel-2'}`}>
@@ -106,6 +106,9 @@ function Seg<T extends string | number>({ label, value, options, onChange, rende
     </div>
   );
 }
+
+/** Enter/Space activation for SVG elements that act as buttons. */
+const onKeys = (fn: () => void) => (e: KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(); } };
 
 const M = ({ children, className = 'text-fg' }: { children: ReactNode; className?: string }) => <span className={`font-mono ${className}`}>{children}</span>;
 
@@ -162,12 +165,13 @@ export default function BgpPathSim() {
       </div>
 
       <div className="rounded-lg border border-line bg-panel p-2">
-        <svg viewBox={`0 0 ${W} 250`} className="w-full" role="img" aria-label="Leaf-spine topology; click a link to fail or restore it">
+        <svg viewBox={`0 0 ${W} 250`} className="w-full" role="group" aria-label={`Leaf-spine topology, ${nSpines} spines and ${LEAVES} leaves, ${failed.size} link(s) down; activate a link to fail or restore it, or a router to show its RIB`}>
           {Array.from({ length: nSpines }, (_, s) => Array.from({ length: LEAVES }, (_, l) => {
             const down = failed.has(linkKey(s, l));
             const onSel = selR.kind === 'leaf' ? selR.idx === l : selR.idx === s;
             return (
-              <g key={linkKey(s, l)} onClick={() => toggle(s, l)} style={{ cursor: 'pointer' }}>
+              <g key={linkKey(s, l)} onClick={() => toggle(s, l)} onKeyDown={onKeys(() => toggle(s, l))} style={{ cursor: 'pointer' }}
+                role="button" tabIndex={0} aria-pressed={down} aria-label={`Link spine${s + 1} to leaf${l + 1}: ${down ? 'failed' : 'up'}`}>
                 <line x1={spX(s)} y1={52} x2={lfX(l)} y2={180} stroke="transparent" strokeWidth={14} />
                 <line x1={spX(s)} y1={52} x2={lfX(l)} y2={180} stroke={down ? 'var(--danger)' : onSel ? 'var(--accent)' : 'var(--border)'}
                   strokeWidth={down ? 1.5 : onSel ? 2.5 : 1.5} strokeDasharray={down ? '5 4' : undefined} />
@@ -178,11 +182,12 @@ export default function BgpPathSim() {
           {rs.map((r) => {
             const x = r.kind === 'spine' ? spX(r.idx) : lfX(r.idx), y = r.kind === 'spine' ? 20 : 180, on = r.id === selR.id;
             return (
-              <g key={r.id} onClick={() => setSel(r.id)} style={{ cursor: 'pointer' }}>
+              <g key={r.id} onClick={() => setSel(r.id)} onKeyDown={onKeys(() => setSel(r.id))} style={{ cursor: 'pointer' }}
+                role="button" tabIndex={0} aria-pressed={on} aria-label={`${r.name} AS ${r.asn}${r.kind === 'leaf' ? ` ${prefixStr(r.idx)}${isolated(r.idx) ? ' (isolated)' : ''}` : ''}, show RIB`}>
                 <rect x={x - 46} y={y} width={92} height={34} rx={6} fill={on ? 'var(--panel-2)' : 'var(--panel)'} stroke={r.kind === 'spine' ? 'var(--data)' : 'var(--accent)'} strokeWidth={on ? 2.5 : 1.2} />
-                <text x={x} y={y + 14} fontSize={12} textAnchor="middle" fill="var(--text)" fontFamily="var(--font-mono)" fontWeight={700}>{r.name}</text>
-                <text x={x} y={y + 28} fontSize={10} textAnchor="middle" fill="var(--muted)" fontFamily="var(--font-mono)">AS {r.asn}</text>
-                {r.kind === 'leaf' && <text x={x} y={y + 50} fontSize={10} textAnchor="middle" fill={isolated(r.idx) ? 'var(--danger)' : 'var(--muted)'} fontFamily="var(--font-mono)">{prefixStr(r.idx)}</text>}
+                <text aria-hidden x={x} y={y + 14} fontSize={12} textAnchor="middle" fill="var(--text)" fontFamily="var(--font-mono)" fontWeight={700}>{r.name}{' '}</text>
+                <text aria-hidden x={x} y={y + 28} fontSize={10} textAnchor="middle" fill="var(--muted)" fontFamily="var(--font-mono)">AS {r.asn}{' '}</text>
+                {r.kind === 'leaf' && <text aria-hidden x={x} y={y + 50} fontSize={10} textAnchor="middle" fill={isolated(r.idx) ? 'var(--danger)' : 'var(--muted)'} fontFamily="var(--font-mono)">{prefixStr(r.idx)}</text>}
               </g>
             );
           })}
@@ -192,9 +197,9 @@ export default function BgpPathSim() {
       <div className="grid gap-3 md:grid-cols-2">
         <div>
           <div className="mb-1 font-mono text-[10px] uppercase tracking-[0.14em] text-muted">Links (click in the diagram or here)</div>
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Link state table">
             <table className="text-xs">
-              <thead><tr><th className="p-1" />{Array.from({ length: LEAVES }, (_, l) => <th key={l} className="p-1 font-mono font-normal text-muted">leaf{l + 1}</th>)}</tr></thead>
+              <thead><tr><th className="p-1"><span className="sr-only">Spine</span></th>{Array.from({ length: LEAVES }, (_, l) => <th key={l} className="p-1 font-mono font-normal text-muted">leaf{l + 1}</th>)}</tr></thead>
               <tbody>
                 {Array.from({ length: nSpines }, (_, s) => (
                   <tr key={s}><td className="p-1 font-mono text-muted">spine{s + 1}</td>
@@ -205,7 +210,7 @@ export default function BgpPathSim() {
                     })}</tr>
                 ))}
                 <tr><td className="p-1 font-mono text-muted">isolate</td>
-                  {Array.from({ length: LEAVES }, (_, l) => <td key={l} className="p-0.5"><button type="button" aria-pressed={isolated(l)} onClick={() => isolate(l)}
+                  {Array.from({ length: LEAVES }, (_, l) => <td key={l} className="p-0.5"><button type="button" aria-pressed={isolated(l)} aria-label={`${isolated(l) ? 'undo: reconnect' : 'cut: isolate'} leaf${l + 1}`} onClick={() => isolate(l)}
                     className={`w-full rounded border px-2 py-0.5 font-mono ${isolated(l) ? 'border-danger/50 bg-danger/10 text-danger' : 'border-line bg-panel hover:bg-panel-2'}`}>{isolated(l) ? 'undo' : 'cut'}</button></td>)}</tr>
               </tbody>
             </table>
@@ -213,7 +218,7 @@ export default function BgpPathSim() {
         </div>
         <div>
           <div className="mb-1 font-mono text-[10px] uppercase tracking-[0.14em] text-muted">Show RIB of</div>
-          <div className="flex flex-wrap gap-1">
+          <div className="flex flex-wrap gap-1" role="group" aria-label="Show RIB of">
             {rs.map((r) => <button key={r.id} type="button" aria-pressed={r.id === selR.id} onClick={() => setSel(r.id)}
               className={`rounded-md border px-2 py-1 font-mono text-xs ${r.id === selR.id ? 'border-accent bg-accent-soft text-accent' : 'border-line bg-panel hover:bg-panel-2'}`}>{r.name}</button>)}
           </div>
@@ -225,7 +230,7 @@ export default function BgpPathSim() {
         </div>
       </div>
 
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto" tabIndex={0} role="region" aria-label={`BGP RIB of ${selR.name}`}>
         <table className="w-full min-w-[520px] text-left text-sm">
           <thead className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted">
             <tr><th className="py-1 pr-3">Prefix</th><th className="py-1 pr-3">Paths received (from: AS_PATH)</th><th className="py-1">Installed next hops</th></tr>
@@ -263,7 +268,7 @@ export default function BgpPathSim() {
         </div>
       )}
 
-      {last && (
+      <div aria-live="polite">{last && (
         <div className="rounded-lg border border-line bg-panel-2 px-3 py-2 text-sm">
           <div className="mb-1 font-semibold">{last.what}: what changed in the forwarding tables</div>
           {last.changes.length === 0 ? <div className="text-muted">No next-hop set changed (for example, the restored path was not needed or maximum-paths caps the set).</div> : (
@@ -283,7 +288,7 @@ export default function BgpPathSim() {
           )}
           <div className="mt-1 text-[11px] text-muted">Only routers and prefixes listed here changed. A single spine–leaf failure touches the failed leaf (loses that spine for every remote prefix) and, via the spine's withdrawals, every other leaf only for the failed leaf's prefix.</div>
         </div>
-      )}
+      )}</div>
 
       <div>
         <div className="mb-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-muted">How the routes are built</div>

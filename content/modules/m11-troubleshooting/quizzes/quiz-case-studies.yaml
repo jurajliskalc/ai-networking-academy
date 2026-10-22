@@ -11,17 +11,17 @@ questions:
       All other ports are near zero. A leaf port shows a few PortXmitDiscards. What is the root cause and best mitigation?
     options:
       - id: a
-        text: A degrading optic or connector on the spine link; save the counters, disable the link so traffic is rerouted, then replace the optic and clean the fibre.
+        text: A degrading optic or connector on the spine link; save the counters, disable the link so traffic reroutes, then replace the optic and clean the fibre.
         correct: true
         explanation: Rising symbol and receive errors plus flaps on a single port point to the physical layer. The leaf discards are a side effect of the flaps.
       - id: b
-        text: Congestion on the leaf; raise its buffer allocation to stop the PortXmitDiscards.
-        explanation: The discards are few and follow from the failing link; buffer tuning would not stop the physical errors.
+        text: Congestion on the leaf, shown by its PortXmitDiscards; raise the buffer allocation on that leaf port so it stops discarding, then re-test.
+        explanation: The discards are few and follow from the failing link; buffer tuning would not stop the symbol errors on the spine port.
       - id: c
-        text: The Subnet Manager is computing bad routes; restart it.
+        text: The Subnet Manager computed bad routes after the link flaps; restart the SM so it re-sweeps the fabric and rebalances the routing tables.
         explanation: Routing does not create symbol errors. Restarting the SM would add churn without fixing the link.
       - id: d
-        text: Clear all counters fabric-wide and watch for a day to confirm.
+        text: Clear all counters fabric-wide, then watch for a day to confirm the errors are real before touching any hardware or routing.
         explanation: Clearing first destroys evidence, and the job keeps suffering meanwhile; the pattern is already clear.
     tags: [infiniband, optics, ber]
   - id: q2
@@ -32,17 +32,17 @@ questions:
       receivers show out_of_sequence climbing. What happened?
     options:
       - id: a
-        text: PFC is now enabled on a priority that RoCE traffic does not use, so RoCE runs lossy; incast-heavy all-to-all overflows buffers before ECN can react.
+        text: PFC now covers a priority RoCE does not use, so RoCE runs lossy and all-to-all incast overflows buffers before ECN can react.
         correct: true
         explanation: Zero pauses on the RoCE priority, continued ECN, and receiver sequence gaps after a change point to a PFC priority mismatch.
       - id: b
-        text: The push triggered a PFC storm that is pausing the whole fabric.
-        explanation: A storm would show very high pause counts, not zero.
+        text: The push triggered a PFC storm; a stuck receiver keeps pausing its upstream ports and the pause spreads across the whole fabric.
+        explanation: A storm would show very high pause counts on the RoCE priority, not zero.
       - id: c
-        text: ECMP polarization started because of the template change.
-        explanation: Polarization causes uneven utilisation, not a sudden disappearance of PFC pauses or a link to the QoS template.
+        text: The template changed the ECMP hash inputs, polarizing flows so the all-to-all traffic piles onto a few uplinks and drops.
+        explanation: A QoS template does not change hash inputs, and polarization causes uneven utilisation, not a sudden disappearance of PFC pauses on the RoCE priority.
       - id: d
-        text: The MoE jobs have a software regression.
+        text: A software regression in the MoE all-to-all code path, which dense jobs barely exercise; the push timing is coincidental.
         explanation: The timing matches the push, and the fabric counters changed in a way that explains the symptom.
     tags: [pfc, change-correlation]
   - id: q3
@@ -53,14 +53,14 @@ questions:
       barely changed. Why did the dense-model jobs suffer much less?
     options:
       - id: a
-        text: Their traffic created less incast, so ECN/DCQCN rate control usually kept queues short enough to avoid overflow even without PFC.
+        text: Their traffic had less incast, so ECN/DCQCN alone usually kept queues short enough to avoid overflow without PFC.
         correct: true
         explanation: ECN reacts after a round trip; it can manage gentle congestion but not fast-filling incast bursts like all-to-all.
       - id: b
-        text: Dense models do not use RDMA.
-        explanation: They use the same NCCL RDMA transports.
+        text: Dense models do not use RDMA for gradients; they go over TCP sockets, which recover from drops by retransmission.
+        explanation: They use the same NCCL RDMA transports as the MoE jobs.
       - id: c
-        text: Dense models use a different DSCP that still had PFC enabled.
+        text: Dense models use a different DSCP, and that DSCP still mapped to the priority that had PFC enabled.
         explanation: Both job types used the same RoCE configuration; the difference was the traffic pattern.
     tags: [ecn, incast]
   - id: q4
@@ -71,17 +71,17 @@ questions:
       95% utilised and the other near 20%. Which combination best explains this?
     options:
       - id: a
-        text: Too few large flows for static hashing (low entropy) plus hash polarization because leaf and spine use the same hash function and seed.
+        text: Too few large flows for static hashing (low entropy), plus polarization from leaf and spine sharing one hash function and seed.
         correct: true
         explanation: Few elephants collide, and identical hashing across tiers makes the spine's choice depend on bits the leaf already fixed.
       - id: b
-        text: A bad optic on the busy links causing retransmissions.
-        explanation: Bad optics produce error counters and retransmissions; here there are no errors.
+        text: A marginal optic on each busy link; corrupted frames are resent, inflating its utilisation while the twin link stays quiet.
+        explanation: Bad optics produce error counters and retransmissions; here there are no errors or drops.
       - id: c
-        text: PFC is disabled, so traffic is lost and retransmitted.
+        text: PFC is disabled, so packets are dropped and go-back-N retransmissions inflate traffic on the busiest links.
         explanation: There are no drops; the issue is distribution, not loss.
       - id: d
-        text: The NICs' PCIe links are downtrained.
+        text: The NICs' PCIe links are downtrained, so some hosts inject at half rate and the links they use look underutilised.
         explanation: Downtraining would show as a node-dependent persistent drop, not as uneven switch link utilisation that changes between reruns.
     tags: [ecmp, polarization]
   - id: q5
@@ -115,18 +115,18 @@ questions:
       at about half of line rate. What is the next command, and what do you expect to see?
     options:
       - id: a
-        text: lspci -vv on that rail's NIC under load, expecting LnkSta below LnkCap (for example Width x8 downgraded instead of x16).
+        text: lspci -vv for that rail's NIC under load, expecting LnkSta width or speed below LnkCap (for example x8 instead of x16).
         correct: true
         explanation: A single rail at about half bandwidth after hardware work is the classic signature of a NIC PCIe link trained at half width.
       - id: b
-        text: nvidia-smi -q -d PERFORMANCE, expecting thermal throttling.
+        text: nvidia-smi -q -d PERFORMANCE, expecting thermal or power throttling on the GPU paired with that rail.
         explanation: Throttling would slow compute, not one NIC rail in a network bandwidth test.
       - id: c
-        text: ibv_devinfo -v, expecting a RoCE v1 GID.
-        explanation: A GID problem would cause connection failures, not half bandwidth.
+        text: show_gids on that rail's NIC, expecting the configured GID index to hold a RoCE v1 entry instead of v2.
+        explanation: A wrong GID type or index causes connection failures, not a connection that works at half bandwidth.
       - id: d
-        text: perfquery on the leaf port, expecting PortXmitWait to be zero.
-        explanation: That would not explain a host-side bandwidth limit found by a per-rail test from this node.
+        text: perfquery on the leaf port facing that rail, expecting PortXmitWait to climb because the switch is congested.
+        explanation: A single test stream from one node to a golden node does not congest the switch; one rail stuck at half rate after hardware work points at the host side.
     tags: [pcie, admission]
   - id: q7
     type: scenario
@@ -140,13 +140,13 @@ questions:
         correct: true
         explanation: The partial-reboot pattern plus retry-exceeded errors points to GID table drift on rebooted nodes.
       - id: b
-        text: Switch PFC configuration on the racks of the failing nodes.
+        text: Switch PFC and ECN configuration on the racks hosting the failing nodes, looking for a mismatched priority.
         explanation: Nothing changed on the switches, and a PFC problem would not correlate with host reboots.
       - id: c
-        text: GPU clock throttle reasons on the failing nodes.
-        explanation: Throttling makes jobs slow, not fail with transport errors.
+        text: GPU clock throttle reasons on the failing nodes, since slow ranks can trip NCCL timeouts.
+        explanation: Throttling makes jobs slow, not fail with transport retry-exceeded errors, and it does not track reboots.
       - id: d
-        text: The NCCL version on the failing nodes.
+        text: The NCCL version on the failing nodes, since a library mismatch between ranks breaks setup.
         explanation: The change was to host networking; the reboot correlation points at addressing, not at the library.
     tags: [gid, change-correlation]
   - id: q8
@@ -158,12 +158,12 @@ questions:
         correct: true
         explanation: Automated checks prevent recurrence regardless of who is on call.
       - id: b
-        text: A reminder to engineers to be more careful with config pushes.
+        text: A reminder to all engineers to be more careful with config pushes, added to the team runbook and onboarding notes.
         explanation: Exhortations do not change the system and rarely prevent recurrence.
       - id: c
-        text: Identifying which engineer made the change.
+        text: A record of which engineer made the change, so that person can be retrained and all of their future pushes reviewed.
         explanation: Blameless reports focus on how the system allowed the failure, not on individuals.
       - id: d
-        text: Raising NCCL timeouts so failures take longer to surface.
+        text: Higher NCCL timeouts across the fleet, so transient fabric faults no longer kill running jobs.
         explanation: This hides symptoms and slows detection; it prevents nothing.
     tags: [postmortem]

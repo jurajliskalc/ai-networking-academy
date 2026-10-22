@@ -164,7 +164,7 @@ export default function CounterDecoder() {
                       <div className="flex gap-1" role="group" aria-label={`${c.name} state`}>
                         {STATES.map((st) => (
                           <button key={st} type="button" aria-pressed={v === st} onClick={() => set(c.id, st)}
-                            className={`rounded border px-1.5 py-0.5 font-mono text-[11px] ${v === st ? stateCls[st] : 'border-line bg-panel hover:bg-panel-2 text-muted'}`}>
+                            className={`min-h-6 min-w-6 rounded border px-1.5 py-0.5 font-mono text-[11px] ${v === st ? stateCls[st] : 'border-line bg-panel hover:bg-panel-2 text-muted'}`}>
                             {stateLabel[st]}
                           </button>
                         ))}
@@ -177,7 +177,8 @@ export default function CounterDecoder() {
           ))}
         </div>
 
-        <div className="space-y-2 lg:sticky lg:top-4 lg:self-start" aria-live="polite">
+        <div className="space-y-2 lg:sticky lg:top-4 lg:self-start">
+          <p className="sr-only" aria-live="polite">{ranked.length ? `${nRising} counters rising. Top hypothesis: ${ranked[0].hyp.title}, score ${ranked[0].score}${ranked.length > 1 ? `; ${ranked.length - 1} more` : ''}.` : 'No hypotheses yet.'}</p>
           <div className="flex items-center gap-2">
             <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted">Ranked hypotheses</div>
             <Pill>{nRising} rising</Pill>
@@ -189,7 +190,7 @@ export default function CounterDecoder() {
                 <div className="text-sm font-semibold">{i + 1}. {r.hyp.title}</div>
                 <div className="font-mono text-sm tabular-nums text-accent">{r.score}</div>
               </div>
-              <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-panel">
+              <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-panel" aria-hidden>
                 <div className="h-full rounded-full bg-accent" style={{ width: `${(100 * r.score) / top}%` }} />
               </div>
               <ul className="mt-2 space-y-0.5 text-xs">

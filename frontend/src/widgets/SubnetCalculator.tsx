@@ -160,7 +160,7 @@ export default function SubnetCalculator() {
         <div className="flex flex-wrap items-end gap-2">
           <div className="min-w-[12rem] flex-1">
             <label htmlFor="sc-cidr" className="mb-1 block font-mono text-[10px] uppercase tracking-[0.14em] text-muted">IPv4 address / prefix</label>
-            <input id="sc-cidr" value={cidr} onChange={(e) => setCidr(e.target.value)} spellCheck={false}
+            <input id="sc-cidr" value={cidr} onChange={(e) => setCidr(e.target.value)} spellCheck={false} aria-invalid={!parsed}
               className={`w-full rounded-md border bg-panel px-2 py-1 font-mono text-sm ${parsed ? 'border-line' : 'border-danger'}`} />
           </div>
           {EXAMPLES.map((e) => (
@@ -172,11 +172,11 @@ export default function SubnetCalculator() {
           <div className="rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger" role="alert">Enter an address like 10.0.3.77/26 (four octets 0-255, prefix 0-32).</div>
         ) : (
           <>
-            <div className="overflow-x-auto rounded-lg border border-line bg-panel-2 px-3 py-2 font-mono text-xs">
+            <div className="overflow-x-auto rounded-lg border border-line bg-panel-2 px-3 py-2 font-mono text-xs" tabIndex={0} role="region" aria-label="Address in binary">
               <div className="whitespace-nowrap">{bin(parsed.addr, parsed.len).map((b, i) => <span key={i} className={b.c === '.' ? 'text-muted' : b.net ? 'text-accent' : 'text-data'}>{b.c}</span>)}</div>
               <div className="mt-1 text-[10px] text-muted"><span className="text-accent">{parsed.len} network bits</span> · <span className="text-data">{32 - parsed.len} host bits</span> · block of 2^{32 - parsed.len} = {fmt(info.total)} addresses</div>
             </div>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" aria-live="polite">
               <Out label="Network" value={`${ipToString(info.network)}/${parsed.len}`} tone="text-accent" />
               <Out label="Broadcast" value={info.broadcast === null ? 'none' : ipToString(info.broadcast)} tone={info.broadcast === null ? 'text-muted' : 'text-fg'} />
               <Out label="First usable" value={ipToString(info.first)} />
@@ -200,7 +200,7 @@ export default function SubnetCalculator() {
           <NumIn id="sc-perleaf" label="Servers per rail leaf" value={perLeaf} onChange={setPerLeaf} min={1} max={512} />
           <div>
             <label htmlFor="sc-base" className="mb-1 block font-mono text-[10px] uppercase tracking-[0.14em] text-muted">Base prefix</label>
-            <input id="sc-base" value={baseStr} onChange={(e) => setBaseStr(e.target.value)} spellCheck={false}
+            <input id="sc-base" value={baseStr} onChange={(e) => setBaseStr(e.target.value)} spellCheck={false} aria-invalid={!baseParsed}
               className={`w-full rounded-md border bg-panel px-2 py-1 font-mono text-sm ${baseParsed ? 'border-line' : 'border-danger'}`} />
           </div>
         </div>
@@ -226,7 +226,7 @@ export default function SubnetCalculator() {
                     <div className="mb-1 font-mono text-[10px] uppercase tracking-[0.14em] text-muted">Rail</div>
                     <div className="flex flex-wrap gap-1">
                       {(['all', ...Array.from({ length: rails }, (_, i) => i)] as (number | 'all')[]).map((r) => (
-                        <button key={String(r)} type="button" aria-pressed={r === railFilter} onClick={() => { setRailFilter(r); setShown(PAGE); }}
+                        <button key={String(r)} type="button" aria-pressed={r === railFilter} aria-label={r === 'all' ? 'All rails' : `Rail ${r}`} onClick={() => { setRailFilter(r); setShown(PAGE); }}
                           className={`rounded-md border px-2 py-1 font-mono text-xs ${r === railFilter ? 'border-accent bg-accent-soft text-accent' : 'border-line bg-panel hover:bg-panel-2'}`}>{r === 'all' ? 'all' : r}</button>
                       ))}
                     </div>
@@ -238,12 +238,12 @@ export default function SubnetCalculator() {
                   </div>
                 </div>
 
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Host link addresses">
                   <table className="w-full text-left text-xs">
                     <thead className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted">
                       <tr>
-                        <th className="py-1 pr-3"><button type="button" onClick={() => setSortBy('node')} aria-pressed={sortBy === 'node'} className={sortBy === 'node' ? 'text-accent' : ''}>Node {sortBy === 'node' ? '▾' : ''}</button></th>
-                        <th className="py-1 pr-3"><button type="button" onClick={() => setSortBy('rail')} aria-pressed={sortBy === 'rail'} className={sortBy === 'rail' ? 'text-accent' : ''}>Rail {sortBy === 'rail' ? '▾' : ''}</button></th>
+                        <th className="py-1 pr-3" aria-sort={sortBy === 'node' ? 'ascending' : 'none'}><button type="button" onClick={() => setSortBy('node')} aria-pressed={sortBy === 'node'} className={sortBy === 'node' ? 'text-accent' : ''}>Node {sortBy === 'node' ? '▾' : ''}</button></th>
+                        <th className="py-1 pr-3" aria-sort={sortBy === 'rail' ? 'ascending' : 'none'}><button type="button" onClick={() => setSortBy('rail')} aria-pressed={sortBy === 'rail'} className={sortBy === 'rail' ? 'text-accent' : ''}>Rail {sortBy === 'rail' ? '▾' : ''}</button></th>
                         <th className="py-1 pr-3">Leaf / port</th><th className="py-1 pr-3">Link /31</th><th className="py-1 pr-3">Leaf IP</th><th className="py-1">Host IP</th>
                       </tr>
                     </thead>
@@ -259,11 +259,11 @@ export default function SubnetCalculator() {
                   </table>
                 </div>
                 <div className="flex items-center gap-3 text-xs text-muted">
-                  <span>showing {fmt(Math.min(shown, rows.length))} of {fmt(rows.length)} links</span>
+                  <span aria-live="polite">showing {fmt(Math.min(shown, rows.length))} of {fmt(rows.length)} links</span>
                   {shown < rows.length && <button type="button" onClick={() => setShown(shown + 256)} className="rounded-md border border-line bg-panel px-2 py-1 hover:bg-panel-2">show 256 more</button>}
                 </div>
 
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Rail leaf summary prefixes">
                   <table className="w-full text-left text-xs">
                     <thead className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted"><tr><th className="py-1 pr-3">Rail leaf</th><th className="py-1 pr-3 text-right">/31s used</th><th className="py-1 pr-3">Summary prefix (advertise)</th><th className="py-1">Rail summary</th></tr></thead>
                     <tbody className="font-mono">

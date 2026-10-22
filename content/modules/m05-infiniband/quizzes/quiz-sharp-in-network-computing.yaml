@@ -64,14 +64,14 @@ questions:
       messages. What is the most likely conclusion?
     options:
       - id: a
-        text: InfiniBand SHARP is not active (plugin, AM or tree allocation problem); NVLS lines refer to NVLink SHARP inside the server.
+        text: InfiniBand SHARP is not active (plugin, AM or tree allocation problem); NVLS means NVLink SHARP inside the server.
         correct: true
         explanation: No CollNet initialisation plus no performance change points to silent fallback.
       - id: b
-        text: SHARP is active and simply gives no benefit at 64 nodes.
+        text: SHARP is active and engaged, but at only 64 nodes it gives no measurable benefit, so the two results match exactly.
         explanation: An exactly identical result with no CollNet in the log suggests it never engaged.
       - id: c
-        text: NVLS lines prove InfiniBand SHARP is working.
+        text: The NVLS lines prove InfiniBand SHARP is working, since NVLS is the name NCCL uses for the switch aggregation trees.
         explanation: NVLS is the NVLink in-switch reduction, not InfiniBand SHARP.
     tags: [troubleshooting, collnet]
   - id: q5
@@ -82,14 +82,14 @@ questions:
       most likely cause?
     options:
       - id: a
-        text: Switch aggregation resources or tree limits are exhausted, so the AM cannot allocate trees for new jobs and they fall back.
+        text: Switch aggregation resources or tree limits are used up, so the AM cannot give new jobs trees and they fall back.
         correct: true
         explanation: SHARP resources are finite and allocated per job; fallback is silent.
       - id: b
-        text: The fabric becomes lossy under load and SHARP disables itself.
+        text: The fabric becomes lossy under the heavier load, and SHARP disables itself for any job started afterwards.
         explanation: InfiniBand remains lossless; the pattern matches resource allocation.
       - id: c
-        text: The SM changes routing engines during the day.
+        text: The SM switches routing engines during the day, which breaks the SHARP trees that new jobs would use.
         explanation: Routing engine changes would affect all jobs, not only new ones.
     tags: [resources, multi-tenant]
   - id: q6
@@ -101,10 +101,10 @@ questions:
         correct: true
         explanation: Different reduction orders produce tiny numerical differences; compare with tolerances.
       - id: b
-        text: SHARP drops some gradient values.
+        text: SHARP drops some gradient values when switch buffers fill, so a few updates are lost in each step.
         explanation: SHARP does not drop data; the difference comes from arithmetic order.
       - id: c
-        text: SHARP compresses gradients to 8 bits.
+        text: SHARP compresses gradients to 8 bits inside the switch, which rounds away the last few digits.
         explanation: SHARP reduces in supported data types; it does not silently quantise to 8 bits.
     tags: [numerics]
   - id: q7
@@ -115,14 +115,14 @@ questions:
       What is the most accurate response?
     options:
       - id: a
-        text: SHARP accelerates inter-node all-reduce (and similar reductions), not all-to-all; the end-to-end gain depends on how much step time is inter-node all-reduce, so it will be well below 2x.
+        text: SHARP speeds up inter-node all-reduce, not all-to-all; the gain depends on the all-reduce share of step time, so well below 2x.
         correct: true
-        explanation: Estimate the communication share first; all-to-all is not a reduction and does not benefit.
+        explanation: SHARP accelerates all-reduce and similar reductions. The end-to-end gain is bounded by how much step time is inter-node all-reduce, so estimate that share first; all-to-all is not a reduction and does not benefit.
       - id: b
-        text: SHARP accelerates all collectives equally, so 2x is realistic.
+        text: SHARP accelerates every collective equally, including all-to-all, so a 2x end-to-end speed-up is realistic for this model's training.
         explanation: SHARP is a reduction technology; all-to-all does not involve reduction.
       - id: c
-        text: SHARP only works for inference.
+        text: SHARP only accelerates inference traffic, so it would not change this training job's speed at all.
         explanation: SHARP is used for training all-reduce and HPC collectives.
     tags: [design, expectations]
   - id: q8
@@ -130,13 +130,13 @@ questions:
     prompt: For small all-reduce messages, why does SHARP reduce latency compared with a ring?
     options:
       - id: a
-        text: The number of sequential steps depends on the switch tree depth (a few levels) instead of growing with the number of ranks.
+        text: The number of sequential steps is set by the switch tree depth (a few levels) instead of growing with the number of ranks.
         correct: true
         explanation: A ring needs 2(N-1) steps; an aggregation tree's depth is set by fabric tiers.
       - id: b
-        text: SHARP packets travel faster through switches.
-        explanation: Propagation and serialization are unchanged; the gain is fewer steps.
+        text: SHARP packets get strict priority through the switches, so they skip the queues that ordinary ring traffic has to wait in.
+        explanation: SHARP does not rely on a priority bypass; propagation and serialization are unchanged, and the gain is fewer sequential steps.
       - id: c
-        text: SHARP bypasses the HCAs entirely.
+        text: SHARP bypasses the HCAs entirely, so hosts avoid the NIC processing delay on every step.
         explanation: Hosts still send and receive through their HCAs.
     tags: [latency]

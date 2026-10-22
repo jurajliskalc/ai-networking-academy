@@ -18,7 +18,7 @@ questions:
         text: Sends it back out of the port it arrived on.
         explanation: Switches never forward a frame back to its ingress port.
       - id: d
-        text: Queues it until the address is learned.
+        text: Holds it in the shared buffer until the destination address is learned.
         explanation: Switches do not hold frames waiting for learning; they flood immediately.
     tags: [switching]
   - id: q2
@@ -88,7 +88,7 @@ questions:
         correct: true
         explanation: Strict priority suits small control traffic; it would starve others if used for bulk data.
       - id: b
-        text: The same queue as RDMA data with equal weight.
+        text: The same queue as RDMA data with equal weight, so they stay in order with it.
         explanation: CNPs would then wait behind the very congestion they are reporting.
       - id: c
         text: The lowest-weight best-effort queue.
@@ -104,34 +104,34 @@ questions:
       discards. What is the correct reading?
     options:
       - id: a
-        text: The switch is repeatedly pausing this host's transmissions on priority 3 because a queue downstream is congested.
+        text: The switch is pausing this host's priority-3 transmissions because a queue downstream is congested.
         correct: true
         explanation: Received pauses come from the neighbour (the switch) and mean it wants this host to stop sending that priority.
       - id: b
-        text: The host is congested and pausing the switch.
-        explanation: That would show up as transmitted pause frames, which are zero here.
+        text: The host is congested on priority 3 and is pausing the switch, which is why rx_prio3_pause keeps rising.
+        explanation: A host pausing the switch would show up as transmitted pause frames (tx_prio3_pause), which are zero here.
       - id: c
-        text: The link is dropping packets on priority 3.
-        explanation: Pauses prevent drops; the discard counter is zero.
+        text: The link is dropping priority-3 packets, and each drop is recorded as a received pause for that priority.
+        explanation: Pause counters count PFC frames, not drops; pauses exist to prevent drops, and the discard counter is zero.
       - id: d
-        text: The counters show a cabling fault.
-        explanation: Pause frames are a congestion mechanism, not a physical-layer error.
+        text: The counters point to a cabling fault, since the NIC counts corrupted frames as received pause frames.
+        explanation: Pause frames are a congestion mechanism, not a physical-layer error; corrupted frames fail the FCS check and show up as error counters.
     tags: [pfc, counters]
   - id: q7
     type: single
     prompt: Why is PFC said to cause head-of-line blocking across links?
     options:
       - id: a
-        text: Pausing a priority on a link stops every flow of that priority on that link, including flows headed to uncongested destinations.
+        text: Pausing a priority on a link stops every flow of that priority there, including flows bound for uncongested destinations.
         correct: true
         explanation: PFC acts per priority per link, not per flow, so innocent flows are blocked too.
       - id: b
-        text: PFC reorders packets so that the head of the queue is sent last.
-        explanation: PFC does not reorder packets; it stops and resumes transmission.
+        text: PFC reorders the paused queue so that the packet at its head is sent last, delaying every flow behind it.
+        explanation: PFC does not reorder packets; it stops and resumes transmission of a whole priority.
       - id: c
-        text: PFC drops the packet at the head of the queue.
-        explanation: PFC exists precisely to avoid drops.
+        text: PFC drops the packet at the head of the queue each time the pause timer expires, so the flows behind it stall.
+        explanation: PFC exists precisely to avoid drops; it never discards packets.
       - id: d
-        text: PFC only works on the first packet of each flow.
-        explanation: PFC pauses all traffic of a priority, not individual packets.
+        text: PFC tracks individual flows and pauses only the one at the head of the queue, letting the others overtake it.
+        explanation: PFC has no notion of flows; it pauses all traffic of a priority on the link, which is exactly what causes the blocking.
     tags: [pfc, hol-blocking]

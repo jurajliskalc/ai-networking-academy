@@ -20,7 +20,7 @@ export default function Exams() {
           return (
             <Card key={e.id} className="flex flex-col p-6">
               <div className="font-mono text-[11px] uppercase tracking-[0.14em] text-accent">Assessment {i + 1}</div>
-              <div className="mt-1 text-lg font-semibold">{e.title}</div>
+              <h2 className="mt-1 text-lg font-semibold">{e.title}</h2>
               <p className="mt-2 text-sm text-muted">{e.description}</p>
               <div className="mt-4 flex flex-wrap gap-2">
                 <Pill><ListChecks size={11} />{e.count} questions</Pill>

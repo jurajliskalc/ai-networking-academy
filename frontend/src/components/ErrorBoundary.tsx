@@ -19,8 +19,8 @@ export default class ErrorBoundary extends Component<{ children: ReactNode; rese
   render() {
     if (!this.state.error) return this.props.children;
     return (
-      <div className="rounded-2xl border border-danger/40 bg-danger/10 p-6">
-        <div className="font-semibold text-danger">Something on this page failed to render.</div>
+      <div className="rounded-2xl border border-danger/40 bg-danger/10 p-6" role="alert">
+        <h1 className="font-semibold text-danger">Something on this page failed to render.</h1>
         <p className="mt-2 text-sm text-muted">{this.state.error.message}</p>
         <p className="mt-2 text-sm text-muted">Please report it on GitHub with the page address. Other pages still work.</p>
       </div>

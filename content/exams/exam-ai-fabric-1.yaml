@@ -1,7 +1,7 @@
 id: exam-ai-fabric-1
 title: "Mock assessment 1: AI fabric fundamentals"
 description: "Original practice material written for AI Networking Academy, not questions from any real certification. Fundamentals-weighted: networking basics, AI workloads, GPU server internals, data center fabrics and RDMA, with a first look at RoCEv2, NCCL and operations."
-duration_minutes: 60
+duration_minutes: 66
 pass_pct: 70
 domains:
   - { id: foundations, title: "Networking foundations and AI workloads" }
@@ -12,7 +12,7 @@ domains:
   - { id: collectives, title: "Collective communication and NCCL" }
   - { id: ops, title: "Operations and troubleshooting" }
 questions:
-  # ---------------- foundations (8) ----------------
+  # ---------------- foundations (9) ----------------
   - id: q1
     domain: foundations
     type: scenario
@@ -23,7 +23,7 @@ questions:
         correct: true
         explanation: "RoCE reuses InfiniBand MTU sizes. A 1500-byte Ethernet MTU cannot carry a 2048-byte RoCE payload plus headers, so the NIC (this is how NVIDIA ConnectX/mlx5 derives it; check your NIC documentation) falls back to 1024. Raising the netdev MTU (for example to 9000 or 4200, end to end) allows 4096."
       - id: b
-        text: "The switch negotiated a 1024-byte MTU with the NIC through LLDP during link-up, overriding the host setting."
+        text: "The switch negotiated a 1024-byte MTU with the NIC through LLDP during link-up, and that negotiated value overrides the MTU configured on the host netdev."
         explanation: "MTU is not negotiated between switch and NIC via LLDP. A mismatched switch MTU causes drops of oversized frames, not a reported active_mtu change."
       - id: c
         text: "The Subnet Manager on the fabric limits all RoCE ports to 1024 bytes until it is reconfigured."
@@ -63,7 +63,7 @@ questions:
         correct: true
         explanation: "Every rank waits for the collective to finish before the next step, so the slowest flow (the tail) determines iteration time, not the average flow."
       - id: b
-        text: "Training traffic is dominated by many short flows, so average latency determines step time."
+        text: "Training traffic is dominated by many short, independent flows, so the average flow latency across the fabric determines step time."
         explanation: "Training traffic is dominated by a small number of large, synchronized flows; averages hide the tail effect that matters."
       - id: c
         text: "Gradient traffic is mostly north-south between GPUs and the internet, so WAN latency dominates."
@@ -145,8 +145,8 @@ questions:
         correct: true
         explanation: "8972 bytes of ICMP payload plus 28 bytes of IP and ICMP headers makes a 9000-byte IP packet. With DF set, a smaller MTU anywhere on the path drops it. MTU must be consistent end to end."
       - id: b
-        text: "ICMP is rate-limited by the switch control plane, so only large pings fail."
-        explanation: "Transit pings are forwarded in hardware, and rate limiting would not discriminate by packet size like this."
+        text: "ICMP is rate-limited by the switch control plane, and large echo requests exceed the policer first, so only they fail."
+        explanation: "Pings between two hosts are transit traffic forwarded in hardware, not punted to the switch control plane, so control-plane policing does not apply; it also would not explain stalled RDMA transfers."
       - id: c
         text: "The -M do option is unsupported on Linux and makes the ping fail for any size."
         explanation: "-M do is a valid Linux ping option that sets Don't Fragment; small pings with it succeed."
@@ -175,21 +175,41 @@ questions:
         explanation: "Off by two orders of magnitude; that rate would be roughly 4 Gb/s."
     tags: [bandwidth, math]
 
-  # ---------------- server (7) ----------------
+  - id: q43
+    domain: foundations
+    type: scenario
+    prompt: "A disaggregated LLM serving cluster runs prefill and decode on separate GPU nodes. Time to first token (TTFT) has risen, while inter-token latency for requests that are already generating is unchanged. Which traffic, carried point to point over the scale-out RDMA fabric at hundreds of MB to GB per request, sits directly on the TTFT path?"
+    options:
+      - id: a
+        text: "The KV cache transfer from the prefill instance to the decode instance that will generate the answer."
+        correct: true
+        explanation: "Decode cannot start until the request's KV cache has arrived, so this per-request, GB-scale transfer is part of TTFT. It is sized for per-request completion time, not average bandwidth."
+      - id: b
+        text: "Tensor-parallel all-reduces inside each instance, which run in every layer of every step across the NVLink domain."
+        explanation: "These are small, latency-sensitive collectives kept inside the NVLink domain, not GB-scale transfers on the scale-out fabric."
+      - id: c
+        text: "The token stream returned to clients, which carries generated text back through the gateway on the front-end network."
+        explanation: "Token streams are small, long-lived HTTP or gRPC streams on the front-end network, and they would affect inter-token delivery rather than the first token's KV arrival."
+      - id: d
+        text: "Expert-parallel dispatch and combine all-to-all, which moves each token's hidden state to the GPUs that hold its experts."
+        explanation: "Expert-parallel all-to-all consists of small, uneven messages in every MoE layer; it is tail-latency sensitive, but it is not the GB-per-request point-to-point transfer described."
+    tags: [inference, kv-cache, disaggregated-serving]
+
+  # ---------------- server (8) ----------------
   - id: q9
     domain: server
     type: scenario
     prompt: "On an 8-GPU server, `nvidia-smi topo -m` shows GPU0 to mlx5_0 as PIX and GPU0 to mlx5_6 as SYS. NCCL on this host is configured so that GPU0 uses mlx5_6. What is the expected effect?"
     options:
       - id: a
-        text: "GPU0's network traffic crosses the inter-socket link, adding latency and possibly limiting bandwidth; mlx5_0 is the right NIC."
+        text: "GPU0's traffic crosses the inter-socket link, adding latency and possibly capping bandwidth; mlx5_0 is the better NIC."
         correct: true
         explanation: "SYS means the path traverses PCIe plus the SMP interconnect between CPU sockets. PIX means at most one PCIe bridge apart, the best affinity for GPUDirect RDMA."
       - id: b
-        text: "No effect; SYS is the fastest path because it uses the system's dedicated GPU interconnect."
-        explanation: "SYS is the worst PCIe affinity class; NVLink appears as NV#, not SYS."
+        text: "No effect; SYS is the fastest class because traffic uses the system's dedicated GPU-to-NIC interconnect instead of shared PCIe switches."
+        explanation: "SYS is the worst PCIe affinity class; there is no dedicated GPU-to-NIC interconnect behind it, and NVLink appears as NV#, not SYS."
       - id: c
-        text: "GPU0 cannot reach mlx5_6 at all, so NCCL will fail to initialize."
+        text: "GPU0 cannot reach mlx5_6 at all across sockets, so NCCL will fail during initialization with a topology error."
         explanation: "SYS paths work; they are just slower. NCCL may also disable GPUDirect RDMA for distant pairs depending on its settings."
       - id: d
         text: "The traffic goes over NVLink to another GPU first, which is faster than PCIe."
@@ -209,7 +229,7 @@ questions:
         text: "Both devices sit behind the same PCIe switch, at most one bridge apart."
         explanation: "That is PIX (single bridge) or PXB (multiple bridges without crossing a host bridge)."
       - id: c
-        text: "The devices are in different CPU sockets connected by the SMP interconnect."
+        text: "The devices are in different CPU sockets, so traffic crosses the SMP interconnect (for example UPI or Infinity Fabric) between them."
         explanation: "That is SYS, the cross-socket case."
       - id: d
         text: "The devices are connected by a bonded set of NVLinks."
@@ -226,7 +246,7 @@ questions:
         correct: true
         explanation: "GPUDirect RDMA lets the NIC DMA to and from GPU memory (via the peer-memory or dma-buf mechanism), cutting a copy and CPU involvement."
       - id: b
-        text: "GPU memory is copied to host memory faster by a dedicated DMA engine before the NIC sends it."
+        text: "GPU memory is first copied to host memory by a dedicated GPU copy engine, faster than a CPU memcpy, before the NIC sends it."
         explanation: "That still describes host staging; GPUDirect RDMA removes the host copy entirely."
       - id: c
         text: "The traffic moves from the network to NVLink, which spans servers automatically."
@@ -246,10 +266,10 @@ questions:
         correct: true
         explanation: "LnkSta is the negotiated state. Gen4 x8 gives about 16 GB/s per direction, far less than 400 Gb/s. Check seating, risers, slot wiring and BIOS settings."
       - id: b
-        text: "LnkCap and LnkSta always differ while the link is idle; the link speeds up under load."
-        explanation: "Some devices do lower speed for power saving, but a halved width is a real downtrain, and bandwidth under load confirms the cap."
+        text: "LnkCap and LnkSta always differ while the link is idle; the link retrains to its full Gen5 x16 capability once traffic starts."
+        explanation: "Some devices do lower speed for power saving, but a halved width is a real downtrain, and the low bandwidth measured under load confirms the cap."
       - id: c
-        text: "The output shows normal operation; Gen5 x16 is reported as 16GT/s x8 per direction."
+        text: "The output shows normal operation; lspci reports a Gen5 x16 link as 16GT/s x8 because it lists per-direction values."
         explanation: "LnkSta reports the actual negotiated speed and width; there is no such per-direction reporting convention."
       - id: d
         text: "The NIC firmware limits RDMA to half of the PCIe bandwidth by default."
@@ -262,17 +282,17 @@ questions:
     prompt: "Why do many 8-GPU training servers pair each GPU with its own scale-out NIC (for example eight 400 Gb/s NICs on H100-class systems)?"
     options:
       - id: a
-        text: "Each GPU gets a dedicated, PCIe-local path to the fabric, enabling rail-aligned traffic and full per-GPU network bandwidth."
+        text: "Each GPU gets a dedicated PCIe-local path to the fabric, enabling rail-aligned traffic and full per-GPU bandwidth."
         correct: true
         explanation: "A 1:1 GPU-to-NIC ratio behind a shared PCIe switch keeps GPUDirect RDMA local and lets each GPU drive its own rail."
       - id: b
         text: "Each NIC is required to power and cool its paired GPU through the PCIe slot."
         explanation: "NICs do not power GPUs; the pairing is about data paths."
       - id: c
-        text: "NVLink cannot carry any traffic, so all GPU-to-GPU data, even inside a server, must use NICs."
+        text: "NVLink cannot carry any traffic, so all GPU-to-GPU data, even between GPUs inside one server, must go through the NICs."
         explanation: "NVLink and NVSwitch carry intra-server GPU traffic; NICs are for inter-server traffic."
       - id: d
-        text: "One NIC per GPU is needed so that each GPU can have a separate management IP address."
+        text: "One NIC per GPU is needed so that each GPU can have its own management IP address and be monitored separately."
         explanation: "Management uses the BMC and front-end ports, not the compute NICs."
     tags: [nic, rail, server-design]
 
@@ -306,15 +326,35 @@ questions:
         correct: true
         explanation: "GPUDirect Storage (GDS, cuFile API) avoids staging I/O in CPU memory when the storage stack and file system support it."
       - id: b
-        text: "NVLink Switch, which extends NVLink to storage arrays."
+        text: "NVLink Switch, which extends the GPU's NVLink domain out to NVMe storage arrays."
         explanation: "NVLink Switch connects GPUs in a scale-up domain, not storage targets."
       - id: c
-        text: "PFC, which makes storage traffic lossless and therefore copy-free."
-        explanation: "PFC prevents drops on Ethernet; it has nothing to do with memory copies in the host."
+        text: "PFC, which makes storage traffic lossless so the NIC can skip the host bounce buffer."
+        explanation: "PFC prevents drops on Ethernet; it has nothing to do with whether data is staged in host memory."
       - id: d
-        text: "SR-IOV, which gives each GPU its own virtual storage controller."
+        text: "SR-IOV, which gives each GPU its own virtual NVMe controller with direct access to the target."
         explanation: "SR-IOV creates virtual PCIe functions; it does not create a direct storage-to-GPU DMA path."
     tags: [gpudirect-storage, storage]
+
+  - id: q44
+    domain: server
+    type: scenario
+    prompt: "An architect proposes building a 72-accelerator scale-up domain from standard RoCEv2 over stock Ethernet switches, because the NICs already exist. Kernels on one accelerator issue many 64-256-byte loads and stores to other accelerators' memory. Which combination of mismatches makes classic RoCEv2 a poor fit for this role?"
+    options:
+      - id: a
+        text: "Verbs instead of load/store, about 60 bytes of headers per packet, and end-to-end recovery, not a reliable link."
+        correct: true
+        explanation: "Scale-up needs memory semantics, small headers and link-level reliability. Classic RoCEv2 offers a verbs API, carries roughly 60 bytes of Ethernet, IP, UDP and IB transport headers and trailers per packet (a large share of a 64-256-byte access) and relies on end-to-end recovery with PFC rather than a reliable link layer."
+      - id: b
+        text: "RoCEv2 cannot address more than 16 endpoints per subnet, and it only carries messages larger than one 4 KiB MTU."
+        explanation: "Neither limit exists: RoCEv2 is routed IP traffic and carries messages of any size. The problems are semantics, header overhead and the recovery model."
+      - id: c
+        text: "RoCEv2 packets need at least a millisecond to cross an Ethernet switch, so every remote access would take over 1 ms."
+        explanation: "Switch transit is far below a millisecond. Latency matters at hundreds of nanoseconds per hop, but the decisive mismatches are API, headers and recovery."
+      - id: d
+        text: "RoCEv2 needs a subnet manager to assign addresses, and one subnet manager cannot manage more than a single rack."
+        explanation: "RoCEv2 has no subnet manager; that is an InfiniBand concept. RoCE endpoints are addressed by IP."
+    tags: [scale-up, rocev2, ualink]
 
   # ---------------- fabric (7) ----------------
   - id: q16
@@ -353,7 +393,7 @@ questions:
         text: "1,024 (32 leaves x 32 downlinks)."
         explanation: "With 64-port spines you can attach 64 leaves, not 32."
       - id: d
-        text: "65,536, the three-tier maximum."
+        text: "65,536 (k^3/4 with k = 64), the fat-tree maximum."
         explanation: "k^3/4 = 65,536 applies to a three-tier fat tree, not two tiers."
     tags: [clos, fat-tree, sizing]
 
@@ -363,14 +403,14 @@ questions:
     prompt: "Two 400 Gb/s RoCE flows from different servers on the same leaf both get about 200 Gb/s, while other spine uplinks on that leaf are nearly idle. Static 5-tuple ECMP is in use. What is the most likely cause?"
     options:
       - id: a
-        text: "Both flows hashed onto the same uplink, a collision that static ECMP cannot correct when there are few flows."
+        text: "Both flows hashed onto the same uplink, a collision that static ECMP does not correct."
         correct: true
-        explanation: "Static hashing places each flow on one path regardless of load. With few elephant flows, collisions are likely; fixes include more entropy (multiple QPs or source ports), adaptive routing or spraying."
+        explanation: "Static hashing places each flow on one path regardless of load. With few elephant flows, collisions are likely and persist; fixes include more entropy (multiple QPs or source ports), adaptive routing or spraying."
       - id: b
-        text: "ECMP always halves the bandwidth of each flow to reserve capacity for failover."
+        text: "ECMP always halves the bandwidth of each flow so that capacity is held in reserve for failover."
         explanation: "ECMP reserves nothing; each flow can use a full link if it has it to itself."
       - id: c
-        text: "The spine switches are rate limiting RoCE to 200 Gb/s per flow by default."
+        text: "The spine switches rate-limit each RoCE flow to 200 Gb/s by default to protect the lossless queue."
         explanation: "There is no such default; the symptom matches two flows sharing one 400 Gb/s link."
       - id: d
         text: "ECMP hashes on the destination MAC only, so all traffic uses one uplink."
@@ -387,7 +427,7 @@ questions:
         correct: true
         explanation: "Each rail groups the same GPU index across servers. Traffic between GPUs with the same index stays within one leaf; cross-rail traffic can be moved onto the right rail inside the server over NVLink."
       - id: b
-        text: "All eight NICs of a server connect to the same leaf to keep the server in one failure domain."
+        text: "All eight NICs of a server connect to the same leaf, keeping each server in one failure domain and its GPUs one hop from that leaf."
         explanation: "That is a server-per-leaf (top-of-rack) style, which is the opposite of rail alignment."
       - id: c
         text: "Each NIC connects directly to a spine, skipping the leaf layer."
@@ -403,17 +443,17 @@ questions:
     prompt: "In a BGP-routed leaf-spine underlay, what lets a leaf spread traffic to a remote prefix across all spines?"
     options:
       - id: a
-        text: "BGP multipath, which installs several equal-cost next hops in the forwarding table for ECMP."
+        text: "BGP multipath, which installs several equal-cost next hops for ECMP."
         correct: true
-        explanation: "With multipath enabled (and, in eBGP designs, consistent AS path lengths), the leaf installs one next hop per spine and hashes flows across them."
+        explanation: "With multipath enabled (and, in eBGP designs, consistent AS path lengths), the leaf installs one next hop per spine in the forwarding table and hashes flows across them."
       - id: b
-        text: "BGP route reflection, which mirrors packets to every spine."
+        text: "BGP route reflection, which mirrors each packet to every spine so one copy arrives."
         explanation: "Route reflectors distribute routes in iBGP designs; they do not replicate packets."
       - id: c
         text: "Spanning Tree, which blocks redundant uplinks to avoid loops."
         explanation: "STP blocks links, which is why L3 leaf-spine designs avoid it."
       - id: d
-        text: "BGP communities, which tag each packet with a spine number."
+        text: "BGP communities, which tag each packet with a spine number that leaves hash on."
         explanation: "Communities are route attributes for policy; they are not carried in data packets."
     tags: [bgp, ecmp, underlay]
 
@@ -451,14 +491,14 @@ questions:
         text: "PFC, which assigns each tenant one of eight priorities."
         explanation: "PFC is a flow-control mechanism; eight priorities cannot provide tenant isolation."
       - id: c
-        text: "InfiniBand partitions, applied to the Ethernet front-end switches."
+        text: "InfiniBand partitions (P_Keys), configured per tenant on the Ethernet front-end switches."
         explanation: "Partition keys (P_Keys) are an InfiniBand feature, not an Ethernet front-end mechanism."
       - id: d
-        text: "A single flat VLAN stretched across all racks, protected by Spanning Tree."
+        text: "A single flat VLAN stretched across all racks, with Spanning Tree preventing loops between tenants."
         explanation: "One flat VLAN gives no tenant isolation and does not scale."
     tags: [evpn, vxlan, multi-tenancy]
 
-  # ---------------- rdma (7) ----------------
+  # ---------------- rdma (8) ----------------
   - id: q23
     domain: rdma
     type: single
@@ -472,7 +512,7 @@ questions:
         text: "The target kernel copies the data from a socket buffer into the application buffer."
         explanation: "That describes TCP sockets; RDMA bypasses the kernel data path and avoids that copy."
       - id: c
-        text: "The target application must call a receive function for each write before the data arrives."
+        text: "The target application must post a receive and call a receive function for each write before the data can land."
         explanation: "Plain RDMA WRITE requires no receive WQE; SEND/RECV is the two-sided operation."
       - id: d
         text: "The target NIC raises an interrupt per packet so the CPU can acknowledge it."
@@ -485,17 +525,17 @@ questions:
     prompt: "An RDMA application connects RC QPs by exchanging information over a TCP socket. The modify-QP to RTR fails. Which information must each side have learned from its peer before RTR can succeed?"
     options:
       - id: a
-        text: "The remote QP number, its starting packet sequence number and the remote address (LID or GID), plus path MTU."
+        text: "The remote QP number, its starting PSN, the remote address (LID or GID) and the path MTU."
         correct: true
-        explanation: "INIT to RTR needs the destination QPN, remote starting PSN (rq_psn), address vector (LID for IB, GID for RoCE) and path MTU."
+        explanation: "INIT to RTR needs the destination QPN, remote starting packet sequence number (rq_psn), address vector (LID for IB, GID for RoCE) and path MTU."
       - id: b
-        text: "Only the remote host name; the NIC resolves everything else automatically."
+        text: "Only the remote host name; the NIC resolves the QP number, PSN and GID automatically during RTR."
         explanation: "Raw verbs require explicit QP attributes; librdmacm can help, but the attributes still must be set."
       - id: c
-        text: "The remote rkey only, because RTR authorizes memory access."
-        explanation: "rkeys are used in RDMA work requests; they are not QP transition attributes."
+        text: "The remote rkey and buffer address only, because the RTR transition authorizes remote memory access."
+        explanation: "rkeys and remote addresses are carried in RDMA work requests; they are not QP transition attributes."
       - id: d
-        text: "The remote TCP port number and window size."
+        text: "The remote TCP port number and window size, which the QP reuses for its own flow control."
         explanation: "TCP parameters only matter for the side channel, not for the RDMA QP."
     tags: [qp-states, verbs]
 
@@ -509,13 +549,13 @@ questions:
         correct: true
         explanation: "Registration makes memory DMA-safe for the NIC and creates keys that authorize local and remote access."
       - id: b
-        text: "Allocates new memory on the NIC that the application must copy data into."
+        text: "Allocates new memory on the NIC that the application must copy its data into before posting."
         explanation: "Registration works on application memory in place; it is not a NIC buffer allocation."
       - id: c
-        text: "Creates a QP bound to that memory so no other QP can use it."
+        text: "Creates a QP bound to that memory region so that no other QP in the process can use it."
         explanation: "MRs belong to a protection domain and can be used by any QP in that PD."
       - id: d
-        text: "Copies the buffer to the remote host so it can be read later."
+        text: "Copies the buffer to the remote host in advance so the peer can read it later without a round trip."
         explanation: "Registration is a local operation; it transfers no data."
     tags: [memory-registration, verbs]
 
@@ -525,17 +565,17 @@ questions:
     prompt: "A developer wants reliable delivery and needs to use RDMA READ to pull data from a remote buffer. Which transport should they choose?"
     options:
       - id: a
-        text: "Reliable Connection (RC), which supports SEND, RDMA WRITE, RDMA READ and atomics with hardware reliability."
+        text: "Reliable Connection (RC), which supports SEND, WRITE, READ and atomics with hardware reliability."
         correct: true
-        explanation: "RC is the transport used by NCCL and most RDMA applications and supports all operations including READ."
+        explanation: "RC is the transport used by NCCL and most RDMA applications and supports all operations including RDMA READ."
       - id: b
-        text: "Unreliable Datagram (UD), which supports RDMA READ to any number of peers."
+        text: "Unreliable Datagram (UD), which supports RDMA READ to any number of peers from one QP."
         explanation: "UD supports only SEND/RECV, with messages limited to one MTU and no reliability."
       - id: c
-        text: "Unreliable Connection (UC), which adds retransmission for READ only."
+        text: "Unreliable Connection (UC), which keeps connection state and adds hardware retransmission for RDMA READ only."
         explanation: "UC supports SEND and RDMA WRITE but not READ, and it does not retransmit."
       - id: d
-        text: "Raw Ethernet QPs, which give RDMA READ semantics without a transport."
+        text: "Raw Ethernet QPs, which provide RDMA READ semantics without the overhead of a transport layer."
         explanation: "Raw packet QPs send Ethernet frames; they have no RDMA READ semantics."
     tags: [transport-types, rc, ud]
 
@@ -545,14 +585,14 @@ questions:
     prompt: "On a newly cabled InfiniBand host, `ibstat` shows `State: Initializing` and `Physical state: LinkUp` for the port, and it never becomes Active. What is the most likely cause?"
     options:
       - id: a
-        text: "No Subnet Manager is running or reachable, so the port has no LID and is never moved to Active."
+        text: "No Subnet Manager is running or reachable, so the port never gets a LID or moves to Active."
         correct: true
         explanation: "LinkUp means the physical link trained. The logical state moves from Initializing to Armed to Active only after an SM configures the port."
       - id: b
-        text: "The cable is faulty; Initializing means the link failed to train."
+        text: "The cable is faulty; Initializing means the link failed to train and is retrying the physical handshake."
         explanation: "A link that failed to train would show physical state Polling or Disabled, not LinkUp."
       - id: c
-        text: "The host is missing an IP address on the ib0 interface."
+        text: "The host is missing an IP address on the ib0 interface, which the port needs before it can go Active."
         explanation: "IPoIB addressing is unrelated to the port's IB logical state."
       - id: d
         text: "The port is running RoCE instead of InfiniBand."
@@ -565,17 +605,17 @@ questions:
     prompt: "How does native InfiniBand avoid dropping packets due to receive buffer overflow on a link?"
     options:
       - id: a
-        text: "Credit-based link-level flow control: a sender transmits only when the receiver has advertised buffer credits for that virtual lane."
+        text: "Credit-based link-level flow control: a sender transmits only when the receiver has advertised buffer credits."
         correct: true
-        explanation: "Credits are granted per VL, so the sender never sends data the receiver cannot store."
+        explanation: "Credits are granted per virtual lane (VL), so the sender never sends data the receiver cannot store."
       - id: b
-        text: "PFC PAUSE frames sent per priority, the same as RoCE."
+        text: "PFC PAUSE frames sent per priority, the same mechanism RoCE fabrics use on lossless Ethernet."
         explanation: "PFC is the Ethernet mechanism; IB has used credits from the start."
       - id: c
-        text: "TCP-style retransmission at the switch for every dropped packet."
+        text: "TCP-style hop-by-hop retransmission: each switch keeps a copy of every packet and resends it if the next hop drops it."
         explanation: "IB switches do not retransmit; the link-level design avoids congestion drops."
       - id: d
-        text: "ECN marking, which tells the sender to stop before buffers fill."
+        text: "ECN marking, which tells the sender to stop transmitting before the receiver's link buffers fill."
         explanation: "IB has its own congestion control for end-to-end rate, but losslessness comes from credits."
     tags: [infiniband, flow-control, credits]
 
@@ -599,6 +639,26 @@ questions:
         text: "Each RDMA WRITE raises an interrupt on the remote CPU to complete it."
         explanation: "RDMA WRITE is handled by the remote NIC without remote CPU involvement."
     tags: [verbs, qp, cq]
+
+  - id: q42
+    domain: rdma
+    type: scenario
+    prompt: "A security review of an RDMA service notes that the server registers a large memory region with remote write access and hands its rkey to every client at connection time. From a threat-modelling point of view, what is the rkey?"
+    options:
+      - id: a
+        text: "A bearer capability: anyone who can send a well-formed packet with a valid QP number, PSN and this rkey gets the region's access."
+        correct: true
+        explanation: "No per-request authentication happens in RDMA: the NIC only checks that the QP, sequence number and rkey are valid for the region. Whoever holds the rkey and can reach the QP with a correctly formed packet gets the access it grants."
+      - id: b
+        text: "A cryptographic key that the NIC uses to authenticate every remote request, so leaking it alone does not expose the region."
+        explanation: "RDMA keys are access tokens, not cryptographic keys, and RoCEv2 packets carry no cryptographic authentication; the ICRC only detects bit errors."
+      - id: c
+        text: "A one-time token that the NIC invalidates after the first remote write, so a captured rkey cannot be replayed later."
+        explanation: "An rkey stays valid while the memory region is registered; nothing in the basic verbs model consumes it on use."
+      - id: d
+        text: "An address filter that the host's kernel firewall checks, so nftables rules can restrict which clients may use it."
+        explanation: "RDMA bypasses the kernel: the NIC terminates RoCE traffic in hardware, so host firewall rules never see it. Reachability has to be enforced on switches or DPUs."
+    tags: [security, rkey, rdma]
 
   # ---------------- roce (4) ----------------
   - id: q30
@@ -631,13 +691,13 @@ questions:
         correct: true
         explanation: "The switch treats priority 3 as lossy, so it drops under congestion instead of pausing. Host and switch PFC/priority maps must match end to end."
       - id: b
-        text: "Normal lossless behavior, because the hosts already enable PFC on priority 3."
+        text: "Normal lossless behavior, because the hosts already enable PFC on priority 3 and pause their own senders."
         explanation: "Losslessness needs each hop's egress to pause upstream; a host setting alone cannot stop switch drops."
       - id: c
-        text: "PFC storms on priority 4 that halt all traffic in the fabric."
+        text: "PFC storms on priority 4, because the switch pauses the class it has configured and halts all traffic in the fabric."
         explanation: "Nothing sends on priority 4, so its pause thresholds are never reached."
       - id: d
-        text: "The NIC automatically remaps RoCE traffic to priority 4 to match the switch."
+        text: "The NIC automatically remaps RoCE traffic to priority 4 after learning the switch's PFC configuration."
         explanation: "NICs do not learn the switch's PFC configuration and remap on their own; DCBX could negotiate settings if configured, but you should not rely on it."
     tags: [pfc, misconfiguration]
 
@@ -651,13 +711,13 @@ questions:
         correct: true
         explanation: "This is the DCQCN loop: switch marking, receiver notification with Congestion Notification Packets, and sender rate reduction followed by gradual recovery."
       - id: b
-        text: "The switch drops the packet; the sender detects the loss and halves its window."
+        text: "The switch drops the packet; the sender detects the loss through a timeout and halves its window."
         explanation: "That is TCP loss-based behavior; DCQCN reacts to ECN marks before drops occur."
       - id: c
-        text: "The switch sends a CNP directly to the sender, which stops transmitting entirely."
+        text: "The switch sends a CNP directly back to the sender, whose NIC then stops transmitting on that QP entirely."
         explanation: "In DCQCN the receiver generates the CNP, and the sender reduces its rate rather than stopping."
       - id: d
-        text: "The switch sends PFC pause to the receiver, which then throttles the application."
+        text: "The switch sends PFC pause frames toward the receiver, whose NIC then throttles the application."
         explanation: "PFC pauses upstream senders hop by hop; it is not part of the ECN signaling loop."
     tags: [ecn, dcqcn, congestion-control]
 
@@ -730,17 +790,17 @@ questions:
     prompt: "A multi-node job is far slower than expected. With NCCL_DEBUG=INFO, the logs show `NET/Socket` being used and no `NET/IB` line. What does this indicate?"
     options:
       - id: a
-        text: "NCCL fell back to TCP sockets, so inter-node traffic is not using RDMA; check the IB/RoCE devices and plugin setup."
+        text: "NCCL fell back to TCP sockets, so inter-node traffic is not using RDMA; check the IB/RoCE devices."
         correct: true
-        explanation: "NET/IB is the verbs transport (also used for RoCE). NET/Socket means NCCL did not find usable RDMA devices or was configured away from them."
+        explanation: "NET/IB is the verbs transport (also used for RoCE). NET/Socket means NCCL did not find usable RDMA devices or was configured away from them; check the devices, drivers and any network plugin setup."
       - id: b
-        text: "NCCL is using GPUDirect RDMA through the socket interface, which is the fastest path."
+        text: "NCCL is using GPUDirect RDMA through the socket interface, which is the fastest inter-node path it has."
         explanation: "GPUDirect RDMA is used via the IB/verbs transport, not via sockets."
       - id: c
-        text: "NCCL is using NVLink between nodes, labelled as Socket in the logs."
+        text: "NCCL is using NVLink between nodes, which NCCL labels as NET/Socket in its INFO-level logs."
         explanation: "NVLink paths are reported separately (P2P/NVLS etc.), not as NET/Socket."
       - id: d
-        text: "This is normal for RoCE fabrics; only InfiniBand shows NET/IB."
+        text: "This is normal for RoCE fabrics; only native InfiniBand ports are reported as NET/IB in the logs."
         explanation: "RoCE also uses NCCL's IB verbs transport and shows NET/IB."
     tags: [nccl, debug]
 
@@ -750,38 +810,38 @@ questions:
     prompt: "Why might NCCL prefer a tree algorithm over a ring for small all-reduce messages at large scale?"
     options:
       - id: a
-        text: "A tree needs on the order of log(n) steps, so latency grows slowly with GPU count, while ring latency grows linearly."
+        text: "A tree needs on the order of log(n) steps, so its latency grows slowly with GPU count; a ring's grows linearly."
         correct: true
         explanation: "For small messages, per-step latency dominates; ring is bandwidth-optimal but takes about 2(n-1) steps."
       - id: b
-        text: "Trees send less total data than rings for all message sizes."
+        text: "Trees send less total data per GPU than rings for every message size, so they are cheaper overall."
         explanation: "Rings are bandwidth-optimal for large messages; trees win mainly on latency."
       - id: c
-        text: "Trees do not need the network, because they run entirely over NVLink."
+        text: "Trees do not need the network, because NCCL runs them entirely over NVLink inside each node."
         explanation: "Inter-node trees use the network like rings do."
       - id: d
-        text: "Rings cannot be used for more than 8 GPUs."
+        text: "Rings cannot be used for more than 8 GPUs, because each ring is limited to one NVLink domain."
         explanation: "Rings span thousands of GPUs; they just accumulate latency."
     tags: [collective-algorithms, tree, ring]
 
-  # ---------------- ops (3) ----------------
+  # ---------------- ops (4) ----------------
   - id: q38
     domain: ops
     type: scenario
     prompt: "One 400G link shows a rising count of FEC-corrected errors and, recently, a nonzero and increasing count of uncorrectable FEC blocks. Jobs crossing it see retransmissions. What is the best next action?"
     options:
       - id: a
-        text: "Treat it as a physical-layer fault: check optics and cable (clean, reseat, swap) and drain the link if errors persist."
+        text: "Treat it as a physical-layer fault: clean, reseat or swap optics and cable; drain the link if errors persist."
         correct: true
         explanation: "Some corrected errors are normal at high speeds; uncorrectable blocks mean frames are lost. Dirty connectors, a bad optic or a damaged cable are the usual causes."
       - id: b
-        text: "Disable FEC so that the errors stop being counted."
-        explanation: "FEC is required at these speeds; disabling it would make the link unusable."
+        text: "Disable FEC on the link so that the corrected and uncorrectable error counters stop increasing."
+        explanation: "FEC is required at these speeds; disabling it would make the link unusable, and the bit errors would still be there."
       - id: c
-        text: "Increase the PFC headroom on that port to absorb the errors."
+        text: "Increase the PFC headroom on that port so the buffers can absorb the errored frames without loss."
         explanation: "Buffers do not fix bit errors; corrupted frames are discarded regardless."
       - id: d
-        text: "Ignore it, since FEC counters always increase on healthy links."
+        text: "Ignore it, since FEC counters always increase on healthy 400G links and uncorrectable blocks are harmless."
         explanation: "Corrected counts can rise on healthy links, but uncorrectable counts indicate real loss."
     tags: [fec, ber, link-layer]
 
@@ -791,17 +851,17 @@ questions:
     prompt: "A 64-node job is 30% slower than last week. Nothing obvious is in the logs. Which approach best follows a structured troubleshooting method?"
     options:
       - id: a
-        text: "Define the symptom, then bisect: run nccl-tests on subsets of nodes to find whether one node, rail or link is the straggler."
+        text: "Define the symptom, then bisect with nccl-tests on node subsets to find whether one node, rail or link is the straggler."
         correct: true
         explanation: "Scoping and bisection narrow a cluster-wide symptom to a component before changing anything."
       - id: b
-        text: "Reboot all switches in the fabric first, then check whether the job is faster."
+        text: "Reboot all switches in the fabric first to clear any stuck state, then check whether the job is faster."
         explanation: "Disruptive changes without evidence can hide the cause and affect other users."
       - id: c
-        text: "Raise every NCCL environment variable to its maximum and rerun."
+        text: "Raise every NCCL environment variable to its maximum value and rerun to see whether the job recovers."
         explanation: "Random tuning changes many variables at once and rarely fixes a regression."
       - id: d
-        text: "Assume the model code changed and close the ticket."
+        text: "Assume the model code changed, since the logs show no fabric errors, and close the ticket."
         explanation: "Assumptions without data skip the verification step of troubleshooting."
     tags: [methodology, stragglers]
 
@@ -811,11 +871,11 @@ questions:
     prompt: "Why do operators run burn-in and fabric validation (for example full-cluster nccl-tests and link error checks) before handing a new cluster to users?"
     options:
       - id: a
-        text: "To find weak links, bad optics, miscabling and slow nodes early, when they are cheap to fix and not yet slowing real jobs."
+        text: "To find weak links, bad optics, miscabling and slow nodes early, while they are cheap to fix."
         correct: true
-        explanation: "Large synchronous jobs are gated by the weakest component, so finding it before production saves a lot of lost GPU time."
+        explanation: "Large synchronous jobs are gated by the weakest component, so finding it before production, before it slows real jobs, saves a lot of lost GPU time."
       - id: b
-        text: "Because switches need several days of traffic before their buffers become lossless."
+        text: "Because switches need several days of sustained traffic before their buffers calibrate and become lossless."
         explanation: "Lossless behavior comes from configuration, not traffic history."
       - id: c
         text: "To let the subnet manager learn MAC addresses before training starts."
@@ -824,3 +884,23 @@ questions:
         text: "Because NCCL needs a training warm-up to download its tuning tables from the vendor."
         explanation: "NCCL tunes itself locally; it does not download tables."
     tags: [validation, burn-in]
+
+  - id: q41
+    domain: ops
+    type: scenario
+    prompt: "A training pod on Kubernetes has an SR-IOV virtual function attached as net1, and ibv_devices inside the pod lists the RDMA device. NCCL still fails during setup because ibv_reg_mr returns 'Cannot allocate memory'. The same container image works on bare metal. What is the most likely cause?"
+    options:
+      - id: a
+        text: "The container lacks the IPC_LOCK capability or has a low memlock limit, so it cannot pin pages for registration."
+        correct: true
+        explanation: "Memory registration pins pages. In a pod that needs the IPC_LOCK capability and an adequate memlock limit from the container runtime; without them registration fails with this error even though the device is present."
+      - id: b
+        text: "The VF has no IP address from IPAM yet, and the NIC refuses to register memory until an address is assigned."
+        explanation: "Registration is a local operation between the process and its RDMA device. Interface addresses matter for GIDs and connection setup, not for ibv_reg_mr."
+      - id: c
+        text: "Topology Manager placed the GPU and the VF on different NUMA nodes, and the driver refuses cross-NUMA registrations."
+        explanation: "Poor GPU-NIC locality costs bandwidth on the GPUDirect path; it does not make memory registration fail with an allocation error."
+      - id: d
+        text: "The pod is in its own network namespace, and RDMA memory registration only works in the host's network namespace."
+        explanation: "Pods using SR-IOV VFs or the shared RDMA device do RDMA from their own network namespaces; that is the whole point of those exposure models."
+    tags: [kubernetes, ipc-lock, memory-registration]

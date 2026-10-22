@@ -61,7 +61,7 @@ function Seg<T extends string | number>({ label, value, options, onChange, rende
   return (
     <div>
       <div className="mb-1 font-mono text-[10px] uppercase tracking-[0.14em] text-muted">{label}</div>
-      <div className="flex flex-wrap gap-1">
+      <div className="flex flex-wrap gap-1" role="group" aria-label={label}>
         {options.map((o) => (
           <button key={String(o)} type="button" onClick={() => onChange(o)} aria-pressed={o === value}
             className={`rounded-md border px-2 py-1 font-mono text-xs transition ${o === value ? 'border-accent bg-accent-soft text-accent' : 'border-line bg-panel hover:bg-panel-2'}`}>
@@ -93,15 +93,15 @@ export default function IbSpeeds() {
 
   const Th = ({ k, children }: { k: SortKey; children: string }) => (
     <th className="py-1 pr-3" aria-sort={sort === k ? (desc ? 'descending' : 'ascending') : 'none'}>
-      <button type="button" onClick={() => { if (sort === k) setDesc(!desc); else { setSort(k); setDesc(false); } }} className="font-mono text-[10px] uppercase tracking-[0.12em] hover:text-fg">
-        {children}{sort === k ? (desc ? ' ▼' : ' ▲') : ''}
+      <button type="button" onClick={() => { if (sort === k) setDesc(!desc); else { setSort(k); setDesc(false); } }} className="min-h-6 font-mono text-[10px] uppercase tracking-[0.12em] hover:text-fg">
+        {children}<span aria-hidden>{sort === k ? (desc ? ' ▼' : ' ▲') : ''}</span>
       </button>
     </th>
   );
 
   return (
     <div className="space-y-4">
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="InfiniBand generations">
         <table className="w-full min-w-[760px] text-left text-sm">
           <thead className="text-muted">
             <tr>
@@ -113,7 +113,7 @@ export default function IbSpeeds() {
           <tbody>
             {rows.map((r) => (
               <tr key={r.name} className={`border-t border-line ${r.name === gen ? 'bg-accent-soft' : ''}`}>
-                <td className="py-1.5 pr-3"><button type="button" aria-pressed={r.name === gen} onClick={() => setGen(r.name)} className="font-mono font-semibold text-accent hover:underline">{r.name}{r.hedge ? '*' : ''}</button></td>
+                <td className="py-1.5 pr-3"><button type="button" aria-pressed={r.name === gen} onClick={() => setGen(r.name)} className="min-h-6 font-mono font-semibold text-accent hover:underline">{r.name}{r.hedge ? '*' : ''}</button></td>
                 <td className="py-1.5 pr-3 font-mono tabular-nums">{r.hedge ? '~' : ''}{r.signal} Gb/s</td>
                 <td className="py-1.5 pr-3 text-xs">{r.encoding}</td>
                 <td className="py-1.5 pr-3 font-mono tabular-nums text-data">{f(r.laneData, 3)}</td>
@@ -140,7 +140,7 @@ export default function IbSpeeds() {
           </div>
         </div>
 
-        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4" aria-live="polite">
           {[['Link data rate', `${f(link, 2)} Gb/s`, 'text-accent'], ['Signalling', `${f(linkSignal(g, width), 3)} Gb/s`, 'text-fg'], [`Adapter total (${ports} port${ports > 1 ? 's' : ''})`, `${f(total, 1)} Gb/s ≈ ${f(total / 8, 1)} GB/s`, 'text-fg'], [`PCIe Gen${pg} x${pl}`, `${f(slot, 1)} Gb/s`, 'text-data']].map(([l, v, t]) => (
             <div key={l} className="rounded-lg border border-line bg-panel-2 px-3 py-2"><div className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted">{l}</div><div className={`font-mono text-base font-semibold tabular-nums ${t}`}>{v}</div></div>
           ))}

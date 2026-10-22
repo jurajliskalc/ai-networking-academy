@@ -85,6 +85,10 @@ prerequisites but must still be self-contained enough to follow.
   ```
   ````
 - ASCII diagrams in a plain fenced block are fine for packet layouts.
+- Diagrams get an accessible name generated from their labels; for a better one add a line
+  `accTitle: <one-line description>` right after the diagram type (`flowchart LR`).
+- Section headings become search results and deep-link anchors (`?s=<slug>`): keep them descriptive and
+  unique within a lesson.
 
 ## Quizzes: `content/modules/<module>/quizzes/quiz-<lesson-id>.yaml`
 
@@ -112,7 +116,10 @@ questions:                      # 6-8 questions
 Rules: `single`/`scenario` have exactly one correct option, `multi` has at least two. Prefer
 scenario questions that test reasoning ("given these counters, what is wrong?") over trivia. At
 least two questions per quiz should be `scenario` type from Level 2 on. Options should be plausible
-and of similar length; avoid "all of the above".
+and of similar length; avoid "all of the above". The validator rejects a single-answer question whose
+correct option is more than 1.25x the length of the longest distractor: give distractors the same
+specificity (a plausible but wrong mechanism) instead of padding the right answer. This also applies
+to exam questions and simulator-lab diagnosis questions.
 
 ## Mock exams: `content/exams/<exam-id>.yaml`
 
@@ -161,8 +168,9 @@ Glossary terms also become flashcards.
 
 ## Hands-on labs: `content/labs/handson/<lab-id>.md`
 
-Real exercises on a Linux host or VM. Files the lab needs (containerlab topologies, scripts) live in
-`labs/<lab-id>/`, and every lab ships a `check.sh` that prints `PASS`/`FAIL` lines.
+Real exercises on the learner's own machines, shown in the app's **Real HW labs** section. Files the lab
+needs (containerlab topologies, scripts) live in `labs/<lab-id>/`, and every lab ships a `check.sh` that
+prints `PASS`/`FAIL`/`WARN`/`SKIP` lines (`aina-hw check <id>` turns them into an importable result).
 
 ```markdown
 ---
@@ -171,7 +179,11 @@ title: Soft-RoCE: your first RDMA connection without RDMA hardware
 kind: handson
 level: 2
 estimated_minutes: 60
-environment: linux-vm          # linux-vm | containerlab
+environment: linux-vm          # linux-vm | containerlab | hardware
+tier: 0                        # 0 virtual, 1 two RDMA hosts, 2 lossless switch, 3 GPU nodes (content/hardware/hardware.yaml)
+fabric: any                    # any | roce | ib
+requires: [linux-vm]           # requirement IDs from hardware.yaml
+summary: "One sentence for the lab card."
 lessons: [rdma-on-linux, perftest-benchmarking]
 files: labs/hol-soft-roce-perftest
 verified: false                # true only after the lab was run end to end on a reference VM
@@ -182,6 +194,22 @@ verified: false                # true only after the lab was run end to end on a
 
 While `verified` is false the app shows a status banner on the lab. Scripts must pass `bash -n` (CI
 enforces it) and should pass ShellCheck.
+
+### Real hardware labs (tier 1-3)
+
+Use `environment: hardware`, declare `changes_config: true|false`, and use these sections in order:
+`## Goal`, `## Before you start`, `## Tasks` (`### Task N: ...`), `## Verify`, `## Restore`,
+`## What you learned` (optional `## Going further`). The compiler enforces all of it.
+
+- Write commands with **`{{NAME}}` placeholders** (SHELL_CASE names from `content/hardware/hardware.yaml`,
+  for example `ib_write_bw -d {{A_RDMA_DEV}} -x {{GID_INDEX}} {{B_IP}}`). The app fills them from the
+  learner's lab profile; unknown names fail validation. New variables need a default in `hardware.yaml`,
+  `labs/hw-toolkit/lib.sh` and `lab.env.example` (a unit test keeps the three in sync).
+- `check.sh` sources `../hw-toolkit/lib.sh`, calls `aina_load_env`, runs on host A and reaches B/C with
+  `on_host`/`start_server`. Read-only unless the lab changes settings; then ship save/restore scripts that
+  keep state under `aina_state_dir <lab>`. Wrap remote servers in `timeout` and use your own 186xx ports.
+- Guides live in `content/hardware/guides/<id>.md` (front matter: `id`, `title`, `order`, `summary`) and
+  may use the same placeholders.
 
 ## Simulator labs
 

@@ -18,15 +18,29 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci --no-audit --no-fund
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
       - name: Validate content
         run: npm run validate
       - name: Unit and simulator-lab tests
         run: npm test
       - name: Type check and build
         run: npm run build
+      - name: Browser interaction tests (Playwright, preinstalled Google Chrome)
+        run: npm run e2e
+      - name: Upload Playwright traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: frontend/test-results/
+          if-no-files-found: ignore
       - name: Lint lab shell scripts
         working-directory: .
         run: |
           shopt -s globstar nullglob
           for f in labs/**/*.sh scripts/*.sh; do bash -n "$f" || exit 1; done
           echo "all lab scripts parse"
+      - name: Real-hardware toolkit tests
+        working-directory: .
+        run: python3 -m unittest discover -s labs/hw-toolkit/tests -v

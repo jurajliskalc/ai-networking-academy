@@ -30,13 +30,13 @@ questions:
         correct: true
         explanation: "The GID index selects the RoCE version. A v1 GID makes the QP send RoCEv1 frames (EtherType 0x8915), which stay inside the L2 domain."
       - id: b
-        text: "The spine switches are dropping UDP 4791 traffic with an ACL."
+        text: "The spine switches are dropping UDP 4791 traffic with an ACL applied during the build."
         explanation: "Possible in general, but the GID index here is clearly the v1 entry, which explains the failure fully."
       - id: c
-        text: "The RDMA MTU is too large for the spine links."
+        text: "The RDMA MTU is larger than the spine links' MTU, so routed QP setup packets are dropped."
         explanation: "An MTU problem typically breaks large transfers, not connection setup, and would not depend on same-leaf versus cross-leaf in this way."
       - id: d
-        text: "PFC is not enabled on the spine links."
+        text: "PFC is not enabled on the spine links, so the cross-leaf handshake packets are lost."
         explanation: "Missing PFC causes drops under congestion, not connection failures on an idle fabric."
     tags: [gid, rocev1]
   - id: q3
@@ -48,13 +48,13 @@ questions:
         correct: true
         explanation: "The invariant CRC deliberately excludes fields that routers legitimately change."
       - id: b
-        text: "The receiver NIC ignores all CRC errors on RoCEv2 packets."
-        explanation: "ICRC errors cause the packet to be dropped. They are not ignored."
+        text: "The receiver NIC skips ICRC verification on RoCEv2, because the Ethernet FCS already covers it."
+        explanation: "The receiver checks the ICRC, and ICRC errors cause the packet to be dropped. They are not ignored."
       - id: c
-        text: "The switch recalculates the ICRC after marking."
+        text: "The switch recalculates the ICRC after marking, in the same pass as the Ethernet FCS update."
         explanation: "Switches do not recompute the ICRC. They only recompute the Ethernet FCS (and the IPv4 header checksum)."
       - id: d
-        text: "ECN bits are carried in the BTH, which the ICRC does not cover."
+        text: "ECN bits are carried in the BTH, which sits after the IP header and outside the ICRC's coverage."
         explanation: "ECN lives in the IP header. The BTH is covered by the ICRC."
     tags: [icrc, ecn]
   - id: q4
@@ -66,13 +66,13 @@ questions:
         correct: true
         explanation: "A 2048-byte RDMA payload plus headers does not fit in 1500, so the NIC picks 1024. Jumbo MTU end to end allows 4096."
       - id: b
-        text: "Increase the RDMA MTU to 9000 with ibv_devinfo."
+        text: "Increase the RDMA MTU to 9000 with ibv_devinfo, since RoCE supports jumbo RDMA MTUs."
         explanation: "RDMA MTU tops out at 4096, and ibv_devinfo only reports, it does not configure."
       - id: c
-        text: "Enable PFC, because the MTU drops when frames are lost."
+        text: "Enable PFC on the RoCE priority, because the NIC lowers its active MTU when frames are lost."
         explanation: "The active MTU does not change in response to loss. It is derived from the interface MTU."
       - id: d
-        text: "Change the GID index to an IPv6 entry to get a larger MTU."
+        text: "Change the GID index to an IPv6 entry, whose larger header budget allows a larger RDMA MTU."
         explanation: "The GID type does not change the RDMA MTU. The netdev MTU is the constraint."
     tags: [mtu]
   - id: q5
@@ -84,13 +84,13 @@ questions:
         correct: true
         explanation: "All packets of a QP share a source port (ordering preserved), and different QPs get different values."
       - id: b
-        text: "The source queue pair number"
+        text: "The source queue pair number, so that the receiver can match replies to the right QP"
         explanation: "The BTH carries only the destination QP. The source port value is an entropy hash, not the QP number."
       - id: c
-        text: "A random value per packet to spray packets across all paths"
+        text: "A random value per packet, so that packets are sprayed evenly across all equal-cost paths"
         explanation: "Per-packet randomisation would reorder packets of a QP. Classic RoCE keeps the source port per flow."
       - id: d
-        text: "The PFC priority of the packet"
+        text: "The PFC priority of the packet, encoded in the low bits so that switches can classify it"
         explanation: "Priority comes from DSCP or PCP, not from UDP ports."
     tags: [ecmp, entropy]
   - id: q6
@@ -117,16 +117,16 @@ questions:
     prompt: "An engineer runs tcpdump on a host's RoCE interface during an ib_write_bw test at 380 Gb/s and sees no RoCE packets at all. What is the correct interpretation?"
     options:
       - id: a
-        text: "Expected: RDMA bypasses the kernel stack. Use switch mirroring, vendor RDMA sniffing support or counters instead."
+        text: "Expected: RDMA bypasses the kernel stack. Use switch mirroring, vendor RDMA sniffer support or counters."
         correct: true
         explanation: "The NIC moves RDMA data directly to memory, so the kernel capture point never sees it."
       - id: b
-        text: "The test is actually running over TCP, because tcpdump would otherwise show UDP 4791."
+        text: "The test is actually running over TCP, because real RoCE traffic would show up in tcpdump as UDP port 4791."
         explanation: "perftest ib_write_bw uses RDMA verbs. The absence in tcpdump is due to kernel bypass."
       - id: c
-        text: "The traffic is RoCEv1, which tcpdump cannot decode."
-        explanation: "tcpdump would still capture RoCEv1 frames if the kernel saw them. The issue is bypass, not decoding."
+        text: "The traffic is RoCEv1, which has no IP header and is therefore filtered out by tcpdump."
+        explanation: "tcpdump would still capture RoCEv1 frames if the kernel saw them. The issue is kernel bypass, not filtering or decoding."
       - id: d
-        text: "The NIC is dropping all packets and the throughput figure is wrong."
+        text: "The NIC is dropping all packets, so the reported 380 Gb/s figure is a perftest measurement error."
         explanation: "perftest bandwidth is measured from completed transfers. 380 Gb/s means data is flowing."
     tags: [troubleshooting]

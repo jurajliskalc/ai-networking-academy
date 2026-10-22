@@ -37,7 +37,7 @@ questions:
         text: PCIe lanes are hashed per flow, so only half the flows are slow, which is normal.
         explanation: PCIe stripes every packet across all trained lanes; there is no per-flow hashing.
       - id: d
-        text: The NIC is on the wrong NUMA node, which lspci reports as a width downgrade.
+        text: The NIC is on the wrong NUMA node, which lspci reports as a width downgrade on the remote socket.
         explanation: NUMA placement is not reported as link width; LnkSta reflects the physical link negotiation.
     tags: [pcie, troubleshooting]
   - id: q3
@@ -86,13 +86,13 @@ questions:
         correct: true
         explanation: Good for isolation between VMs, but on bare-metal training nodes it lengthens the GPU-NIC path and is commonly disabled per NCCL guidance.
       - id: b
-        text: It encrypts P2P traffic between GPUs and NICs.
+        text: It encrypts P2P traffic between GPUs and NICs so that other tenants cannot read it.
         explanation: ACS is about routing and access checks, not encryption.
       - id: c
-        text: It increases the PCIe link speed for P2P transfers.
+        text: It raises the PCIe link speed for P2P transfers that stay below one switch.
         explanation: Link speed is negotiated by link training; ACS does not change it.
       - id: d
-        text: It enables NVLink between GPUs on different switches.
+        text: It enables NVLink between GPUs that sit under different PCIe switches.
         explanation: NVLink is a separate interconnect, unrelated to PCIe ACS.
     tags: [pcie, acs]
   - id: q6
@@ -104,13 +104,13 @@ questions:
         correct: true
         explanation: Host-memory benchmarks need buffers and threads local to the NIC; otherwise DMA crosses the socket link and results vary run to run.
       - id: b
-        text: Increase the switch buffer size on the ToR.
+        text: Increase the shared buffer allocated to the lossless queue on the ToR switch port facing the node.
         explanation: A two-node test with no congestion is not limited by switch buffers.
       - id: c
-        text: Lower the MTU to reduce packet size.
+        text: Lower the RDMA MTU to 1024 so that smaller packets complete their DMA more evenly across runs.
         explanation: Smaller MTU increases overhead and does not address cross-socket DMA.
       - id: d
-        text: Disable the second CPU socket in BIOS.
+        text: Disable the second CPU socket in BIOS so that every DMA is forced to stay on one node.
         explanation: Drastic and unnecessary; correct binding solves placement without losing half the machine.
     tags: [numa, benchmarking]
   - id: q7
@@ -118,13 +118,13 @@ questions:
     prompt: Why do NIC speed generations tend to arrive together with PCIe generations (200G with Gen4, 400G with Gen5, 800G with Gen6)?
     options:
       - id: a
-        text: Because a NIC cannot move more data than its host PCIe link can carry, so each doubling of Ethernet or InfiniBand rate needs a doubling of PCIe bandwidth.
+        text: A NIC cannot move more data than its host PCIe link carries, so each doubling of network line rate needs double the PCIe bandwidth.
         correct: true
-        explanation: The x16 PCIe link is the NIC's pipe into the server; it must match or exceed line rate.
+        explanation: The x16 PCIe link is the NIC's pipe into the server; it must match or exceed line rate, for Ethernet and InfiniBand alike.
       - id: b
-        text: Because PCI-SIG and IEEE publish their standards on the same day.
+        text: PCI-SIG and IEEE coordinate their roadmaps and publish matching standards together, so vendors ship both at once.
         explanation: The standards bodies are independent; the coupling is a bandwidth requirement, not a calendar.
       - id: c
-        text: Because PCIe and Ethernet share the same SerDes encoding.
+        text: PCIe and Ethernet use the same line encoding and FEC, so a NIC can only run at rates that match its PCIe encoding.
         explanation: They use different encodings and FEC schemes; similar SerDes technology helps but is not the reason.
     tags: [pcie, nic]

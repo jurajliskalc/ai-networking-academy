@@ -134,16 +134,16 @@ export default function IbAddressing() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-1">
+      <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Subnet manager sweep steps">
         {STEPS.map((s, i) => (
-          <button key={s} type="button" aria-pressed={i === step} onClick={() => setStep(i)}
+          <button key={s} type="button" aria-current={i === step ? 'step' : undefined} onClick={() => setStep(i)}
             className={`rounded-md border px-2 py-1 font-mono text-xs ${i === step ? 'border-accent bg-accent-soft text-accent' : i < step ? 'border-line bg-panel-2' : 'border-line bg-panel hover:bg-panel-2'}`}>{i}. {s}</button>
         ))}
-        <button type="button" onClick={() => setStep(Math.min(5, step + 1))} disabled={step === 5} className="rounded-md border border-line bg-panel px-3 py-1 text-xs hover:bg-panel-2 disabled:opacity-40">Next ▶</button>
+        <button type="button" onClick={() => setStep(Math.min(5, step + 1))} disabled={step === 5} className="rounded-md border border-line bg-panel px-3 py-1 text-xs hover:bg-panel-2 disabled:opacity-40">Next<span aria-hidden> ▶</span></button>
       </div>
 
       <div className="rounded-lg border border-line bg-panel p-2">
-        <svg viewBox="0 0 640 225" className="w-full" role="img" aria-label="InfiniBand subnet with two switches and four HCAs">
+        <svg viewBox="0 0 640 225" className="w-full" role="img" aria-label={`InfiniBand subnet with two switches and four HCAs, step ${step}: ${STEPS[step]}. ${lidsOn ? `LIDs assigned: ${NODES.map((n) => `${n.name} ${hex(n.lid, 4)}`).join(', ')}.` : 'No LIDs assigned yet.'} HCA ports ${portState}.${islDown ? ' Link SW1 p4 to SW2 p4 failed.' : ''}`}>
           {LINKS.map((l) => {
             const down = islDown && l.id === 'isl4';
             const [x1, y1] = POS[l.a], [x2, y2] = POS[l.b];
@@ -177,17 +177,17 @@ export default function IbAddressing() {
         </svg>
       </div>
 
-      <div className="rounded-lg border border-line bg-panel-2 p-3 text-sm">
+      <div className="rounded-lg border border-line bg-panel-2 p-3 text-sm" aria-live="polite">
         {step === 0 && <p>All cables have trained: physical state <b>LinkUp</b>, logical state <b>Init</b>. No port has a LID (0x0000) and no switch has a forwarding table, so no data can flow yet. Only the SM on hostA can talk, using directed-route SMPs on QP0 / VL15.</p>}
         {step === 1 && (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Directed-route discovery">
             <p className="mb-2">The SM walks the fabric with <b>directed-route</b> SMPs: the path is a list of output ports, hop by hop, so it works before any LID exists. Each reply carries the node GUID, so a node reached twice is recognised.</p>
             <table className="w-full min-w-[440px] text-left text-xs"><thead className="font-mono text-[10px] uppercase text-muted"><tr><th className="pr-2">DR path (out ports)</th><th className="pr-2">Reached</th><th className="pr-2">Node GUID</th><th>Learned</th></tr></thead>
               <tbody>{DISCOVERY.map(([p, n, w]) => <tr key={p} className="border-t border-line"><td className="py-1 pr-2 font-mono">{p}</td><td className="pr-2 font-mono">{node(n).name}</td><td className="pr-2 font-mono">{guidStr(node(n).guid)}</td><td className="text-muted">{w}</td></tr>)}</tbody></table>
           </div>
         )}
         {step === 2 && (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Assigned LIDs and GIDs">
             <p className="mb-2">The SM assigns unicast LIDs from <b>0x0001-0xBFFF</b> (LMC 0: one per port). HCAs get a LID per port; a switch gets one LID, on its management port 0. GUIDs never change; LIDs are the SM's choice (here in discovery order; OpenSM keeps a GUID-to-LID cache to keep them stable).</p>
             <table className="w-full min-w-[520px] text-left text-xs"><thead className="font-mono text-[10px] uppercase text-muted"><tr><th className="pr-2">Node</th><th className="pr-2">Port GUID (OUI · vendor part)</th><th className="pr-2">LID</th><th>Default GID (port 1 / switch port 0)</th></tr></thead>
               <tbody>{NODES.map((n) => { const g = guidStr(n.guid); return <tr key={n.id} className="border-t border-line"><td className="py-1 pr-2 font-mono">{n.name}</td><td className="pr-2 font-mono"><span className="text-data">{g.slice(0, 8)}</span>{g.slice(8)}</td><td className="pr-2 font-mono text-accent">{hex(n.lid, 4)}</td><td className="font-mono text-muted">{defaultGid(n.guid)}</td></tr>; })}</tbody></table>
@@ -196,7 +196,7 @@ export default function IbAddressing() {
         {(step === 3 || step === 4) && (
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-3">
-              <div className="flex gap-1">{(['minhop', 'updn'] as const).map((e) => <button key={e} type="button" aria-pressed={engine === e} onClick={() => setEngine(e)}
+              <div className="flex gap-1" role="group" aria-label="Routing engine">{(['minhop', 'updn'] as const).map((e) => <button key={e} type="button" aria-pressed={engine === e} onClick={() => setEngine(e)}
                 className={`rounded-md border px-2 py-1 font-mono text-xs ${engine === e ? 'border-accent bg-accent-soft text-accent' : 'border-line bg-panel hover:bg-panel-2'}`}>{e}</button>)}</div>
               <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={islDown} onChange={(e) => setIslDown(e.target.checked)} className="accent-[var(--accent)]" />Fail SW1 p4 ↔ SW2 p4 (heavy sweep, recompute)</label>
             </div>
@@ -204,7 +204,7 @@ export default function IbAddressing() {
               {engine === 'updn' ? `Up/Down: root SW1 (rank 0), SW2 rank 1; paths may go up then down, never down then up. ${forbidden} candidate port(s) removed: with two switches and hosts only at the edge, no shortest path goes down then up, so the tables equal minhop's. On meshes or rings that restriction is what prevents credit loops.` : 'minhop: shortest paths with per-port balancing; it does not guarantee deadlock freedom on topologies with cycles.'}</p>
             <div className="grid gap-2 sm:grid-cols-2">
               {['SW1', 'SW2'].map((s) => (
-                <div key={s} className="overflow-x-auto"><div className="font-mono text-xs font-semibold">{s} LFT {step === 4 ? <span className="text-accent">(programmed)</span> : <span className="text-muted">(computed)</span>}</div>
+                <div key={s} className="overflow-x-auto" tabIndex={0} role="region" aria-label={`${s} linear forwarding table`}><div className="font-mono text-xs font-semibold">{s} LFT {step === 4 ? <span className="text-accent">(programmed)</span> : <span className="text-muted">(computed)</span>}</div>
                   <table className="w-full text-left text-xs"><thead className="font-mono text-[10px] uppercase text-muted"><tr><th className="pr-2">DLID</th><th className="pr-2">→ out port</th><th>leads to</th></tr></thead>
                     <tbody>{Object.entries(lft[s]).map(([d, p]) => { const n = NODES.find((x) => x.lid === Number(d))!; const nx = p === 0 ? 'this switch (port 0)' : node(peer(s, p, (l) => !(islDown && l.id === 'isl4'))!.node).name; return <tr key={d} className="border-t border-line"><td className="py-0.5 pr-2 font-mono">{hex(Number(d), 4)} <span className="text-muted">{n.name}</span></td><td className="pr-2 font-mono text-data">{p}</td><td className="text-muted">{nx}</td></tr>; })}</tbody></table>
                 </div>
@@ -220,7 +220,7 @@ export default function IbAddressing() {
         <div className="flex flex-wrap gap-4">
           {[['Source', src, setSrc], ['Destination', dst, setDst]].map(([label, v, set]) => (
             <div key={label as string}><div className="mb-1 font-mono text-[10px] uppercase tracking-[0.14em] text-muted">{label as string}</div>
-              <div className="flex gap-1">{cas.map((c) => <button key={c.id} type="button" aria-pressed={v === c.id} onClick={() => (set as (x: string) => void)(c.id)}
+              <div className="flex gap-1" role="group" aria-label={label as string}>{cas.map((c) => <button key={c.id} type="button" aria-pressed={v === c.id} onClick={() => (set as (x: string) => void)(c.id)}
                 className={`rounded-md border px-2 py-1 font-mono text-xs ${v === c.id ? 'border-accent bg-accent-soft text-accent' : 'border-line bg-panel hover:bg-panel-2'}`}>{c.id}</button>)}</div></div>
           ))}
         </div>
@@ -242,12 +242,12 @@ export default function IbAddressing() {
         <div className="flex flex-wrap gap-4">
           {cas.map((c) => (
             <div key={c.id}><div className="mb-1 font-mono text-[10px] uppercase tracking-[0.14em] text-muted">{c.name} · {mem[c.id] === 'none' ? 'no entry' : hex(pkeyValue(0x0001, mem[c.id]), 4)}</div>
-              <div className="flex gap-1">{(['none', 'limited', 'full'] as const).map((m) => <button key={m} type="button" aria-pressed={mem[c.id] === m} onClick={() => setMem({ ...mem, [c.id]: m })}
-                className={`rounded-md border px-2 py-0.5 font-mono text-xs ${mem[c.id] === m ? 'border-accent bg-accent-soft text-accent' : 'border-line bg-panel hover:bg-panel-2'}`}>{m}</button>)}</div></div>
+              <div className="flex gap-1" role="group" aria-label={`${c.name} membership`}>{(['none', 'limited', 'full'] as const).map((m) => <button key={m} type="button" aria-pressed={mem[c.id] === m} onClick={() => setMem({ ...mem, [c.id]: m })}
+                className={`min-h-6 rounded-md border px-2 py-0.5 font-mono text-xs ${mem[c.id] === m ? 'border-accent bg-accent-soft text-accent' : 'border-line bg-panel hover:bg-panel-2'}`}>{m}</button>)}</div></div>
           ))}
         </div>
-        <div className="mt-2 overflow-x-auto">
-          <table className="text-xs"><thead><tr><th className="p-1" />{cas.map((c) => <th key={c.id} className="p-1 font-mono font-normal text-muted">{c.id}</th>)}</tr></thead>
+        <div className="mt-2 overflow-x-auto" tabIndex={0} role="region" aria-label="Which hosts can talk in partition 0x0001" aria-live="polite">
+          <table className="text-xs"><thead><tr><th className="p-1"><span className="sr-only">From \ to</span></th>{cas.map((c) => <th key={c.id} className="p-1 font-mono font-normal text-muted">{c.id}</th>)}</tr></thead>
             <tbody>{cas.map((a) => <tr key={a.id}><td className="p-1 font-mono text-muted">{a.id}</td>{cas.map((b) => {
               const ok = a.id === b.id ? null : canTalk(mem[a.id], mem[b.id]);
               return <td key={b.id} className={`p-1 text-center font-mono ${ok === null ? 'text-muted' : ok ? 'text-accent' : 'text-danger'}`}>{ok === null ? '·' : ok ? 'yes' : 'no'}</td>;

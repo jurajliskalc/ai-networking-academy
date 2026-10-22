@@ -150,7 +150,7 @@ Every change goes through a pull request. The CI pipeline runs before a human re
    - Each host NIC connects to a leaf of its own rail.
    - ECMP hash fields and seeds as designed.
 4. **Model-based analysis** (optional but powerful): tools such as Batfish parse configurations for supported NOSes and answer questions like "are all BGP sessions compatible?" or "is this prefix reachable from every leaf?" before deployment. Check Batfish's supported-vendor list for your NOS.
-5. **Lab or digital twin**: apply to a virtual or physical staging fabric (for example NVIDIA Air for Cumulus Linux, or containerlab for supported NOSes) and run smoke tests.
+5. **Lab or digital twin**: apply to a virtual or physical staging fabric (for example NVIDIA Air, which NVIDIA's certification pages call NVIDIA DSX Air as of 2026, for Cumulus Linux, or containerlab for supported NOSes) and run smoke tests.
 
 ### Safe rollout on day 2
 

@@ -23,18 +23,18 @@ diagnosis:
   prompt: Which statement is correct?
   options:
     - id: a
-      text: "Two independent faults cause the slowdown: a bad optic on leaf02 swp4 (node04, rail 1) and PFC disabled on node02 mlx5_6. The spine02-leaf03 link is down but does not carry rail-local collective traffic."
+      text: "Two faults cause the slowdown: a bad optic on leaf02 swp4 (node04, rail 1) and PFC disabled on node02 mlx5_6. The down spine02 link does not carry rail-local traffic."
       correct: true
-      explanation: In a rail-optimized fabric NCCL keeps traffic on the same rail, one leaf hop away, so a single spine uplink barely matters for this job. The rail with drops (no PFC) paces the job, and after that is fixed the high-BER rail would still pace it.
+      explanation: In a rail-optimized fabric NCCL keeps traffic on the same rail, one leaf hop away, so a single spine uplink (spine02 swp3 to leaf03) barely matters for this job. The rail with drops (no PFC) paces the job, and after that is fixed the high-BER rail would still pace it.
     - id: b
-      text: The failure of the spine02 swp3 link halves the bisection bandwidth of rail 2, which explains the slowdown.
-      explanation: Rail-local traffic never crosses the spines here. The alarm is real but it is not the cause.
+      text: The spine02 swp3 link to leaf03 is down, which halves rail 2's uplink capacity and paces every ring; the other counters are background noise.
+      explanation: Rail-local traffic never crosses the spines here. The alarm is real but it is not the cause, and the drops on node02 mlx5_6 and the errors on leaf02 swp4 are not noise.
     - id: c
-      text: Only the PFC issue matters; the leaf02 swp4 errors are within normal range.
+      text: Only node02 mlx5_6 matters. Its missing PFC causes drops, while the leaf02 swp4 errors are corrected by FEC and within normal range.
       explanation: A raw BER of 3E-04 (beyond RS-FEC's correction limit) with post-FEC errors and flaps is far outside the normal range, and that rail would still cap the job after the PFC fix.
     - id: d
-      text: The NCCL configuration drifted on node02.
-      explanation: /etc/nccl.conf is identical on all nodes.
+      text: The leaf02 swp4 optic is the only fault, and the drops seen on node02 mlx5_6 are retransmissions caused by its corrupted packets.
+      explanation: node02 mlx5_6 is on rail 6 (leaf07), not rail 1, so it never carries that link's traffic. mlnx_qos -i enp204s0np0 shows PFC disabled on every priority, and leaf07 swp2 shows its own TX drops.
 checks:
   - { description: "leaf02 swp4 link is clean", check: link_clean, args: { switch: leaf02, port: swp4 } }
   - { description: "node02 mlx5_6 enables PFC on priority 3 only", check: host_pfc_only, args: { node: node02, rail: 6, prio: 3 } }

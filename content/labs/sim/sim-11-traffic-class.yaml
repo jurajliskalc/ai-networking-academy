@@ -19,18 +19,18 @@ diagnosis:
   prompt: What is the root cause?
   options:
     - id: a
-      text: The new image's /etc/nccl.conf lacks NCCL_IB_TC=106, so RoCE traffic leaves with DSCP 0, lands in the lossy default priority on every switch, and is dropped under load.
+      text: The new image's /etc/nccl.conf lacks NCCL_IB_TC=106, so RoCE leaves with DSCP 0 and lands in the lossy default priority.
       correct: true
-      explanation: The switches and NICs map DSCP 26 to the lossless priority 3, and traffic class 106 is DSCP 26 shifted left by two bits with the ECT bit set. Without it, RoCE uses priority 0, which has no PFC, so congestion causes drops instead of pauses.
+      explanation: The switches and NICs map DSCP 26 to the lossless priority 3, and traffic class 106 is DSCP 26 shifted left by two bits with the ECT bit set. Without it, RoCE uses priority 0 on every switch, which has no PFC, so congestion causes drops instead of pauses.
     - id: b
-      text: PFC is disabled on priority 0.
-      explanation: PFC should not be enabled on the default class; the fix is to put RoCE into the lossless class.
+      text: Image v42 left PFC disabled on priority 0, the class RoCE uses, so the NICs and leaves drop it under load.
+      explanation: RoCE is meant to use priority 3 (DSCP 26) here, not priority 0, and PFC should not be enabled on the default class. The fix is to put RoCE back into the lossless class.
     - id: c
-      text: The NICs trust PCP instead of DSCP.
-      explanation: mlnx_qos shows trust dscp on every NIC.
+      text: Image v42 switched the NICs to trust PCP, so untagged RoCE is classified to priority 0 and misses PFC.
+      explanation: mlnx_qos shows trust dscp on every NIC, as the ticket says. The setting that changed with the image is in /etc/nccl.conf.
     - id: d
-      text: The new image ships a different NCCL version that defaults to the tree algorithm.
-      explanation: The counters show the traffic moved to priority 0; the algorithm has nothing to do with that.
+      text: Image v42 ships a newer NCCL whose default algorithm leaves two thirds of the rail bandwidth unused.
+      explanation: The counters show the traffic moved to priority 0 and the leaves drop packets; the algorithm has nothing to do with that.
 checks:
   - { description: "Every node sets NCCL_IB_TC=106", check: nccl_conf, args: { node: all, key: NCCL_IB_TC, value: "106" } }
   - { description: "all_reduce bus bandwidth is above 360 GB/s", check: allreduce_min_busbw, args: { value: 360 } }

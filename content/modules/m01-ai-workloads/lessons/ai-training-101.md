@@ -152,7 +152,7 @@ Checkpoints matter to network engineers because they create big, bursty traffic 
 
 ## In practice
 
-You can see the shape of a training job from the host without any special tools. On a GPU node during a data-parallel job, `nvidia-smi dmon` prints per-GPU metrics once a second, including streaming multiprocessor (SM) utilisation and, on supported GPUs, PCIe throughput:
+You can see the shape of a training job from the host without any special tools. On a GPU node during a data-parallel job, `nvidia-smi dmon` prints per-GPU metrics once a second, including streaming multiprocessor (SM) utilisation (`-s u`, shown below) and, with `-s t` on supported GPUs, PCIe throughput:
 
 ```
 $ nvidia-smi dmon -s u

@@ -23,4 +23,11 @@ for dev in a-br b-br r-br br-hol1; do
   fi
 done
 
+if command -v iptables >/dev/null 2>&1; then
+  while iptables -C FORWARD -i br-hol1 -o br-hol1 -j ACCEPT 2>/dev/null; do
+    echo "+ iptables -D FORWARD -i br-hol1 -o br-hol1 -j ACCEPT"
+    iptables -D FORWARD -i br-hol1 -o br-hol1 -j ACCEPT
+  done
+fi
+
 echo "Cleanup complete."

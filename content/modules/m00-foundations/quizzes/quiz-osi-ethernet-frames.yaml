@@ -87,13 +87,13 @@ questions:
         correct: true
         explanation: RDMA kernel bypass means host captures usually miss the data path unless the NIC offers a sniffer feature or the switch mirrors the port.
       - id: b
-        text: The switch counters are wrong; if tcpdump sees nothing, nothing is being sent.
+        text: The switch counters are wrong, since they count frames queued for the port rather than frames actually sent.
         explanation: Switch port counters are a reliable view of transmitted frames; the capture tool is the blind one here.
       - id: c
-        text: tcpdump cannot capture frames larger than 1518 bytes.
+        text: tcpdump cannot capture frames larger than 1518 bytes, so the 4096-byte RDMA payloads are silently skipped.
         explanation: tcpdump captures jumbo frames fine (the snap length is configurable); size is not the issue.
       - id: d
-        text: The traffic is encrypted, so tcpdump discards it.
+        text: The traffic is encrypted by the NIC, and tcpdump discards every packet whose payload it cannot decode.
         explanation: tcpdump captures encrypted traffic too; it just cannot read the payload.
     tags: [rdma, troubleshooting]
   - id: q6
@@ -101,17 +101,17 @@ questions:
     prompt: Which statement correctly describes how RoCEv2 relates to InfiniBand?
     options:
       - id: a
-        text: RoCEv2 reuses the InfiniBand transport (BTH and above) and carries it in UDP/IP over Ethernet, with UDP destination port 4791.
+        text: RoCEv2 carries the InfiniBand transport (BTH and above) in UDP/IP over Ethernet, using UDP destination port 4791.
         correct: true
         explanation: That is exactly the RoCEv2 encapsulation, which makes it routable across IP fabrics.
       - id: b
         text: RoCEv2 is InfiniBand with Ethernet MAC addresses instead of LIDs, still using the InfiniBand link layer.
         explanation: RoCEv2 uses the Ethernet link layer, not the IB link layer (LRH, VCRC).
       - id: c
-        text: RoCEv2 runs directly over Ethernet with EtherType 0x8915 and cannot be routed.
+        text: RoCEv2 runs directly over Ethernet with EtherType 0x8915, so it stays inside one L2 domain and cannot be routed.
         explanation: That describes RoCEv1. RoCEv2 moved into UDP/IP precisely to become routable.
       - id: d
-        text: RoCEv2 is a TCP-based protocol that emulates InfiniBand verbs in software.
+        text: RoCEv2 is a TCP-based protocol in which the host kernel emulates InfiniBand verbs in software over ordinary sockets.
         explanation: RoCEv2 uses UDP, and the transport is implemented in NIC hardware, not emulated over TCP.
     tags: [rocev2, infiniband]
   - id: q7
@@ -121,16 +121,16 @@ questions:
       it crosses a routed spine it lands in the default queue on the far leaf. Which explanation fits best?
     options:
       - id: a
-        text: The PCP field lives in the Ethernet header, which is rebuilt at each routed hop, so the marking is lost; the fabric should classify on DSCP instead.
+        text: PCP lives in the Ethernet header, which is rebuilt at every routed hop, so the marking is lost; classify on DSCP instead.
         correct: true
         explanation: Routed hops do not preserve L2 tags. IP-header DSCP survives routing, which is why routed RoCE fabrics trust DSCP.
       - id: b
-        text: The spine's FCS check modified the priority bits.
-        explanation: The FCS is a checksum; checking it never changes header fields.
+        text: The spine's FCS check recomputed the frame checksum and cleared the priority bits as a side effect.
+        explanation: The FCS is a checksum; checking or recomputing it never changes header fields.
       - id: c
-        text: PCP values above 2 are reserved and are reset by all switches.
-        explanation: All eight PCP values are valid; nothing about value 3 is special in the standard.
+        text: PCP values above 2 are reserved for network control traffic, so every standards-compliant switch resets them to 0.
+        explanation: All eight PCP values are valid for user traffic; nothing about value 3 is special in the standard.
       - id: d
-        text: The UDP destination port 4791 overrides any priority marking.
+        text: The UDP destination port 4791 overrides any marking, so every spine places RoCEv2 into the default queue.
         explanation: Port 4791 identifies RoCEv2 but has no built-in effect on queue selection.
     tags: [qos, vlan, routing]

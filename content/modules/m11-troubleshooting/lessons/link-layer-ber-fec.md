@@ -31,11 +31,11 @@ A modern AI fabric has tens of thousands of 400G and 800G links running PAM4 sig
 50-100+ Gb/s per lane, through pluggable optics, fibre patch panels and connectors that someone
 cleaned (or did not) on a loading dock. At these speeds every link has a non-zero raw bit error rate
 by design; forward error correction (FEC) is what makes them usable. That changes how you troubleshoot
-the physical layer. "Any error is bad" no longer works: a perfectly healthy link corrects millions of
-bit errors per second. What matters is the **margin**: how close the raw error rate is to what FEC can
+the physical layer. "Any error is bad" no longer works: a perfectly healthy link can correct thousands to hundreds of
+thousands of bit errors per second. What matters is the **margin**: how close the raw error rate is to what FEC can
 correct, and whether any errors escape FEC.
 
-Link-layer faults are the most common hardware root cause of degraded AI jobs. A marginal link rarely
+Link-layer faults are among the most common hardware root causes of degraded AI jobs. A marginal link rarely
 goes down cleanly. It corrupts a few packets per minute (each costing an RDMA retransmission or, on
 InfiniBand generations that support it, a link-level retransmission), flaps for a second at 3 a.m., or retrains at a lower speed. The
 training job sees a straggler or an NCCL timeout and nobody suspects a dusty connector. This lesson
@@ -100,8 +100,8 @@ ber-fec
 > FEC is like the error-correcting memory (ECC) in a server: a few corrected errors per day are
 > normal and invisible, but a DIMM whose corrected-error rate climbs is about to fail, and you replace
 > it before it throws an uncorrectable error. Where it breaks down: memory ECC corrects per word with
-> tiny overhead and errors are rare; link FEC on PAM4 corrects errors **continuously**, millions per
-> second, so "corrected errors present" is never by itself a fault. You alert on the rate and trend.
+> tiny overhead and errors are rare; link FEC on PAM4 corrects errors **continuously**, thousands or
+> more per second, so "corrected errors present" is never by itself a fault. You alert on the rate and trend.
 
 ### Link flaps and retraining
 
@@ -310,6 +310,9 @@ After any repair, clear (or snapshot) the counters, run traffic at line rate for
 (for example `ib_write_bw` bidirectional or an all-pairs test) and check against acceptance criteria:
 zero effective errors, raw BER under the vendor threshold with no lane far out of family, no flaps,
 correct speed and width.
+
+The hardware lab [Link health: optics, FEC and physical-layer error counters under load](#/hw/labs/hw-05-link-health-optics)
+walks through these readings and a soak on your own RDMA hosts.
 
 ### Decision table
 

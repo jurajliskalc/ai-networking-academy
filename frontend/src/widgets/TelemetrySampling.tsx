@@ -156,7 +156,8 @@ function Plot({ bursts, v0, span, dt, stat }: { bursts: Burst[]; v0: number; spa
   }
   const dots = R.length <= 60 ? Array.from(R, (v, i) => ({ x: xOf((k0 + i + 1) * dt), y: yOf(v) })).filter((d) => d.x >= X0 && d.x <= X1) : [];
   return (
-    <svg viewBox="0 0 760 210" className="w-full" role="img" aria-label="True queue occupancy versus what the collector sees">
+    <svg viewBox="0 0 760 210" className="w-full" role="img"
+      aria-label={`True queue occupancy over a ${fmtUs(span)} window versus what the collector sees reading ${STATS.find((s) => s.id === stat)!.label} every ${fmtUs(dt)}. The figures below summarise how many bursts that view detects.`}>
       {[0, 25, 50, 75, 100].map((v) => (
         <g key={v}>
           <line x1={X0} x2={X1} y1={yOf(v)} y2={yOf(v)} stroke="var(--border)" strokeWidth={0.6} />
@@ -181,7 +182,7 @@ function Seg<T extends string | number>({ label, value, options, onChange, rende
   return (
     <div>
       <div className="mb-1 font-mono text-[10px] uppercase tracking-[0.14em] text-muted">{label}</div>
-      <div className="flex flex-wrap gap-1">
+      <div className="flex flex-wrap gap-1" role="group" aria-label={label}>
         {options.map((o) => (
           <button key={String(o)} type="button" onClick={() => onChange(o)} aria-pressed={o === value}
             className={`rounded-md border px-2 py-1 font-mono text-xs transition ${o === value ? 'border-accent bg-accent-soft text-accent' : 'border-line bg-panel hover:bg-panel-2'}`}>
@@ -215,15 +216,15 @@ export default function TelemetrySampling() {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <Pill><span className="inline-block h-0.5 w-4 bg-muted" /> true occupancy (1 µs resolution, max per pixel)</Pill>
-        <Pill><span className="inline-block h-0.5 w-4 bg-data" /> collector view{stat === 'counter' ? ' (% of interval above threshold)' : ''}</Pill>
+        <Pill><span className="inline-block h-0.5 w-4 bg-muted" aria-hidden /> true occupancy (1 µs resolution, max per pixel)</Pill>
+        <Pill><span className="inline-block h-0.5 w-4 bg-data" aria-hidden /> collector view{stat === 'counter' ? ' (% of interval above threshold)' : ''}</Pill>
         <Pill>{bursts.length.toLocaleString('en-US')} bursts in 10 min</Pill>
         <button type="button" onClick={() => setSeed((s) => s + 1)} className="rounded-md border border-line bg-panel px-2 py-0.5 text-xs hover:bg-panel-2">New trace (seed {seed})</button>
       </div>
 
       <div className="rounded-lg border border-line bg-panel p-2"><Plot bursts={bursts} v0={v0} span={zoom} dt={dt} stat={stat} /></div>
 
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" aria-live="polite">
         {[
           { l: 'Bursts detected', v: `${pct(cur).toFixed(pct(cur) < 1 && pct(cur) > 0 ? 2 : 1)} %`, t: pct(cur) > 90 ? 'text-accent' : pct(cur) > 10 ? 'text-warn' : 'text-danger', sub: `${cur.detected.toLocaleString('en-US')} of ${cur.total.toLocaleString('en-US')}` },
           { l: 'Peak seen / true peak', v: stat === 'counter' ? 'n/a' : `${cur.peakSeen.toFixed(1)} / ${cur.truePeak.toFixed(1)} %`, t: stat !== 'counter' && cur.peakSeen >= cur.truePeak - 0.05 ? 'text-accent' : 'text-warn', sub: stat === 'counter' ? 'a counter has no peak' : 'max reading over 10 min' },
@@ -238,14 +239,14 @@ export default function TelemetrySampling() {
         ))}
       </div>
 
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Detection by interval">
         <table className="w-full min-w-[420px] text-left text-sm">
           <caption className="mb-1 text-left font-mono text-[10px] uppercase tracking-[0.14em] text-muted">All intervals, {STATS.find((s) => s.id === stat)!.label}</caption>
           <thead><tr className="border-b border-line text-xs text-muted"><th className="py-1 pr-3 font-medium">Interval</th><th className="py-1 pr-3 font-medium">Bursts detected</th><th className="py-1 pr-3 font-medium">Peak seen</th><th className="py-1 font-medium">Flagged intervals</th></tr></thead>
           <tbody className="font-mono tabular-nums">
             {table.map((r) => (
               <tr key={r.dt} className={`border-b border-line/60 ${r.dt === dt ? 'text-accent' : ''}`}>
-                <td className="py-1 pr-3">{r.label}</td>
+                <td className="py-1 pr-3">{r.label}{r.dt === dt && <span className="sr-only"> (selected)</span>}</td>
                 <td className="py-1 pr-3">{pct(r.s).toFixed(2)} %</td>
                 <td className="py-1 pr-3">{stat === 'counter' ? 'n/a' : `${r.s.peakSeen.toFixed(1)} %`}</td>
                 <td className="py-1">{r.s.flagged.toLocaleString('en-US')}</td>

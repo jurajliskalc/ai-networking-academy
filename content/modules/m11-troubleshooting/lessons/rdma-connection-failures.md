@@ -222,7 +222,7 @@ Illustrative failing output:
  2048       5000           98.20              97.95
  4096       5000           ...
  Completion with error at client
- Failed status 12: wc_id 0 syndrom 0x81     <- 12 = IBV_WC_RETRY_EXC_ERR; the syndrome is device-specific
+ Failed status 12: wr_id 0 syndrom 0x81     <- 12 = IBV_WC_RETRY_EXC_ERR; the syndrome is device-specific
 ```
 
 Messages up to 2048 bytes produce packets that fit through the broken hop; at 4096 bytes the packets (4096 bytes of payload plus Ethernet, IP, UDP, BTH and ICRC headers, roughly 4.15 KB on the wire) exceed it. In this illustrative case a spine port had been configured with an interface MTU of 4096, copied from the RDMA MTU by mistake: too small for a 4096-byte RoCE payload plus headers. A hop at 1500 would break even earlier, at 2048-byte packets. Now check the MTU on every hop (NIC netdev, leaf ports, spine ports, any router interface) against your design; on switches, remember that L2 and L3 interface MTUs may be configured separately.

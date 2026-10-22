@@ -1,0 +1,415 @@
+{
+ "schema": "aina.hw.report/1",
+ "toolkit": "1.0.0",
+ "generated": "2026-10-22T09:00:00+00:00",
+ "lab": "demo-lab (illustrative)",
+ "fabric": "roce",
+ "hosts": [
+  {
+   "schema": "aina.hw.host/1",
+   "toolkit": "1.0.0",
+   "collected": "2026-10-22T09:00:00+00:00",
+   "role": "A",
+   "host": {
+    "hostname": "node-a",
+    "kernel": "6.8.0-45-generic",
+    "os": "Ubuntu 24.04.1 LTS",
+    "arch": "x86_64",
+    "cpu": "Illustrative 32-Core CPU @ 2.80GHz",
+    "numa_nodes": 2,
+    "mem_gb": 251.7,
+    "cmdline_flags": [
+     "iommu=pt"
+    ],
+    "governor": "performance",
+    "memlock": "unlimited"
+   },
+   "software": {
+    "rdma_core": "50.0-2build2",
+    "perftest": "24.01.0-0.38.g8a3c4a7-1",
+    "ofed": null,
+    "nvidia_driver": null,
+    "python": "3.12.3",
+    "tools": {
+     "rdma": true,
+     "ibv_devinfo": true,
+     "ib_write_bw": true,
+     "ibstat": true,
+     "iblinkinfo": true,
+     "ethtool": true,
+     "dcb": true,
+     "mlnx_qos": true,
+     "show_gids": true,
+     "ibdev2netdev": true,
+     "mlxlink": false,
+     "mst": false,
+     "nvidia-smi": false,
+     "mpirun": false,
+     "numactl": true,
+     "lldpcli": true,
+     "tcpdump": true,
+     "opensm": false,
+     "sminfo": false,
+     "ofed_info": false
+    }
+   },
+   "modules": {
+    "mlx5_core": true,
+    "mlx5_ib": true,
+    "ib_core": true,
+    "ib_uverbs": true,
+    "rdma_ucm": true,
+    "ib_ipoib": false,
+    "rdma_rxe": false,
+    "irdma": false,
+    "bnxt_re": false,
+    "nvidia": false,
+    "nvidia_peermem": false,
+    "nv_peer_mem": false
+   },
+   "rdma": [
+    {
+     "name": "mlx5_0",
+     "node_type": "CA",
+     "fw_ver": "28.42.1000",
+     "board_id": "MT_0000000222",
+     "hca_type": "MT4123",
+     "node_guid": "b83f:d203:00aa:bb01",
+     "pci": "0000:3b:00.0",
+     "numa_node": 0,
+     "pcie": {
+      "speed": 16.0,
+      "width": 16,
+      "max_speed": 16.0,
+      "max_width": 16
+     },
+     "ports": [
+      {
+       "port": 1,
+       "state": "ACTIVE",
+       "phys_state": "LinkUp",
+       "rate": "100 Gb/sec (2X HDR)",
+       "rate_gbps": 100.0,
+       "link_layer": "Ethernet",
+       "lid": 0,
+       "sm_lid": 0,
+       "netdev": "ens1f0np0",
+       "active_mtu": 4096,
+       "gids": [
+        {
+         "index": 0,
+         "gid": "fe80:0000:0000:0000:ba3f:d2ff:feaa:bb01",
+         "type": "IB/RoCE v1",
+         "netdev": "ens1f0np0"
+        },
+        {
+         "index": 1,
+         "gid": "fe80:0000:0000:0000:ba3f:d2ff:feaa:bb01",
+         "type": "RoCE v2",
+         "netdev": "ens1f0np0"
+        },
+        {
+         "index": 2,
+         "gid": "0000:0000:0000:0000:0000:ffff:c0a8:320b",
+         "type": "IB/RoCE v1",
+         "netdev": "ens1f0np0"
+        },
+        {
+         "index": 3,
+         "gid": "0000:0000:0000:0000:0000:ffff:c0a8:320b",
+         "type": "RoCE v2",
+         "netdev": "ens1f0np0"
+        }
+       ],
+       "counters": {
+        "link_downed": 0,
+        "port_rcv_errors": 0,
+        "port_xmit_data": 123456789,
+        "symbol_error": 0
+       },
+       "hw_counters": {
+        "np_cnp_sent": 0,
+        "out_of_sequence": 0,
+        "packet_seq_err": 0,
+        "rp_cnp_handled": 0
+       }
+      }
+     ]
+    }
+   ],
+   "netdevs": [
+    {
+     "name": "ens1f0np0",
+     "mtu": 9000,
+     "operstate": "up",
+     "speed_mbps": 100000,
+     "mac": "b8:3f:d2:aa:bb:01",
+     "ipv4": [
+      "192.168.50.11/24"
+     ],
+     "pause": {
+      "autonegotiate": false,
+      "rx": true,
+      "tx": true
+     },
+     "qos": {
+      "trust": "dscp",
+      "pfc_enabled": [
+       3
+      ],
+      "dscp_prio": {
+       "7": 0,
+       "6": 0,
+       "5": 0,
+       "4": 0,
+       "3": 0,
+       "2": 0,
+       "1": 0,
+       "0": 0,
+       "31": 3,
+       "30": 3,
+       "29": 3,
+       "28": 3,
+       "27": 3,
+       "26": 3,
+       "25": 3,
+       "24": 3,
+       "55": 6,
+       "54": 6,
+       "53": 6,
+       "52": 6,
+       "51": 6,
+       "50": 6,
+       "49": 6,
+       "48": 6
+      },
+      "source": "mlnx_qos"
+     },
+     "ecn": null,
+     "stats": {
+      "rx_prio3_bytes": 52428800,
+      "tx_prio3_pause": 0,
+      "rx_prio3_pause": 0,
+      "rx_discards_phy": 0,
+      "rx_crc_errors_phy": 0,
+      "rx_symbol_err_phy": 0,
+      "rx_out_of_buffer": 0
+     },
+     "lldp": {
+      "system": "leaf1",
+      "port": "swp1"
+     },
+     "driver": "mlx5_core",
+     "driver_version": "6.8.0-45-generic",
+     "firmware": "28.42.1000 (MT_0000000222)",
+     "bus": "0000:3b:00.0"
+    }
+   ],
+   "gpus": [],
+   "gpu_topo": null,
+   "notes": []
+  },
+  {
+   "schema": "aina.hw.host/1",
+   "toolkit": "1.0.0",
+   "collected": "2026-10-22T09:00:00+00:00",
+   "role": "B",
+   "host": {
+    "hostname": "node-b",
+    "kernel": "6.8.0-45-generic",
+    "os": "Ubuntu 24.04.1 LTS",
+    "arch": "x86_64",
+    "cpu": "Illustrative 32-Core CPU @ 2.80GHz",
+    "numa_nodes": 2,
+    "mem_gb": 251.7,
+    "cmdline_flags": [
+     "iommu=pt"
+    ],
+    "governor": "powersave",
+    "memlock": "8192"
+   },
+   "software": {
+    "rdma_core": "50.0-2build2",
+    "perftest": "24.01.0-0.38.g8a3c4a7-1",
+    "ofed": null,
+    "nvidia_driver": null,
+    "python": "3.12.3",
+    "tools": {
+     "rdma": true,
+     "ibv_devinfo": true,
+     "ib_write_bw": true,
+     "ibstat": true,
+     "iblinkinfo": true,
+     "ethtool": true,
+     "dcb": true,
+     "mlnx_qos": true,
+     "show_gids": true,
+     "ibdev2netdev": true,
+     "mlxlink": false,
+     "mst": false,
+     "nvidia-smi": false,
+     "mpirun": false,
+     "numactl": true,
+     "lldpcli": true,
+     "tcpdump": true,
+     "opensm": false,
+     "sminfo": false,
+     "ofed_info": false
+    }
+   },
+   "modules": {
+    "mlx5_core": true,
+    "mlx5_ib": true,
+    "ib_core": true,
+    "ib_uverbs": true,
+    "rdma_ucm": true,
+    "ib_ipoib": false,
+    "rdma_rxe": false,
+    "irdma": false,
+    "bnxt_re": false,
+    "nvidia": false,
+    "nvidia_peermem": false,
+    "nv_peer_mem": false
+   },
+   "rdma": [
+    {
+     "name": "mlx5_0",
+     "node_type": "CA",
+     "fw_ver": "28.39.1002",
+     "board_id": "MT_0000000222",
+     "hca_type": "MT4123",
+     "node_guid": "b83f:d203:00aa:bb01",
+     "pci": "0000:3b:00.0",
+     "numa_node": 1,
+     "pcie": {
+      "speed": 8.0,
+      "width": 16,
+      "max_speed": 16.0,
+      "max_width": 16
+     },
+     "ports": [
+      {
+       "port": 1,
+       "state": "ACTIVE",
+       "phys_state": "LinkUp",
+       "rate": "100 Gb/sec (2X HDR)",
+       "rate_gbps": 100.0,
+       "link_layer": "Ethernet",
+       "lid": 0,
+       "sm_lid": 0,
+       "netdev": "ens1f0np0",
+       "active_mtu": 1024,
+       "gids": [
+        {
+         "index": 0,
+         "gid": "fe80:0000:0000:0000:ba3f:d2ff:feaa:bb01",
+         "type": "IB/RoCE v1",
+         "netdev": "ens1f0np0"
+        },
+        {
+         "index": 1,
+         "gid": "fe80:0000:0000:0000:ba3f:d2ff:feaa:bb01",
+         "type": "RoCE v2",
+         "netdev": "ens1f0np0"
+        },
+        {
+         "index": 2,
+         "gid": "0000:0000:0000:0000:0000:ffff:c0a8:320c",
+         "type": "IB/RoCE v1",
+         "netdev": "ens1f0np0"
+        },
+        {
+         "index": 3,
+         "gid": "0000:0000:0000:0000:0000:ffff:c0a8:320c",
+         "type": "RoCE v2",
+         "netdev": "ens1f0np0"
+        }
+       ],
+       "counters": {
+        "link_downed": 0,
+        "port_rcv_errors": 0,
+        "port_xmit_data": 123456789,
+        "symbol_error": 0
+       },
+       "hw_counters": {
+        "np_cnp_sent": 0,
+        "out_of_sequence": 42,
+        "packet_seq_err": 0,
+        "rp_cnp_handled": 0
+       }
+      }
+     ]
+    }
+   ],
+   "netdevs": [
+    {
+     "name": "ens1f0np0",
+     "mtu": 1500,
+     "operstate": "up",
+     "speed_mbps": 100000,
+     "mac": "b8:3f:d2:aa:bb:01",
+     "ipv4": [
+      "192.168.50.12/24"
+     ],
+     "pause": {
+      "autonegotiate": false,
+      "rx": true,
+      "tx": true
+     },
+     "qos": {
+      "trust": "pcp",
+      "pfc_enabled": [],
+      "dscp_prio": {
+       "7": 0,
+       "6": 0,
+       "5": 0,
+       "4": 0,
+       "3": 0,
+       "2": 0,
+       "1": 0,
+       "0": 0,
+       "31": 3,
+       "30": 3,
+       "29": 3,
+       "28": 3,
+       "27": 3,
+       "26": 3,
+       "25": 3,
+       "24": 3,
+       "55": 6,
+       "54": 6,
+       "53": 6,
+       "52": 6,
+       "51": 6,
+       "50": 6,
+       "49": 6,
+       "48": 6
+      },
+      "source": "mlnx_qos"
+     },
+     "ecn": null,
+     "stats": {
+      "rx_prio3_bytes": 52428800,
+      "tx_prio3_pause": 0,
+      "rx_prio3_pause": 0,
+      "rx_discards_phy": 0,
+      "rx_crc_errors_phy": 17,
+      "rx_symbol_err_phy": 0,
+      "rx_out_of_buffer": 0
+     },
+     "lldp": {
+      "system": "leaf1",
+      "port": "swp2"
+     },
+     "driver": "mlx5_core",
+     "driver_version": "6.8.0-45-generic",
+     "firmware": "28.39.1002 (MT_0000000222)",
+     "bus": "0000:3b:00.0"
+    }
+   ],
+   "gpus": [],
+   "gpu_topo": null,
+   "notes": []
+  }
+ ]
+}

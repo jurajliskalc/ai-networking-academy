@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pill } from '../components/ui';
 
 // ---------- Tree data (exported so it can be validated in tests) ----------
@@ -291,15 +291,22 @@ export default function TroubleshootingTree() {
   const id = path[path.length - 1];
   const node = TREE[id];
   const go = (next: string) => setPath((p) => [...p, next]);
+  // Move focus to the new question or diagnosis so keyboard and screen reader users continue from there.
+  const title = useRef<HTMLDivElement>(null);
+  const shown = useRef(id);
+  useEffect(() => {
+    if (shown.current !== id) title.current?.focus();
+    shown.current = id;
+  }, [id]);
 
   return (
     <div className="space-y-4">
       <nav aria-label="Decision path" className="flex flex-wrap items-center gap-1 text-xs">
         {path.map((pid, i) => (
           <span key={pid} className="flex items-center gap-1">
-            {i > 0 && <span className="text-muted">›</span>}
+            {i > 0 && <span className="text-muted" aria-hidden>›</span>}
             <button type="button" onClick={() => setPath(path.slice(0, i + 1))} aria-current={i === path.length - 1 ? 'step' : undefined}
-              className={`rounded px-1.5 py-0.5 ${i === path.length - 1 ? 'bg-accent-soft text-accent' : 'text-muted hover:text-fg'}`}>
+              className={`min-h-6 rounded px-1.5 py-0.5 ${i === path.length - 1 ? 'bg-accent-soft text-accent' : 'text-muted hover:text-fg'}`}>
               {TREE[pid].title.length > 34 ? `${TREE[pid].title.slice(0, 32)}…` : TREE[pid].title}
             </button>
           </span>
@@ -316,11 +323,11 @@ export default function TroubleshootingTree() {
 
       {node.kind === 'q' ? (
         <div className="rounded-xl border border-line bg-panel-2 p-4">
-          <h3 className="text-base font-semibold">{node.title}</h3>
+          <div ref={title} tabIndex={-1} className="text-base font-semibold outline-none">{node.title}</div>
           <p className="mt-1 text-sm text-muted">{node.body}</p>
           {node.checklist && (
             <ul className="mt-3 space-y-1 text-sm">
-              {node.checklist.map((c) => <li key={c} className="flex gap-2"><span className="text-accent">□</span><span>{c}</span></li>)}
+              {node.checklist.map((c) => <li key={c} className="flex gap-2"><span className="text-accent" aria-hidden>□</span><span>{c}</span></li>)}
             </ul>
           )}
           <div className="mt-4 grid gap-2">
@@ -336,10 +343,10 @@ export default function TroubleshootingTree() {
       ) : (
         <div className={`rounded-xl border bg-panel-2 p-4 ${toneCls[node.tone].split(' ')[0]}`}>
           <div className={`font-mono text-[10px] uppercase tracking-[0.14em] ${toneCls[node.tone].split(' ')[1]}`}>Likely root cause</div>
-          <h3 className="text-base font-semibold">{node.title}</h3>
+          <div ref={title} tabIndex={-1} className="text-base font-semibold outline-none">{node.title}</div>
           <p className="mt-1 text-sm text-muted">{node.cause}</p>
           <div className="mt-3 font-mono text-[10px] uppercase tracking-[0.14em] text-muted">Evidence to collect (snapshot, wait, snapshot: use deltas)</div>
-          <div className="mt-1 overflow-x-auto">
+          <div className="mt-1 overflow-x-auto" tabIndex={0} role="region" aria-label="Evidence to collect">
             <table className="w-full min-w-[520px] text-left text-sm">
               <thead><tr className="border-b border-line text-xs text-muted"><th className="py-1 pr-3 font-medium">Command</th><th className="py-1 font-medium">What to look for</th></tr></thead>
               <tbody>

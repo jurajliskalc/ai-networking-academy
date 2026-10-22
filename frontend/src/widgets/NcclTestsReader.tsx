@@ -87,7 +87,7 @@ function Seg<T extends string | number>({ label, value, options, onChange, rende
   return (
     <div>
       <div className="mb-1 font-mono text-[10px] uppercase tracking-[0.14em] text-muted">{label}</div>
-      <div className="flex flex-wrap gap-1">{options.map((o) => (
+      <div className="flex flex-wrap gap-1" role="group" aria-label={label}>{options.map((o) => (
         <button key={String(o)} type="button" onClick={() => onChange(o)} aria-pressed={o === value}
           className={`rounded-md border px-2 py-1 font-mono text-xs transition ${o === value ? 'border-accent bg-accent-soft text-accent' : 'border-line bg-panel hover:bg-panel-2'}`}>{render ? render(o) : String(o)}</button>
       ))}</div>
@@ -157,7 +157,7 @@ export default function NcclTestsReader() {
       <div className="rounded-lg border border-line bg-panel-2 p-3">
         <label className="block"><span className="mb-1 block font-mono text-[10px] uppercase tracking-[0.14em] text-muted">Or paste an nccl-tests data row</span>
           <input value={paste} onChange={(e) => setPaste(e.target.value)} className="w-full rounded-md border border-line bg-panel px-2 py-1 font-mono text-xs" /></label>
-        <div className="mt-2 flex flex-wrap items-center gap-2">
+        <div className="mt-2 flex flex-wrap items-center gap-2" aria-live="polite">
           <button type="button" onClick={doParse} className="rounded-md border border-accent bg-accent-soft px-3 py-1 text-sm text-accent">Parse row</button>
           {printed ? <span className="text-xs text-muted">size {printed.size.toLocaleString('en-US')} B · time {printed.time} µs · printed algbw {printed.algbw} · busbw {printed.busbw}
             {ratio !== null && <> · busbw/algbw = {fmt(ratio, 3)}{impliedN ? <> → n ≈ {fmt(impliedN, 1)} for {coll}</> : null}</>}</span>
@@ -177,7 +177,7 @@ export default function NcclTestsReader() {
       </div>
       {topo === 'multi' && (n % gg !== 0) && <div className="text-xs text-warn">n is not a multiple of g; the model assumes full nodes.</div>}
 
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" aria-live="polite">
         <Out label="algbw = S / t" value={`${fmt(a)} GB/s`} />
         <Out label={`busbw = algbw × ${factorText(coll)}`} value={`${fmt(b)} GB/s`} tone="text-accent" />
         <Out label={`ceiling (${topo === 'single' ? '1 node' : `${fmt(nodes, 1)} nodes`})`} value={`${fmt(ceil.value)} GB/s`} tone="text-data" />

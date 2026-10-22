@@ -15,14 +15,14 @@ questions:
         correct: true
         explanation: On an untagged fabric there is no PCP; without DSCP trust and a correct traffic class RoCE falls into the default, lossy priority.
       - id: b
-        text: PFC is enabled on priority 0 by mistake.
+        text: PFC is enabled on priority 0 by mistake, so the NIC steers RoCE into that class because it is now lossless.
         explanation: PFC configuration does not change which priority traffic is transmitted on; classification does.
       - id: c
-        text: ECN is disabled on the switch RoCE queue.
-        explanation: ECN settings do not move traffic between priorities on the host.
+        text: ECN is disabled on the switch RoCE queue, so DCQCN falls back and the NIC sends RoCE on the default priority.
+        explanation: ECN settings do not move traffic between priorities on the host; there is no such fallback.
       - id: d
-        text: The MTU is too small on the host.
-        explanation: MTU affects packet size, not priority classification.
+        text: The host MTU is too small, so RoCE messages are split into extra packets that go out on the default priority.
+        explanation: MTU affects packet size and count, not priority classification; every packet of a QP uses the same traffic class.
     tags: [trust, classification]
   - id: q2
     type: scenario
@@ -36,13 +36,13 @@ questions:
         correct: true
         explanation: The RoCE queue cannot pause its sender and tail-drops, while an almost unused priority is protected.
       - id: b
-        text: Headroom on priority 3 is too small.
+        text: Headroom on priority 3 is too small for the cable length, so it overflows.
         explanation: Insufficient headroom shows drops while pause is being sent on the same priority; here no pause is sent on 3 at all.
       - id: c
-        text: The CNP DSCP is mapped to the wrong queue.
+        text: The CNP DSCP is mapped to the wrong queue, so DCQCN never slows the senders.
         explanation: CNP placement affects DCQCN reaction time, not whether PFC is active on the RoCE priority.
       - id: d
-        text: Link CRC errors are being counted as drops.
+        text: Link CRC errors on the port are being counted as TC 3 drops.
         explanation: CRC drops would not correlate with PFC being configured on another priority, and would show in error counters.
     tags: [pfc]
   - id: q3
@@ -75,13 +75,13 @@ questions:
         correct: true
         explanation: Small packets passing while full-size 4096-byte payloads fail is the classic MTU signature, and a replaced device is a likely place for a default MTU.
       - id: b
-        text: The GID index on both hosts.
-        explanation: A wrong GID index usually prevents the connection from working at all, regardless of size.
+        text: The GID index on both hosts, since the wrong GID type can carry small RDMA messages but not full-size ones.
+        explanation: A wrong GID index or type usually prevents the connection from working at all, regardless of message size.
       - id: c
-        text: The ECN marking thresholds on the leaves.
-        explanation: ECN thresholds influence congestion response, not whether large packets are delivered.
+        text: The ECN marking thresholds on the leaves, since large transfers build queues that small ones never do.
+        explanation: ECN thresholds influence congestion response, not whether large packets are delivered; marking slows senders, it does not cause retry-exceeded errors.
       - id: d
-        text: The CNP priority mapping.
+        text: The CNP priority mapping, since lost CNPs let large transfers overrun the switch queues.
         explanation: CNP mapping does not cause size-dependent failure.
     tags: [mtu]
   - id: q5
@@ -96,14 +96,14 @@ questions:
         correct: true
         explanation: Receivers see no CE-marked packets at all, so the problem is upstream of the NIC. PFC is the only brake.
       - id: b
-        text: The receiving NIC has its notification point disabled.
+        text: The receiving NIC has its notification point disabled, so it ignores the CE marks.
         explanation: Then np_ecn_marked_roce_packets would still rise while np_cnp_sent stayed at zero.
       - id: c
-        text: CNPs are being dropped in a lossy queue.
+        text: CNPs are being dropped in a lossy queue before they reach the senders.
         explanation: No CNPs are sent in the first place, so their path is not yet the issue.
       - id: d
-        text: PFC is disabled on the RoCE priority.
-        explanation: PFC is clearly active; it is the only mechanism working.
+        text: PFC is disabled on the RoCE priority, so DCQCN has no signal to react to.
+        explanation: PFC is clearly active (many PFC frames); it is the only mechanism working. DCQCN reacts to ECN marks, not to PFC.
     tags: [ecn, dcqcn]
   - id: q6
     type: scenario
@@ -117,13 +117,13 @@ questions:
         correct: true
         explanation: CNPs are generated but not arriving; drops in the default queue suggest CNPs travel there and are lost or delayed.
       - id: b
-        text: Lower the ECN marking threshold on the RoCE queue.
-        explanation: Marking already works; the reverse path for CNPs is the problem.
+        text: Lower the ECN marking threshold on the RoCE queue so receivers send more CNPs and more of them get through.
+        explanation: Marking already works; the reverse path for CNPs is the problem, and sending more CNPs into the same lossy queue does not fix it.
       - id: c
-        text: Enable PFC on priority 0.
+        text: Enable PFC on priority 0 so the default queue stops dropping under congestion.
         explanation: Making the default class lossless risks spreading pause to all traffic and does not fix CNP classification.
       - id: d
-        text: Raise the RDMA path MTU.
+        text: Raise the RDMA path MTU so fewer, larger packets need congestion notification.
         explanation: CNPs are tiny; MTU is unrelated.
     tags: [cnp, dcqcn]
   - id: q7
@@ -138,14 +138,14 @@ questions:
         correct: true
         explanation: Headroom must absorb bytes in flight after XOFF; longer cables need more. Drops while pausing are the signature.
       - id: b
-        text: PFC is enabled on the wrong priority.
-        explanation: Pause is being sent on the correct priority, so PFC priority is right.
+        text: PFC is enabled on the wrong priority on the new link, so the RoCE queue cannot pause its sender.
+        explanation: Pause is being sent on the RoCE priority itself, so the PFC priority is right.
       - id: c
-        text: The NIC trust mode is PCP.
-        explanation: Classification is correct since traffic is in the lossless class; the issue is buffering.
+        text: The NIC trust mode is PCP, so RoCE lands in a queue that has no headroom reserved.
+        explanation: Classification is correct since traffic is in the lossless class and pause is sent on it; the issue is buffering.
       - id: d
-        text: ECN is disabled on the hosts.
-        explanation: Host ECN settings do not cause ingress buffer overflow during pause on a switch.
+        text: ECN is disabled on the hosts, so senders never slow down and the switch buffer overflows anyway.
+        explanation: Without ECN the fabric leans harder on PFC, but correctly sized headroom still prevents drops while pausing; drops during pause on a new long link point at headroom.
     tags: [headroom, pfc]
   - id: q8
     type: multi

@@ -116,7 +116,7 @@ commands:
 
   - cmd: mlxconfig -d /dev/mst/mt4129_pciconf0 query
     platform: nvidia
-    summary: Show the NIC's non-volatile firmware configuration (link type per port, SR-IOV, number of VFs, PCIe settings, and so on), with current and next-boot values.
+    summary: Show the NIC's non-volatile firmware configuration (link type per port, SR-IOV, number of VFs, PCIe settings, and so on) as next-boot values; add -e to also show the default and current values.
     example: |
       Device #1:
       ----------

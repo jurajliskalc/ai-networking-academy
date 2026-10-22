@@ -1,0 +1,154 @@
+id: quiz-kubernetes-network-operator
+title: "Knowledge check: RDMA on Kubernetes"
+lesson: kubernetes-network-operator
+pass_pct: 70
+questions:
+  - id: q1
+    type: scenario
+    prompt: "A distributed training job runs in Kubernetes pods that request eight GPUs each but no other resources and carry no network annotations. It completes without errors, but it is several times slower than on bare metal. NCCL_DEBUG=INFO shows NET/Socket. What is the most likely cause?"
+    options:
+      - id: a
+        text: "The pods only have the primary CNI interface eth0 and no RDMA devices, so NCCL fell back to TCP sockets."
+        correct: true
+        explanation: "Without an RDMA resource request and a secondary network, the pod has nothing for the IB/RoCE plugin to use, and NCCL falls back silently."
+      - id: b
+        text: "The GPU Operator loaded DMA-BUF instead of nvidia-peermem, which forces NCCL to stage all traffic through TCP."
+        explanation: "DMA-BUF is the recommended GPUDirect RDMA mechanism; it does not cause a socket fallback."
+      - id: c
+        text: "Topology Manager placed the GPUs on one NUMA node, which disables NCCL's InfiniBand plugin inside containers."
+        explanation: "NUMA placement affects performance of the GPU-NIC path, not whether NCCL can use RDMA at all."
+      - id: d
+        text: "The switch fabric lacks PFC on the RoCE priority, so NCCL detects loss and switches to its socket transport."
+        explanation: "NCCL does not switch transports because of loss; NET/Socket means it found no usable RDMA device."
+    tags: [kubernetes, nccl, troubleshooting]
+  - id: q2
+    type: single
+    prompt: "What does Multus CNI add to a Kubernetes pod?"
+    options:
+      - id: a
+        text: "Additional interfaces (net1, net2 ...) created by other CNI plugins, selected through a pod annotation."
+        correct: true
+        explanation: "Multus is a meta-plugin: it reads k8s.v1.cni.cncf.io/networks and calls the CNI plugin each NetworkAttachmentDefinition describes."
+      - id: b
+        text: "RDMA device files under /dev/infiniband, advertised to the scheduler as an extended resource per node."
+        explanation: "That is the job of a device plugin such as the RDMA shared device plugin or the SR-IOV device plugin."
+      - id: c
+        text: "A replacement for the primary cluster network, moving eth0 from the overlay onto the RDMA fabric."
+        explanation: "The primary CNI still provides eth0; Multus adds secondary networks alongside it."
+      - id: d
+        text: "IP addresses for secondary interfaces, allocated per node from IPPool objects in blocks."
+        explanation: "That describes an IPAM plugin such as NV-IPAM, which Multus-attached networks call."
+    tags: [multus, cni]
+  - id: q3
+    type: single
+    prompt: "A platform team wants each training pod to have its own RDMA device with hardware-separated queues on the compute NIC, several pods per node. Which exposure model fits best?"
+    options:
+      - id: a
+        text: "SR-IOV virtual functions with the SR-IOV CNI, one VF per pod per rail."
+        correct: true
+        explanation: "Each VF is its own PCIe function with its own RDMA device, moved into the pod's namespace."
+      - id: b
+        text: "Host networking, so that every pod sees all physical NICs and all RDMA devices."
+        explanation: "Host networking gives no isolation between pods and is effectively one job per node."
+      - id: c
+        text: "The RDMA shared device plugin with macvlan, so pods share the parent's RDMA device."
+        explanation: "This allows high density but the RDMA device itself is shared rather than per pod."
+      - id: d
+        text: "Host-device CNI, moving one whole physical interface into each pod that needs RDMA."
+        explanation: "This is exclusive but limits you to one pod per physical interface, not several per NIC."
+    tags: [sr-iov, isolation]
+  - id: q4
+    type: scenario
+    prompt: "On a two-socket 8-GPU server (four GPUs and four NICs per NUMA node), kubelet's Topology Manager runs with the single-numa-node policy. Pods requesting one GPU and one SR-IOV VF sometimes reach full GPUDirect RDMA bandwidth and sometimes much less. What explains it?"
+    options:
+      - id: a
+        text: "NUMA alignment keeps GPU and VF on one socket but cannot pick the NIC under the GPU's own PCIe switch."
+        correct: true
+        explanation: "Topology Manager works at NUMA granularity; PCIe-level pairing needs whole-node pods or DRA attributes such as pcieRoot."
+      - id: b
+        text: "single-numa-node forces the GPU and VF onto different sockets, so the traffic crosses the inter-socket link."
+        explanation: "The policy does the opposite: it admits the pod only if the resources fit on one NUMA node."
+      - id: c
+        text: "SR-IOV VFs cannot use GPUDirect RDMA at all, so the slow pods are staging data through host memory."
+        explanation: "VFs can use GPUDirect RDMA; the variation comes from which GPU-NIC pair the pod received."
+      - id: d
+        text: "Topology Manager is alpha and ignores device plugin hints, so the placement is effectively random."
+        explanation: "Topology Manager is stable (since Kubernetes v1.27) and uses device plugin hints, at NUMA granularity."
+    tags: [topology, numa, dra]
+  - id: q5
+    type: multi
+    prompt: "Which components does the NVIDIA Network Operator (v26.x documentation) manage only through the cluster-wide NicClusterPolicy, never through a NicNodePolicy? (Select all that apply.)"
+    options:
+      - id: a
+        text: "Multus CNI."
+        correct: true
+        explanation: "Multus is a cluster-wide component."
+      - id: b
+        text: "NV-IPAM."
+        correct: true
+        explanation: "NV-IPAM is listed as cluster-wide."
+      - id: c
+        text: "The NIC Configuration Operator."
+        correct: true
+        explanation: "It is listed among the cluster-wide components."
+      - id: d
+        text: "The DOCA-OFED driver container."
+        explanation: "The driver is a per-node component and may be placed in a NicNodePolicy."
+      - id: e
+        text: "The SR-IOV device plugin."
+        explanation: "Device plugins are per-node components and may be placed in a NicNodePolicy."
+    tags: [network-operator]
+  - id: q6
+    type: scenario
+    prompt: "After a maintenance window, RDMA jobs failed on dozens of nodes at the same time. The change log shows a new DOCA-OFED driver container version was rolled out by the Network Operator. What should the team change first?"
+    options:
+      - id: a
+        text: "Set a small non-zero maxParallelUpgrades in the driver upgradePolicy and coordinate drains with jobs."
+        correct: true
+        explanation: "Reloading the NIC driver takes RDMA interfaces down; rolling it through a few nodes at a time limits the blast radius. Note that 0 means no limit, not zero nodes."
+      - id: b
+        text: "Switch the GPU Operator from DMA-BUF to nvidia-peermem so that driver reloads no longer interrupt jobs."
+        explanation: "The GPUDirect mechanism does not make a NIC driver reload transparent to running RDMA jobs."
+      - id: c
+        text: "Set the RDMA subsystem to shared netns mode on the running nodes so devices survive the driver reload."
+        explanation: "The netns mode does not keep devices alive across a driver reload, and it should not be changed on running nodes."
+      - id: d
+        text: "Move the driver section into both NicClusterPolicy and every NicNodePolicy so that upgrades are applied twice."
+        explanation: "A per-node section may be in one place only; the admission webhook rejects duplicates."
+    tags: [lifecycle, operations]
+  - id: q7
+    type: scenario
+    prompt: "In an InfiniBand cluster, two tenants' pods must not reach each other on the compute fabric. Pods use IB SR-IOV networks. Which component makes partition membership follow pod placement automatically?"
+    options:
+      - id: a
+        text: "ib-kubernetes, which adds each pod's VF GUID to the network's P_Key through a subnet-manager plugin such as UFM."
+        correct: true
+        explanation: "It watches pods, reads the partition key from the network definition and programs membership through the SM plugin."
+      - id: b
+        text: "NV-IPAM, which assigns each tenant a separate IP subnet so the subnet manager blocks traffic between them."
+        explanation: "IP subnets do not create InfiniBand partitions; isolation on IB is enforced with P_Keys."
+      - id: c
+        text: "Topology Manager, which places each tenant's pods on different NUMA nodes so their VFs cannot communicate."
+        explanation: "NUMA placement has nothing to do with fabric reachability."
+      - id: d
+        text: "The RDMA shared device plugin, which gives each tenant a separate rdmaHcaMax quota on the same HCA."
+        explanation: "A resource quota limits how many pods share a device; it does not isolate traffic."
+    tags: [infiniband, pkey, multi-tenancy]
+  - id: q8
+    type: single
+    prompt: "Why does the lesson recommend running the two-pod ib_write_bw test with -R?"
+    options:
+      - id: a
+        text: "The RDMA connection manager resolves the GID from the pod's IP, so no GID index must be guessed."
+        correct: true
+        explanation: "Inside a pod the GID table follows the pod's interfaces; RDMA CM avoids hard-coding an index from bare metal."
+      - id: b
+        text: "It makes perftest report results in Gb/s instead of MiB/s, which matches the NIC's line rate."
+        explanation: "That is --report_gbits, not -R."
+      - id: c
+        text: "It enables GPUDirect RDMA so the test reads GPU memory instead of host memory buffers."
+        explanation: "GPU memory is selected with the CUDA options, for example --use_cuda_dmabuf."
+      - id: d
+        text: "It runs the test in both directions at once so that each pod's VF is loaded in full."
+        explanation: "Bidirectional mode is a different option; -R selects RDMA CM for connection setup."
+    tags: [perftest, verification]

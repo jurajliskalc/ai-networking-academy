@@ -1,0 +1,62 @@
+id: sim-16-cross-rail-spines
+title: "Hot spines in a rail-optimized fabric"
+level: 3
+estimated_minutes: 35
+lessons: [rail-optimized-topology, nccl-configuration, oversubscription-and-blocking, nccl-debugging]
+summary: A tuning change lets NCCL rings change NIC inside a node, so all inter-node traffic crosses rails through the spines.
+start: node01
+ticket: |
+  **INC-4870 · Sev3 · All-reduce bandwidth halved, spines running hot**
+
+  > Since Monday's rollout of nccl-tuning role v2.4, `all_reduce_perf` peaks at about 170 GB/s instead
+  > of ~370. Nothing failed: all links are up, no drops, no CRC errors. Both spines, which normally sit
+  > idle, now show heavy traffic and ECN marking on every port. The network team asks for budget for a
+  > third spine "because the 2:1 leaf uplinks cannot keep up". - ML platform team
+
+  Is a third spine the answer? Find the root cause and fix it.
+faults:
+  - { type: nccl_conf, node: all, set: { NCCL_CROSS_NIC: 1 } }
+hints:
+  - In a rail-optimized fabric NCCL keeps each inter-node hop on one rail, one leaf away. During a collective the spines should be almost idle. Why would traffic reach them at all?
+  - "Set `NCCL_DEBUG=INFO` in /etc/nccl.conf on node01 and run `all_reduce_perf` again. For each channel, compare the `NET/IB/<n>` index the ring receives on with the one it sends on."
+  - "`cat /etc/nccl.conf` on each node and compare it with what a rail-optimized fabric needs. The NCCL documentation explains each variable."
+diagnosis:
+  prompt: What is the root cause?
+  options:
+    - id: a
+      text: The v2.4 nccl.conf sets NCCL_CROSS_NIC=1, so rings may leave a node on a different NIC than they enter, and inter-node hops now cross rails through the spines.
+      correct: true
+      explanation: NCCL_CROSS_NIC=1 allows a ring or tree to use different NICs, which is meant for fabrics where all of a node's NICs share one switch. In this rail-optimized fabric the channel lines show rings receiving on NET/IB/c and sending on another NIC, so node A's NIC m talks to node B's NIC c on a different rail, and that path is leaf, spine, leaf. Each leaf has 4 x 400G down and only 2 x 400G up, so the job gets at most half its bandwidth and the spines light up. Removing the setting (default 2, or 0) keeps rings rail-aligned.
+    - id: b
+      text: The spine layer is undersized for this job. A 2:1 oversubscribed leaf-to-spine stage cannot carry an all-reduce, so a third spine is the correct fix.
+      explanation: A rail-aligned all-reduce never uses the spines; it ran at ~370 GB/s on the same hardware last week. A third spine would only soften a problem that should not exist. Nothing in the hardware changed, only the NCCL configuration.
+    - id: c
+      text: ECMP hash polarization on the leaf uplinks sends every RoCE flow to one spine, which halves the uplink capacity that is available to the job.
+      explanation: Both spines carry the same load (compare nv show interface swpN counters on spine01 and spine02), so the hashing is spreading flows. The question is why the traffic is on the uplinks at all.
+    - id: d
+      text: The v2.4 role dropped NCCL_IB_HCA, so NCCL now picks NICs in PCI order and pairs each GPU with a NIC that sits on the other NUMA node.
+      explanation: NCCL_IB_HCA=mlx5 is still in /etc/nccl.conf, NCCL lists all eight HCAs, and every GPU still has a PIX-attached NIC. A NUMA mismatch would also not send traffic to the spines.
+checks:
+  - { description: "NCCL_CROSS_NIC is not set to 1 on any node", check: nccl_conf_not, args: { node: all, key: NCCL_CROSS_NIC, value: 1 } }
+  - { description: "all_reduce bus bandwidth is above 360 GB/s", check: allreduce_min_busbw, args: { value: 360 } }
+solution: |
+  Healthy rail-local collectives leave the spines idle; after one run here, spine01 and spine02 show tens
+  of millions of packets and heavy ECN marking on every port, and the leaf uplinks (swp31, swp32) do too.
+  Every NIC shows about nine times the usual ECN marks and CNPs. With `NCCL_DEBUG=INFO`, the
+  channel lines show rings that receive on `NET/IB/0` and send on `NET/IB/7` (and so on): the hop to the
+  next node starts on one rail and ends on another. `/etc/nccl.conf` on every node contains
+  `NCCL_CROSS_NIC=1`, added by the v2.4 role. (Strictly, `=1` *allows* rings to use different NICs; whether
+  NCCL's topology search then picks crossed rings depends on the NCCL version and the system. In this lab
+  it does, which the channel lines prove; on a real cluster, confirm it the same way.)
+
+  Fix: remove the line on all four nodes, for example `sed -i '/NCCL_CROSS_NIC/d' /etc/nccl.conf`
+  (default 2, or set 0 explicitly to forbid crossing rails), and run the test again.
+
+  Lesson: NCCL settings encode assumptions about the topology. NCCL_CROSS_NIC=1 is right when all NICs of
+  a node share one switch and wrong for rail-optimized fabrics. Treat nccl.conf like network config:
+  review it, version it, and keep a reference busbw test in the rollout pipeline.
+fix:
+  - "node01: sed -i '/NCCL_CROSS_NIC/d' /etc/nccl.conf"
+  - "node02: sed -i '/NCCL_CROSS_NIC/d' /etc/nccl.conf"
+  - "node03: sed -i '/NCCL_CROSS_NIC/d' /etc/nccl.conf"
+  - "node04: sed -i '/NCCL_CROSS_NIC/d' /etc/nccl.conf"

@@ -44,17 +44,17 @@ questions:
     prompt: "Why is busbw, not algbw, used to compare all-reduce results between 16-rank and 256-rank runs?"
     options:
       - id: a
-        text: "algbw naturally falls as n grows, while busbw normalizes to the per-link load of an optimal algorithm and stays comparable with hardware speeds."
+        text: "algbw falls as n grows; busbw normalizes to the per-link load of an optimal algorithm, so it stays comparable to hardware speeds."
         correct: true
         explanation: "The 2(n-1)/n factor accounts for the increasing data each rank must move."
       - id: b
-        text: "busbw includes the time of warm-up iterations."
-        explanation: "Warm-up iterations are not timed."
+        text: "busbw includes the warm-up iterations, so it smooths out the start-up cost that makes small 16-rank runs look faster than large ones."
+        explanation: "Warm-up iterations are not timed; algbw and busbw come from the same timed iterations."
       - id: c
-        text: "algbw is measured only on rank 0."
-        explanation: "Both are derived from the same timing."
+        text: "algbw is measured only on rank 0, so at 256 ranks it misses the slow ranks that busbw averages in."
+        explanation: "Both are derived from the same timing; busbw is simply algbw times a fixed factor."
       - id: d
-        text: "busbw measures PCIe bus utilization directly."
+        text: "busbw reads the PCIe bus utilization counters directly, so it reflects real link load at any rank count."
         explanation: "busbw is a computed number, not a measured bus counter."
     tags: [busbw]
   - id: q4
@@ -66,14 +66,14 @@ questions:
         correct: true
         explanation: "Avg bus bandwidth is a sweep-dependent mean useful for regressions with identical parameters."
       - id: b
-        text: "The cluster is broken because the average should equal the peak."
-        explanation: "Small messages are latency-bound, so the average is always far below the peak."
+        text: "The cluster is underperforming, because on a healthy fabric the sweep average should be close to the peak."
+        explanation: "Small messages are latency-bound, so a sweep average from 8 B is far below the peak by construction."
       - id: c
-        text: "The 8 GB row is wrong and should be ignored."
-        explanation: "Large sizes are where bandwidth is measured best."
+        text: "The 8 GB row is an outlier from a single iteration and should be ignored in favour of the average."
+        explanation: "Each row is timed over several iterations, and large sizes are where bandwidth is measured best."
       - id: d
-        text: "The test should be rerun with -c 0 to raise the average."
-        explanation: "Disabling validation does not change the timed result meaningfully."
+        text: "The sweep should be rerun with -c 0, since data validation is what drags the average down to 97 GB/s."
+        explanation: "Disabling validation does not change the timed result meaningfully; the low average comes from the latency-bound small sizes."
     tags: [avg-busbw]
   - id: q5
     type: scenario
@@ -84,14 +84,14 @@ questions:
         correct: true
         explanation: "With one NIC per GPU, the network-side ceiling is roughly NICs per node times per-NIC rate, capped by NVLink."
       - id: b
-        text: "The colleague is right; busbw is bounded by a single NIC."
-        explanation: "That holds with one GPU per node, not with 8 GPUs and 8 NICs per node."
+        text: "The colleague is right: a ring is only as fast as its slowest hop, and every inter-node hop in it goes through a single 400 Gb/s NIC."
+        explanation: "One ring channel uses one NIC, but NCCL runs channels over all 8 NICs in parallel; the single-NIC bound holds with one GPU and one NIC per node, not with 8 of each."
       - id: c
-        text: "Both are wrong; busbw is bounded by PCIe Gen5 x16 bandwidth of one GPU."
+        text: "Both are wrong: busbw is bounded by the PCIe Gen5 x16 link of one GPU, about 64 GB/s per direction."
         explanation: "Each GPU only sends its own NIC's share across PCIe; the aggregate is higher."
       - id: d
-        text: "The test must have used SHARP, which is the only way to exceed 50 GB/s."
-        explanation: "SHARP is not required for this result."
+        text: "The test must have used SHARP in-network reduction, the only way busbw can exceed one NIC's rate."
+        explanation: "SHARP is not required for this result; the 8 NICs per node already allow it."
     tags: [ceiling]
   - id: q6
     type: single
@@ -102,14 +102,14 @@ questions:
         correct: true
         explanation: "With -c 1 nccl-tests checks results; any errors indicate corruption."
       - id: b
-        text: "Packets were retransmitted, which is normal."
-        explanation: "Retransmissions are not counted in #wrong."
+        text: "Packets were retransmitted by the NIC, which is normal on a busy fabric and can be ignored at low counts."
+        explanation: "Retransmissions are not counted in #wrong; it counts elements that failed validation."
       - id: c
-        text: "Some iterations were slower than average."
+        text: "Some iterations ran slower than the average and were flagged, which points to congestion or jitter."
         explanation: "#wrong is about data correctness, not timing."
       - id: d
-        text: "The message size was not a power of two."
-        explanation: "Sizes need not be powers of two; this is unrelated."
+        text: "The message size was not a power of two, so the last elements of each buffer were padded and skipped."
+        explanation: "Sizes need not be powers of two; #wrong counts elements whose result failed validation."
     tags: [validation]
   - id: q7
     type: multi

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, RotateCcw, Trophy } from 'lucide-react';
 import { useIndex, useQuiz } from '../content';
@@ -17,6 +17,14 @@ export default function QuizPage() {
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const [finished, setFinished] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  // Move focus to the new question (or the result) so keyboard and screen reader users follow along.
+  const questionRef = useRef<HTMLDivElement>(null);
+  const resultRef = useRef<HTMLDivElement>(null);
+  const moved = useRef(false);
+  useEffect(() => {
+    if (!moved.current) { moved.current = true; return; }
+    (finished ? resultRef : questionRef).current?.focus();
+  }, [i, finished]);
 
   const score = useMemo(() => {
     if (!quiz) return 0;
@@ -49,9 +57,12 @@ export default function QuizPage() {
     return (
       <div className="mx-auto max-w-3xl">
         <Card className="p-8 text-center">
-          <Trophy size={40} className={`mx-auto ${passed ? 'text-accent' : 'text-muted'}`} />
-          <div className="mt-3 text-5xl font-extrabold tabular-nums">{score}%</div>
-          <div className={`mt-2 font-semibold ${passed ? 'text-accent' : 'text-warn'}`}>{passed ? 'Passed' : `Not yet: ${quiz.pass_pct}% needed`}</div>
+          <div ref={resultRef} tabIndex={-1} role="status" className="outline-none">
+            <h1 className="sr-only">Quiz results: {quiz.title.replace(/^Knowledge check:\s*/, '')}</h1>
+            <Trophy size={40} aria-hidden className={`mx-auto ${passed ? 'text-accent' : 'text-muted'}`} />
+            <div className="mt-3 text-5xl font-extrabold tabular-nums"><span className="sr-only">Your score: </span><span>{score}%</span></div>
+            <div className={`mt-2 font-semibold ${passed ? 'text-accent' : 'text-warn'}`}>{passed ? 'Passed' : `Not yet: ${quiz.pass_pct}% needed`}</div>
+          </div>
           <div className="mt-6 flex flex-wrap justify-center gap-3">
             <Button variant="ghost" onClick={restart}><RotateCcw size={16} />Retry</Button>
             {lesson && <Button variant="ghost" to={`/lesson/${lesson.id}`}><ArrowLeft size={16} />Back to lesson</Button>}
@@ -78,9 +89,11 @@ export default function QuizPage() {
       <PageHeader eyebrow="Knowledge check" title={quiz.title.replace(/^Knowledge check:\s*/, '')}>
         Check each answer to see why every option is right or wrong. Pass mark {quiz.pass_pct}%{best !== undefined ? ` · your best ${best}%` : ''}.
       </PageHeader>
-      <Bar value={(100 * Object.keys(checked).length) / quiz.questions.length} className="mb-6" />
+      <Bar value={(100 * Object.keys(checked).length) / quiz.questions.length} label="Questions checked" className="mb-6" />
       <Card className="p-6">
+        <div ref={questionRef} tabIndex={-1} className="outline-none" role="group" aria-label={`Question ${i + 1} of ${quiz.questions.length}`}>
         <QuestionCard q={q} index={i} total={quiz.questions.length} chosen={chosen} onChange={(ids) => setAnswers((a) => ({ ...a, [q.id]: ids }))} revealed={revealed} seed={`${quiz.id}-${attempt}`} />
+        </div>
         <div className="mt-6 flex items-center justify-between">
           <Button variant="ghost" onClick={() => setI(i - 1)} disabled={i === 0}><ArrowLeft size={16} />Back</Button>
           {!revealed
@@ -90,12 +103,17 @@ export default function QuizPage() {
               : <Button onClick={finish} disabled={Object.keys(checked).length < quiz.questions.length}>See results</Button>}
         </div>
       </Card>
-      <div className="mt-4 flex flex-wrap justify-center gap-1.5">
-        {quiz.questions.map((x, k) => (
-          <button key={x.id} onClick={() => setI(k)} aria-label={`Question ${k + 1}`}
-            className={`h-2.5 w-6 rounded-full ${k === i ? 'bg-fg' : checked[x.id] ? (isCorrect(x.options, answers[x.id] ?? []) ? 'bg-accent' : 'bg-danger') : 'bg-panel-2'}`} />
-        ))}
-      </div>
+      <nav className="mt-4 flex flex-wrap justify-center gap-1.5" aria-label="Questions">
+        {quiz.questions.map((x, k) => {
+          const st = checked[x.id] ? (isCorrect(x.options, answers[x.id] ?? []) ? 'correct' : 'incorrect') : 'not checked';
+          return (
+            // A 24 px tall hit area around the slim dot (WCAG 2.5.8 target size).
+            <button key={x.id} type="button" onClick={() => setI(k)} aria-label={`Question ${k + 1}, ${st}`} aria-current={k === i ? 'step' : undefined} className="group flex h-6 items-center">
+              <span className={`block h-2.5 w-6 rounded-full border ${k === i ? 'border-fg bg-fg' : checked[x.id] ? (st === 'correct' ? 'border-accent bg-accent' : 'border-danger bg-danger') : 'border-muted/60 bg-panel-2 group-hover:border-muted'}`} />
+            </button>
+          );
+        })}
+      </nav>
     </div>
   );
 }

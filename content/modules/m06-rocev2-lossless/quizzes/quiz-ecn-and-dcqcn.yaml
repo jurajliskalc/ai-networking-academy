@@ -12,13 +12,13 @@ questions:
         correct: true
         explanation: "RFC 3168: switches set CE instead of dropping ECN-capable packets."
       - id: b
-        text: "10 (ECT(0))"
+        text: "10 (ECT(0), ECN-Capable Transport)"
         explanation: "ECT(0) is set by the sender to declare ECN capability."
       - id: c
-        text: "00 (Not-ECT)"
+        text: "00 (Not-ECT, not ECN-capable)"
         explanation: "Not-ECT means the transport is not ECN-capable. A congested switch must drop such packets rather than mark them."
       - id: d
-        text: "01 (ECT(1))"
+        text: "01 (ECT(1), ECN-Capable Transport)"
         explanation: "ECT(1) is the alternative ECN-capable codepoint set by senders, not a congestion mark."
     tags: [ecn, rfc3168]
   - id: q2
@@ -30,14 +30,14 @@ questions:
         correct: true
         explanation: "That is the RED-style ramp. Above Kmax every ECN-capable packet is marked."
       - id: b
-        text: "Every packet is marked."
-        explanation: "Marking every packet happens above Kmax."
+        text: "Every ECN-capable packet is marked as soon as the queue crosses Kmin."
+        explanation: "Marking every ECN-capable packet happens only above Kmax. Between Kmin and Kmax marking is probabilistic."
       - id: c
-        text: "Packets are dropped with probability Pmax."
+        text: "ECN-capable packets are dropped with a probability that rises linearly towards Pmax."
         explanation: "For ECN-capable packets in an ECN profile, the switch marks instead of dropping."
       - id: d
-        text: "The switch sends a PFC frame."
-        explanation: "ECN marking and PFC are separate mechanisms with separate thresholds."
+        text: "The switch sends a PFC pause frame upstream for the priority of that queue."
+        explanation: "ECN marking and PFC are separate mechanisms with separate thresholds. Crossing Kmin does not generate a pause."
     tags: [ecn, wred]
   - id: q3
     type: multi
@@ -64,18 +64,18 @@ questions:
     prompt: "During an incast test, the receiver shows np_ecn_marked_roce_packets and np_cnp_sent rising quickly, but every sender shows rp_cnp_handled at 0. Switch PFC counters are high. What is the most likely problem?"
     options:
       - id: a
-        text: "CNPs are lost or misclassified on the return path, for example a CNP DSCP mapped to a congested lossy queue or filtered."
+        text: "CNPs are lost or misclassified on the return path, e.g. mapped to a congested lossy queue or filtered."
         correct: true
         explanation: "Marking and CNP generation work, but CNPs never reach the senders, so DCQCN cannot react and PFC carries the load."
       - id: b
-        text: "The switches are not configured for ECN marking."
-        explanation: "The receiver is seeing CE-marked packets, so marking works."
+        text: "The switches are not configured for ECN marking, so the senders never receive any congestion signal at all."
+        explanation: "The receiver is counting CE-marked packets (np_ecn_marked_roce_packets), so switch marking works."
       - id: c
-        text: "The receiver's NP function is disabled."
-        explanation: "np_cnp_sent is rising, so the NP is active."
+        text: "The receiver's NP function is disabled, so the CE marks are never turned into CNPs."
+        explanation: "np_cnp_sent is rising, so the NP is active and is generating CNPs."
       - id: d
-        text: "The incast is too small to trigger congestion control."
-        explanation: "Marks, CNPs and high PFC all show significant congestion."
+        text: "The incast is too small to need a rate cut, so the senders' DCQCN correctly ignores the CNPs."
+        explanation: "Marks, CNPs and high PFC all show significant congestion. rp_cnp_handled at 0 means the CNPs are not arriving, not that they are ignored."
     tags: [dcqcn, cnp, troubleshooting]
   - id: q5
     type: single
@@ -86,32 +86,32 @@ questions:
         correct: true
         explanation: "With alpha = 1 the cut is 50 %. R_T stores 400 Gb/s as the target for recovery."
       - id: b
-        text: "0 Gb/s until the CNP timer expires"
+        text: "0 Gb/s; the flow is paused until the CNP timer expires"
         explanation: "DCQCN reduces the rate multiplicatively. It does not stop the flow."
       - id: c
-        text: "396 Gb/s, an additive decrease of 1 %"
+        text: "396 Gb/s, an additive decrease of 1 % per CNP"
         explanation: "DCQCN uses multiplicative decrease scaled by alpha, not a fixed additive step."
       - id: d
-        text: "100 Gb/s, a 75 % cut"
-        explanation: "The maximum cut per CNP is alpha/2, which is at most 50 %."
+        text: "100 Gb/s, a 75 % cut because alpha = 1 is the maximum"
+        explanation: "The cut per CNP is R_C × alpha/2, so even at the maximum alpha = 1 it is 50 %, not 75 %."
     tags: [dcqcn, rate]
   - id: q6
     type: scenario
     prompt: "After a switch upgrade, PFC pause frames on the leaves start appearing before any ECN marks during incast, and throughput oscillates. Host DCQCN settings are unchanged. What should you suspect first?"
     options:
       - id: a
-        text: "The ECN marking thresholds on the RoCE queue are now set above the point where PFC triggers (or ECN is off)."
+        text: "The ECN thresholds on the RoCE queue now sit above the point where PFC triggers, or ECN is off."
         correct: true
         explanation: "ECN must signal congestion before XOFF. If marking starts too late, PFC fires first and DCQCN cannot act."
       - id: b
-        text: "The CNP DSCP is wrong on the hosts."
-        explanation: "That would show marks without CNP handling. Here, marks themselves are missing or late."
+        text: "The CNP DSCP on the hosts now maps to a lossy queue, so senders never slow down in time."
+        explanation: "Host settings are unchanged, and a CNP problem would show marks without CNP handling. Here the marks themselves are missing or late."
       - id: c
-        text: "The DCQCN alpha gain g is too small."
-        explanation: "Host settings are unchanged, and the symptom is the ordering of switch thresholds."
+        text: "The DCQCN alpha gain g is too small, so the senders cut their rate too slowly after each mark."
+        explanation: "Host settings are unchanged, and the symptom is PFC firing before any marks, which is about switch threshold ordering."
       - id: d
-        text: "Headroom is too large."
-        explanation: "Excess headroom wastes buffer but does not make PFC fire before ECN."
+        text: "The upgrade enabled the PFC watchdog, which sends pause frames whenever a queue stalls."
+        explanation: "A PFC watchdog reacts to a sustained pause storm by ignoring pauses or dropping traffic. It does not generate pause frames."
     tags: [ecn, pfc, thresholds]
   - id: q7
     type: single
@@ -122,30 +122,30 @@ questions:
         correct: true
         explanation: "A CNP queued behind the congestion it reports arrives too late to help."
       - id: b
-        text: "Because CNPs must be lossless and only priority 6 supports PFC"
+        text: "Because CNPs must be lossless, and only priority 6 can be configured for PFC"
         explanation: "Any priority can have PFC. CNPs are usually lossy but strict, because occasional loss is tolerable."
       - id: c
-        text: "Because the IBTA specification mandates DSCP 48 for CNPs"
+        text: "Because the IBTA RoCEv2 annex mandates DSCP 48 and priority 6 for every CNP"
         explanation: "DSCP 48 / priority 6 is a common NVIDIA convention, not a standard requirement."
       - id: d
-        text: "To prevent CNPs from being ECN-marked, which would create a loop"
-        explanation: "The reason is latency of feedback, not marking loops."
+        text: "To keep CNPs from being ECN-marked themselves, which would create a feedback loop"
+        explanation: "CNPs are not ECN-capable data that drives DCQCN. The reason for strict priority is feedback latency, not marking loops."
     tags: [cnp, qos]
   - id: q8
     type: single
     prompt: "What distinguishes an RTT-based congestion control such as NVIDIA RTTCC from DCQCN?"
     options:
       - id: a
-        text: "It infers congestion from NIC-measured round-trip time, so it depends less on ECN configuration in switches."
+        text: "It infers congestion from NIC-measured round-trip time, so it depends less on switch ECN settings."
         correct: true
         explanation: "RTT-based schemes treat rising delay as the congestion signal. Availability depends on NIC generation and firmware."
       - id: b
-        text: "It requires in-band network telemetry from every switch."
+        text: "It requires in-band network telemetry inserted by every switch on the path to compute its sending rate."
         explanation: "That describes telemetry-based schemes such as HPCC, not RTT-based ones."
       - id: c
-        text: "It uses PFC pause frames as its congestion signal."
+        text: "It uses received PFC pause frames as its congestion signal instead of CE-marked packets."
         explanation: "No mainstream end-to-end congestion control uses PFC as its signal."
       - id: d
-        text: "It only works on InfiniBand."
-        explanation: "RTTCC is aimed at RoCE on Ethernet."
+        text: "It only works on InfiniBand, where the subnet manager reports the round-trip time per path."
+        explanation: "RTTCC is aimed at RoCE on Ethernet, and the NIC measures RTT itself. The subnet manager does not report per-path RTT."
     tags: [rttcc, congestion-control]

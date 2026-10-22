@@ -12,13 +12,13 @@ questions:
         correct: true
         explanation: That on-card SoC lets it run infrastructure services, isolated from the host.
       - id: b
-        text: The DPU supports RDMA while the RDMA NIC does not.
-        explanation: Both support RDMA; the name of the second already says so.
+        text: The DPU runs RDMA in hardware, while an RDMA NIC leaves the transport to the host.
+        explanation: Both run RDMA in hardware; offloading the transport is the defining job of an RDMA NIC.
       - id: c
-        text: The DPU only works with InfiniBand.
+        text: The DPU only works on InfiniBand fabrics and cannot be used on Ethernet.
         explanation: DPUs are widely used on Ethernet front-end and storage networks.
       - id: d
-        text: The DPU connects to the host over NVLink instead of PCIe.
+        text: The DPU connects to the host over NVLink instead of PCIe, giving it more bandwidth.
         explanation: DPUs attach to the host over PCIe like other adapters.
     tags: [dpu]
   - id: q2
@@ -26,17 +26,17 @@ questions:
     prompt: In a typical 8-GPU training server, how many compute (back-end) NICs are installed, and why?
     options:
       - id: a
-        text: One, shared by all GPUs, to save switch ports.
+        text: One, shared by all GPUs through the PCIe switch, to save switch ports and optics.
         explanation: One NIC would make network bandwidth per GPU eight times smaller and create a PCIe hotspot.
       - id: b
         text: Eight, one per GPU, so each GPU has dedicated bandwidth and a short PCIe path to its own NIC.
         correct: true
         explanation: The one-NIC-per-GPU pattern is the basis of AI server design and of rail-optimized fabrics.
       - id: c
-        text: Two, one per CPU socket, so NUMA is balanced.
+        text: Two, one per CPU socket, so NUMA traffic stays evenly balanced across both of the host's sockets.
         explanation: Socket balance matters, but two NICs cannot give each GPU the bandwidth collectives need.
       - id: d
-        text: Sixteen, two per GPU, for redundancy.
+        text: Sixteen, two per GPU, so that a single NIC failure never stops a GPU from communicating.
         explanation: Compute NICs are typically not doubled per GPU; resilience is handled by the job and the fabric.
     tags: [nic, server-design]
   - id: q3
@@ -44,18 +44,18 @@ questions:
     prompt: "A newly racked node's compute NIC port stays down. The fabric is InfiniBand. ibv_devinfo on the host shows link_layer: Ethernet for that port. What is the most likely cause and fix?"
     options:
       - id: a
-        text: The VPI adapter is configured for Ethernet; set its port protocol to InfiniBand (for example via the LINK_TYPE parameter in mlxconfig) and reset the adapter.
+        text: The VPI port is configured for Ethernet; set it to InfiniBand (the port's LINK_TYPE setting in mlxconfig) and reset the adapter.
         correct: true
-        explanation: VPI ports run either link layer depending on firmware configuration; it must match the switch.
+        explanation: VPI ports run either link layer depending on firmware configuration (LINK_TYPE_P1/LINK_TYPE_P2); it must match the switch.
       - id: b
-        text: The subnet manager is down, which makes ports report Ethernet.
+        text: The subnet manager is down, and until it has swept the fabric an InfiniBand port keeps reporting its link layer as Ethernet.
         explanation: A missing subnet manager leaves an IB port in INIT, not reporting Ethernet as the link layer.
       - id: c
-        text: The MTU is too large for InfiniBand.
+        text: The interface MTU is too large for InfiniBand, so the driver falls back to presenting the port as Ethernet.
         explanation: MTU mismatch does not change the reported link layer.
       - id: d
-        text: The NIC needs a DPU to speak InfiniBand.
-        explanation: ConnectX adapters speak InfiniBand natively when configured to do so.
+        text: The NIC needs a DPU or a gateway in front of it to speak InfiniBand, since ConnectX cards are Ethernet-only.
+        explanation: ConnectX VPI adapters speak InfiniBand natively when configured to do so.
     tags: [vpi, troubleshooting]
   - id: q4
     type: multi
@@ -86,14 +86,14 @@ questions:
         correct: true
         explanation: The trust boundary sits on the card, which the tenant cannot reconfigure even with root on the host.
       - id: b
-        text: A classic NIC with host firewall rules.
+        text: A classic NIC with host firewall rules, since iptables on the host can enforce per-tenant isolation.
         explanation: A tenant with root can change host firewall rules.
       - id: c
-        text: A SuperNIC, because it has the highest bandwidth.
+        text: A SuperNIC, because its higher bandwidth lets it carry tenant and storage traffic on one port.
         explanation: SuperNICs target east-west GPU traffic; they are not designed to run provider infrastructure services.
       - id: d
-        text: No adapter; use VLANs on the ToR only.
-        explanation: Switch-side VLANs help, but they cannot provide storage virtualization or host-side policy.
+        text: No adapter at all; VLANs and ACLs on the ToR switch alone provide both isolation and storage.
+        explanation: Switch-side VLANs and ACLs help, but they cannot provide storage virtualization or host-side policy.
     tags: [dpu, multi-tenancy]
   - id: q6
     type: single
@@ -104,10 +104,10 @@ questions:
         correct: true
         explanation: 800 Gb/s is 100 GB/s, roughly double what Gen5 x16 can carry.
       - id: b
-        text: Both ports run at line rate because PCIe and the network are independent.
-        explanation: Every byte the NIC sends must first cross the PCIe link from host memory.
+        text: Both ports run at line rate, since PCIe and network bandwidth are independent and each port has its own lanes.
+        explanation: Every byte the NIC sends must first cross the PCIe link from host memory, and both ports share the one x16 link.
       - id: c
-        text: The NIC automatically negotiates PCIe Gen6.
+        text: The NIC automatically retrains the link to PCIe Gen6, doubling host bandwidth so both ports reach 400G.
         explanation: The link generation depends on both ends; a Gen5 host cannot train at Gen6.
     tags: [pcie, nic]
   - id: q7
@@ -115,16 +115,16 @@ questions:
     prompt: What is a key architectural change of ConnectX-8 class SuperNICs compared with typical H100-generation server designs?
     options:
       - id: a
-        text: They integrate a PCIe Gen6 switch, so the GPU can attach to the NIC directly instead of through a separate board-level PCIe switch.
+        text: They integrate a PCIe Gen6 switch, so a GPU can attach to the NIC directly instead of via a separate board-level switch.
         correct: true
         explanation: Integrating the switch shortens the GPU-NIC path and guarantees affinity by construction. Check platform docs for the exact wiring.
       - id: b
-        text: They replace PCIe with Ethernet to the GPU.
+        text: They replace PCIe with an Ethernet link to the GPU, so GPU memory is reached over the same protocol as the rest of the fabric.
         explanation: The host interface is still PCIe.
       - id: c
-        text: They drop RDMA support to save power.
+        text: They drop RDMA offload to save power, leaving the transport to the GPU, which then drives the fabric directly.
         explanation: RDMA is the core function of a SuperNIC.
       - id: d
-        text: They only support InfiniBand.
+        text: They support only InfiniBand (XDR), so Ethernet AI fabrics need a different adapter family altogether.
         explanation: ConnectX-8 class adapters support both InfiniBand (XDR) and Ethernet.
     tags: [supernic, connectx]

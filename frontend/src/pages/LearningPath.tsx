@@ -29,16 +29,16 @@ export default function LearningPath() {
                 const st = moduleStats(ix, progress, m);
                 return (
                   <div key={m.id} className="relative rounded-2xl border border-line bg-panel p-5">
-                    <span className={`absolute -left-[31px] top-6 h-3 w-3 rounded-full border-2 ${st.done === st.total && st.total ? 'border-accent bg-accent' : st.read ? 'border-accent bg-bg' : 'border-line bg-bg'}`} />
+                    <span aria-hidden className={`absolute -left-[31px] top-6 h-3 w-3 rounded-full border-2 ${st.done === st.total && st.total ? 'border-accent bg-accent' : st.read ? 'border-accent bg-bg' : 'border-line bg-bg'}`} />
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <div className="font-mono text-xs text-muted">Module {m.order}</div>
-                        <Link to={`/module/${m.id}`} className="text-lg font-semibold hover:text-accent">{m.title}</Link>
+                        <h3><Link to={`/module/${m.id}`} className="text-lg font-semibold hover:text-accent">{m.title}</Link></h3>
                         <p className="mt-1 max-w-3xl text-sm text-muted">{m.summary}</p>
                       </div>
                       <div className="w-40 text-right font-mono text-xs text-muted">
                         <div className="mb-1.5 flex items-center justify-end gap-1"><Clock size={12} />{Math.round(st.minutes / 60 * 10) / 10} h</div>
-                        <Bar value={st.pct} />
+                        <Bar value={st.pct} label={`Module ${m.order} mastered`} />
                         <div className="mt-1">{st.done}/{st.total} mastered</div>
                       </div>
                     </div>
@@ -49,8 +49,8 @@ export default function LearningPath() {
                         return (
                           <li key={l.id}>
                             <Link to={`/lesson/${l.id}`} className="flex items-start gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-panel-2">
-                              <Icon size={16} className={`mt-0.5 shrink-0 ${done ? 'text-accent' : 'text-muted'}`} />
-                              <span>{l.title}</span>
+                              <Icon size={16} aria-hidden className={`mt-0.5 shrink-0 ${done ? 'text-accent' : 'text-muted'}`} />
+                              <span>{l.title}<span className="sr-only">{done ? ' (mastered)' : progress.lessons[l.id] ? ' (read)' : ''}</span></span>
                             </Link>
                           </li>
                         );

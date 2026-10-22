@@ -39,6 +39,8 @@ const INFO: Record<Code, { text: string; tone: string; gdr: string }> = {
 };
 
 const CPU_AFF = ['0-55,112-167', '56-111,168-223'];
+/** Header cells sit on the always-dark code background; lesson prose styles would otherwise paint them light. */
+const TH = { background: 'transparent', borderColor: 'rgba(255,255,255,.12)' } as const;
 
 function pathPoints(a: Dev, b: Dev): [number, number][] {
   if (a.id === b.id) return [];
@@ -69,7 +71,8 @@ export default function PcieTopo() {
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted">Click two devices (GPU↔NIC or GPU↔GPU), or a cell in the matrix. Illustrative layout, similar in spirit to an HGX H100 board.</p>
-      <svg viewBox="0 0 760 400" className="w-full" role="img" aria-label="PCIe topology of an 8-GPU server">
+      <svg viewBox="0 0 760 400" className="w-full" role="group"
+        aria-label={`PCIe topology of an 8-GPU server: 2 CPUs, 4 PCIe switch complexes, each GPU paired with a NIC under one switch, GPUs joined by NVSwitch. Selected: ${sel.join(' and ')}${c ? `, path ${c}` : ''}.`}>
         {/* static wiring */}
         <g stroke="var(--border)" strokeWidth={1.5} fill="none">
           <line x1={SX(0) + 60} y1={Y.cpu} x2={SX(1) - 60} y2={Y.cpu} strokeWidth={3} />
@@ -111,6 +114,7 @@ export default function PcieTopo() {
           return (
             <g key={d.id} onClick={() => click(d.id)} style={{ cursor: 'pointer' }} role="button" tabIndex={0} aria-label={d.id} aria-pressed={on}
               onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); click(d.id); } }}>
+              <title>{`${d.id}${d.kind === 'NIC' ? ` (mlx5_${d.idx})` : ''}, NUMA ${d.socket}`}</title>
               <rect x={d.x - 19} y={d.y - 16} width={38} height={32} rx={5} fill={on ? (gpu ? 'var(--accent-soft)' : 'var(--panel-2)') : 'var(--panel)'} stroke={on ? 'var(--text)' : gpu ? 'var(--accent)' : 'var(--data)'} strokeWidth={on ? 2.5 : 1.5} />
               <text x={d.x} y={d.y - 2} textAnchor="middle" fontSize={9} fill={gpu ? 'var(--accent)' : 'var(--data)'} fontFamily="var(--font-mono)">{d.kind}</text>
               <text x={d.x} y={d.y + 10} textAnchor="middle" fontSize={11} fontWeight={700} fill="var(--text)" fontFamily="var(--font-mono)">{d.idx}</text>
@@ -119,7 +123,7 @@ export default function PcieTopo() {
         })}
       </svg>
 
-      <div className="rounded-lg border border-line bg-panel-2 p-3 text-sm">
+      <div className="rounded-lg border border-line bg-panel-2 p-3 text-sm" aria-live="polite">
         {b && c ? (
           <>
             <div className="flex flex-wrap items-center gap-2">
@@ -133,26 +137,26 @@ export default function PcieTopo() {
         ) : <span className="text-muted">Selected {a.id}. Click a second device.</span>}
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-line" style={{ background: 'var(--code-bg)', color: 'var(--code-text)' }}>
+      <div className="overflow-x-auto rounded-lg border border-line" style={{ background: 'var(--code-bg)', color: 'var(--code-text)' }} tabIndex={0} role="region" aria-label="nvidia-smi topo -m matrix">
         <div className="px-3 pt-2 font-mono text-[11px] opacity-70">$ nvidia-smi topo -m</div>
         <table className="m-2 border-collapse font-mono text-[11px]" onMouseLeave={() => setHover(null)}>
           <thead>
             <tr>
-              <th className="px-1.5 py-0.5" />
-              {ORDER.map((d, ci) => <th key={d.id} className={`px-1.5 py-0.5 font-normal ${hover?.[1] === ci ? 'text-[#4ade80]' : ''}`}>{d.id}</th>)}
-              <th className="px-1.5 py-0.5 text-left font-normal">CPU Affinity</th>
-              <th className="px-1.5 py-0.5 text-left font-normal">NUMA Affinity</th>
+              <th className="px-1.5 py-0.5" style={TH}><span className="sr-only">Device</span></th>
+              {ORDER.map((d, ci) => <th key={d.id} scope="col" style={TH} className={`px-1.5 py-0.5 font-normal ${hover?.[1] === ci ? 'text-[#4ade80]' : ''}`}>{d.id}</th>)}
+              <th scope="col" style={TH} className="px-1.5 py-0.5 text-left font-normal">CPU Affinity</th>
+              <th scope="col" style={TH} className="px-1.5 py-0.5 text-left font-normal">NUMA Affinity</th>
             </tr>
           </thead>
           <tbody>
             {ORDER.map((r, ri) => (
               <tr key={r.id}>
-                <th className={`px-1.5 py-0.5 text-left font-normal ${hover?.[0] === ri ? 'text-[#4ade80]' : ''}`}>{r.id}</th>
+                <th scope="row" style={TH} className={`px-1.5 py-0.5 text-left font-normal ${hover?.[0] === ri ? 'text-[#4ade80]' : ''}`}>{r.id}</th>
                 {ORDER.map((col, ci) => {
                   const cc = code(r, col);
                   const selected = (sel[0] === r.id && sel[1] === col.id) || (sel[1] === r.id && sel[0] === col.id);
                   const cross = hover && (hover[0] === ri || hover[1] === ci);
-                  const color = cc === 'SYS' ? '#f87171' : cc === 'NODE' || cc === 'PHB' ? '#fbbf24' : cc === 'X' ? '#6b7a90' : '#4ade80';
+                  const color = cc === 'SYS' ? '#f87171' : cc === 'NODE' || cc === 'PHB' ? '#fbbf24' : cc === 'X' ? '#8190a6' : '#4ade80';
                   return (
                     <td key={col.id} onMouseEnter={() => setHover([ri, ci])} onClick={() => cc !== 'X' && pick(ri, ci)}
                       className="cursor-pointer px-1.5 py-0.5 text-center"

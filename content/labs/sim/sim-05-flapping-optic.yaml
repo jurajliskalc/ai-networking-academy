@@ -21,18 +21,18 @@ diagnosis:
   prompt: Which evidence best identifies the root cause?
   options:
     - id: a
-      text: node03 enp154s0np0 shows rx_pcs_symbol_err_phy (symbols FEC could not correct), rx_symbol_err_phy and rx_crc_errors_phy rising, a raw BER around 3E-04 (above what RS-FEC can correct) with post-FEC errors, low RX power on one lane and link flaps in dmesg. The leaf05 swp3 cable or optic is bad.
+      text: node03 enp154s0np0 shows uncorrectable symbol errors, CRC errors, a raw BER of 3E-04 with post-FEC errors, one weak RX lane and link flaps, so the leaf05 swp3 optic or cable is bad.
       correct: true
-      explanation: Symbol errors and a pre-FEC BER far above normal, uncorrectable (post-FEC) errors, one weak lane and flaps all point at the physical link. Corrupted packets are dropped and RDMA retransmits them, so that rail paces the collective.
+      explanation: rx_pcs_symbol_err_phy counts symbols FEC could not correct, and a raw BER around 3E-04 is above what RS(544,514) FEC can correct, so post-FEC errors appear. Together with rising rx_crc_errors_phy, one lane at low RX power and link flaps in dmesg, everything points at the physical link. Corrupted packets are dropped and RDMA retransmits them, so that rail paces the collective.
     - id: b
-      text: PFC pause counters are high on node03, so the fabric is congested.
-      explanation: Pause counters on this link are normal, and congestion does not produce CRC or symbol errors.
+      text: node03 enp154s0np0 shows rising rx_prio3_pause and tx_prio3_pause counters, and leaf05 swp3 is sending PFC pause frames, so rail 4 is congested and paced by pauses.
+      explanation: Pause counters on this link are in the same range as on healthy links, and congestion does not produce CRC or symbol errors.
     - id: c
-      text: The out_of_sequence counters prove a NIC firmware bug.
-      explanation: out_of_sequence counts gaps in PSNs seen by the receiver. It is a consequence of the dropped (corrupted) packets, not a cause.
+      text: out_of_sequence and packet_seq_err climbing on node03 mlx5_4 point at a ConnectX firmware bug that mis-orders RDMA packets on that NIC.
+      explanation: out_of_sequence counts gaps in PSNs seen by the receiver. It is a consequence of the dropped (corrupted) packets, not a cause, and the same firmware runs on every NIC.
     - id: d
-      text: The GPU on node03 is throttling.
-      explanation: GPU throttling would not create link-layer errors on one NIC.
+      text: node03 enp154s0np0 shows rx_corrected_bits_phy rising, which only proves that FEC is doing its job. The link is healthy and the slowdown lies elsewhere.
+      explanation: Corrected bits alone are normal on PAM4 links, but this link also shows uncorrectable symbol errors, CRC errors, post-FEC errors, a weak lane and flaps. It is not healthy.
 checks:
   - { description: "leaf05 swp3 link is clean (BER back to normal)", check: link_clean, args: { switch: leaf05, port: swp3 } }
   - { description: "all_reduce bus bandwidth is above 360 GB/s", check: allreduce_min_busbw, args: { value: 360 } }

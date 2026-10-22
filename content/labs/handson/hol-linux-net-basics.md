@@ -7,12 +7,16 @@ estimated_minutes: 60
 environment: linux-vm
 lessons: [linux-networking-toolkit, mtu-jumbo-frames]
 files: labs/hol-linux-net-basics
-verified: false
+verified: true
+tier: 0
+fabric: any
+requires: [linux-vm]
+summary: "Namespaces, veth pairs and a bridge form a tiny rack; reproduce and diagnose the classic jumbo-frame black hole."
 ---
 
 > [!NOTE]
-> This lab has been syntax-checked (`bash -n` on every script) but has not yet been executed end
-> to end on a real VM. If a command behaves differently on your system, please report it.
+> Verified end to end (every task, `check.sh` and `cleanup.sh`) on Ubuntu 24.04 under WSL2 (kernel 6.6.87.2-microsoft-standard-WSL2) on 2026-10-22; see `labs/README.md` for the exact versions and the caveats of WSL2.
+> If a command behaves differently on your system, please report it.
 
 ## Goal
 
@@ -62,6 +66,9 @@ sudo ip netns add hol1-b
 sudo ip link add br-hol1 type bridge
 sudo ip link set br-hol1 up
 
+# Let frames switched by br-hol1 pass the host firewall (see the note below)
+sudo iptables -I FORWARD -i br-hol1 -o br-hol1 -j ACCEPT
+
 # Cable 1: a-eth0 (inside hol1-a) <-> a-br (bridge port in the host)
 sudo ip link add a-br type veth peer name a-eth0
 sudo ip link set a-eth0 netns hol1-a
@@ -85,6 +92,15 @@ sudo ip -n hol1-b addr add 10.10.0.2/24 dev b-eth0
 
 (Or run `sudo ./setup.sh` from `labs/hol-linux-net-basics/`.)
 
+> [!WARNING]
+> **Why the `iptables` line?** Docker (installed by `setup-ubuntu.sh` for the containerlab labs)
+> loads the `br_netfilter` module, which makes IPv4 frames crossing *any* Linux bridge traverse the
+> host's iptables `FORWARD` chain, and Docker sets that chain's policy to `DROP`. Without the
+> `ACCEPT` rule, ARP still works (it is not IP) but every ping across `br-hol1` silently disappears:
+> a firewall black hole that looks a lot like the MTU black hole this lab is about. Check with
+> `sysctl net.bridge.bridge-nf-call-iptables` (1 = bridged traffic is filtered) and
+> `sudo iptables -S FORWARD`. On a VM without Docker the rule is harmless. `cleanup.sh` removes it.
+
 **Observe:**
 
 ```bash
@@ -104,7 +120,7 @@ ping, exactly like a hardware switch's MAC table.
 ### Task 2: Read the interfaces like an engineer
 
 ```bash
-ethtool a-br              # speed/duplex/link as reported by the driver
+sudo ethtool a-br         # speed/duplex/link as reported by the driver
 ethtool -i a-br           # driver name
 ethtool -S a-br           # driver statistics
 ethtool -k a-br | grep -E 'segmentation|scatter|receive-offload'
@@ -139,7 +155,7 @@ sudo ip link set b-br mtu 9000
 sudo ip link set br-hol1 mtu 9000
 # b-eth0 inside hol1-b stays at 1500
 
-ip -br link show master br-hol1
+ip link show master br-hol1 | grep -o '^[0-9]*: [^:]*\|mtu [0-9]*'
 sudo ip -n hol1-a link show a-eth0 | grep -o 'mtu [0-9]*'
 sudo ip -n hol1-b link show b-eth0 | grep -o 'mtu [0-9]*'
 ```

@@ -39,6 +39,14 @@ else
   fail "dctcp is not available (sudo modprobe tcp_dctcp)"
 fi
 
+dctcp_ok=0
+if grep -qw dctcp /proc/sys/net/ipv4/tcp_allowed_congestion_control; then
+  pass "dctcp is in net.ipv4.tcp_allowed_congestion_control (namespaces may select it)"
+  dctcp_ok=1
+else
+  fail "dctcp is not in net.ipv4.tcp_allowed_congestion_control (namespaces get EPERM; re-run setup.sh)"
+fi
+
 qd=$(ip netns exec ecn-r tc qdisc show dev to-rcv)
 if grep -q 'htb' <<<"$qd"; then pass "HTB shaper present on ecn-r to-rcv"; else fail "no HTB shaper on ecn-r to-rcv"; fi
 if grep -qE '^qdisc red .* ecn' <<<"$qd"; then
@@ -60,7 +68,7 @@ restore() {
 }
 trap restore EXIT
 
-if grep -qw dctcp /proc/sys/net/ipv4/tcp_available_congestion_control; then
+if [[ $dctcp_ok -eq 1 ]]; then
   ip netns exec ecn-s2 sysctl -q -w net.ipv4.tcp_congestion_control=dctcp
   ip netns exec ecn-s2 sysctl -q -w net.ipv4.tcp_ecn=1
   ip netns exec ecn-rcv sysctl -q -w net.ipv4.tcp_congestion_control=dctcp

@@ -23,4 +23,11 @@ for ns in ecn-s1 ecn-s2 ecn-s3 ecn-r ecn-rcv; do
   fi
 done
 ip link del ecntmp1 2>/dev/null || true
+
+if [[ -f /tmp/ecn-allowed-cc.orig ]]; then
+  orig=$(cat /tmp/ecn-allowed-cc.orig)
+  echo "+ sysctl -w net.ipv4.tcp_allowed_congestion_control=\"$orig\""
+  sysctl -q -w net.ipv4.tcp_allowed_congestion_control="$orig" || true
+  rm -f /tmp/ecn-allowed-cc.orig
+fi
 echo "Cleanup complete."

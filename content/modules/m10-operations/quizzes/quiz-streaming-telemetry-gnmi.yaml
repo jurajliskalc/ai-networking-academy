@@ -12,10 +12,10 @@ questions:
         correct: true
         explanation: Oper status is discrete state; you want the change immediately and nothing in between. A heartbeat guards against silently missed updates.
       - id: b
-        text: STREAM with SAMPLE every 10 minutes.
+        text: STREAM with SAMPLE every 10 minutes to limit load.
         explanation: A flap that lasts a few seconds would be missed entirely or reported late.
       - id: c
-        text: ONCE, repeated by cron every minute.
+        text: ONCE subscriptions, re-run by cron every minute.
         explanation: This rebuilds polling with extra session overhead and still misses short events.
     tags: [gnmi]
   - id: q2
@@ -29,14 +29,14 @@ questions:
         correct: true
         explanation: Bursts that fill the buffer for microseconds to milliseconds are almost never caught by a 10 s point sample. A watermark reports the worst moment in each interval.
       - id: b
-        text: The pause counters are wrong because the buffer is empty; ignore them.
+        text: The pause counters are wrong; with an empty buffer no pause can be sent, so ignore them.
         explanation: Pauses are generated only when ingress buffers cross XOFF; they prove the buffer filled at some point.
       - id: c
-        text: The switch is lying; replace it.
+        text: The switch reports occupancy incorrectly; open a hardware case and replace it.
         explanation: Nothing indicates a hardware fault; this is a sampling artefact.
       - id: d
-        text: Switch to SNMP polling at 5 minutes for accuracy.
-        explanation: Longer intervals make the averaging problem worse.
+        text: Poll buffer occupancy with SNMP every 5 minutes instead, which averages out the noise.
+        explanation: Longer intervals make the averaging problem worse; the bursts disappear completely.
     tags: [buffers, sampling]
   - id: q3
     type: scenario
@@ -45,17 +45,17 @@ questions:
       its sessions to half the leaves two hours earlier. What should you add?
     options:
       - id: a
-        text: Alerts on collector and target health (scrape up, stale series, subscription resets) plus gNMI heartbeats.
+        text: Alerts on collector and target health (target up, stale series, subscription resets) plus gNMI heartbeats.
         correct: true
         explanation: A silent pipeline looks identical to a quiet fabric. Monitoring the monitoring is mandatory.
       - id: b
-        text: A higher sample interval so the collector has less load.
-        explanation: May reduce load but does not detect lost sessions.
+        text: A longer sample interval, so the collector has less load and stops dropping sessions.
+        explanation: It may reduce load, but it does not detect lost sessions, so the next loss would be just as silent.
       - id: c
-        text: More dashboards per leaf.
-        explanation: Dashboards built on missing data still show nothing.
+        text: More per-leaf dashboards, so that engineers notice when a leaf's graphs look flat.
+        explanation: Missing data and a quiet port look the same on a dashboard, and nothing alerts anyone; dashboards built on missing data still show nothing.
       - id: d
-        text: ON_CHANGE subscriptions for all counters.
+        text: ON_CHANGE subscriptions for all counters, so updates arrive the moment anything changes.
         explanation: Counters change continuously; ON_CHANGE is for state and does not solve session loss detection.
     tags: [pipeline, alerting]
   - id: q4
@@ -63,15 +63,15 @@ questions:
     prompt: In gNMI notifications, why should rate calculations use the device timestamp?
     options:
       - id: a
-        text: Collector receive time can drift when the collector or network is backlogged, creating false spikes and dips.
+        text: Collector receive time shifts when the collector or network is backlogged, creating false spikes and dips.
         correct: true
         explanation: The device timestamp marks when the value was read, so deltas divided by device time are accurate.
       - id: b
-        text: gNMI notifications do not carry any timestamp, so the collector must invent one.
+        text: gNMI notifications carry no timestamp at all, so the collector has to assign one when each update arrives.
         explanation: Each Notification carries a timestamp in nanoseconds since the epoch.
       - id: c
-        text: Device timestamps are in SNMP TimeTicks, which Prometheus requires.
-        explanation: gNMI uses nanoseconds since the epoch; TimeTicks are an SNMP concept.
+        text: Device timestamps are SNMP TimeTicks, the format Prometheus requires for counter rates.
+        explanation: gNMI uses nanoseconds since the epoch; TimeTicks are an SNMP concept, and Prometheus does not require them.
     tags: [gnmi]
   - id: q5
     type: scenario
@@ -80,17 +80,17 @@ questions:
       What is the main risk?
     options:
       - id: a
-        text: Cardinality and ingest volume explode, overwhelming the TSDB; curate counters and keep job_id out of raw series.
+        text: Cardinality and ingest volume explode and overwhelm the TSDB; curate counters and keep job_id off raw series.
         correct: true
         explanation: Millions of series at 1 s, multiplied by a churning job_id label, is a classic way to take down Prometheus.
       - id: b
-        text: The NICs will drop RoCE traffic while counters are read.
-        explanation: Reading counters does not drop data-plane traffic; the cost is on the monitoring side.
+        text: The NICs will pause or drop RoCE traffic while the driver reads hundreds of counters each second.
+        explanation: Reading counters does not drop or pause data-plane traffic; the cost is on the monitoring side.
       - id: c
-        text: gNMI cannot transport integer values.
-        explanation: gNMI supports integer, float, string and other typed values.
+        text: gNMI cannot carry 64-bit integer counters, so the values will wrap and produce wrong rates.
+        explanation: gNMI typed values include 64-bit unsigned and signed integers as well as float, string and other types.
       - id: d
-        text: There is no risk; more data is always better.
+        text: None worth planning for; storage is cheap, and more labelled data is always better to have during an incident.
         explanation: Uncurated high-cardinality data costs money and reliability and slows queries during incidents.
     tags: [cardinality]
   - id: q6
@@ -100,18 +100,18 @@ questions:
       design is most robust?
     options:
       - id: a
-        text: Alert when a port's pause rate exceeds a multiple of the median of comparable ports, sustained for some minutes.
+        text: Alert when a port's pause rate exceeds a multiple of the median of comparable ports, sustained for minutes.
         correct: true
         explanation: Peer-relative outlier detection adapts to workload, and symmetry makes outliers meaningful.
       - id: b
-        text: Alert whenever the cumulative pause counter exceeds 1,000,000.
+        text: Alert when the cumulative pause counter on any port exceeds a fixed value such as 1,000,000.
         explanation: Cumulative values reflect uptime, not current behaviour.
       - id: c
-        text: Alert on any pause frame at all.
+        text: Alert on any pause frame at all, since a lossless fabric should never need to pause.
         explanation: Some pauses are normal under incast; this alert would fire constantly.
       - id: d
-        text: Disable pause alerting and rely on job failures.
-        explanation: Slowdowns rarely cause failures; you would miss the most common harm.
+        text: Disable pause alerting and rely on job failures, since pauses on their own never lose data.
+        explanation: Pause storms slow jobs long before anything fails; you would miss the most common harm.
     tags: [alerting, pfc]
   - id: q7
     type: multi
@@ -138,13 +138,13 @@ questions:
     prompt: Where does high-frequency (sub-second) switch telemetry fit best?
     options:
       - id: a
-        text: As a targeted diagnostic on a few ports during an investigation, such as microbursts during a collective.
+        text: As a targeted diagnostic on a few ports during an investigation, such as microbursts in a collective.
         correct: true
         explanation: Its data volume is orders of magnitude higher than normal sampling, so it is a microscope, not a fleet-wide default.
       - id: b
-        text: As the default for every counter on every port forever.
+        text: As the fleet-wide default for every counter on every port, replacing normal sampling.
         explanation: The volume and cost would be enormous for little added value.
       - id: c
-        text: Only for optics temperature.
-        explanation: Optics temperature moves slowly; 60 s sampling is enough.
+        text: Only for optics temperature and power, whose readings change fastest on hot links.
+        explanation: Optics temperature and power move slowly; 60 s sampling is enough.
     tags: [high-frequency]

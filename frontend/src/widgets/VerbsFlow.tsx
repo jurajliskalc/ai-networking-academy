@@ -136,7 +136,7 @@ function Seg<T extends string | number>({ label, value, options, onChange, rende
   return (
     <div>
       <div className="mb-1 font-mono text-[10px] uppercase tracking-[0.14em] text-muted">{label}</div>
-      <div className="flex flex-wrap gap-1">
+      <div className="flex flex-wrap gap-1" role="group" aria-label={label}>
         {options.map((o) => (
           <button key={String(o)} type="button" onClick={() => onChange(o)} aria-pressed={o === value} disabled={disabled?.(o)}
             className={`rounded-md border px-2 py-1 font-mono text-xs disabled:opacity-30 ${o === value ? 'border-accent bg-accent-soft text-accent' : 'border-line bg-panel hover:bg-panel-2'}`}>
@@ -205,7 +205,7 @@ export default function VerbsFlow() {
         </div>
       </div>
 
-      <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-7" aria-label="Components touched in this step">
+      <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-7" role="group" aria-label="Components touched in this step">
         {PARTS.map((p) => {
           const on = step.active.includes(p.id);
           return (
@@ -213,6 +213,7 @@ export default function VerbsFlow() {
               <div className="font-mono text-[10px] uppercase tracking-[0.1em]">{p.host ? `Host ${p.host}` : 'Network'}</div>
               <div className="text-xs font-semibold leading-tight">{p.label}</div>
               {p.id === 'cpuB' && op !== 'send' && <div className="mt-0.5 text-[10px] text-muted">untouched</div>}
+              {on && <span className="sr-only">(active in this step)</span>}
             </div>
           );
         })}
@@ -223,7 +224,7 @@ export default function VerbsFlow() {
         <div className={`text-base font-semibold ${step.tone === 'danger' ? 'text-danger' : ''}`}>{step.title}</div>
         <p className="mt-1.5 text-sm leading-relaxed text-muted">{step.detail}</p>
         {shownPk && (
-          <div className="mt-3 overflow-x-auto">
+          <div className="mt-3 overflow-x-auto" tabIndex={0} role="region" aria-label="Packets on the wire in this step">
             <table className="w-full min-w-[420px] text-left font-mono text-xs">
               <thead className="text-muted"><tr><th className="py-1 pr-3">PSN</th><th className="pr-3">BTH opcode</th><th className="pr-3">Headers</th><th className="pr-3">Payload</th><th>Dir</th></tr></thead>
               <tbody>
@@ -257,7 +258,7 @@ export default function VerbsFlow() {
         {steps.map((st, k) => (
           <li key={k}>
             <button type="button" onClick={() => { setPlaying(false); setI(k); }} aria-current={k === idx ? 'step' : undefined}
-              className={`text-left hover:text-fg ${k === idx ? 'font-semibold text-fg' : ''} ${st.tone === 'danger' ? 'text-danger' : ''}`}>{k + 1}. {st.title}</button>
+              className={`min-h-6 py-0.5 text-left hover:text-fg ${k === idx ? 'font-semibold text-fg' : ''} ${st.tone === 'danger' ? 'text-danger' : ''}`}>{k + 1}. {st.title}</button>
           </li>
         ))}
       </ol>

@@ -191,7 +191,8 @@ function Toggle({ on, set, children }: { on: boolean; set: (v: boolean) => void;
 
 function Topology({ cfg, paths }: { cfg: RouteCfg; paths: (Path | null)[] }) {
   return (
-    <svg viewBox="0 0 520 240" className="w-full" role="img" aria-label="Leaf-spine topology with flow paths">
+    <svg viewBox="0 0 520 240" className="w-full" role="img"
+      aria-label={`Leaf-spine topology: spines S1 and S2, leaves L1 to L4 each with one host. Failed links: ${cfg.failed.length ? cfg.failed.join(', ') : 'none'}. Paths: ${paths.map((p, i) => p && `${FLOWS[i].id} ${[FLOWS[i].src, ...p.hops.map((h) => h.q.split('>')[1])].join(' to ')}${p.outcome === 'delivered' ? ` to ${FLOWS[i].dst}` : p.outcome === 'ttl' ? ', looping' : ', no route'}`).filter(Boolean).join('; ') || 'none'}.`}>
       <defs>{FLOWS.map((f) => <marker key={f.id} id={`ah-${f.id}`} viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill={f.color} /></marker>)}</defs>
       {ALL_LINKS.map((k) => { const [s, l] = k.split('-'); const dead = cfg.failed.includes(k); const [x1, y1] = POS[s], [x2, y2] = POS[l];
         return <g key={k}><line x1={x1} y1={y1} x2={x2} y2={y2} stroke={dead ? 'var(--danger)' : 'var(--border)'} strokeWidth={dead ? 1.5 : 2} strokeDasharray={dead ? '5 4' : undefined} />
@@ -214,7 +215,8 @@ function DepGraph({ nodes, edges, cyc, sim, dead, r }: { nodes: string[]; edges:
   const N = nodes.length, cx = 260, cy = 150, R = 112;
   const pos = new Map(nodes.map((k, i) => [k, [cx + R * Math.cos((2 * Math.PI * i) / N - Math.PI / 2), cy + R * Math.sin((2 * Math.PI * i) / N - Math.PI / 2)] as [number, number]]));
   return (
-    <svg viewBox="0 0 520 300" className="w-full" role="img" aria-label="Buffer dependency graph">
+    <svg viewBox="0 0 520 300" className="w-full" role="img"
+      aria-label={`Buffer dependency graph: ${N} lossless buffers, ${edges.length} dependencies. ${cyc.size ? `On a cycle: ${nodes.filter((k) => cyc.has(k)).map(short).join(', ')}.` : 'No cycle.'} ${dead.length ? `Deadlocked: ${dead.map(short).join(', ')}.` : ''} Paused: ${nodes.filter((k) => !isLossy(k, r) && sim.xoff[k]).map(short).join(', ') || 'none'}.`}>
       <defs><marker id="dep-ah" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="var(--muted)" /></marker>
         <marker id="dep-ah-c" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="var(--danger)" /></marker></defs>
       {N === 0 && <text x={cx} y={cy} textAnchor="middle" fontSize={12} fill="var(--muted)">No lossless buffers in use: no PAUSE, so no dependencies.</text>}
@@ -277,7 +279,7 @@ export default function PfcDeadlock() {
         </div>
         <div>
           <div className="mb-1 font-mono text-[10px] uppercase tracking-[0.14em] text-muted">Flows (lossless priority)</div>
-          <div className="flex flex-wrap gap-1">{FLOWS.map((f, i) => <Toggle key={f.id} on={on[i]} set={(v) => setOn(on.map((x, j) => (j === i ? v : x)))}><span style={{ color: f.color }}>■</span> {f.id} {f.src}→{f.dst}</Toggle>)}</div>
+          <div className="flex flex-wrap gap-1">{FLOWS.map((f, i) => <Toggle key={f.id} on={on[i]} set={(v) => setOn(on.map((x, j) => (j === i ? v : x)))}><span style={{ color: f.color }} aria-hidden>■</span> {f.id} {f.src}→{f.dst}</Toggle>)}</div>
         </div>
         <div>
           <div className="mb-1 font-mono text-[10px] uppercase tracking-[0.14em] text-muted">Routing state</div>
@@ -329,7 +331,8 @@ export default function PfcDeadlock() {
 
       <div className={`rounded-lg border px-3 py-2 text-sm ${status.tone}`} role="status">{status.text}</div>
 
-      <div className="flex h-10 items-end gap-px rounded-md border border-line bg-panel-2 p-1" aria-label="Delivered packets per tick">
+      <div className="flex h-10 items-end gap-px rounded-md border border-line bg-panel-2 p-1" role="img"
+        aria-label={`Delivered packets per tick over the last ${sim.recent.length} ticks: ${sim.recent.reduce((a, r) => a + r.reduce((x, y) => x + y, 0), 0)} in total, ${last10.reduce((a, b) => a + b, 0)} in the last 10.`}>
         {sim.recent.map((r, i) => { const v = r.reduce((a, b) => a + b, 0); return <div key={i} className="flex-1 rounded-sm bg-accent" style={{ height: `${Math.max(4, v * 25)}%`, opacity: v ? 1 : 0.25 }} />; })}
       </div>
 

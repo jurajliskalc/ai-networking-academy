@@ -8,13 +8,17 @@ environment: linux-vm
 lessons: [rocev2-encapsulation]
 files: labs/hol-rocev2-wireshark
 verified: false
+tier: 0
+fabric: any
+requires: [linux-vm]
+summary: "Capture Soft-RoCE packets and decode the BTH: opcodes, PSNs, QPNs and ACKs, exactly as a packet analyzer sees RoCEv2."
 ---
 
 > [!NOTE]
-> This lab has been syntax-checked (`bash -n` on every script) but has not yet been executed end
-> to end on real VMs. The synthetic capture generator and `check.sh` were tested against
-> Wireshark/tshark 3.0; newer Wireshark versions should decode the same fields, but confirm field
-> names with `tshark -G fields` as shown in Task 2.
+> Only the single-VM path (Option B: the synthetic capture with Tasks 2, 5 and 7, and `check.sh` on
+> it) has been executed, with tshark 4.2.2 on Ubuntu 24.04; the field names below were confirmed
+> there with `tshark -G fields`. The real two-VM Soft-RoCE capture (Option A) has not yet been run,
+> so this lab stays unverified. If a command behaves differently on your system, please report it.
 
 ## Goal
 
@@ -66,7 +70,8 @@ GID=$(./find_gid.sh -q rxe0); echo "GID index: $GID"
 ```
 
 Note each VM's IP address on `$IF`. Below, **VM A** (IP `$A_IP`) is the server and **VM B** is the
-client. Check plain connectivity first: `ping -c 3 $A_IP` from VM B. If `tshark` asks whether
+client. On VM B, set it in the shell you use for the tasks (`A_IP=<VM A's address>`), and check
+plain connectivity first: `ping -c 3 $A_IP` from VM B. If `tshark` asks whether
 non-root users may capture packets, either answer is fine; this lab captures with `sudo tcpdump`
 and reads files as a normal user.
 
@@ -118,7 +123,7 @@ First, confirm the field names on your Wireshark version:
 tshark -G fields | awk -F'\t' '$3 ~ /^infiniband\.(bth|reth|aeth)\./ {print $3"\t"$2}'
 ```
 
-On Wireshark 3.0 this prints names such as `infiniband.bth.opcode`, `infiniband.bth.destqp`,
+This prints names such as `infiniband.bth.opcode`, `infiniband.bth.destqp`,
 `infiniband.bth.psn`, `infiniband.bth.a` (AckReq), `infiniband.bth.p_key`, `infiniband.reth.va`,
 `infiniband.reth.r_key`, `infiniband.reth.dmalen`, `infiniband.aeth.syndrome` and
 `infiniband.aeth.msn`. If your version differs, substitute its names below.

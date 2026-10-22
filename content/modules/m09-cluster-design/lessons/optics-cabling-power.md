@@ -208,12 +208,12 @@ check the MFT documentation for the options available in your version.
 
 ```text
 # Illustrative, trimmed output of: ethtool -m eth2
-Identifier                 : 0x19 (OSFP 8X Pluggable Transceiver)
-Vendor name                : EXAMPLEVENDOR
-Module temperature         : 52.30 degrees C
-Laser output power (lane1) : 1.20 mW / 0.79 dBm
-Rx power (lane1)           : 0.98 mW / -0.09 dBm
-Rx power (lane3)           : 0.21 mW / -6.78 dBm     <- lane far below its peers
+Identifier                                : 0x19 (OSFP 8X Pluggable Transceiver)
+Vendor name                               : EXAMPLEVENDOR
+Module temperature                        : 52.30 degrees C
+Transmit avg optical power (Channel 1)    : 1.20 mW / 0.79 dBm
+Rcvr signal avg optical power (Channel 1) : 0.98 mW / -0.09 dBm
+Rcvr signal avg optical power (Channel 3) : 0.21 mW / -6.78 dBm     <- lane far below its peers
 ```
 
 One lane receiving several dB less than its neighbours is a classic dirty or damaged connector.

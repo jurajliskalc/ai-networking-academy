@@ -30,14 +30,14 @@ questions:
         correct: true
         explanation: RTR is where the QP learns who its peer is and how to receive from it.
       - id: b
-        text: Send PSN, timeout, retry_cnt, rnr_retry and max_rd_atomic.
+        text: Send PSN, timeout, retry_cnt, rnr_retry and max_rd_atomic, which govern how the QP sends.
         explanation: Those are the RTR to RTS attributes.
       - id: c
-        text: Port number, P_Key index and access flags only.
+        text: Port number, P_Key index and access flags only; the peer's details are supplied later at RTS.
         explanation: Those are set in the RESET to INIT transition.
       - id: d
-        text: Only the Q_Key.
-        explanation: A Q_Key is used by UD QPs, set at INIT.
+        text: Only the Q_Key, which identifies the peer QP for the connection.
+        explanation: A Q_Key is used by UD QPs and set at INIT; it does not identify an RC peer.
     tags: [qp-state-machine, attributes]
   - id: q3
     type: single
@@ -89,13 +89,13 @@ questions:
         correct: true
         explanation: The remote access error is the first error; it moved the QP to ERR, and everything else was flushed.
       - id: b
-        text: The fabric is dropping packets, causing the flush errors.
+        text: The fabric is dropping packets, and each flush error is the NIC reporting one packet that was lost on the way.
         explanation: Packet loss would show as retry-exceeded errors, not remote access errors; flushes are only consequences.
       - id: c
-        text: The CQ is too small, which causes flush errors.
+        text: The CQ is too small, so overflowing completions are flushed and reported as errors.
         explanation: CQ overflow causes an asynchronous CQ error, not a remote access error on a specific WR.
       - id: d
-        text: The local buffer was not registered.
+        text: The local buffer was not registered, so the NIC rejects the request before sending it.
         explanation: That would cause a local protection error (IBV_WC_LOC_PROT_ERR), not a remote access error.
     tags: [troubleshooting, completions]
   - id: q6
@@ -110,13 +110,13 @@ questions:
         correct: true
         explanation: A wrong GID index (wrong RoCE version or IP) lets the QP reach RTS but packets never reach the peer, so retries are exhausted.
       - id: b
-        text: Whether the MR has IBV_ACCESS_REMOTE_READ.
+        text: Whether the MR was registered with IBV_ACCESS_REMOTE_READ for the peer.
         explanation: Missing permissions produce access errors, not retry exhaustion.
       - id: c
-        text: Whether the CQ uses a completion channel.
+        text: Whether the CQ uses a completion channel or is polled in a busy loop.
         explanation: Polling versus events does not affect whether packets reach the peer.
       - id: d
-        text: Whether IBV_SEND_INLINE is set.
+        text: Whether IBV_SEND_INLINE is set on the first RDMA Write request.
         explanation: Inline only affects how the payload is fetched by the local NIC.
     tags: [roce, gid, troubleshooting]
   - id: q7
@@ -128,10 +128,10 @@ questions:
         correct: true
         explanation: RDMA Write is one-sided, so the remote application must be told separately (e.g. Write-with-Immediate or a follow-up Send).
       - id: b
-        text: The remote application has processed the data.
+        text: The remote application has processed the data, because the remote NIC raised a completion for it.
         explanation: The remote CPU is not involved in an RDMA Write and gets no notification.
       - id: c
-        text: The data has only been copied into a local kernel buffer.
+        text: The data has only been copied into a local kernel buffer and may not have left the host yet.
         explanation: RDMA does not stage data in kernel buffers.
     tags: [completions, semantics]
   - id: q8
@@ -145,12 +145,12 @@ questions:
         correct: true
         explanation: A QP needs the peer's QPN, PSN and address to move to RTR; without the exchange it stays in INIT.
       - id: b
-        text: The QPs ran out of retries and entered ERR.
-        explanation: Retry exhaustion would show ERR, and only happens once sending has started in RTS.
+        text: The QPs ran out of retries on a lossy path, and the driver reset them back to INIT.
+        explanation: Retry exhaustion moves a QP to ERR, not INIT, and only happens once sending has started in RTS.
       - id: c
-        text: The switches are dropping RDMA packets.
+        text: The switches are dropping RDMA packets, so the QP-to-QP handshake never completes.
         explanation: No RDMA packets are sent from INIT; the QP has not been connected yet.
       - id: d
-        text: The memory regions lack remote write permission.
+        text: The memory regions lack remote write permission, so the QPs cannot advance to RTR.
         explanation: Permissions are checked when operations arrive, not during state transitions.
     tags: [qp-state-machine, troubleshooting]

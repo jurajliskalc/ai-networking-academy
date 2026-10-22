@@ -31,31 +31,36 @@ export function Pill({ children, className = '' }: { children: ReactNode; classN
   return <span className={`inline-flex items-center gap-1 rounded-full border border-line bg-panel-2 px-2 py-0.5 text-[11px] text-muted ${className}`}>{children}</span>;
 }
 
-export function Bar({ value, className = '' }: { value: number; className?: string }) {
+/** A progress bar; `label` is its accessible name (required: a bare progressbar is announced without context). */
+export function Bar({ value, label, className = '' }: { value: number; label: string; className?: string }) {
   const v = Math.max(0, Math.min(100, value));
   return (
-    <div className={`h-1.5 w-full overflow-hidden rounded-full bg-panel-2 ${className}`} role="progressbar" aria-valuenow={Math.round(v)} aria-valuemin={0} aria-valuemax={100}>
+    <div className={`h-1.5 w-full overflow-hidden rounded-full bg-panel-2 ${className}`} role="progressbar" aria-label={label} aria-valuenow={Math.round(v)} aria-valuemin={0} aria-valuemax={100}>
       <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${v}%` }} />
     </div>
   );
 }
 
-export function Button({ children, onClick, variant = 'primary', disabled, to, className = '', type = 'button' }: {
+export function Button({ children, onClick, variant = 'primary', disabled, to, className = '', type = 'button', pressed, label }: {
   children: ReactNode; onClick?: () => void; variant?: 'primary' | 'ghost' | 'danger'; disabled?: boolean; to?: string; className?: string; type?: 'button' | 'submit';
+  /** For toggle and segmented-choice buttons: exposed as aria-pressed. */
+  pressed?: boolean;
+  /** Accessible name when the visible content is not enough. */
+  label?: string;
 }) {
   const cls = {
-    primary: 'bg-accent text-[#04120a] hover:brightness-110 font-semibold',
+    primary: 'bg-accent text-on-accent hover:brightness-110 font-semibold',
     ghost: 'border border-line bg-panel hover:bg-panel-2',
     danger: 'border border-danger/40 text-danger hover:bg-danger/10',
   }[variant];
   const base = `inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm transition disabled:cursor-not-allowed disabled:opacity-40 ${cls} ${className}`;
-  if (to) return <Link to={to} className={base}>{children}</Link>;
-  return <button type={type} className={base} onClick={onClick} disabled={disabled}>{children}</button>;
+  if (to) return <Link to={to} className={base} aria-label={label}>{children}</Link>;
+  return <button type={type} className={base} onClick={onClick} disabled={disabled} aria-pressed={pressed} aria-label={label}>{children}</button>;
 }
 
 export function Loading({ error }: { error?: string | null }) {
-  if (error) return <div className="rounded-xl border border-danger/40 bg-danger/10 p-4 text-sm text-danger">Could not load content: {error}. Did you run <code>npm run content</code>?</div>;
-  return <div className="space-y-3"><div className="h-8 w-2/3 animate-pulse rounded bg-panel-2" /><div className="h-4 w-full animate-pulse rounded bg-panel-2" /><div className="h-4 w-5/6 animate-pulse rounded bg-panel-2" /></div>;
+  if (error) return <div role="alert" className="rounded-xl border border-danger/40 bg-danger/10 p-4 text-sm text-danger">Could not load content: {error}. Did you run <code>npm run content</code>?</div>;
+  return <div className="space-y-3" role="status" aria-label="Loading"><div className="h-8 w-2/3 animate-pulse rounded bg-panel-2" /><div className="h-4 w-full animate-pulse rounded bg-panel-2" /><div className="h-4 w-5/6 animate-pulse rounded bg-panel-2" /></div>;
 }
 
 export function Stat({ label, value, sub }: { label: string; value: ReactNode; sub?: ReactNode }) {

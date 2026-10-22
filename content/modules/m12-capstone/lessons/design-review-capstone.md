@@ -200,7 +200,8 @@ records the choice in the decision log. Either way, **reserve the spine rack pos
 
 **Space check (constraint: 64 RU per row).** Per row: 8 rail leaves + 4 spines (16 spines spread
 across 4 rows; 8 per row in the 32-spine option) + 2 storage/front-end leaves + 2 OOB switches = 16 to
-20 switches. At 1-2 RU each (check the actual model), that is at most about 40 RU, inside the budget,
+20 switches. At 1-2 RU each (check the actual model), that is at most about 40 RU. The shared switches in the plan (border leaves, storage and front-end
+spines, the OOB aggregation pair) add roughly 2-3 more per row when spread over the 4 rows, still inside the budget,
 but note that cable management and patch panels for 512 links per row also consume rack units.
 
 > [!NOTE]
@@ -277,7 +278,9 @@ depend on the fabrics it manages, and must have its own path to the management s
 | 10.1.0.0/16 | Storage/front-end fabric (per-VRF subnets, loopbacks, VTEPs) | /16 |
 | 10.255.0.0/20 | Out-of-band management | /20 |
 
-Reserve the *next* /21s now for SUs 5-8 so growth does not fragment the plan.
+Reserve two more /21s now for SUs 5-8 (for example 10.0.24.0/21 for NIC links and 10.0.32.0/21 for
+leaf-spine links; 10.0.16.0/21 is not free because it contains the loopback /24) so growth does not
+fragment the plan.
 
 Routing follows RFC 7938: **eBGP underlay**, one private 4-byte ASN per leaf and one shared ASN for
 the spine layer, BGP unnumbered or /31 numbered sessions, ECMP across all spine paths, and

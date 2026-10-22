@@ -1,13 +1,20 @@
-import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Search } from 'lucide-react';
 import { useIndex } from '../content';
 import { Card, Loading, PageHeader, Pill } from '../components/ui';
 
 export default function Reference() {
   const { data: ix, error } = useIndex();
-  const [tab, setTab] = useState<'commands' | 'glossary'>('commands');
-  const [q, setQ] = useState('');
+  // ?tab=glossary&q=ECN deep links (used by site search) preselect the tab and the filter.
+  const [params] = useSearchParams();
+  const [tab, setTab] = useState<'commands' | 'glossary'>(params.get('tab') === 'glossary' ? 'glossary' : 'commands');
+  const [q, setQ] = useState(params.get('q') ?? '');
+  useEffect(() => {
+    const t = params.get('tab');
+    if (t === 'commands' || t === 'glossary') setTab(t);
+    if (params.has('q')) setQ(params.get('q') ?? '');
+  }, [params]);
   const [group, setGroup] = useState('all');
   const needle = q.trim().toLowerCase();
 
@@ -27,15 +34,16 @@ export default function Reference() {
         The tools of the trade, with what to look for in their output. Example output is illustrative; real output varies by version and platform.
       </PageHeader>
       <div className="mb-6 flex flex-wrap items-center gap-3">
-        <div className="inline-flex rounded-xl border border-line bg-panel p-1">
-          {(['commands', 'glossary'] as const).map((t) => <button key={t} onClick={() => setTab(t)} className={`rounded-lg px-4 py-2 text-sm capitalize ${tab === t ? 'bg-accent-soft font-medium text-accent' : 'text-muted'}`}>{t}</button>)}
+        <div className="inline-flex rounded-xl border border-line bg-panel p-1" role="group" aria-label="Show">
+          {(['commands', 'glossary'] as const).map((t) => <button key={t} type="button" aria-pressed={tab === t} onClick={() => setTab(t)} className={`rounded-lg px-4 py-2 text-sm capitalize ${tab === t ? 'bg-accent-soft font-medium text-accent' : 'text-muted'}`}>{t}</button>)}
         </div>
-        <label className="flex flex-1 items-center gap-2 rounded-xl border border-line bg-panel px-3 py-2 min-w-[220px]">
-          <Search size={16} className="text-muted" />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={tab === 'commands' ? 'Search commands, e.g. pause, gid, ber' : 'Search terms'} className="flex-1 bg-transparent text-sm outline-none" />
+        <label className="flex flex-1 items-center gap-2 rounded-xl border border-line bg-panel px-3 py-2 min-w-[220px] focus-within:border-accent">
+          <Search size={16} className="text-muted" aria-hidden />
+          <span className="sr-only">{tab === 'commands' ? 'Filter commands' : 'Filter glossary terms'}</span>
+          <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={tab === 'commands' ? 'Search commands, e.g. pause, gid, ber' : 'Search terms'} className="flex-1 bg-transparent text-sm outline-none" />
         </label>
         {tab === 'commands' && (
-          <select value={group} onChange={(e) => setGroup(e.target.value)} className="rounded-xl border border-line bg-panel px-3 py-2 text-sm">
+          <select value={group} onChange={(e) => setGroup(e.target.value)} aria-label="Command category" className="rounded-xl border border-line bg-panel px-3 py-2 text-sm">
             <option value="all">All categories</option>
             {ix.commands.map((g) => <option key={g.id} value={g.id}>{g.title}</option>)}
           </select>
@@ -52,21 +60,21 @@ export default function Reference() {
                   <Card key={i} className="p-4">
                     <div className="flex flex-wrap items-center gap-2"><code className="font-mono text-[0.92rem] font-semibold text-accent">{c.cmd}</code>{c.platform && <Pill>{c.platform}</Pill>}</div>
                     <p className="mt-1.5 text-sm">{c.summary}</p>
-                    {c.example && <pre className="mt-3 overflow-x-auto rounded-lg border border-line bg-[var(--code-bg)] p-3 font-mono text-xs leading-relaxed text-[var(--code-text)]">{c.example.trimEnd()}</pre>}
+                    {c.example && <pre tabIndex={0} aria-label={`Example output of ${c.cmd}`} className="mt-3 overflow-x-auto rounded-lg border border-line bg-[var(--code-bg)] p-3 font-mono text-xs leading-relaxed text-[var(--code-text)]">{c.example.trimEnd()}</pre>}
                     {c.notes && <p className="mt-2 text-[13px] text-muted">{c.notes}</p>}
                   </Card>
                 ))}
               </div>
             </section>
           ))}
-          {!commands.length && <p className="text-muted">No commands match.</p>}
+          {!commands.length && <p className="text-muted" role="status">No commands match.</p>}
         </div>
       ) : (
         <dl className="grid gap-3 md:grid-cols-2">
           {terms.map((t) => (
             <Card key={t.term} className="p-4">
               <dt className="font-semibold">{t.term}{t.expansion && <span className="ml-2 font-normal text-muted">{t.expansion}</span>}</dt>
-              <dd className="mt-1 text-sm text-muted">{t.definition}{t.lesson && <> <Link to={`/lesson/${t.lesson}`} className="text-data hover:underline">Lesson →</Link></>}</dd>
+              <dd className="mt-1 text-sm text-muted">{t.definition}{t.lesson && <> <Link to={`/lesson/${t.lesson}`} className="text-data underline underline-offset-2">Lesson<span className="sr-only"> about {t.term}</span> →</Link></>}</dd>
             </Card>
           ))}
         </dl>

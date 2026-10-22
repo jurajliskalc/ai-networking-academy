@@ -86,7 +86,7 @@ function Lane({ title, fwd, back, occ, buf, marks, color, ctrl, D, t }: {
   const H = 120, by = 30;
   const fill = Math.min(1, occ / buf);
   return (
-    <svg viewBox="0 0 360 170" className="w-full" role="img" aria-label={`${title} link`}>
+    <svg viewBox="0 0 360 170" className="w-full" role="img" aria-label={`${title} link, receive buffer ${Math.round(fill * 100)}% full`}>
       <text x={8} y={16} fontSize={12} fontWeight={700} fill="var(--text)">{title}</text>
       <rect x={8} y={48} width={60} height={56} rx={6} fill="var(--panel-2)" stroke="var(--border)" />
       <text x={38} y={80} textAnchor="middle" fontSize={11} fill="var(--text)" fontFamily="var(--font-mono)">TX</text>
@@ -156,13 +156,13 @@ export default function IbCreditFlow() {
         ].map((c) => (
           <label key={c.label} className="block">
             <div className="mb-1 flex justify-between font-mono text-[10px] uppercase tracking-[0.14em] text-muted"><span>{c.label}</span><span className="normal-case tracking-normal text-fg">{c.val}</span></div>
-            <input type="range" min={c.min} max={c.max} step={c.step} value={c.v} onChange={(e) => c.set(Number(e.target.value))} className="w-full accent-[var(--accent)]" />
+            <input type="range" min={c.min} max={c.max} step={c.step} value={c.v} onChange={(e) => c.set(Number(e.target.value))} aria-valuetext={c.val} className="w-full accent-[var(--accent)]" />
           </label>
         ))}
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <Button variant="ghost" onClick={() => setRunning((r) => !r)} className="!py-1">{running ? 'Pause' : 'Run'}</Button>
-        <Button variant="ghost" onClick={() => advance(Math.round(1000 / DT))} className="!py-1">+1 µs</Button>
+        <Button variant="ghost" onClick={() => setRunning((r) => !r)} className="!py-1">{running ? 'Pause' : 'Run'}<span className="sr-only"> simulation</span></Button>
+        <Button variant="ghost" onClick={() => advance(Math.round(1000 / DT))} className="!py-1">+1 µs<span className="sr-only"> (advance the simulation)</span></Button>
         <Button variant="ghost" onClick={reset} className="!py-1">Reset</Button>
         <span className="ml-auto font-mono text-xs text-muted">t = {(elapsed / 1000).toFixed(1)} µs</span>
       </div>
@@ -170,7 +170,7 @@ export default function IbCreditFlow() {
       <div className="rounded-lg border border-line bg-panel-2 p-3 font-mono text-xs leading-relaxed">
         <div>one-way delay = {cable} m × 5 ns/m = <span className="text-fg">{oneWayNs.toLocaleString()} ns</span>; RTT = {rttNs.toLocaleString()} ns</div>
         <div>bytes in flight per RTT = 50 B/ns × {rttNs.toLocaleString()} ns = <span className="text-data">{kb(inflight)}</span></div>
-        <div>PFC headroom needed ≈ rate × (RTT + {RESPONSE_NS} ns response) + 2 × MTU = <span className={headroom * 1024 >= needHead ? 'text-accent' : 'text-danger'}>{kb(needHead)}</span> (set: {headroom} KB)</div>
+        <div>PFC headroom needed ≈ rate × (RTT + {RESPONSE_NS} ns response) + 2 × MTU = <span className={headroom * 1024 >= needHead ? 'text-accent' : 'text-danger'}>{kb(needHead)}</span> (set: {headroom} KB{headroom * 1024 >= needHead ? ', enough' : ', too small'})</div>
       </div>
 
       <div className="grid gap-3 md:grid-cols-2">

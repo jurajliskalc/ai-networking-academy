@@ -26,54 +26,54 @@ questions:
     prompt: "Why does NCCL use a double binary tree rather than a single binary tree?"
     options:
       - id: a
-        text: "In one tree, interior nodes carry more traffic than leaves; with two complementary trees each node is interior in at most one, balancing load and recovering near-full bandwidth."
+        text: "A single tree loads interior nodes far more than leaves; with two complementary trees each rank is interior in at most one, balancing the load."
         correct: true
         explanation: "Each tree carries half the data and every rank does a balanced share of sending and receiving."
       - id: b
-        text: "Two trees provide redundancy in case one network path fails."
-        explanation: "The motivation is bandwidth balance, not fault tolerance."
+        text: "Two trees give path redundancy: if a link in one tree fails, NCCL finishes the collective over the surviving tree."
+        explanation: "NCCL does not fail over between the two trees; a link failure surfaces as a communicator error. The motivation is bandwidth balance, not fault tolerance."
       - id: c
-        text: "A single tree cannot be pipelined."
-        explanation: "Single trees can be pipelined; the issue is unequal load on interior nodes."
+        text: "A single tree cannot be pipelined, so large messages would wait for the full reduction at the root before broadcasting."
+        explanation: "Single trees can be pipelined in chunks; the real issue is unequal load on interior nodes versus leaves."
       - id: d
-        text: "Two trees halve the number of latency steps compared with one tree."
-        explanation: "Both trees have logarithmic depth; the latency term does not halve."
+        text: "Two trees halve the tree depth, cutting the latency term from about log2(n) steps to about log2(n)/2."
+        explanation: "Both trees span all ranks and have logarithmic depth; the latency term does not halve."
     tags: [tree, nccl]
   - id: q3
     type: scenario
     prompt: "A flat ring all-reduce across 512 ranks shows poor performance for 1 MB messages but near-ideal bandwidth at 4 GB. Per-step latency is about 5 microseconds. What best explains this?"
     options:
       - id: a
-        text: "The ring's latency term (about 2 x 511 x 5 us, roughly 5 ms) dominates small messages, while large messages are bandwidth-bound where the ring is optimal."
+        text: "The ring's latency term, about 2 x 511 x 5 us (roughly 5 ms), dominates at 1 MB; at 4 GB the run is bandwidth-bound, where the ring is optimal."
         correct: true
         explanation: "Linear latency in n is the ring's weakness; trees or hierarchical algorithms help small messages at scale."
       - id: b
-        text: "The fabric has ECMP collisions only for small messages."
-        explanation: "Collisions affect bandwidth-bound transfers more, not specifically small messages."
+        text: "ECMP hash collisions hit small messages hardest, because a 1 MB transfer rides only a few flows that cannot spread evenly across all the spine uplinks."
+        explanation: "Collisions cut the throughput of bandwidth-bound transfers; they would hurt the 4 GB run, not specifically the 1 MB one."
       - id: c
-        text: "The NIC MTU is too small for 1 MB messages."
-        explanation: "Messages are segmented into packets regardless; MTU does not explain this size dependence."
+        text: "The NIC MTU is too small for 1 MB messages, so each one is split into many packets and per-packet overhead dominates the transfer."
+        explanation: "Every message is segmented into MTU-sized packets; per-packet overhead scales with bytes and would affect 4 GB just as much, so MTU does not explain this size dependence."
       - id: d
-        text: "The ring has a bandwidth term that grows with n."
-        explanation: "The bandwidth term 2(n-1)/n·S·beta is nearly constant in n."
+        text: "The ring's bandwidth term grows with n, so at 512 ranks each rank moves far more bytes per all-reduce than at 8 ranks."
+        explanation: "The bandwidth term 2(n-1)/n·S·beta approaches 2·S·beta and is nearly constant in n; it would also hurt the 4 GB case."
     tags: [scaling, latency]
   - id: q4
     type: single
     prompt: "What happens to the network data volume per rank for all-reduce when SHARP in-network reduction is used?"
     options:
       - id: a
-        text: "It drops from about 2·S to about S, because each rank sends its data up once and receives the result once."
+        text: "It falls from about 2·S to about S, since each rank sends its data up once and gets the result once."
         correct: true
         explanation: "The switches do the reduction, so data no longer has to be passed around a ring twice."
       - id: b
-        text: "It doubles, because switches must forward copies to every rank."
-        explanation: "Switch-based reduction and multicast reduce volume, not increase it."
+        text: "It doubles, because the switches must forward a separate copy of the reduced result back to every rank."
+        explanation: "Switch-based reduction and multicast reduce the per-rank volume; each rank still receives the result only once."
       - id: c
-        text: "It stays the same; SHARP only reduces latency."
-        explanation: "SHARP reduces both steps and bytes moved over the network."
+        text: "It stays at about 2·S; SHARP shortens the number of steps (latency) but each rank moves the same bytes."
+        explanation: "SHARP reduces both the number of steps and the bytes each rank moves over the network (about 2·S down to about S)."
       - id: d
-        text: "It becomes zero because GPUs no longer need the network."
-        explanation: "Data still travels to and from the switches."
+        text: "It falls to nearly zero, because the reduction happens inside the switches instead of crossing the network."
+        explanation: "Data still travels to and from the switches: each rank sends about S up and receives about S back."
     tags: [sharp, collnet]
   - id: q5
     type: multi
@@ -100,34 +100,34 @@ questions:
     prompt: "What is NVLS in NCCL?"
     options:
       - id: a
-        text: "An algorithm using NVLink SHARP, where NVSwitch hardware performs reductions and multicast within the NVLink domain."
+        text: "An algorithm using NVLink SHARP: NVSwitch hardware performs reductions and multicast within the NVLink domain."
         correct: true
         explanation: "NVLS offloads reduction to NVSwitch on supported (Hopper-generation and later) systems."
       - id: b
-        text: "A network plugin for Ethernet NICs."
-        explanation: "NVLS operates within the NVLink domain, not over Ethernet."
+        text: "A NCCL net plugin that carries collectives over RoCE Ethernet NICs, analogous to the InfiniBand verbs transport."
+        explanation: "NVLS operates inside the NVLink domain via NVSwitch; carrying traffic over Ethernet or InfiniBand NICs is the job of the network transport or a net plugin."
       - id: c
-        text: "A protocol like LL128 that packs flags with data."
+        text: "A low-latency protocol like LL128 that packs flags alongside data in each line it sends over NVLink."
         explanation: "LL, LL128 and Simple are protocols; NVLS is an algorithm."
       - id: d
-        text: "A debug mode that logs NVLink errors."
-        explanation: "NVLS is a collective algorithm, not a logging feature."
+        text: "A diagnostic mode that checks NVLink link health and logs NVLink errors before a communicator starts."
+        explanation: "NVLS is a collective algorithm, not a health-check or logging feature."
     tags: [nvls]
   - id: q7
     type: scenario
     prompt: "An architect proposes recursive halving-doubling for all-reduce because it is optimal in both latency and bandwidth terms. In a rail-optimized GPU cluster, what is the main practical concern?"
     options:
       - id: a
-        text: "Partners are far apart in the topology and many pairs exchange simultaneously over the network, which maps poorly onto NVLink plus rail-local paths."
+        text: "Exchange partners are far apart in the topology and many pairs cross the network at once, mapping poorly onto NVLink plus rail-local paths."
         correct: true
         explanation: "The cost model ignores topology; rings and trees map better onto the fast intra-node and rail-local links."
       - id: b
-        text: "Its bandwidth term is worse than the ring's."
-        explanation: "Its bandwidth term equals the ring's 2(n-1)/n·S·beta."
+        text: "Its bandwidth term is worse than the ring's, because every one of its log2(n) rounds exchanges the full buffer S instead of a shrinking share."
+        explanation: "Halving-doubling exchanges S/2, S/4, ... per round; its bandwidth term equals the ring's 2(n-1)/n·S·beta."
       - id: c
-        text: "It cannot perform sum reductions."
-        explanation: "It supports the same reductions as other algorithms."
+        text: "It cannot perform sum reductions on BF16 or FP16 data, only on FP32 and integer types, which rules it out for training."
+        explanation: "It is a communication pattern; it supports the same reduction operations and data types as other algorithms."
       - id: d
-        text: "It requires SHARP-capable switches."
+        text: "It depends on SHARP-capable switches to combine partial sums, which rail-optimized leaf switches typically lack."
         explanation: "It is a host-based algorithm and needs no switch features."
     tags: [algorithms, topology]

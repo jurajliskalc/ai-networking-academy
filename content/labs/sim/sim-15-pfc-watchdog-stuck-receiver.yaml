@@ -1,0 +1,65 @@
+id: sim-15-pfc-watchdog-stuck-receiver
+title: "PFC watchdog trips: a stuck receiver and a storm contained"
+level: 4
+estimated_minutes: 45
+lessons: [pfc-storms-deadlocks, pfc-priority-flow-control, telemetry-counters, troubleshooting-methodology]
+summary: A NIC stops draining and floods its leaf with pause frames. The watchdog contains it; do not switch the watchdog off.
+start: node01
+ticket: |
+  **INC-4833 · Sev2 · Cluster-wide slowdown, leaf07 PFC watchdog alarms**
+
+  > Since about 04:10 every multi-node job runs at roughly 15 % of normal speed. NCCL logs no errors.
+  > Monitoring shows the PFC watchdog deadlock count on leaf07 swp3 climbing, and the leaf is discarding
+  > RoCE packets on that port. The on-call engineer wants to disable the PFC watchdog on leaf07
+  > ("it is dropping our lossless traffic") and asks for approval. - NOC
+
+  Approve or reject the change, find what is actually wrong, fix it and verify.
+faults:
+  - { type: nic_rx_stall, node: node03, rail: 6 }
+hints:
+  - The PFC watchdog does not create pause frames, it reacts to them. Which device is sending the pause frames that trip it, and in which direction do they flow?
+  - "On leaf07, read `nv show interface swp3 qos pfc-watchdog` and `nv show interface swp3 counters` (RX vs TX PFC pause). On node03, `ethtool -S enp204s0np0 | grep prio3_pause`."
+  - "A NIC that transmits pause frames non-stop is not draining its receive buffer. Compare `ib_write_bw -d mlx5_6 --report_gbits node03` from node01 with the reverse direction from node03."
+diagnosis:
+  prompt: Which statement is correct?
+  options:
+    - id: a
+      text: node03 mlx5_6 has a stuck receive path and floods leaf07 swp3 with pause frames. The watchdog is correctly dropping that queue to stop the storm from spreading.
+      correct: true
+      explanation: The pause frames flow from the host to the switch (tx_prio3_pause in the tens of millions on node03 enp204s0np0, RX PFC pause on leaf07 swp3), so the NIC is asking the leaf to stop sending, continuously. Writes toward node03 mlx5_6 crawl while writes from it run at line rate, which is the signature of a receiver that does not drain. The watchdog detects the long pause, ignores it and discards the queued RoCE packets for that port (TX drops, DEADLOCK on traffic class 3), so senders see sequence errors and timeouts and retransmit. That is slow, but contained to one port.
+    - id: b
+      text: The PFC watchdog on leaf07 swp3 is too sensitive and drops healthy lossless traffic. Disabling it on that port restores lossless delivery and the job's speed.
+      explanation: Try it and run the job again. Without the watchdog the leaf honours the storm, its buffers fill, and it starts pausing every other host on rail 6 (TX PFC pause on swp1, swp2 and swp4). The whole rail stalls and bus bandwidth drops to about 15 GB/s. The watchdog is the containment, not the cause.
+    - id: c
+      text: The optic on leaf07 swp3 is failing. Its CRC errors force retransmissions, and the retransmission bursts look like a pause storm to the watchdog on that port.
+      explanation: leaf07 swp3 shows 0 RX errors and 0 FCS/CRC errors, and node03 has no symbol or CRC errors. Corrupted frames are dropped, not paused, and the watchdog reacts only to received pause frames.
+    - id: d
+      text: ECN is disabled on leaf07, so senders are never slowed down and the leaf has to pause node03 so often that its own watchdog trips on that port.
+      explanation: leaf07 marks ECN normally (TX ECN marked on every port, CNPs on every NIC) and sends almost no pauses. The pauses on swp3 are received from node03, not sent to it. The watchdog acts on pauses arriving at a port.
+checks:
+  - { description: "node03 mlx5_6 drains its receive queue again", check: nic_not_stalled, args: { node: node03, rail: 6 } }
+  - { description: "the PFC watchdog is still enabled on leaf07 swp3", check: pfcwd_on, args: { switch: leaf07, port: swp3 } }
+  - { description: "leaf07 has no unapplied configuration", check: no_pending, args: { switch: leaf07 } }
+  - { description: "all_reduce bus bandwidth is above 360 GB/s", check: allreduce_min_busbw, args: { value: 360 } }
+solution: |
+  1. Direction first. leaf07 `nv show interface swp3 counters` shows RX PFC pause in the tens of millions
+     and TX PFC pause near zero: the pauses come *from* node03. On node03, `ethtool -S enp204s0np0 | grep
+     prio3_pause` confirms `tx_prio3_pause` in the tens of millions.
+  2. Watchdog state. `nv show interface swp3 qos pfc-watchdog` shows traffic class 3 in `DEADLOCK` with a
+     climbing deadlock count, and `nv show interface swp3 qos roce counters` shows
+     `unicast-no-buffer-discard` growing. The watchdog is discarding the queue instead of letting the
+     storm back up into the leaf (Cumulus: it stops honouring received pauses on that traffic class and
+     discards new packets for the egress queue). Which counter a real switch charges watchdog discards to
+     can vary by platform and release; in this simulator they show as TX drops and buffer discards.
+  3. Impact. node03 `rdma statistic show link mlx5_6/1` shows `out_of_sequence`, and the other nodes'
+     mlx5_6 show `packet_seq_err` and `local_ack_timeout_err`: retransmissions. `ib_write_bw` toward node03
+     mlx5_6 gets about 60 Gb/s, the reverse direction gets line rate.
+  4. Fix: drain node03 and cold-reset the adapter (lab action `reseat-nic node03 mlx5_6`), then collect a
+     firmware dump for the vendor. Keep the watchdog enabled. Disabling it turns one stuck port into a
+     stalled rail.
+
+  Lesson: a PFC watchdog trip is a symptom pointing at the device on the other end of that port. Read
+  pause counters with their direction, and treat the watchdog (and the NIC's own stall prevention) as
+  the fuse that keeps one bad receiver from freezing the fabric.
+fix:
+  - "node01: reseat-nic node03 mlx5_6"

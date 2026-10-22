@@ -22,14 +22,14 @@ diagnosis:
       correct: true
       explanation: In this model, NCCL picks one network for the whole communicator, so with IB disabled on one rank the job runs on NET/Socket and the RoCE NICs sit idle.
     - id: b
-      text: The RoCE NICs on node04 are down.
-      explanation: rdma link shows them ACTIVE and ib_write_bw works.
+      text: node04's RoCE NICs did not come up after a reboot, so NCCL finds no RDMA device and falls back to sockets.
+      explanation: rdma link shows them ACTIVE and ib_write_bw from node04 works at line rate.
     - id: c
-      text: GPUDirect RDMA is disabled, so data is staged through host memory.
+      text: GPUDirect RDMA is disabled on node04, so every transfer is staged through host memory before reaching the NIC.
       explanation: That costs some bandwidth, but RoCE would still be used and the links would not be idle.
     - id: d
-      text: The spine switches are congested.
-      explanation: Rail-local traffic does not use the spines, and the links carry no traffic at all.
+      text: A typo in NCCL_IB_HCA on node04 matches no RDMA device, so NCCL silently falls back to the socket transport over eno1.
+      explanation: "That failure exists (NCCL logs 'NET/IB : No device found.'), but here the INFO log says 'NCCL_IB_DISABLE set by environment to 1.' and node04's NCCL_IB_HCA is mlx5, which matches every NIC."
 checks:
   - { description: "all_reduce runs on NET/IB above 360 GB/s", check: allreduce_min_busbw, args: { value: 360 } }
 solution: |

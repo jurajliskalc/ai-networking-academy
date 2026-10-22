@@ -48,17 +48,17 @@ questions:
       (6.4 TB/s total). A reviewer proposes a 1:1 storage fabric. What is the strongest counter-argument?
     options:
       - id: a
-        text: The storage system, not the network, caps throughput; 2:1 server leaves still give several times the storage system's capability.
+        text: The storage system, not the network, caps throughput; 2:1 server leaves still carry several times what storage can deliver.
         correct: true
         explanation: "8 server leaves x 3.2 Tb/s uplink = 25.6 Tb/s (3.2 TB/s), about 8x the 400 GB/s the storage can deliver, so 1:1 buys unused bandwidth."
       - id: b
-        text: Storage traffic is always lossy, so oversubscription has no cost.
+        text: Storage traffic always runs over lossy TCP, so it absorbs any oversubscription through retransmission at no real cost.
         explanation: "Many storage protocols (NFS over RDMA, NVMe-oF, parallel FS over RoCE) can be RDMA-based and sensitive to loss; this is not an argument for oversubscription."
       - id: c
-        text: A 1:1 fabric would require a three-tier design.
+        text: A 1:1 storage fabric for 256 x 200G server ports would need a third switching tier, which this design cannot easily justify.
         explanation: "The storage fabric is small; 1:1 would cost more switches and optics, but it would not force a third tier at this scale."
       - id: d
-        text: Checkpoints are written only by rank 0, so storage bandwidth does not matter.
+        text: Checkpoints are written only by rank 0, so only one storage port per job is ever busy and the fabric barely matters.
         explanation: "Large-model checkpoints are usually sharded and written by many ranks in parallel; aggregate write bandwidth matters."
     tags: [storage, oversubscription]
   - id: q4
@@ -86,17 +86,17 @@ questions:
       4-SU rail-optimized design (32 servers per SU). What is the most honest answer?
     options:
       - id: a
-        text: One NIC on each of 32 servers is lost; since most jobs need all 8 NICs, those 32 servers (256 GPUs) are effectively unavailable for multi-node jobs until repair.
+        text: One NIC on each of the SU's 32 servers; as most jobs need all 8 NICs, those 256 GPUs are effectively out for multi-node work.
         correct: true
         explanation: "A rail leaf connects rail r of every server in the SU. NCCL jobs typically cannot continue without a NIC, so the practical impact is the SU's servers."
       - id: b
-        text: Only 32 GPUs are affected, so the impact is 3% of the cluster.
+        text: Only the 32 GPUs behind the failed leaf are affected, about 3% of the cluster; the other 992 GPUs keep running.
         explanation: "32 NICs are lost, but each sits in a different server; jobs on those servers usually fail entirely, so the practical impact is larger."
       - id: c
-        text: Nothing; ECMP reroutes the traffic over other leaves.
+        text: Nothing visible; ECMP reroutes each affected NIC's traffic through another leaf in the same SU within seconds.
         explanation: "Servers connect to exactly one leaf per rail; there is no alternate leaf for that NIC to use."
       - id: d
-        text: The whole cluster stops because every spine loses a link.
+        text: The whole cluster stops, because every spine loses a link and the fabric is no longer non-blocking for any job.
         explanation: "Spines lose links to that leaf, but other leaves keep full connectivity; jobs not using that SU continue."
     tags: [resilience, rail-optimized]
   - id: q6
@@ -128,12 +128,12 @@ questions:
         correct: true
         explanation: "This is the core benefit of rail alignment combined with locality-aware scheduling."
       - id: b
-        text: It lets the job avoid using RDMA entirely.
+        text: It lets servers in one SU exchange gradients over TCP sockets, avoiding RDMA connection setup and its overhead.
         explanation: "Inter-server traffic still uses RDMA through the NICs; placement changes the path, not the transport."
       - id: c
-        text: It removes the need for NVLink inside the server.
+        text: It removes the need for NVLink inside each server, because the rail leaf now carries the tensor-parallel traffic too.
         explanation: "NVLink still carries the tensor-parallel traffic inside the server."
       - id: d
-        text: It allows the spine to be oversubscribed 8:1 with no impact.
+        text: It allows the spine to be oversubscribed 8:1 with no impact, because no job traffic ever needs to cross the spine.
         explanation: "Pipeline, expert and cross-SU traffic still crosses the spine, and not every job is placed perfectly."
     tags: [rail-optimized, scheduling]

@@ -58,7 +58,7 @@ function Seg<T extends string | number>({ label, value, options, onChange, rende
   return (
     <div>
       <div className="mb-1 font-mono text-[10px] uppercase tracking-[0.14em] text-muted">{label}</div>
-      <div className="flex flex-wrap gap-1">
+      <div className="flex flex-wrap gap-1" role="group" aria-label={label}>
         {options.map((o) => (
           <button key={String(o)} type="button" onClick={() => onChange(o)} aria-pressed={o === value}
             className={`rounded-md border px-2 py-1 font-mono text-xs transition ${o === value ? 'border-accent bg-accent-soft text-accent' : 'border-line bg-panel hover:bg-panel-2'}`}>
@@ -89,7 +89,7 @@ function Chart({ r, buffer }: { r: IncastResult; buffer: number }) {
   const d = r.points.map((p, i) => `${i ? 'L' : 'M'}${x(p[0]).toFixed(1)},${y(p[1]).toFixed(1)}`).join(' ');
   const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => f * tMax / 1.05);
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label={`Queue depth over time: peak ${fmtBytes(r.peak)}, empty after ${fmtTime(r.endS)}`}>
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label={`Queue depth over time: peak ${fmtBytes(r.peak)} against a ${fmtBytes(buffer)} buffer, ${r.drops > 0 ? `${fmtBytes(r.drops)} dropped, ` : ''}empty after ${fmtTime(r.endS)}`}>
       <line x1={L} y1={H - B} x2={W - Rr} y2={H - B} stroke="var(--border)" />
       <line x1={L} y1={T} x2={L} y2={H - B} stroke="var(--border)" />
       {ticks.map((t) => (
@@ -144,7 +144,7 @@ export default function QueueLatency() {
             <input id="ql-frame" type="number" min={64} max={9216} value={frame} onChange={(e) => setFrame(Math.floor(num(e.target.value, 64, 9216)))}
               className="w-20 rounded-md border border-line bg-panel px-2 py-1 font-mono text-sm" />
             {[64, 1518, 4158, 9018].map((f) => (
-              <button key={f} type="button" aria-pressed={f === frame} onClick={() => setFrame(f)}
+              <button key={f} type="button" aria-pressed={f === frame} onClick={() => setFrame(f)} aria-label={`${f} byte frame`}
                 className={`rounded-md border px-1.5 py-1 font-mono text-xs ${f === frame ? 'border-accent bg-accent-soft text-accent' : 'border-line bg-panel hover:bg-panel-2'}`}>{f}</button>
             ))}
           </div>
@@ -166,7 +166,7 @@ export default function QueueLatency() {
             <input id="ql-buf" type="number" min={0.01} max={500} step={0.5} value={bufferMB} onChange={(e) => setBufferMB(num(e.target.value, 0.01, 500))}
               className="w-20 rounded-md border border-line bg-panel px-2 py-1 font-mono text-sm" />
             {[1, 2, 10, 32].map((b) => (
-              <button key={b} type="button" aria-pressed={b === bufferMB} onClick={() => setBufferMB(b)}
+              <button key={b} type="button" aria-pressed={b === bufferMB} onClick={() => setBufferMB(b)} aria-label={`${b} MB buffer`}
                 className={`rounded-md border px-1.5 py-1 font-mono text-xs ${b === bufferMB ? 'border-accent bg-accent-soft text-accent' : 'border-line bg-panel hover:bg-panel-2'}`}>{b}</button>
             ))}
           </div>
@@ -175,7 +175,7 @@ export default function QueueLatency() {
           <div className="mb-1 flex items-baseline justify-between font-mono text-[10px] uppercase tracking-[0.14em] text-muted">
             <label htmlFor="ql-n">Incast degree N (senders)</label><span className="text-base font-semibold normal-case tracking-normal text-fg">{n}:1</span>
           </div>
-          <input id="ql-n" type="range" min={1} max={64} value={n} onChange={(e) => setN(Number(e.target.value))} className="w-full accent-[var(--accent)]" />
+          <input id="ql-n" type="range" min={1} max={64} value={n} aria-valuetext={`${n} senders (${n}:1)`} onChange={(e) => setN(Number(e.target.value))} className="w-full accent-[var(--accent)]" />
         </div>
         <div>
           <label htmlFor="ql-burst" className="mb-1 block font-mono text-[10px] uppercase tracking-[0.14em] text-muted">Burst per sender (KB)</label>
@@ -183,14 +183,14 @@ export default function QueueLatency() {
             <input id="ql-burst" type="number" min={1} max={100000} value={burstKB} onChange={(e) => setBurstKB(num(e.target.value, 1, 100000))}
               className="w-24 rounded-md border border-line bg-panel px-2 py-1 font-mono text-sm" />
             {[64, 256, 1000, 4000].map((b) => (
-              <button key={b} type="button" aria-pressed={b === burstKB} onClick={() => setBurstKB(b)}
+              <button key={b} type="button" aria-pressed={b === burstKB} onClick={() => setBurstKB(b)} aria-label={`${b} KB burst`}
                 className={`rounded-md border px-1.5 py-1 font-mono text-xs ${b === burstKB ? 'border-accent bg-accent-soft text-accent' : 'border-line bg-panel hover:bg-panel-2'}`}>{b}</button>
             ))}
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" aria-live="polite">
         <Out label="Serialization / frame" value={fmtTime(ser)} sub={`(${frame} + 20) × 8 / ${gbps}G`} />
         <Out label="Packet rate" value={`${(pps / 1e6).toFixed(1)} Mpps`} sub="one port, line rate" />
         <Out label="Queueing delay now" value={fmtTime(qSimple)} tone="text-data" sub={`${fmtBytes(depthBytes)} ≈ ${depthPkts.toFixed(depthPkts < 10 ? 1 : 0)} pkts; ${fmtTime(qWire)} with IPG`} />
@@ -205,7 +205,7 @@ export default function QueueLatency() {
         ))}
       </div>
 
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" aria-live="polite">
         <Out label="Excess arrival" value={n > 1 ? fmtRate(r.excessBps) : '0'} sub={`(${n} − 1) × ${gbps}G`} />
         <Out label="Time to fill buffer" value={n > 1 ? fmtTime(r.fillS) : 'never'} tone={overflow ? 'text-warn' : 'text-fg'} sub={`${fmtBytes(buffer)} / excess`} />
         <Out label="Peak queue" value={fmtBytes(r.peak)} sub={`max delay ${fmtTime(r.maxDelayS)}`} tone="text-data" />

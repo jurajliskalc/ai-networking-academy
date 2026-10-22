@@ -53,8 +53,8 @@ questions:
         text: 96 (64 leaves, 32 spines).
         explanation: That is the two-tier answer for 128-port switches; 64-port switches top out at 2,048 endpoints in two tiers.
       - id: c
-        text: "5,120."
-        explanation: That is a full k = 64 three-tier tree for 65,536 endpoints; a partial build is far smaller.
+        text: 5,120 (2,048 leaves, 2,048 aggregation, 1,024 core).
+        explanation: That is a full k = 64 three-tier tree (5k^2 / 4) for 65,536 endpoints; a partial build of 4 pods is far smaller.
       - id: d
         text: 192 (128 leaves, 64 spines).
         explanation: Two tiers of 64-port switches cannot have 128 leaves; each spine only has 64 ports.
@@ -113,8 +113,8 @@ questions:
         text: Total switch bandwidth doubles to 102.4 Tb/s.
         explanation: The ASIC capacity is unchanged; 128 x 400G = 64 x 800G.
       - id: c
-        text: The two-tier limit stays at 2,048 endpoints because the ASIC is the same.
-        explanation: The limit depends on radix, which doubles; k^2 / 2 becomes 8,192.
+        text: The two-tier limit stays at 2,048 endpoints, because the ASIC and its total bandwidth are unchanged.
+        explanation: The endpoint limit depends on radix, not on ASIC bandwidth; radix doubles, so k^2 / 2 becomes 8,192.
       - id: d
         text: Oversubscription becomes 2:1 automatically.
         explanation: Oversubscription depends on how many ports you assign up versus down, not on splitting.

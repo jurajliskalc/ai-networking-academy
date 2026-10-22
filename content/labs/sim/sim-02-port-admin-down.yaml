@@ -26,14 +26,14 @@ diagnosis:
       correct: true
       explanation: "nv show interface lists swp2 as down with 'Admin down'. The optic swap shut the port and nobody re-enabled it."
     - id: b
-      text: The new optic is faulty and the link cannot train.
-      explanation: A bad optic would leave the port admin up but operationally down or flapping, typically with low RX power. Here the port is disabled in the configuration.
+      text: The replacement optic in leaf08 swp2 is faulty, so the port is enabled but the link cannot train.
+      explanation: A bad optic would leave the port admin up but operationally down or flapping, typically with low RX power. Here nv show interface marks swp2 'Admin down', so the port is disabled in the configuration.
     - id: c
-      text: The NIC firmware on node02 crashed.
-      explanation: ibv_devinfo still works and the device is present; only the physical link is down.
+      text: node02's enp220s0np0 was left administratively down during the work, so mlx5_7 reports no link.
+      explanation: ip link show enp220s0np0 shows the interface UP with NO-CARRIER, so the host side is enabled and waiting for the far end. The work was done on the leaf, not on node02.
     - id: d
-      text: NCCL excludes mlx5_7 via NCCL_IB_HCA.
-      explanation: NCCL_IB_HCA would not change the RDMA port state that rdma link shows.
+      text: A stale NCCL_IB_HCA on node02 excludes mlx5_7, so NCCL never brings the rail-7 port up.
+      explanation: NCCL does not control port state. rdma link reports mlx5_7 DOWN with no job running, and NCCL_IB_HCA in /etc/nccl.conf is unchanged.
 checks:
   - { description: "leaf08 swp2 is up", check: port_up, args: { switch: leaf08, port: swp2 } }
   - { description: "No uncommitted NVUE changes on leaf08", check: no_pending, args: { switch: leaf08 } }

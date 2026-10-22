@@ -21,8 +21,8 @@ questions:
         text: 8 spines, 4 links per leaf-spine pair.
         explanation: 8 x 64 = 512 ports cannot terminate 1,024 uplinks.
       - id: d
-        text: 4 spines, one per scalable unit.
-        explanation: Spines interconnect leaves across SUs; per-SU spines would not provide any-to-any connectivity.
+        text: 4 spines, one per scalable unit, with 8 links from each leaf.
+        explanation: Spines interconnect leaves across SUs; per-SU spines would not provide any-to-any connectivity, and 4 x 64 ports cannot terminate 1,024 uplinks.
     tags: [superpod, sizing]
   - id: q2
     type: scenario
@@ -54,14 +54,14 @@ questions:
         correct: true
         explanation: OOB reaches the BMC independently of the host OS and data NICs.
       - id: b
-        text: The in-band management network.
-        explanation: In-band uses the host OS network stack, which is hung.
+        text: The in-band management network, through the node's SSH and serial-console service.
+        explanation: In-band uses the host OS network stack and services, which are hung.
       - id: c
         text: The compute fabric, through the subnet manager.
         explanation: The subnet manager configures fabric routing; it cannot control a host's power.
       - id: d
-        text: The storage fabric.
-        explanation: Storage NICs are host-controlled data ports, down with the OS.
+        text: The storage fabric, through the storage NIC's firmware.
+        explanation: Storage NICs are host-controlled data ports, down with the OS; they cannot power-cycle the node.
     tags: [oob, management]
   - id: q4
     type: multi
@@ -95,13 +95,13 @@ questions:
         correct: true
         explanation: The two halves of a twin-port cage belong to different rails and must go to different leaves.
       - id: b
-        text: Nothing; a twin-port cage is one logical 800G port that must go to one leaf.
+        text: Nothing; a twin-port cage is one logical 800G port, so both fibers must land on the same leaf.
         explanation: On the node, the cage presents two independent 400G NICs, not one 800G port.
       - id: c
-        text: The links will not come up because a leaf cannot accept two cables from one transceiver.
+        text: The links will not come up, because a leaf rejects two cables that come from the same transceiver.
         explanation: The links come up normally, which is why this mistake is easy to miss.
       - id: d
-        text: GPU 0 loses connectivity entirely.
+        text: GPU 0 loses connectivity entirely, while GPU 1 keeps working through the rail-0 leaf.
         explanation: GPU 0's NIC is on the correct leaf; the problem is GPU 1's placement.
     tags: [cabling, twin-port, rail-optimized]
   - id: q6
@@ -109,17 +109,17 @@ questions:
     prompt: How does a GB200 NVL72-based SuperPOD change the unit of design compared with a DGX H100 SuperPOD?
     options:
       - id: a
-        text: The rack (72 GPUs in one NVLink domain) becomes the basic building block, and in-rack NVLink becomes an additional network to plan.
+        text: The NVL72 rack (72 GPUs in one NVLink domain) becomes the building block, and in-rack NVLink is a network to plan.
         correct: true
         explanation: NVIDIA's GB200 design treats the NVL72 rack as the system; scale-out still uses one NIC per GPU.
       - id: b
-        text: The scale-out fabric is removed because NVLink connects all racks.
+        text: The scale-out fabric is removed, because NVLink switches now connect every rack in the SuperPOD.
         explanation: NVL72's NVLink domain is one rack; racks still connect through the scale-out compute fabric.
       - id: c
-        text: Each rack uses a single 800G NIC shared by all 72 GPUs.
+        text: Each rack uses a single 800G NIC shared by all 72 GPUs, since NVLink aggregates their traffic.
         explanation: The design keeps one scale-out NIC per GPU.
       - id: d
-        text: The storage fabric is merged into NVLink.
+        text: The storage fabric is merged into NVLink, so GPUs read checkpoints over the NVLink spine.
         explanation: Storage remains on a separate network; NVLink is a GPU memory fabric.
     tags: [gb200, nvl72, superpod]
   - id: q7

@@ -26,18 +26,18 @@ questions:
     prompt: Between two given RoCEv2 NICs, which header field provides almost all of the ECMP entropy?
     options:
       - id: a
-        text: The UDP source port, which the NIC sets per queue pair
+        text: The UDP source port, chosen per queue pair
         correct: true
         explanation: IPs and the destination port 4791 are constant between the two NICs; only the source port varies.
       - id: b
-        text: The UDP destination port
-        explanation: It is always 4791 for RoCEv2.
+        text: The UDP destination port, which identifies each RDMA connection
+        explanation: It is always 4791 for RoCEv2; connections are identified inside the BTH, not by the UDP destination port.
       - id: c
-        text: The destination IP address
-        explanation: It is the same for every flow to that NIC.
+        text: The destination IP address, which differs per GPU flow
+        explanation: Between two given NICs it is the same for every flow.
       - id: d
-        text: The Ethernet source MAC
-        explanation: MACs change hop by hop in a routed fabric and are constant per NIC.
+        text: The Ethernet source MAC, which the NIC varies per flow
+        explanation: The NIC uses one MAC; MACs are constant per NIC and are rewritten hop by hop in a routed fabric anyway.
     tags: [rocev2, entropy]
   - id: q3
     type: scenario
@@ -66,46 +66,46 @@ questions:
         correct: true
         explanation: Uneven load within one ECMP group, with some links saturated and others idle, is the classic signature.
       - id: b
-        text: The leaf is oversubscribed 2:1
-        explanation: Oversubscription would show all uplinks evenly saturated.
+        text: The leaf is oversubscribed 2:1, so its uplinks cannot carry the load
+        explanation: Oversubscription would show all uplinks evenly saturated; here total load is only half the capacity.
       - id: c
-        text: Two uplinks are down
+        text: Two uplinks are down and their traffic was moved to the others
         explanation: Down links would show zero and the rest would be evenly loaded; here links at 2-3 % still carry traffic.
       - id: d
-        text: PFC is pausing the busy links
-        explanation: PFC pauses would reduce utilization on congested links, not create this pattern by themselves.
+        text: PFC is pausing the busy links and diverting their traffic to idle ones
+        explanation: PFC pauses would reduce utilization on congested links and never reroute traffic, so it does not create this pattern.
     tags: [collisions, troubleshooting]
   - id: q5
     type: single
     prompt: What is hash polarization?
     options:
       - id: a
-        text: Correlated ECMP decisions at successive tiers because switches use the same hash function, seed and fields, leaving some next-tier links unused.
+        text: Correlated ECMP choices at successive tiers when switches share hash function, seed and fields, so some next-tier links stay idle.
         correct: true
         explanation: Flows that shared hash bits at tier one share them again at tier two. Fix with per-tier seeds or algorithms.
       - id: b
-        text: Hashing that sends A-to-B and B-to-A traffic on the same path.
-        explanation: That is symmetric hashing, a deliberate feature.
+        text: Hashing that deliberately sends the A-to-B and B-to-A directions of a flow over the same path through the fabric.
+        explanation: That is symmetric hashing, a deliberate feature, not polarization.
       - id: c
-        text: The tendency of hashing to favour IPv6 over IPv4.
-        explanation: There is no such inherent bias.
+        text: A bias in hash functions that steers IPv6 flows onto lower-numbered links because their longer addresses carry more hash bits.
+        explanation: There is no such inherent bias toward IPv6 or toward particular link numbers.
     tags: [polarization]
   - id: q6
     type: single
     prompt: Why is resilient hashing valuable for RoCE traffic when an uplink fails?
     options:
       - id: a
-        text: It moves only the flows that were on the failed link, so other flows keep their path and do not risk out-of-order delivery and retransmissions.
+        text: Only the flows that were on the failed link move; all other flows keep their path and avoid reordering and retransmissions.
         correct: true
         explanation: Modulo-style rehashing moves many unaffected flows, which can trigger RC recovery on a wide scale.
       - id: b
-        text: It makes the failed link come back up faster.
-        explanation: Hashing has no effect on link recovery.
+        text: It rehashes every flow across the surviving links at once, so load is perfectly rebalanced within a single packet time.
+        explanation: Rehashing every flow is what plain modulo hashing does and what resilient hashing avoids, because it reorders unaffected RoCE flows.
       - id: c
-        text: It enables PFC on the remaining links.
-        explanation: PFC configuration is separate from ECMP hashing.
+        text: It enables PFC on the remaining links, so the extra traffic moved onto them cannot be dropped during the failover.
+        explanation: PFC configuration is separate from ECMP hashing; resilient hashing does not touch it.
       - id: d
-        text: It doubles the bandwidth of the surviving links.
+        text: It bonds the surviving links to double their bandwidth, so the moved flows see no added congestion.
         explanation: Capacity is unchanged; only flow assignment is affected.
     tags: [resilient-hashing]
   - id: q7

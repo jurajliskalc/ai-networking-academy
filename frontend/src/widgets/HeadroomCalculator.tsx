@@ -60,7 +60,7 @@ function Seg<T extends string | number>({ label, value, options, onChange, rende
   return (
     <div>
       <div className="mb-1 font-mono text-[10px] uppercase tracking-[0.14em] text-muted">{label}</div>
-      <div className="flex flex-wrap gap-1">
+      <div className="flex flex-wrap gap-1" role="group" aria-label={label}>
         {options.map((o) => (
           <button key={String(o)} type="button" onClick={() => onChange(o)} aria-pressed={o === value}
             className={`rounded-md border px-2 py-1 font-mono text-xs ${o === value ? 'border-accent bg-accent-soft text-accent' : 'border-line bg-panel hover:bg-panel-2'}`}>
@@ -126,7 +126,7 @@ export default function HeadroomCalculator() {
         <Seg label="Max frame / port MTU (bytes)" value={mtu} options={MTUS} onChange={setMtu} />
         <div>
           <Seg label="Cable length (m)" value={meters} options={LENGTHS} onChange={setMeters} />
-          <input type="range" min={1} max={2000} value={meters} onChange={(e) => setMeters(Number(e.target.value))} aria-label="Cable length in metres"
+          <input type="range" min={1} max={2000} value={meters} onChange={(e) => setMeters(Number(e.target.value))} aria-label="Cable length in metres" aria-valuetext={`${meters} m`}
             className="mt-2 w-full accent-[var(--accent)]" />
           <div className="font-mono text-xs text-muted">{meters} m · {nsPerM} ns/m → one way {n0(h.propNs)} ns</div>
         </div>
@@ -150,7 +150,7 @@ export default function HeadroomCalculator() {
       </div>
 
       <div className="rounded-lg border border-line bg-panel p-2">
-        <svg viewBox="0 0 600 46" className="w-full" role="img" aria-label="Headroom components">
+        <svg viewBox="0 0 600 46" className="w-full" role="img" aria-label={`Headroom components, total ${kb(h.total)} per PG per port: ${parts.filter((p) => p.v > 0).map((p) => `${p.label} ${n0(p.v)} bytes`).join(', ')}`}>
           {parts.map((p) => {
             const w = (p.v / sum) * 600;
             const r = <rect key={p.label} x={x} y={4} width={Math.max(0, w)} height={22} fill={p.color} opacity={0.85} />;
@@ -167,14 +167,14 @@ export default function HeadroomCalculator() {
         </div>
       </div>
 
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Headroom calculation">
         <table className="w-full min-w-[480px] text-left text-xs">
           <thead className="text-muted"><tr><th className="py-1 pr-2">Component</th><th className="pr-2">Calculation</th><th className="text-right">Bytes</th></tr></thead>
           <tbody className="font-mono">
             <tr className="border-t border-line"><td className="py-1 pr-2 font-sans">Cable, round trip</td><td className="pr-2">2 × {meters} m × {nsPerM} ns/m = {n0(2 * h.propNs)} ns × {gbps} Gb/s ÷ 8</td><td className="text-right text-data">{n0(h.cable)}</td></tr>
             <tr className="border-t border-line"><td className="py-1 pr-2 font-sans">Response delays (PHY, FEC, MAC, scheduler)</td><td className="pr-2">{respUnit === 'ns' ? `${n0(resp)} ns × ${gbps} Gb/s ÷ 8` : `${n0(resp)} bit times ÷ 8 (= ${n0(respNs)} ns at ${gbps}G)`}</td><td className="text-right text-warn">{n0(h.response)}</td></tr>
             <tr className="border-t border-line"><td className="py-1 pr-2 font-sans">Frame in progress at receiver (PFC waits behind it) + at sender (cannot abort)</td><td className="pr-2">2 × {mtu}</td><td className="text-right text-accent">{n0(h.frames)}</td></tr>
-            <tr className="border-t border-line"><td className="py-1 pr-2 font-sans font-semibold">Total before margin</td><td /><td className="text-right font-semibold">{n0(h.base)}</td></tr>
+            <tr className="border-t border-line"><td className="py-1 pr-2 font-sans font-semibold">Total before margin</td><td><span className="sr-only">sum of the above</span></td><td className="text-right font-semibold">{n0(h.base)}</td></tr>
             {margin === 'percent' && <tr className="border-t border-line"><td className="py-1 pr-2 font-sans">With margin</td><td className="pr-2">× {(1 + marginPct / 100).toFixed(2)}</td><td className="text-right">{n0(h.total)}</td></tr>}
             {margin === 'cells' && <tr className="border-t border-line"><td className="py-1 pr-2 font-sans">With cell rounding</td>
               <td className="pr-2">rate terms × ⌈{pkt}/{cell}⌉·{cell}/({pkt}+20) = ×{h.cellFactor.toFixed(2)}; frames as ⌈{mtu}/{cell}⌉ cells; total to whole cells</td><td className="text-right">{n0(h.total)}</td></tr>}
@@ -188,7 +188,7 @@ export default function HeadroomCalculator() {
         <Num label="Switch buffer (MB)" value={bufMB} set={setBufMB} min={1} max={1000} />
       </div>
 
-      <div className={`rounded-lg border px-3 py-2 text-sm ${share > 0.5 ? 'border-danger/50 text-danger' : share > 0.2 ? 'border-warn/50 text-warn' : 'border-line'}`}>
+      <div aria-live="polite" className={`rounded-lg border px-3 py-2 text-sm ${share > 0.5 ? 'border-danger/50 text-danger' : share > 0.2 ? 'border-warn/50 text-warn' : 'border-line'}`}>
         <span className="font-mono">{kb(h.total)} × {pgs} PG × {ports} ports = <b>{mb(total)}</b></span>
         <span className="text-muted"> of {bufMB} MB buffer = </span><b className="font-mono">{(share * 100).toFixed(1)} %</b>
         <span className="text-muted"> reserved as headroom{share > 1 ? ': does not fit at all' : share > 0.5 ? ': most of the buffer is idle reserve' : ''}.</span>

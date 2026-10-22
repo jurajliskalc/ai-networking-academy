@@ -80,7 +80,7 @@ function Seg<T extends string | number>({ label, value, options, onChange, fmt }
   return (
     <div>
       <div className="mb-1 font-mono text-[10px] uppercase tracking-[0.14em] text-muted">{label}</div>
-      <div className="flex flex-wrap gap-1">
+      <div className="flex flex-wrap gap-1" role="group" aria-label={label}>
         {options.map((o) => (
           <button key={String(o)} type="button" onClick={() => onChange(o)} aria-pressed={o === value}
             className={`rounded-md border px-2 py-1 font-mono text-xs transition ${o === value ? 'border-accent bg-accent-soft text-accent' : 'border-line hover:bg-panel-2'}`}>{fmt ? fmt(o) : String(o)}</button>
@@ -96,7 +96,7 @@ function Slider({ id, label, value, min, max, step, unit, onChange }: { id: stri
       <label htmlFor={id} className="mb-1 flex justify-between font-mono text-[10px] uppercase tracking-[0.14em] text-muted">
         <span>{label}</span><span className="text-fg">{value} {unit}</span>
       </label>
-      <input id={id} type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.target.value))} className="w-full accent-[var(--accent)]" />
+      <input id={id} type="range" min={min} max={max} step={step} value={value} aria-valuetext={`${value} ${unit}`} onChange={(e) => onChange(Number(e.target.value))} className="w-full accent-[var(--accent)]" />
     </div>
   );
 }
@@ -191,7 +191,7 @@ export default function TrainingStepTimeline() {
         </div>
       </div>
 
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label={`Timeline of one training step: step ${ms(r.step)} ms, exposed communication ${ms(r.exposed)} ms`}>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label={`Timeline of one training step: forward ends at ${ms(r.fwdEnd)} ms, backward at ${ms(r.bwdEnd)} ms, ${r.buckets.length} all-reduce buckets finish at ${ms(r.commEnd)} ms, exposed communication ${ms(r.exposed)} ms, step ends at ${ms(r.step)} ms${strag > 0 ? `; the straggler delays every rank by ${ms(r.step - healthy.step)} ms` : ''}.`}>
         {ticks.map((t) => (
           <g key={t}>
             <line x1={x(t)} x2={x(t)} y1={22} y2={H - 22} stroke="var(--border)" />
@@ -217,11 +217,11 @@ export default function TrainingStepTimeline() {
 
       <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted">
         {[['var(--data)', 'forward'], ['var(--accent)', 'backward layers'], ['var(--data)', 'all-reduce bucket (alternating shades)'], ['var(--warn)', 'optimizer'], ['var(--danger)', 'exposed comm']].map(([c, l]) => (
-          <span key={l} className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm" style={{ background: c }} />{l}</span>
+          <span key={l} className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm" style={{ background: c }} aria-hidden />{l}</span>
         ))}
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2" aria-live="polite">
         <Pill>step <span className="font-mono text-fg">{ms(r.step)} ms</span></Pill>
         <Pill>exposed comm <span className="font-mono text-danger">{ms(r.exposed)} ms</span> ({((r.exposed / r.step) * 100).toFixed(0)}% of step)</Pill>
         <Pill>hidden <span className="font-mono text-fg">{r.commTotal > 0 ? (((r.commTotal - r.exposed) / r.commTotal) * 100).toFixed(0) : 0}%</span> of {ms(r.commTotal)} ms comm</Pill>

@@ -26,14 +26,14 @@ questions:
     prompt: A colleague reports ib_write_bw shows "about 46000" on a 400 Gb/s link and is alarmed. What is the likely explanation?
     options:
       - id: a
-        text: "The default unit is MB/s (perftest uses 2^20-byte megabytes): 46,000 x 1,048,576 x 8 bits is about 386 Gb/s, which is healthy."
+        text: The default unit is MB/s in 2^20-byte megabytes, so 46,000 is about 386 Gb/s, which is healthy.
         correct: true
-        explanation: Use --report_gbits to report in Gb/s and avoid this confusion.
+        explanation: 46,000 x 1,048,576 x 8 bits is about 386 Gb/s. Use --report_gbits to report in Gb/s and avoid this confusion.
       - id: b
-        text: The link negotiated 46 Gb/s.
-        explanation: No IB or Ethernet speed corresponds to that; it is a unit misreading.
+        text: The link renegotiated to a lower speed and is running at about 46 Gb/s instead of 400 Gb/s.
+        explanation: No IB or Ethernet speed corresponds to 46 Gb/s; it is a unit misreading.
       - id: c
-        text: perftest reports kilobits per second.
+        text: perftest reports kilobits per second by default, so 46,000 means the link carries only about 46 Mb/s.
         explanation: perftest defaults to MB/s, not kb/s.
     tags: [perftest, units]
   - id: q3
@@ -48,13 +48,13 @@ questions:
         correct: true
         explanation: 16 GT/s is Gen4; a 400G adapter needs Gen5 x16 (32 GT/s) or an equivalent arrangement.
       - id: b
-        text: The fabric is oversubscribed.
+        text: The fabric is oversubscribed, so the pair shares uplinks with other traffic.
         explanation: A single pair test with a flat ceiling regardless of QPs points at the host, not fabric contention.
       - id: c
-        text: The GID index is wrong.
-        explanation: A wrong GID would cause connection failures, not a stable lower bandwidth.
+        text: The GID index is wrong, so traffic uses a slower RoCE v1 path.
+        explanation: A wrong GID would cause connection failures, not a stable lower bandwidth; RoCE v1 is not a slower data path.
       - id: d
-        text: The message size is too small.
+        text: The message size is too small to fill a 400 Gb/s pipe.
         explanation: The ceiling persists at large sizes, which rules out message-rate limits.
     tags: [pcie, troubleshooting]
   - id: q4
@@ -62,15 +62,15 @@ questions:
     prompt: Why do ib_read_lat results typically look about twice as high as ib_write_lat for the same message size?
     options:
       - id: a
-        text: Write and send latency tests report half of a ping-pong round trip, while read latency reports the full time for the read to return.
+        text: Write and send latency tests report half a ping-pong round trip; read latency reports the full time for the read to return.
         correct: true
         explanation: A read inherently needs a request and a response, and perftest reports that complete time.
       - id: b
-        text: RDMA Read packets travel at half the link rate.
-        explanation: Read responses travel at full link rate.
+        text: RDMA Read responses are sent at half the link rate, so a read of the same size takes about twice as long on the wire.
+        explanation: Read responses travel at full link rate; the difference is in what perftest measures.
       - id: c
-        text: Reads always go through the remote CPU.
-        explanation: RDMA Read is one-sided; the remote CPU is not involved.
+        text: Every RDMA Read is served by the remote CPU, whose interrupt and copy overhead roughly doubles the latency.
+        explanation: RDMA Read is one-sided; the remote NIC serves it and the remote CPU is not involved.
     tags: [latency]
   - id: q5
     type: multi
@@ -100,17 +100,17 @@ questions:
       only when node17's mlx5_3 is involved. What should you do next?
     options:
       - id: a
-        text: Inspect node17's mlx5_3 link and host path - negotiated speed and width, cable/optics error counters, PCIe link status.
+        text: "Inspect node17's mlx5_3: negotiated speed and width, cable and optics error counters, and PCIe link status."
         correct: true
         explanation: The problem follows one NIC, so investigate that NIC's link, cable and PCIe before the fabric.
       - id: b
-        text: Increase -q to 64 and rerun; ECMP collisions explain it.
+        text: Rerun with -q 64; ECMP hash collisions on rail 3 explain the shortfall, and more QPs will spread the flows.
         explanation: A single pair through the fabric that is slow with any peer points at the endpoint, not at hashing.
       - id: c
-        text: Accept the result; 290 Gb/s is within normal variation.
+        text: Accept it; 290 Gb/s is within normal run-to-run variation for ib_write_bw during burn-in.
         explanation: A 25 percent shortfall against identical peers is an outlier to fix before production.
       - id: d
-        text: Change the GID index on all hosts.
+        text: Change the GID index on all hosts on rail 3 so every pair uses the same RoCE v2 entry.
         explanation: The other 63 pairs work, and a wrong GID would cause failures, not lower bandwidth.
     tags: [validation, burn-in]
   - id: q7
@@ -118,14 +118,14 @@ questions:
     prompt: What does the perftest -R option change?
     options:
       - id: a
-        text: The QPs are connected using the RDMA connection manager (rdma_cm) instead of exchanging details over a plain TCP socket.
+        text: QPs are connected via the RDMA connection manager (rdma_cm) instead of exchanging details over a TCP socket.
         correct: true
         explanation: rdma_cm also resolves the GID from the IP address you give it.
       - id: b
-        text: It reverses the direction of the test.
-        explanation: Use -b for bidirectional tests; -R does not reverse direction.
+        text: It reverses the test direction, so the server side sends and the client side receives the data.
+        explanation: -R does not reverse direction; use -b for bidirectional tests.
       - id: c
-        text: It reports results in Gb/s.
+        text: It switches result reporting from MB/s to Gb/s, matching how link speeds are quoted.
         explanation: That is --report_gbits.
     tags: [perftest]
   - id: q8
@@ -137,7 +137,7 @@ questions:
         correct: true
         explanation: 391.85e9 / (65536 x 8) is about 747,000 messages per second.
       - id: b
-        text: About 7.5 Mpps
+        text: About 7.47 Mpps
         explanation: That would require ten times the bandwidth at this message size.
       - id: c
         text: About 47 Mpps

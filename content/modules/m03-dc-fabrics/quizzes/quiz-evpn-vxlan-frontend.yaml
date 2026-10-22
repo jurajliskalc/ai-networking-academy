@@ -44,36 +44,36 @@ questions:
     prompt: "Tenants on a new EVPN-VXLAN front-end can ping each other across leaves with small packets, but large file transfers between racks stall. Tenant interfaces use MTU 9000 and fabric links use MTU 9000. What is wrong?"
     options:
       - id: a
-        text: The underlay MTU does not accommodate VXLAN overhead; full-size tenant frames plus 50 bytes exceed 9000 and are dropped.
+        text: The underlay MTU does not fit VXLAN overhead; 9000-byte tenant frames plus 50 bytes exceed 9000 and are dropped.
         correct: true
         explanation: Raise the underlay MTU (for example around 9216) or lower tenant MTUs so encapsulated frames fit.
       - id: b
-        text: ARP suppression blocks large packets.
-        explanation: ARP suppression affects ARP handling only.
+        text: ARP suppression on the leaves blocks large packets, because the leaf answers only for frames that fit a 1500-byte MTU.
+        explanation: ARP suppression affects ARP handling only; it has no relation to data packet size.
       - id: c
-        text: Route targets are mismatched.
-        explanation: RT mismatch would break connectivity entirely, including small pings.
+        text: Route targets are mismatched between the leaves, so large flows are imported into the wrong VNI and discarded.
+        explanation: RTs govern route import, not packet size; an RT mismatch would break connectivity entirely, including small pings.
       - id: d
-        text: The VNI is too large.
-        explanation: VNIs are 24-bit identifiers and do not affect packet size.
+        text: The VNI is too large for the 24-bit field, so encapsulation truncates packets above the standard Ethernet size.
+        explanation: A VNI that does not fit 24 bits would be rejected at configuration, and the VNI never affects packet size.
     tags: [vxlan, mtu, troubleshooting]
   - id: q4
     type: scenario
     prompt: "On leaf 1, show evpn vni lists VNI 100 with zero remote VTEPs, although leaf 2 and leaf 3 also have VNI 100 configured and EVPN sessions to the spines are established. Leaf 1 receives other EVPN routes. What is the most likely cause?"
     options:
       - id: a
-        text: The route targets for VNI 100 on leaf 1 do not match those on the other leaves, so their type 3 and type 2 routes are not imported.
+        text: VNI 100 on leaf 1 has route targets that do not match the other leaves, so their type 3 and type 2 routes are not imported.
         correct: true
         explanation: Routes arrive but are not imported into VNI 100 without a matching RT.
       - id: b
-        text: The underlay MTU is too small.
-        explanation: MTU affects data forwarding, not import of control-plane routes.
+        text: The underlay MTU is too small, so type 3 routes from leaf 2 and leaf 3 are fragmented and dropped in transit.
+        explanation: BGP runs over TCP, which segments to fit the path, and the sessions are established; MTU affects data forwarding, not route import.
       - id: c
-        text: The spines do not have VNI 100 configured.
-        explanation: Spines do not need VNIs; they only relay EVPN routes.
+        text: The spines do not have VNI 100 configured, so they filter its type 3 routes instead of relaying them.
+        explanation: Spines do not need VNIs; they relay EVPN routes regardless of which VNIs exist locally.
       - id: d
-        text: ARP suppression is disabled.
-        explanation: That would increase flooding but would not hide remote VTEPs.
+        text: ARP suppression is disabled, so leaf 1 waits for ARP replies before listing any remote VTEP.
+        explanation: Disabled ARP suppression increases flooding but does not hide remote VTEPs, which come from type 3 routes.
     tags: [evpn, troubleshooting]
   - id: q5
     type: single
@@ -84,11 +84,11 @@ questions:
         correct: true
         explanation: Asymmetric IRB requires every leaf to have every VNI and learn all MACs of all subnets.
       - id: b
-        text: It removes the need for a BGP control plane.
-        explanation: Both models rely on EVPN in BGP.
+        text: It removes the need for a BGP control plane, because each leaf learns remote MACs by flooding in the data plane.
+        explanation: Both models rely on EVPN in BGP to distribute MAC and IP reachability.
       - id: c
-        text: It eliminates the VXLAN header.
-        explanation: Traffic is still VXLAN-encapsulated in both models.
+        text: It eliminates the VXLAN header for routed traffic, so inter-subnet packets travel natively across the underlay.
+        explanation: Routed traffic is still VXLAN-encapsulated in both models; symmetric IRB carries it in the L3 VNI.
     tags: [irb]
   - id: q6
     type: multi
@@ -115,16 +115,16 @@ questions:
     prompt: Why is the AI back-end compute fabric usually built as a plain routed L3 Clos without EVPN-VXLAN?
     options:
       - id: a
-        text: GPU NICs need simple routed connectivity at maximum performance, and avoiding an overlay keeps RoCE behaviour, MTU and QoS predictable.
+        text: GPU NICs need plain routed connectivity at full speed, and no overlay keeps RoCE behaviour, MTU and QoS predictable.
         correct: true
         explanation: Overlays are used on the back-end only when multi-tenancy requires them, in switches or DPUs.
       - id: b
-        text: VXLAN cannot carry UDP traffic such as RoCEv2.
-        explanation: VXLAN encapsulates any Ethernet frame, including RoCEv2 packets.
+        text: VXLAN cannot carry RoCEv2, because its own outer header is UDP and UDP inside UDP is not permitted.
+        explanation: VXLAN encapsulates any Ethernet frame, including UDP-based RoCEv2 packets.
       - id: c
-        text: BGP cannot run on back-end switches.
-        explanation: Back-end Ethernet fabrics commonly run eBGP underlays.
+        text: BGP cannot run on back-end switches, since their control planes are reserved for PFC and ECN processing.
+        explanation: Back-end Ethernet fabrics commonly run eBGP underlays; PFC and ECN are handled in the data plane.
       - id: d
-        text: EVPN only works with InfiniBand.
-        explanation: EVPN is an Ethernet VPN technology.
+        text: EVPN only works on InfiniBand, where the subnet manager distributes the MAC/IP routes.
+        explanation: EVPN is an Ethernet VPN technology carried in BGP; InfiniBand does not use it.
     tags: [ai-fabric, design]

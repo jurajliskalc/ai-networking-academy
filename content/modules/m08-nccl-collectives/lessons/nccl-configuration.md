@@ -20,7 +20,7 @@ further_reading:
   - title: NCCL troubleshooting guide
     url: https://docs.nvidia.com/deeplearning/nccl/user-guide/docs/troubleshooting.html
   - title: PyTorch ProcessGroupNCCL environment variables
-    url: https://pytorch.org/docs/stable/torch_nccl_environment_variables.html
+    url: https://docs.pytorch.org/docs/stable/torch_nccl_environment_variables.html
 ---
 
 ## Why this matters
@@ -137,6 +137,10 @@ priority:
 ```bash
 export NCCL_IB_TC=104   # DSCP 26 << 2 = 104
 ```
+
+Many deployment guides use **106** instead: the same DSCP 26 plus ECT(0) in the two ECN bits, so the
+packets are ECN-capable from the start. Both put the traffic in the DSCP 26 class; which one your site
+uses is part of its QoS profile (see `qos-trust-and-mapping`, and the Real HW labs, which use 106).
 
 The NIC may also apply its own QoS settings (trust mode, default DSCP for RDMA traffic), configured
 with vendor tools. Whichever mechanism you use, the packets on the wire must carry the DSCP the

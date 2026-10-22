@@ -10,7 +10,7 @@ const LAYER_COLOR: Record<Layer, string> = {
   l2: 'var(--data)',
   l3: 'var(--accent)',
   l4: 'var(--warn)',
-  ib: '#a78bfa',
+  ib: 'var(--analogy)',
   data: 'var(--text)',
 };
 
@@ -30,11 +30,11 @@ function Toggle({ label, checked, onChange }: { label: string; checked: boolean;
   );
 }
 
-function Seg<T extends string | number>({ options, value, onChange, fmt }: { options: readonly T[]; value: T; onChange: (v: T) => void; fmt?: (v: T) => string }) {
+function Seg<T extends string | number>({ options, value, onChange, fmt, label }: { options: readonly T[]; value: T; onChange: (v: T) => void; fmt?: (v: T) => string; label?: string }) {
   return (
-    <div className="inline-flex flex-wrap overflow-hidden rounded-lg border border-line">
+    <div className="inline-flex flex-wrap overflow-hidden rounded-lg border border-line" role="group" aria-label={label}>
       {options.map((o) => (
-        <button key={String(o)} type="button" onClick={() => onChange(o)}
+        <button key={String(o)} type="button" onClick={() => onChange(o)} aria-pressed={o === value}
           className={`px-2.5 py-1 font-mono text-xs transition ${o === value ? 'bg-accent-soft text-accent' : 'bg-panel text-muted hover:text-fg'}`}>
           {fmt ? fmt(o) : String(o)}
         </button>
@@ -154,8 +154,8 @@ export default function RocePacket() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-        <div className="flex items-center gap-2"><span className="text-xs text-muted">RoCE MTU</span><Seg options={MTUS} value={mtu as (typeof MTUS)[number]} onChange={setMtu} /></div>
-        <div className="flex items-center gap-2"><span className="text-xs text-muted">Link</span><Seg options={SPEEDS} value={speed as (typeof SPEEDS)[number]} onChange={setSpeed} fmt={(v) => `${v}G`} /></div>
+        <div className="flex items-center gap-2"><span className="text-xs text-muted">RoCE MTU</span><Seg label="RoCE MTU" options={MTUS} value={mtu as (typeof MTUS)[number]} onChange={setMtu} /></div>
+        <div className="flex items-center gap-2"><span className="text-xs text-muted">Link</span><Seg label="Link speed" options={SPEEDS} value={speed as (typeof SPEEDS)[number]} onChange={setSpeed} fmt={(v) => `${v}G`} /></div>
       </div>
       <div className="flex flex-wrap gap-x-5 gap-y-2">
         <Toggle label="802.1Q tag" checked={vlan} onChange={setVlan} />
@@ -166,26 +166,29 @@ export default function RocePacket() {
 
       <div>
         <div className="mb-1 flex justify-between font-mono text-[10px] text-muted"><span>headers to scale, payload compressed</span><span>click a segment</span></div>
-        <div className="flex h-16 w-full gap-[2px]" role="list">
+        <ul className="flex h-16 w-full gap-[2px]" aria-label="Packet segments" style={{ listStyle: 'none', paddingLeft: 0 }}>
           {segments.map((s) => {
             const grow = s.layer === 'data' ? 70 : s.bytes;
             const c = LAYER_COLOR[s.layer];
             const active = s.id === selected.id;
             return (
-              <button key={s.id} type="button" role="listitem" onClick={() => setSel(s.id)} title={`${s.name}: ${s.bytes} B`}
-                className="flex min-w-[1.6rem] flex-col items-center justify-center overflow-hidden rounded-md px-0.5 font-mono transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
-                style={{
-                  flexGrow: grow, flexBasis: 0,
-                  background: `color-mix(in srgb, ${c} ${active ? 34 : 16}%, transparent)`,
-                  border: `1.5px ${s.wire ? 'dashed' : 'solid'} color-mix(in srgb, ${c} ${active ? 100 : 55}%, transparent)`,
-                }}>
-                <span className="w-full truncate text-center text-[10px] font-semibold leading-tight" style={{ color: s.layer === 'data' ? 'var(--text)' : c }}>{s.short}</span>
-                <span className="w-full truncate text-center text-[10px] leading-tight text-muted">{s.bytes}</span>
-              </button>
+              <li key={s.id} className="flex min-w-[1.6rem]" style={{ flexGrow: grow, flexBasis: 0, marginTop: 0 }}>
+                <button type="button" onClick={() => setSel(s.id)} title={`${s.name}: ${s.bytes} B`} aria-pressed={active} aria-label={`${s.short} ${s.bytes}: ${s.name}, ${s.bytes} bytes, ${LAYER_LABEL[s.layer]}`}
+                  className="flex w-full flex-col items-center justify-center overflow-hidden rounded-md px-0.5 font-mono transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+                  style={{
+                    background: `color-mix(in srgb, ${c} ${active ? 34 : 16}%, transparent)`,
+                    border: `1.5px ${s.wire ? 'dashed' : 'solid'} color-mix(in srgb, ${c} ${active ? 100 : 55}%, transparent)`,
+                  }}>
+                  {/* Label text is pulled towards the body text colour so it stays readable on the tinted fill in both themes. */}
+                  <span className="w-full truncate text-center text-[10px] font-semibold leading-tight" style={{ color: s.layer === 'data' ? 'var(--text)' : `color-mix(in srgb, ${c} 55%, var(--text))` }}>{s.short}</span>{' '}
+                  <span className="w-full truncate text-center text-[10px] leading-tight" style={{ color: 'color-mix(in srgb, var(--muted) 45%, var(--text))' }}>{s.bytes}</span>
+                </button>
+              </li>
             );
           })}
-        </div>
-        <div className="mt-2 flex h-2 w-full overflow-hidden rounded-full border border-line" aria-label="True-scale bar">
+        </ul>
+        <div className="mt-2 flex h-2 w-full overflow-hidden rounded-full border border-line" role="img"
+          aria-label={`True-scale bar: ${frame - mtu + (wire ? l1 : 0)} bytes of overhead around ${mtu} bytes of payload`}>
           {segments.map((s) => <div key={s.id} style={{ flexGrow: s.bytes, flexBasis: 0, background: LAYER_COLOR[s.layer], opacity: s.layer === 'data' ? 0.35 : 0.9 }} />)}
         </div>
         <div className="mt-1 font-mono text-[10px] text-muted">true scale: overhead is a sliver at 4096 B, a sizeable slice at 256 B</div>
@@ -198,7 +201,7 @@ export default function RocePacket() {
             <div className="font-mono text-xs" style={{ color: LAYER_COLOR[selected.layer] === 'var(--text)' ? 'var(--muted)' : LAYER_COLOR[selected.layer] }}>{selected.bytes} B · {LAYER_LABEL[selected.layer]}</div>
           </div>
           <p className="mt-1 text-sm text-muted">{selected.blurb}</p>
-          <div className="mt-3 overflow-x-auto">
+          <div className="mt-3 overflow-x-auto" tabIndex={0} role="region" aria-label={`${selected.name} fields`}>
             <table className="w-full text-left text-xs">
               <thead><tr className="border-b border-line text-muted"><th className="py-1 pr-2 font-medium">Field</th><th className="py-1 pr-2 font-medium">Bits</th><th className="py-1 font-medium">Value</th></tr></thead>
               <tbody>
@@ -214,7 +217,7 @@ export default function RocePacket() {
           </div>
         </div>
 
-        <div className="space-y-2">
+        <div className="space-y-2" aria-live="polite">
           <Metric label="Ethernet frame (with FCS)" value={`${frame} B`} />
           <Metric label="Bytes on the wire" value={`${wireBytes} B`} sub="frame + 8 B preamble/SFD + 12 B IFG" />
           <Metric label={`Payload efficiency (${wire ? 'wire' : 'frame'})`} value={`${(eff * 100).toFixed(1)} %`} sub={`${mtu} B payload / ${denom} B`} accent />

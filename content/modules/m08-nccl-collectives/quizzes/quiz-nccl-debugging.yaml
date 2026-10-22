@@ -12,14 +12,14 @@ questions:
         correct: true
         explanation: "INFO level, filtered subsystems and one file per process keep logs readable at scale."
       - id: b
-        text: "NCCL_DEBUG=TRACE on all ranks to stdout."
-        explanation: "TRACE requires a tracing build and produces enormous interleaved output."
+        text: "NCCL_DEBUG=TRACE on every rank, printed to stdout so the scheduler collects it all in one log."
+        explanation: "TRACE requires a tracing build, and one shared stdout log of every rank produces enormous interleaved output."
       - id: c
-        text: "NCCL_DEBUG=WARN with NCCL_DEBUG_SUBSYS=ALL."
+        text: "NCCL_DEBUG=WARN with NCCL_DEBUG_SUBSYS=ALL, so every subsystem reports but only real problems print."
         explanation: "WARN suppresses the INFO lines that show network and transport selection."
       - id: d
-        text: "TORCH_NCCL_ASYNC_ERROR_HANDLING=1 only."
-        explanation: "That controls PyTorch error handling, not NCCL logging."
+        text: "TORCH_NCCL_ASYNC_ERROR_HANDLING=1 alone, which makes PyTorch print NCCL's init and network choices."
+        explanation: "That controls PyTorch error handling for failed collectives, not NCCL logging."
     tags: [logging]
   - id: q2
     type: scenario
@@ -30,31 +30,31 @@ questions:
         correct: true
         explanation: "Status 12 is transport retry exceeded; status 5 means work requests were flushed from QPs already in error."
       - id: b
-        text: "On the 200 ranks with status=5, since they are the majority."
-        explanation: "Flush errors are consequences of an earlier failure."
+        text: "On the 200 ranks with status=5, since errors on that many NICs at once point to a fabric-wide problem rather than one link."
+        explanation: "Status 5 means work requests were flushed from QPs already in error; these are consequences of the earlier failure on rank 37."
       - id: c
-        text: "On raising NCCL_IB_RETRY_CNT on all ranks."
-        explanation: "Retry count is already at its usual maximum; find the cause first."
+        text: "On raising NCCL_IB_RETRY_CNT and NCCL_IB_TIMEOUT on all ranks so the job rides through transient loss."
+        explanation: "Retry count is already at its usual maximum, and longer timeouts only delay the failure; find the cause on the first failing path first."
       - id: d
-        text: "On the PyTorch version, since NCCL errors are always framework bugs."
-        explanation: "A retry-exceeded error points to the transport path between two specific endpoints."
+        text: "On the PyTorch and NCCL versions, since errors this widespread usually come from a library regression."
+        explanation: "The timeline shows one origin, and a retry-exceeded error points to the transport path between two specific endpoints."
     tags: [transport-errors]
   - id: q3
     type: scenario
-    prompt: "A 256-GPU job hangs. Every rank eventually reports a watchdog timeout. Rank 113's last collective shows SeqNum 9120 while all others show 9121, and there are no link or switch events. What is the most likely cause?"
+    prompt: "A 256-GPU job hangs. All ranks except rank 113 report a watchdog timeout on the all-reduce with SeqNum 9121. Rank 113's last recorded collective is SeqNum 9120, and there are no link or switch events. What is the most likely cause?"
     options:
       - id: a
-        text: "Rank 113 diverged or stalled before issuing the next collective (code path, data-dependent control flow, or a local problem), so the others wait for it."
+        text: "Rank 113 diverged or stalled before issuing the next collective (code path, data-dependent control flow or a local problem)."
         correct: true
-        explanation: "A rank behind in sequence numbers is the one that is different; no network fault is indicated."
+        explanation: "A rank behind in sequence numbers is the one that is different, and the others wait for it; no network fault is indicated."
       - id: b
-        text: "A spine switch is dropping RoCE packets."
-        explanation: "No network events were observed, and the sequence mismatch points at one rank."
+        text: "A spine switch is silently dropping RoCE packets, so rank 113's share of SeqNum 9121 never reached its peers."
+        explanation: "No network events were observed, and rank 113 never even issued SeqNum 9121; the sequence mismatch points at one rank."
       - id: c
-        text: "NCCL_IB_TC is set incorrectly on all ranks."
-        explanation: "A QoS mistake would affect performance broadly, not cause one rank to lag by one collective."
+        text: "NCCL_IB_TC is set incorrectly on all ranks, so collective traffic lands in a lossy queue and the all-reduce stalls."
+        explanation: "A QoS mistake would affect performance broadly and every rank would still have issued SeqNum 9121; it does not make one rank lag by one collective."
       - id: d
-        text: "The ring algorithm cannot handle 256 GPUs."
+        text: "The ring algorithm cannot span 256 GPUs, so NCCL deadlocks once the ring grows past a fixed rank limit."
         explanation: "NCCL handles far larger jobs; this is a rank-level divergence."
     tags: [hangs]
   - id: q4
@@ -66,14 +66,14 @@ questions:
         correct: true
         explanation: "The GDRDMA suffix indicates direct NIC access to GPU memory."
       - id: b
-        text: "NCCL switched from InfiniBand to sockets."
-        explanation: "The hops still use NET/IB."
+        text: "NCCL fell back from InfiniBand verbs to TCP sockets on NIC 7, which is why the GDRDMA suffix disappeared from each hop line."
+        explanation: "The hops still show NET/IB; a socket fallback would show NET/Socket."
       - id: c
-        text: "The job now uses fewer channels."
-        explanation: "Channel count is shown elsewhere; the suffix is about GDR."
+        text: "The job now uses fewer channels, and NCCL drops the GDRDMA suffix to mark the reduced parallelism."
+        explanation: "Channel count is shown elsewhere; the suffix is about GPUDirect RDMA."
       - id: d
-        text: "Adaptive routing was disabled on the fabric."
-        explanation: "NCCL's GDR decision is independent of switch AR."
+        text: "Adaptive routing was disabled on the switches, and NCCL only enables GDRDMA when the fabric offers AR."
+        explanation: "NCCL's GDR decision depends on the host (driver, peer-memory support, PCIe topology) and is independent of switch AR."
     tags: [gdr]
   - id: q5
     type: multi
@@ -122,12 +122,12 @@ questions:
         correct: true
         explanation: "When peer access is unavailable, NCCL falls back to SHM staging through host memory."
       - id: b
-        text: "The spine switch ECMP hash seeds."
+        text: "The spine switch ECMP hash seeds, since uneven hashing can lower all-reduce bandwidth on newly added nodes."
         explanation: "Single-node traffic does not cross the fabric."
       - id: c
-        text: "NCCL_IB_GID_INDEX on the new servers."
-        explanation: "GID selection affects RoCE connections, not intra-node transport."
+        text: "NCCL_IB_GID_INDEX on the new servers, since a non-RoCEv2 GID entry makes NCCL stage data via SHM."
+        explanation: "GID selection affects RoCE connections between nodes, not the intra-node transport."
       - id: d
-        text: "The PFC watchdog configuration."
+        text: "The PFC watchdog configuration, since pause storms on the new servers' ports slow every transfer."
         explanation: "PFC is a fabric feature and irrelevant to intra-node P2P."
     tags: [p2p, shm]

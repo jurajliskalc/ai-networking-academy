@@ -30,13 +30,13 @@ questions:
         correct: true
         explanation: SYS is the farthest category; GPU0 should not use NIC5 for bulk traffic.
       - id: b
-        text: The NIC is a system management NIC.
+        text: NIC5 is a system management NIC reserved for BMC and out-of-band traffic.
         explanation: SYS describes a path, not the role of a device.
       - id: c
-        text: The two devices share a PCIe switch.
+        text: The two devices share a PCIe switch, so their path stays on the system board.
         explanation: That would be PIX.
       - id: d
-        text: They are connected by NVLink.
+        text: They are connected by NVLink through the NVSwitch system fabric.
         explanation: NVLink connections appear as NV#.
     tags: [topology, numa]
   - id: q3
@@ -44,17 +44,17 @@ questions:
     prompt: "On a new node, the GPU-NIC block shows GPU2 with NODE to every compute NIC and GPU3 with PIX to both NIC2 and NIC3. All other GPUs have exactly one PIX NIC. What is the most likely issue and response?"
     options:
       - id: a
-        text: A NIC is in the wrong slot or a riser is cabled to the wrong PCIe switch; fix the hardware placement and re-check against the golden topology.
+        text: A NIC is in the wrong slot or a riser goes to the wrong PCIe switch; fix the placement and re-check against the golden topology.
         correct: true
         explanation: GPU2 has lost its local NIC and GPU3 has gained one, which is a physical placement problem.
       - id: b
-        text: Nothing; NCCL will balance the load automatically with no performance impact.
+        text: "Nothing is wrong: NCCL balances GPU2's traffic across the NODE paths automatically, so there is no performance impact."
         explanation: GPU2's traffic would take a NODE path through the CPU, making the node a likely straggler.
       - id: c
-        text: Set NCCL_NET_GDR_LEVEL=SYS so GPU2 can use GPUDirect RDMA.
+        text: Set NCCL_NET_GDR_LEVEL=SYS so that GPU2 can keep using GPUDirect RDMA to its NIC over the NODE path.
         explanation: That treats the symptom and still leaves GPU2 on a poor path; fix placement instead.
       - id: d
-        text: The NVLink fabric is degraded.
+        text: The NVLink fabric is degraded, so GPU2 has lost its NVLink paths and the matrix shows NODE for its NICs instead.
         explanation: NVLink health appears in the GPU-GPU block, not in GPU-NIC entries.
     tags: [topology, troubleshooting]
   - id: q4
@@ -62,32 +62,32 @@ questions:
     prompt: "A team's launch wrapper sets NCCL_IB_HCA per local rank to mlx5_<local rank>, assuming GPU i uses mlx5_i. After an OS upgrade on some nodes, those nodes are slower. The NIC Legend now shows NIC2: mlx5_3 and NIC3: mlx5_2, while PIX pairing is still GPU2-NIC2 and GPU3-NIC3. What is the best fix?"
     options:
       - id: a
-        text: Stop relying on name-based assumptions; let NCCL select NICs by topology (or derive lists from topology) and update any name-based tooling.
+        text: Stop assuming names; let NCCL pick NICs by topology (or derive the lists from topology) and fix any name-based tooling.
         correct: true
         explanation: Device names can be reordered by enumeration; topology is the source of truth.
       - id: b
-        text: Swap the cables of rails 2 and 3 on every affected node.
+        text: Swap the cables of rails 2 and 3 on every affected node so that the mlx5 device names line up with the rail numbers again.
         explanation: Physical placement is unchanged; only names moved, so recabling would break correct wiring.
       - id: c
-        text: Downgrade the OS on the affected nodes.
-        explanation: That avoids the symptom but keeps a fragile assumption in place.
+        text: Downgrade the OS on the affected nodes, since the new kernel enumerates the NICs in the wrong order.
+        explanation: That avoids the symptom but keeps a fragile assumption in place; no enumeration order is guaranteed to be "right".
       - id: d
-        text: Disable NIC2 and NIC3.
-        explanation: That removes bandwidth for two GPUs.
+        text: Disable NIC2 and NIC3 on the affected nodes until a driver update restores the old device names.
+        explanation: That removes bandwidth for two GPUs and still relies on names being stable.
     tags: [topology, nccl]
   - id: q5
     type: single
     prompt: On an NVSwitch-based 8-GPU server, one GPU pair shows NV12 while all other pairs show NV18. What should you conclude?
     options:
       - id: a
-        text: Some NVLinks of one of those GPUs are down or not trained; verify with nvidia-smi nvlink --status and open a hardware ticket.
+        text: Some NVLinks of one of those GPUs are down or untrained; confirm with nvidia-smi nvlink --status and open a hardware ticket.
         correct: true
         explanation: On NVSwitch systems every pair should show the same NV# value.
       - id: b
-        text: The two GPUs are on different NUMA nodes, which reduces NV# automatically.
+        text: The two GPUs sit on different NUMA nodes, and NVSwitch systems always report fewer NVLinks for cross-socket GPU pairs.
         explanation: NUMA placement does not change the NVLink count.
       - id: c
-        text: This is how NVSwitch shows lower priority pairs.
+        text: NVSwitch gives some GPU pairs lower priority, and NV12 marks a pair that receives a smaller bandwidth share by design.
         explanation: NVSwitch provides uniform all-to-all connectivity; there is no priority encoded in NV#.
     tags: [nvlink, topology]
   - id: q6

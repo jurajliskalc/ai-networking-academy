@@ -36,12 +36,12 @@ export default function Simulator() {
     <div>
       <PageHeader eyebrow="Sandbox" title="Fabric simulator">
         A healthy 32-GPU cluster to explore freely: 4 nodes × 8 H100-class GPUs, 8 × 400G RoCE NICs per node, 8 rail leaves and 2 spines.
-        Break things on purpose and watch the counters. Share a session by link: <code>#/simulator?run=ibdev2netdev&amp;run=nvidia-smi%20topo%20-m</code>. For guided incidents, open a <Link to="/labs" className="text-data hover:underline">simulator lab</Link>.
+        Break things on purpose and watch the counters. Share a session by link: <code>#/simulator?run=ibdev2netdev&amp;run=nvidia-smi%20topo%20-m</code>. For guided incidents, open a <Link to="/labs" className="text-data underline underline-offset-2">simulator lab</Link>.
         The model and its limits are described in <code>docs/SIMULATOR.md</code>.
       </PageHeader>
       <Card className="mb-6 p-4"><Topology /></Card>
-      <div className="mb-3 flex justify-end"><Button variant="ghost" onClick={() => { setState(createFabric()); setGen((g) => g + 1); }}><RotateCcw size={15} />Reset cluster</Button></div>
-      <div className="h-[70vh]"><Terminal key={gen} state={state} start="node01" onChange={() => {}} autorun={gen === 0 ? autorun : undefined} banner={'Fabric Simulator sandbox. Healthy cluster. Try: ibdev2netdev, nvidia-smi topo -m, all_reduce_perf -b 8 -e 8G -f 2 -g 1, ssh leaf04'} /></div>
+      <div className="mb-3 flex justify-end"><Button variant="ghost" onClick={() => { setState(createFabric()); setGen((g) => g + 1); }}><RotateCcw size={15} aria-hidden />Reset cluster</Button></div>
+      <div className="h-[70vh]"><Terminal key={gen} autoFocus state={state} start="node01" onChange={() => {}} autorun={gen === 0 ? autorun : undefined} banner={'Fabric Simulator sandbox. Healthy cluster. Try: ibdev2netdev, nvidia-smi topo -m, all_reduce_perf -b 8 -e 8G -f 2 -g 1, ssh leaf04'} /></div>
     </div>
   );
 }

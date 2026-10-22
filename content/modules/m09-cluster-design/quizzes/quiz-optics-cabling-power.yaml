@@ -15,10 +15,10 @@ questions:
         correct: true
         explanation: 25 m is beyond copper reach at 100G per lane; multimode/single-mode optics or AOCs reach tens of meters.
       - id: b
-        text: Passive DAC.
-        explanation: Passive copper reaches only a few meters at this lane rate.
+        text: Passive DAC, since 100G-per-lane copper comfortably spans a 25 m row.
+        explanation: Passive copper reaches only a few meters at 100G per lane, far short of 25 m.
       - id: c
-        text: AEC.
+        text: AECs, whose retimers stretch 100G-per-lane copper to 25 m and beyond.
         explanation: AECs extend copper to several meters, not 25 m.
       - id: d
         text: Any medium, since reach only matters above 100 m.
@@ -55,31 +55,31 @@ questions:
         correct: true
         explanation: 12,000 x 0.004 = 48 per year; 48 / 52 is about 0.9 per week.
       - id: b
-        text: About 9 per week.
+        text: About 9 per week (480 per year).
         explanation: That uses 4% instead of 0.4%.
       - id: c
-        text: About 1 per year.
+        text: About 1 per year, since AFR is a fleet-wide rate.
         explanation: AFR applies to each module; with 12,000 modules failures are frequent.
       - id: d
-        text: About 48 per week.
-        explanation: 48 is the yearly figure.
+        text: About 48 per week (0.4% of all modules).
+        explanation: 48 (0.4% of 12,000) is the yearly figure, not the weekly one.
     tags: [reliability, afr]
   - id: q4
     type: single
     prompt: What does a twin-port 800G OSFP module on a Quantum-2 class switch provide?
     options:
       - id: a
-        text: Two independent 400G (4 x 100G) ports from one 8-lane cage, each with its own fiber connector.
+        text: Two independent 400G (4 x 100G) ports from one 8-lane cage, each with its own connector.
         correct: true
         explanation: That is how 64 NDR ports are exposed through 32 OSFP cages.
       - id: b
-        text: One 800G port that must connect to a single 800G peer.
-        explanation: Twin-port modules present two separate ports, not one.
+        text: One 800G port (8 x 100G) that must connect to a single 800G peer at the far end.
+        explanation: Twin-port modules present two separate 400G ports, not one 800G port.
       - id: c
-        text: Redundant 400G paths where the second port is a standby.
-        explanation: Both ports are active and independent.
+        text: Two 400G paths in an active/standby pair, where the second port takes over only on failure.
+        explanation: Both ports are active and independent; neither is a standby.
       - id: d
-        text: An 800G port built from 16 lanes of 50G.
+        text: One 800G port built from 16 electrical lanes of 50G PAM4 inside a single cage.
         explanation: OSFP has 8 electrical lanes; 800G is 8 x 100G here.
     tags: [osfp, twin-port]
   - id: q5
@@ -87,17 +87,17 @@ questions:
     prompt: What is the main operational trade-off of co-packaged optics (CPO) compared with pluggable transceivers?
     options:
       - id: a
-        text: Optical engines are fixed on the switch package, so an optical fault cannot be fixed by swapping one pluggable module (lasers are often still pluggable).
+        text: Optical engines sit on the switch package, so an optical fault cannot be fixed by swapping one pluggable module.
         correct: true
-        explanation: CPO trades field replaceability and broad interoperability for lower power per bit.
+        explanation: CPO trades field replaceability and broad interoperability for lower power per bit (the laser sources are often still pluggable).
       - id: b
-        text: CPO requires copper cables between switches.
-        explanation: CPO is an optical technology; links are still fiber.
+        text: CPO replaces fiber between switches with copper, which limits inter-switch links to a few meters.
+        explanation: CPO is an optical technology; links between switches are still fiber.
       - id: c
-        text: CPO consumes more power per bit than DSP-based pluggables.
-        explanation: Lower power per bit is the main claimed benefit.
+        text: CPO consumes more power per bit than DSP-based pluggables, since its optics sit beside the hot ASIC.
+        explanation: Lower power per bit is the main claimed benefit; short electrical paths remove most of the DSP and SerDes power.
       - id: d
-        text: CPO only works for host NICs, not switches.
+        text: CPO only works for host NICs, because a switch package has no room for optical engines.
         explanation: The announced products (Quantum-X and Spectrum-X Photonics) are switches.
     tags: [cpo]
   - id: q6
@@ -111,14 +111,14 @@ questions:
         correct: true
         explanation: One weak lane after handling is a typical contamination or damage signature; cleaning is cheap and often fixes it.
       - id: b
-        text: Replace the switch.
-        explanation: A single lane on one link points at the optical path, not the switch.
+        text: Replace the switch, since rising FEC errors point to a failing ASIC SerDes.
+        explanation: A single weak lane on one link after a move points at the optical path, not the switch.
       - id: c
-        text: Disable FEC to reduce errors.
+        text: Disable FEC on the link so the corrected-error counter stops climbing.
         explanation: FEC is required at this lane rate; disabling it would turn corrected errors into packet loss.
       - id: d
-        text: Lower the MTU.
-        explanation: MTU does not affect optical receive power or bit errors.
+        text: Lower the MTU so fewer bits per frame are exposed to errors.
+        explanation: MTU does not affect optical receive power or bit error rate.
     tags: [troubleshooting, cleaning]
   - id: q7
     type: multi

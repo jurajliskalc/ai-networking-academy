@@ -26,35 +26,35 @@ questions:
     prompt: "Which statement best distinguishes endpoint (last-hop) congestion from fabric congestion?"
     options:
       - id: a
-        text: "Endpoint congestion occurs when total demand toward one destination port exceeds its rate, so no choice of path can fix it."
+        text: "Endpoint congestion is demand toward one destination port exceeding its rate, which no choice of path can fix."
         correct: true
         explanation: "Load balancing redistributes traffic among paths; it cannot add capacity to the last link."
       - id: b
-        text: "Endpoint congestion only happens on InfiniBand fabrics."
-        explanation: "Incast affects any fabric technology."
+        text: "Endpoint congestion only happens on InfiniBand, where credit flow control pushes it back to the senders."
+        explanation: "Incast affects any fabric technology, Ethernet included."
       - id: c
-        text: "Fabric congestion always happens on host-facing ports."
-        explanation: "Fabric congestion happens on uplinks and spine links; host-facing ports are the last hop."
+        text: "Fabric congestion always happens on host-facing ports, while endpoint congestion sits on the leaf-to-spine links."
+        explanation: "It is the other way round: fabric congestion happens on uplinks and spine links; host-facing ports are the last hop."
       - id: d
-        text: "Endpoint congestion is solved by adaptive routing."
-        explanation: "Adaptive routing solves fabric hotspots, not incast."
+        text: "Endpoint congestion is the kind that adaptive routing solves, by moving flows to less-loaded uplinks."
+        explanation: "Adaptive routing solves fabric hotspots, not incast: every path still ends at the same overloaded port."
     tags: [congestion]
   - id: q3
     type: scenario
     prompt: "Host H on leaf 2 sends only to receiver Q, which is idle. During another job's incast toward receiver R on leaf 1, H's traffic stalls and H's NIC counts many received pause frames on the RoCE priority. What is happening?"
     options:
       - id: a
-        text: "PFC pauses propagated back from R's congested port form a congestion tree, and H's flow is a victim sharing the paused priority."
+        text: "PFC pauses spreading back from R's congested port form a congestion tree; H's flow is a victim on the paused priority."
         correct: true
         explanation: "PFC pauses a whole priority on a link, so unrelated flows on that priority stop too (head-of-line blocking)."
       - id: b
-        text: "Q is sending pause frames because it is overloaded."
-        explanation: "Q is idle; the pauses originate from the congestion near R."
+        text: "Q is sending pause frames back through the fabric because its NIC receive buffer is overloaded by H's traffic."
+        explanation: "Q is idle and receives only H's traffic; the pauses originate from the congestion near R."
       - id: c
-        text: "H's NIC is faulty and generating pauses."
-        explanation: "H is receiving pauses, not transmitting them, so it is a victim, not the source."
+        text: "H's NIC is faulty and generating pause storms that its own counters report as received pauses."
+        explanation: "Received and transmitted pauses are counted separately. H is receiving pauses, not transmitting them, so it is a victim, not the source."
       - id: d
-        text: "ECMP polarization placed H's flow on the same link as R's traffic."
+        text: "ECMP polarization placed H's flow on the same uplink as the incast traffic toward R, which starves it of all bandwidth."
         explanation: "Sharing a link alone would only reduce bandwidth; the stall and received pauses point to PFC propagation."
     tags: [pfc, victim-flows]
   - id: q4
@@ -66,13 +66,13 @@ questions:
         correct: true
         explanation: "Marking must begin well below XOFF so congestion control engages before pauses."
       - id: b
-        text: "The PFC watchdog is disabled."
-        explanation: "The watchdog handles storms; it does not explain why ECN never marks."
+        text: "The PFC watchdog is disabled, so PFC keeps firing instead of handing control to ECN."
+        explanation: "The watchdog handles storms by dropping or ignoring pauses; it does not hand control to ECN and does not explain why ECN never marks."
       - id: c
-        text: "ECMP hashing excludes the UDP source port."
-        explanation: "Hash fields affect path selection, not the ordering of ECN and PFC thresholds."
+        text: "ECMP hashing excludes the UDP source port, so flows collide on a few uplinks and saturate them."
+        explanation: "Collisions would still produce ECN marks if marking started below XOFF. Hash fields affect path selection, not the ordering of ECN and PFC thresholds."
       - id: d
-        text: "The MTU is set to 9000 bytes."
+        text: "The MTU is set to 9000 bytes, so each packet consumes too much buffer for marking to engage."
         explanation: "MTU does not determine whether ECN marks before PFC triggers."
     tags: [ecn, pfc, tuning]
   - id: q5
@@ -100,18 +100,18 @@ questions:
     prompt: "One server's NIC transmits large numbers of PFC pause frames toward its leaf, while other servers in the same job transmit almost none. Switch queues toward that server are not unusually deep. Where do you look first?"
     options:
       - id: a
-        text: "Inside the server: GPU-NIC PCIe placement, PCIe/IOMMU settings, or anything limiting how fast the NIC can write to memory."
+        text: "Inside the server: GPU-NIC PCIe placement, PCIe/IOMMU settings, or anything slowing NIC writes to memory."
         correct: true
         explanation: "A NIC sends pauses when its own receive buffers fill, which points to a host-side bottleneck."
       - id: b
-        text: "The spine ECMP hash configuration."
-        explanation: "Hashing would not make a NIC itself emit pauses."
+        text: "The spine ECMP hash configuration, which may be steering too many flows toward that server."
+        explanation: "Hashing picks fabric paths, not destinations, and would not make a NIC emit pauses while switch queues toward it stay normal."
       - id: c
-        text: "The ECN thresholds on the spine switches."
-        explanation: "The bottleneck is at the receiving host, not in the fabric queues."
+        text: "The ECN thresholds on the spine switches, which may be set too high to slow down the senders in time."
+        explanation: "The bottleneck is at the receiving host, not in the fabric queues, which are not unusually deep."
       - id: d
-        text: "The leaf's routing table."
-        explanation: "Routing issues cause reachability problems, not NIC-originated pauses."
+        text: "The leaf's routing table, which may be wrongly sending traffic from other jobs to that server's port as well."
+        explanation: "Misrouted traffic would deepen the switch queues toward that port, which are normal here. The pauses come from the NIC's own receive path."
     tags: [troubleshooting, host]
   - id: q7
     type: single
@@ -122,12 +122,12 @@ questions:
         correct: true
         explanation: "PFC is the backstop that prevents drops during the reaction delay of end-to-end congestion control."
       - id: b
-        text: "ECN only works on InfiniBand."
+        text: "ECN is an InfiniBand mechanism, so on Ethernet RoCE needs PFC as its only congestion signal."
         explanation: "ECN is an IP mechanism (RFC 3168) used by DCQCN on Ethernet."
       - id: c
-        text: "PFC improves load balancing across spines."
-        explanation: "PFC does not influence path selection."
+        text: "PFC spreads the load across the spines by pausing the busiest uplinks so that the traffic shifts to idle ones."
+        explanation: "PFC does not influence path selection; it only pauses a priority on one link."
       - id: d
-        text: "RoCEv2 forbids ECN marking."
-        explanation: "RoCEv2 congestion control (e.g. DCQCN) depends on ECN marks."
+        text: "RoCEv2 forbids switches from ECN-marking its packets, because the ICRC would then fail."
+        explanation: "RoCEv2 congestion control (e.g. DCQCN) depends on ECN marks, and the ICRC masks the ECN bits so marking is safe."
     tags: [pfc, ecn]
