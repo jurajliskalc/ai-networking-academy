@@ -1,0 +1,18 @@
+Infiniband device 'rocep3s0f0' port 1 status:
+	default gid:	 fe80:0000:0000:0000:268a:07ff:fe00:11ee
+	base lid:	 0x0
+	sm lid:		 0x0
+	state:		 4: ACTIVE
+	phys state:	 5: LinkUp
+	rate:		 100 Gb/sec (4X EDR)
+	link_layer:	 Ethernet
+
+Infiniband device 'rocep3s0f1' port 1 status:
+	default gid:	 fe80:0000:0000:0000:268a:07ff:fe00:11ef
+	base lid:	 0x0
+	sm lid:		 0x0
+	state:		 4: ACTIVE
+	phys state:	 5: LinkUp
+	rate:		 100 Gb/sec (4X EDR)
+	link_layer:	 Ethernet
+

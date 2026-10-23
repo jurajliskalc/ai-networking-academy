@@ -224,10 +224,12 @@ than guessing firmware parameters.
 1. **Balance**: per-uplink TX rates during an all-reduce should now be within a few percent of each
    other, independent of restarts.
 2. **No reordering penalty**: on the NICs, out-of-sequence and retransmission counters should stay
-   flat. On ConnectX with the mlx5 driver, `ethtool -S <iface>` and the RDMA hardware counters
-   under `/sys/class/infiniband/<dev>/ports/<n>/hw_counters/` include counters such as
-   `out_of_sequence`, `packet_seq_err` and `local_ack_timeout_err` (availability varies by driver
-   and firmware).
+   flat. On ConnectX with the mlx5 driver, these are RDMA hardware counters, not netdev
+   (`ethtool -S`) counters: read them under `/sys/class/infiniband/<dev>/ports/<n>/hw_counters/`
+   or with `rdma statistic show link <dev>/<n>`. They include `out_of_sequence`, `packet_seq_err`,
+   `local_ack_timeout_err` and `roce_adp_retrans` (availability varies by driver and firmware; take
+   `<dev>` from `rdma link`, since distro rdma-core names it like `rocep3s0f0` and NVIDIA's stack
+   like `mlx5_0`).
 3. **Throughput**: nccl-tests bus bandwidth should rise and, just as important, its variance across
    runs should shrink.
 

@@ -93,7 +93,7 @@ cabling-validator
 
 Each server should be identical. Collect and diff:
 
-- GPU count, model, driver version, VBIOS; NIC model and firmware (`ibv_devinfo`, `mlxfwmanager` or `flint` query); BIOS settings that matter (for example IOMMU/ACS behaviour, power profiles).
+- GPU count, model, driver version, VBIOS; NIC model and firmware (`ibv_devinfo`, `ethtool -i`, `devlink dev info`, or an MFT `mlxfwmanager`/`flint` query, which needs MFT device access and fails on hosts with Secure Boot lockdown); BIOS settings that matter (for example IOMMU/ACS behaviour, power profiles).
 - PCIe link state for every GPU and NIC: `lspci -vv` and compare `LnkSta` (current) to `LnkCap` (capability). A NIC at Gen5 x16 that trained at Gen5 x8 or Gen4 x16 silently halves or worsens its achievable bandwidth.
 - Topology: `nvidia-smi topo -m` must match the reference (each NIC on the expected PCIe switch next to its GPU).
 - GPU health: `dcgmi diag -r 3` (or the level your DCGM version recommends for acceptance) for memory, PCIe bandwidth, and stress tests.
@@ -175,13 +175,13 @@ Client side on node B:
 ib_write_bw -d mlx5_0 -x 3 -s 1048576 -D 10 --report_gbits nodeA
 ```
 
-`-x` is the GID index (RoCE only; check `show_gids` or `rdma link`/sysfs to choose the RoCEv2 entry), `-s` the message size, `-D` duration in seconds. Add `-q 4` for multiple QPs, and `--use_cuda=<gpu-index>` (in CUDA-enabled builds) to source and sink in GPU memory.
+`mlx5_0` is the NVIDIA-stack (MLNX_OFED / DOCA-OFED) device name; distro rdma-core names devices after their PCI address (for example `rocep3s0f0`), so take the name from `rdma link show`. `-x` is the GID index (RoCE only; read `/sys/class/infiniband/<dev>/ports/1/gid_attrs/types/<N>`, or `show_gids` on the NVIDIA stack, to choose the RoCEv2 entry), `-s` the message size, `-D` duration in seconds. Add `-q 4` for multiple QPs, and `--use_cuda=<gpu-index>` (only in CUDA-enabled builds such as NVIDIA's; distro perftest packages lack it) to source and sink in GPU memory.
 
-Illustrative output (trimmed):
+Illustrative output (trimmed). With `-D` perftest first prints `WARNING: BW peak won't be measured in this run.` and reports the peak as 0.00; read the average:
 
 ```text
  #bytes     #iterations    BW peak[Gb/sec]    BW average[Gb/sec]   MsgRate[Mpps]
- 1048576    443030         371.82             371.65               0.044303
+ 1048576    443030           0.00               371.65 		     0.044303
 ```
 
 371 Gb/s average on a 400 Gb/s port is a plausible healthy result. A pair at 190 Gb/s is a defect to chase: check PCIe `LnkSta` of both NICs, link speed, and port counters.

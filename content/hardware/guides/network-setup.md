@@ -105,9 +105,9 @@ still flows, but drops (or never-ending pauses) appear under load.
 | Item | Hosts (hw-03 configures them) | Switch | Your profile |
 |---|---|---|---|
 | Classification | Trust DSCP | Trust DSCP on host-facing ports | |
-| RoCE data DSCP | NIC/application stamps it (perftest `--tclass`, `NCCL_IB_TC`, `cma_roce_tos`) | Maps it to the lossless priority/queue | DSCP {{ROCE_DSCP}}, traffic class byte {{TCLASS}} |
+| RoCE data DSCP | NIC/application stamps it (perftest `--tclass`, `NCCL_IB_TC`, the RDMA CM default via `cma_roce_tos` or configfs `default_roce_tos`) | Maps it to the lossless priority/queue | DSCP {{ROCE_DSCP}}, traffic class byte {{TCLASS}} |
 | Lossless priority | PFC enabled on this priority only | PFC enabled on the same priority, buffers with headroom | priority {{ROCE_PRIO}} |
-| CNPs | NIC sends CNPs with this DSCP | Maps CNPs to a high-priority (often strict) queue | DSCP {{CNP_DSCP}} |
+| CNPs | NIC sends CNPs with this DSCP (mlx5 with NVIDIA's stack defaults to 48) | Maps CNPs to a high-priority (often strict) queue | DSCP {{CNP_DSCP}} |
 | ECN | Congestion control (DCQCN on NVIDIA NICs) reacts to marks | ECN marking on the lossless queue | |
 | MTU | {{MTU}} | 9216 (or at least {{MTU}} + headers) | MTU {{MTU}} |
 

@@ -46,7 +46,7 @@ commands:
   - cmd: nv show qos roce
     platform: cumulus
     summary: Show the active RoCE QoS settings - mode, trust, lossless priority, PFC, ECN thresholds and the DSCP/priority mappings.
-    notes: Compare this with mlnx_qos on the hosts. The lossless priority and the DSCP that NCCL or the NIC stamps (NCCL_IB_TC / cma_roce_tos) must line up. Output format varies by release.
+    notes: Compare this with mlnx_qos (NVIDIA stack) or dcb (inbox stack) on the hosts. The lossless priority and the DSCP that NCCL or the NIC stamps (NCCL_IB_TC / cma_roce_tos) must line up. Output format varies by release.
     tags: [cumulus, nvue, roce, verify]
 
   - cmd: nv show interface swp1 qos roce counters

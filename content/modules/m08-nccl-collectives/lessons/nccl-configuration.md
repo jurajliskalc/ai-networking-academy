@@ -113,16 +113,21 @@ nccl-env-explorer
 
 On RoCE, each port has a GID table with entries for each IP address and RoCE version. NCCL must use
 a **RoCEv2** GID whose IP is on the back-end network. Inspect it with the `show_gids` script that
-ships with NVIDIA's driver stack (MLNX_OFED/DOCA), or by reading
-`/sys/class/infiniband/<dev>/ports/<port>/gids/<index>` and `gid_attrs/types/<index>`:
+ships with NVIDIA's driver stack (MLNX_OFED/DOCA; it is not part of distro rdma-core), or by reading
+`/sys/class/infiniband/<dev>/ports/<port>/gids/<index>`, `gid_attrs/types/<index>` (`IB/RoCE v1` or
+`RoCE v2`) and `gid_attrs/ndevs/<index>`, which works on any stack. Device names follow the stack
+too: NVIDIA's names devices `mlx5_0`, distro rdma-core names them like `rocep3s0f0`; take the names
+for `NCCL_IB_HCA` from `rdma link` or `ibv_devices` on your image.
 
 ```text
-# Illustrative show_gids output (columns trimmed)
-DEV     PORT INDEX GID                                     IPv4         VER  DEV
-mlx5_0  1    0     fe80:0000:0000:0000:0a42:a1ff:fe12:3456              v1   ens1f0
-mlx5_0  1    1     fe80:0000:0000:0000:0a42:a1ff:fe12:3456              v2   ens1f0
-mlx5_0  1    2     0000:0000:0000:0000:0000:ffff:0a64:0001 10.100.0.1   v1   ens1f0
-mlx5_0  1    3     0000:0000:0000:0000:0000:ffff:0a64:0001 10.100.0.1   v2   ens1f0
+# Illustrative show_gids output (one port shown; tab-separated)
+DEV	PORT	INDEX	GID					IPv4  		VER	DEV
+---	----	-----	---					------------  	---	---
+mlx5_0	1	0	fe80:0000:0000:0000:0a42:a1ff:fe12:3456			v1	ens1f0
+mlx5_0	1	1	fe80:0000:0000:0000:0a42:a1ff:fe12:3456			v2	ens1f0
+mlx5_0	1	2	0000:0000:0000:0000:0000:ffff:0a64:0001	10.100.0.1  	v1	ens1f0
+mlx5_0	1	3	0000:0000:0000:0000:0000:ffff:0a64:0001	10.100.0.1  	v2	ens1f0
+n_gids_found=4
 ```
 
 Here index 3 is RoCEv2 with the IPv4 address. Index 3 is common on such systems, but it is **not**
@@ -143,9 +148,12 @@ packets are ECN-capable from the start. Both put the traffic in the DSCP 26 clas
 uses is part of its QoS profile (see `qos-trust-and-mapping`, and the Real HW labs, which use 106).
 
 The NIC may also apply its own QoS settings (trust mode, default DSCP for RDMA traffic), configured
-with vendor tools. Whichever mechanism you use, the packets on the wire must carry the DSCP the
-switches classify into the PFC/ECN-enabled queue; verify with a packet capture on a mirror port or
-switch per-queue counters, not by reading the configuration.
+with vendor tools (`mlnx_qos` and `cma_roce_tos` with NVIDIA's stack; `dcb` from iproute2 and the
+rdma_cm configfs `default_roce_tos` file with the distro stack). Whichever mechanism you use, the
+packets on the wire must carry the DSCP the switches classify into the PFC/ECN-enabled queue; verify
+with a packet capture on a mirror port or switch per-queue counters, not by reading the
+configuration. On the host, `tcpdump -i <netdev>` does not see RoCE traffic (the NIC offloads it);
+libpcap's RDMA sniffer on mlx5 does, when you capture on the RDMA device name (`tcpdump -i mlx5_0`).
 
 ### InfiniBand: service level
 

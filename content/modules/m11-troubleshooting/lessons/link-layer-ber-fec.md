@@ -200,13 +200,14 @@ releases, so read the output rather than scripting against exact strings without
 ### Step 1: link state, speed and FEC mode
 
 ```bash
-ethtool eth3 | grep -E 'Speed|Link detected'
+ethtool eth3 | grep -E 'Speed|Lanes|Link detected'   # without sudo, a "netlink error: Operation not permitted" line (the WoL query) comes first
 ethtool --show-fec eth3
 ```
 
 ```text
 # Illustrative output
         Speed: 400000Mb/s
+        Lanes: 4
         Link detected: yes
 FEC parameters for eth3:
 Supported/Configured FEC encodings: Auto RS
@@ -219,29 +220,44 @@ down: treat it as a fault even if it carries traffic.
 ### Step 2: PHY health with mlxlink
 
 ```bash
-mlxlink -d mlx5_3            # basic state, speed, FEC
-mlxlink -d mlx5_3 -c         # add physical counters and BER
-mlxlink -d mlx5_3 -m         # add transceiver (module) information
+sudo mst status -v                    # lists each port's PCI address, RDMA name and, on new kernels, its FWCTL device
+sudo mlxlink -d <mst-device>          # basic state, speed, FEC
+sudo mlxlink -d <mst-device> -c       # add physical counters and BER
+sudo mlxlink -d <mst-device> -m       # add transceiver (module) information
 ```
+
+`<mst-device>` is whatever `mst status -v` lists for the port: an `/dev/mst/...` device after `mst start`,
+or the PCI address or RDMA device name (`mlx5_3`) where MFT accepts them. On a host with Secure Boot and
+kernel lockdown, `mst start` loads and immediately unloads its modules as "(unused)", leaving no usable `/dev/mst` devices, and `mlxlink -d mlx5_3` fails with
+`-E- Failed to open device: "mlx5_3", No such file or directory`; with a recent kernel and MFT (for example
+kernel 7.0 with MFT 4.37), `mst status -v` instead lists a `/dev/fwctl/fwctlN` device and
+`mlxlink -d /dev/fwctl/fwctl0` works. Check your MFT release notes.
 
 ```text
 # Illustrative output, trimmed; field names differ between MFT releases
 Operational Info
 ----------------
-State                           : Active
-Speed                           : 400G
-Width                           : 4x
-FEC                             : Standard_RS-FEC - (544,514)
+State                              : Active
+Physical state                     : LinkUp
+Speed                              : 400G
+Width                              : 4x
+FEC                                : Standard RS-FEC - RS(544,514)
+
+Troubleshooting Info
+--------------------
+Status Opcode                      : 0
+Group Opcode                       : N/A
+Recommendation                     : No issue was observed
 
 Physical Counters and BER Info
 ------------------------------
-Time Since Last Clear [Min]     : 4320.0
-Effective Physical Errors       : 0
-Effective Physical BER          : 15E-255
-Raw Physical Errors Per Lane    : 1203994,1187420,1176002,98822310
-Raw Physical BER                : 1E-9
-Link Down Counter               : 0
-Link Error Recovery Counter     : 0
+Time Since Last Clear [Min]        : 4320.0
+Effective Physical Errors          : 0
+Raw Physical Errors Per Lane       : 1203994,1187420,1176002,98822310
+Effective Physical BER             : 15E-255
+Raw Physical BER                   : 1E-9
+Link Down Counter                  : 0
+Link Error Recovery Counter        : 0
 ```
 
 Annotation:
@@ -257,12 +273,12 @@ Annotation:
 ### Step 3: optics digital diagnostics (DDM)
 
 ```bash
-ethtool -m eth3
+sudo ethtool -m eth3     # needs root; without it: netlink error: Operation not permitted
 ```
 
 ```text
 # Illustrative output, trimmed (QSFP-DD / OSFP style, per-lane values)
-Module temperature                        : 52.10 degrees C
+Module temperature                        : 52.10 degrees C / 125.78 degrees F
 Module voltage                            : 3.2950 V
 Laser tx bias current (Channel 1)         : 7.120 mA
 Laser tx bias current (Channel 4)         : 7.080 mA
@@ -278,6 +294,8 @@ errors in `mlxlink` (lanes numbered from 0 there and from 1 here; confirm lane m
 module type). A 5 dB deficit on one lane almost always means a dirty or damaged connector position or
 fibre, not a bad receiver. Compare against the module's warning and alarm thresholds, which `ethtool
 -m` also prints for most modules. Field names and units vary with module type and ethtool version.
+A passive DAC has no optical power or bias lines at all (and may report a module temperature of 0.00 degrees C);
+there you rely on BER and error counters alone.
 
 ### Step 4: InfiniBand port counters
 

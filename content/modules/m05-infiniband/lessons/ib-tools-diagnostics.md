@@ -131,11 +131,11 @@ The Subnet Manager log (for OpenSM, typically `/var/log/opensm.log`; for UFM, th
 
 ```text
 $ ibstat mlx5_3 | grep -E "State|Physical|Rate|Base lid|SM lid"
-                State: Active
-                Physical state: LinkUp
-                Rate: 400
-                Base lid: 57
-                SM lid: 1
+		State: Active
+		Physical state: LinkUp
+		Rate: 400
+		Base lid: 57
+		SM lid: 1
 ```
 
 *(Illustrative.)* Active, LinkUp, expected rate, a LID and an SM LID: the host's view is healthy. `ibstatus` gives a similar summary across all HCAs.

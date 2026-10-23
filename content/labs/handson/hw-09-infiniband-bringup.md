@@ -61,6 +61,13 @@ By the end you can:
   > after a firmware reset or reboot, and changes what every other lab sees. Only VPI adapters
   > support it; confirm the parameter name and values with `mlxconfig ... query` and your firmware
   > release notes. Switch back with `LINK_TYPE_P1=2` when you return to the RoCE labs.
+
+  On a host with **Secure Boot** (kernel lockdown), MFT cannot reach the adapter's configuration:
+  `mst start` ends with `Unloading MST PCI module (unused)` and creates no `/dev/mst` devices,
+  `mlxconfig -d mlx5_0 q` or `-d <pci-address> q` prints `-E- Failed to open the device`, and even
+  the `/dev/fwctl/fwctl0` path of recent kernels and MFT refuses NV configuration
+  (`HW access is disabled`). Disable Secure Boot for the change (or use a signed MFT kernel module),
+  then turn it back on.
 - **Profile:** set `FABRIC` to `ib` on the [Connect page](#/hw/connect), with your RDMA devices. For
   InfiniBand the `*_NETDEV` fields are only used if you run IPoIB; host names (`HOST_A`,
   `HOST_B`) must resolve on the management network.
@@ -84,17 +91,22 @@ ibstat {{A_RDMA_DEV}} {{RDMA_PORT}}          # host B: {{B_RDMA_DEV}}
 Illustrative output without an SM:
 
 ```
-CA 'mlx5_0'
-        Port 1:
-                State: Initializing
-                Physical state: LinkUp
-                Rate: 200
-                Base lid: 65535
-                LMC: 0
-                SM lid: 0
-                Port GUID: 0x...
-                Link layer: InfiniBand
+CA: 'mlx5_0'
+Port 1:
+State: Initializing
+Physical state: LinkUp
+Rate: 200
+Base lid: 65535
+LMC: 0
+SM lid: 0
+Capability mask: 0x...
+Port GUID: 0x...
+Link layer: InfiniBand
 ```
+
+(With a device and port given, `ibstat` prints this flat list; plain `ibstat` prints every CA with
+indented `Port N:` blocks. The device is `mlx5_0` with NVIDIA's stack and named after the PCI
+address, like `ibp59s0f0`, with distribution rdma-core: take it from `ibstat -l` or `rdma link`.)
 
 Also: `ibstatus` (a compact summary script) and the raw sysfs view:
 
@@ -136,10 +148,12 @@ sudo sminfo
 Illustrative output:
 
 ```
-                State: Active
-                Physical state: LinkUp
-                Base lid: 2
-                SM lid: 1
+State: Active
+Physical state: LinkUp
+...
+Base lid: 2
+LMC: 0
+SM lid: 1
 ...
 sminfo: sm lid 1 sm guid 0x..., activity count 1290 priority 0 state 3 SMINFO_MASTER
 ```

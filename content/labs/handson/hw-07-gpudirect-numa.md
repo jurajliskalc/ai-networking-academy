@@ -93,7 +93,8 @@ NIC Legend:
 | `NODE` | Between host bridges inside one NUMA node | Often noticeably slower for peer-to-peer. |
 | `SYS` | Across the socket interconnect (UPI, Infinity Fabric, ...) | Usually poor for GPUDirect; frameworks may avoid it. |
 
-The `NIC Legend` (printed by recent drivers) maps `NIC0`, `NIC1` to RDMA device names. Find
+The `NIC Legend` (printed by recent drivers) maps `NIC0`, `NIC1` to RDMA device names (`mlx5_0`
+with NVIDIA's OFED/DOCA stack; with distribution rdma-core they look like `rocep59s0f0`). Find
 `{{A_RDMA_DEV}}` and read down its column: the GPU with `PIX` or `PXB` there is the one to pair
 with it. Many GPU servers are built with exactly one NIC per GPU under a shared PCIe switch for
 this reason (the "rail" design in the cluster-design lessons).
@@ -143,7 +144,10 @@ sudo lspci -vv -s "$NIC_PCI" | grep -E 'LnkCap:|LnkSta:'
 
 `LnkSta` shows the current speed and width; if it is below `LnkCap`, `lspci` marks it
 `(downgraded)`. GPUs may lower their link speed at idle to save power, so check a GPU's link while
-it is busy before calling it a fault.
+it is busy before calling it a fault. Inside a virtual machine with passed-through devices, `lspci`
+shows the hypervisor's virtual PCIe ports (for example `Speed 5GT/s, Width x32`) and the topology
+matrix reflects the virtual layout, so do this lab on bare metal if the PCIe path is what you want
+to learn about.
 
 ### Task 3: Which GPUDirect RDMA mechanism does this host use?
 
@@ -226,7 +230,11 @@ with CUDA support**. Distribution packages are usually built without it. Check:
 ib_write_bw --help 2>&1 | grep -i cuda
 ```
 
-If `--use_cuda` appears, you are ready. If nothing appears, build perftest from source on both
+If `--use_cuda` appears, you are ready. NVIDIA's DOCA-Host perftest, for example, lists
+`--use_cuda`, `--cuda_mem_type`, `--use_cuda_bus_id`, `--use_cuda_dmabuf`, `--use_cuda_pcie_mapping`
+and `--use_data_direct`. If nothing appears (the usual case for distribution packages), the build has
+no CUDA support: passing `--use_cuda=0` anyway makes it stop with ` Parser function exited with
+Error` and ` Unsupported memory type`. Then build perftest from source on both
 hosts following the CUDA section of the perftest README (github.com/linux-rdma/perftest): you run
 its `autogen.sh` and `configure` with the path to the CUDA headers, then `make`. Option names have
 changed between perftest versions (older builds took `--use_cuda` with no GPU index; newer ones
@@ -265,8 +273,9 @@ CUDA device 0: PCIe address is 1B:00
 Picking device No. 0
 ...
 allocated 131072 bytes of GPU buffer at 0x7f2c4e000000
+...
  #bytes     #iterations    BW peak[Gb/sec]    BW average[Gb/sec]   MsgRate[Mpps]
- 65536      5000             97.10              97.05              0.185111
+ 65536      5000             97.10              97.05  		     0.185111
 ```
 
 **What to observe:** with a `PIX`/`PXB` path and working GPUDirect RDMA, GPU-memory bandwidth should
@@ -274,7 +283,9 @@ be close to the host-memory baseline at large messages. A large gap points to th
 ACS redirection (Task 4), a downgraded PCIe link (Task 2), or registration not using GPUDirect at
 all. If the run fails while registering memory, revisit Task 3.
 
-Sweep message sizes (`-a`) for both runs and compare where each curve flattens. Small messages on GPU
+Sweep message sizes (`-a`) for both runs and compare where each curve flattens (`-a` registers
+buffers up to 8 MiB, so memlock must be unlimited: `ulimit -l` on both hosts, otherwise perftest
+stops with `Couldn't allocate MR`). Small messages on GPU
 memory are often slower, because the NIC's reads of GPU memory travel over PCIe to the GPU instead of
 coming from host memory caches.
 

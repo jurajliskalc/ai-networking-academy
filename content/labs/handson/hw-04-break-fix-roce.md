@@ -31,14 +31,18 @@ By the end you can:
 
 > [!NOTE]
 > Command output here is **illustrative**. Error texts of the RDMA tools vary between rdma-core and
-> perftest releases; the patterns are what matters.
+> perftest releases; the patterns are what matters. With NVIDIA's DOCA-Host stack, verbs tools may
+> also print a harmless `libibverbs: Warning: couldn't load driver 'libionic-rdmav59.so': ...` line.
 
 ## Before you start
 
 - **Done first:** [First RoCEv2 traffic](#/hw/labs/hw-02-roce-first-traffic). Ideally also
   [Host-side lossless QoS](#/hw/labs/hw-03-host-qos-pfc-ecn) with its configuration still applied:
-  two of the five faults are QoS faults and are only injected if a QoS tool (`mlnx_qos` or `dcb`)
-  is present and the lossless configuration is active (otherwise there would be nothing to break).
+  two of the five faults are QoS faults and are only injected if the lossless configuration is
+  active (otherwise there would be nothing to break). `pfc-off` works with `mlnx_qos` or `dcb`;
+  `trust-pcp` uses `mlnx_qos --trust pcp` on NVIDIA's stack; with the distribution's inbox stack
+  (`dcb apptrust` is not supported on mlx5) it removes the port's DSCP app entries, which switches
+  mlx5 back to PCP trust, and the restore adds them again.
 - **A healthy baseline:** `./hw-toolkit/aina-hw check hw-02-roce-first-traffic` passes on host A.
   Do not start an incident on a fabric that is already broken.
 - **Root** on host B (the injector) and **SSH** from A to B (the check).
@@ -156,9 +160,16 @@ ibv_rc_pingpong -d {{A_RDMA_DEV}} -g {{GID_INDEX}} {{B_IP}}      # after startin
 Illustrative failures and what they usually point to:
 
 ```
+client read/write: No space left on device   # server and client disagree (for example -g 0 on one side, 3 on the other)
+Couldn't read/write remote address
 Failed to modify QP to RTR          # bad remote GID / address information, often a GID index problem
 Couldn't connect to 192.168.50.12:18515      # no TCP path to the server (address, link, firewall)
+IB device 'mlx5_0' wasn't found     # ibv_devinfo: wrong device name (compare with rdma link show)
 ```
+
+perftest reports a missing server as `Couldn't connect to 192.168.50.12:18515` followed by
+`Unable to open file descriptor for socket connection`, and a wrong device as `IB device mlx5_0 not
+found` / ` Unable to find the Infiniband/RoCE device`.
 
 ### Task 6: The QoS layer: same contract on both hosts?
 
@@ -167,10 +178,24 @@ If everything so far is clean, the fault is in classification. Compare the hosts
 ```bash
 mlnx_qos -i {{A_NETDEV}} | grep -iE 'trust|enabled'
 ssh {{HOST_B}} mlnx_qos -i {{B_NETDEV}} | grep -iE 'trust|enabled'
-# or, with iproute2:
+# or, with iproute2 (the inbox stack has no mlnx_qos):
 dcb pfc show dev {{A_NETDEV}} prio-pfc
 ssh {{HOST_B}} dcb pfc show dev {{B_NETDEV}} prio-pfc
+dcb app show dev {{A_NETDEV}} dscp-prio
+ssh {{HOST_B}} dcb app show dev {{B_NETDEV}} dscp-prio
+ethtool -a {{A_NETDEV}}; ssh {{HOST_B}} ethtool -a {{B_NETDEV}}
 ```
+
+Illustrative `mlnx_qos` lines on a correctly configured host:
+
+```
+Priority trust state: dscp
+	enabled     0   0   0   1   0   0   0   0
+```
+
+`dcb app show` prints DSCP 26 by its name (`dscp-prio AF31:3`). `ethtool -a` belongs in the
+comparison too: on mlx5, global pause (`RX: on`, `TX: on`) and PFC exclude each other, and an
+`ethtool -A ... rx on tx on` silently turns PFC off on every priority.
 
 Then run traffic with your traffic class and watch **which priority** host B counts it in:
 
@@ -238,9 +263,9 @@ The debrief, for after you have committed a diagnosis:
 |---|---|---|
 | `mtu-mismatch` | Small pings work, full-size DF ping fails; RDMA may work at small sizes and fail or stall at large ones (`ibv_rc_pingpong` uses a 1024-byte path MTU by default, so it can still pass) | `cat /sys/class/net/{{B_NETDEV}}/mtu` is 1500; `active_mtu` 1024 on B |
 | `ip-missing` | Ping fails; `ibv_rc_pingpong` cannot connect; the RoCE v2 IPv4 GID is gone | `ip -br addr` on B shows no `{{B_IP}}`; GID table has only link-local entries |
-| `port-down` | Everything fails; RDMA port DOWN on B; on a back-to-back cable A's port usually goes DOWN too | `ip -br link` shows `DOWN` on B with admin state down (`ip link show` lacks `UP` in the flags) |
+| `port-down` | Everything fails; RDMA port `DOWN` / `DISABLED` on B, while A's port can still show `ACTIVE` (mlx5 keeps the PHY of an admin-down port up, so the cable stays lit) | `ip -br link` shows `DOWN` on B with admin state down (`ip link show` lacks `UP` in the flags) |
 | `pfc-off` | Traffic works at full speed; nothing visible without congestion | `mlnx_qos` / `dcb pfc show` differ between A and B |
-| `trust-pcp` | Traffic works; host B counts RoCE in `rx_prio0_bytes` instead of priority {{ROCE_PRIO}} | `mlnx_qos` trust state `pcp` on B |
+| `trust-pcp` | Traffic works; host B counts RoCE in `rx_prio0_bytes` instead of priority {{ROCE_PRIO}} | `mlnx_qos` trust state `pcp` on B; inbox stack: `dcb -N app show dev <if>` prints no `dscp-prio` entries on B |
 
 ## What you learned
 

@@ -225,20 +225,38 @@ still retransmit correctly. PFC only makes loss rare enough that a simple retran
 
 ### Host side: is PFC on, and is it being used?
 
-On NVIDIA ConnectX with the OFED utilities, `mlnx_qos` shows PFC per priority:
+On NVIDIA ConnectX with NVIDIA's stack (MLNX_OFED / DOCA-OFED), `mlnx_qos` shows PFC per priority:
 
 ```bash
 mlnx_qos -i ens1f0np0
 ```
 
 ```text
-# illustrative, trimmed
+# illustrative, trimmed (trust dscp, PFC on priority 3)
 DCBX mode: OS controlled
 Priority trust state: dscp
+dscp2prio mapping:
+	prio:0 dscp:07,06,05,04,03,02,01,00,
 ...
+Receive buffer size (bytes): 130944,130944,0,0,0,0,0,0,max_buffer_size=262016
+Cable len: 7
 PFC configuration:
-        priority    0   1   2   3   4   5   6   7
-        enabled     0   0   0   1   0   0   0   0
+	priority    0   1   2   3   4   5   6   7
+	enabled     0   0   0   1   0   0   0   0
+	buffer      0   0   0   1   0   0   0   0
+...
+```
+
+`mlnx_qos` is not part of a distro (inbox) driver install. There, iproute2's `dcb` does the same job:
+
+```bash
+dcb pfc show dev ens1f0np0
+```
+
+```text
+# illustrative
+pfc-cap 8 macsec-bypass off delay 7
+prio-pfc 0:off 1:off 2:off 3:on 4:off 5:off 6:off 7:off
 ```
 
 Make sure global 802.3x pause is off, so that it cannot pause the whole link:
@@ -247,6 +265,19 @@ Make sure global 802.3x pause is off, so that it cannot pause the whole link:
 ethtool -a ens1f0np0            # show global pause settings
 ethtool -A ens1f0np0 rx off tx off
 ```
+
+```text
+# illustrative
+Pause parameters for ens1f0np0:
+Autonegotiate:	off
+RX:		off
+TX:		off
+```
+
+On ConnectX (mlx5) the two settings interact. Global pause is on by default (`RX: on`, `TX: on`),
+and enabling PFC on any priority turns it off automatically. The reverse is a trap: running
+`ethtool -A <if> rx on tx on` while PFC is enabled silently clears PFC on **all** priorities, with
+no warning and exit code 0. Re-check the PFC vector after any `ethtool -A`.
 
 The mlx5 driver exposes per-priority pause counters through `ethtool -S`. The names below are
 documented in the kernel's mlx5 counters page. Availability depends on driver version, and the
@@ -270,12 +301,19 @@ ethtool -S ens1f0np0 | grep -E 'prio3_pause|pause_storm'
 
 How to read it:
 
+- The global-pause counters (`rx_global_pause`, `tx_global_pause` and their `_duration`) exist only
+  while 802.3x pause is on. When PFC is enabled they disappear and the `prioN_pause` counters appear
+  instead, so seeing `rx_global_pause` on a RoCE port means PFC is not enabled there. The
+  `pause_storm` counters are always present.
 - `rx_prio3_pause` rising slowly during heavy collectives: normal. The fabric occasionally pushes
   back on this sender.
 - `rx_prio3_pause` rising fast on *many* hosts at once, with throughput down: congestion spreading.
   Look for a hot spot or an ECN misconfiguration.
 - `tx_prio3_pause` rising on one host: that host's receive path is the bottleneck (PCIe, NUMA, a
-  stalled process, firmware). Investigate the host, not the switch.
+  stalled process, firmware). Investigate the host, not the switch. Some pauses from a NIC that is
+  receiving at line rate are normal (in a back-to-back 100G lab test, the receiver paused the sender
+  hundreds of times in ten seconds). Compare rate and duration across hosts rather than reacting to
+  any non-zero value.
 - Pause-storm counters non-zero: the NIC's storm protection triggered. See the storms and deadlocks lesson.
 
 ### Switch side
@@ -328,6 +366,8 @@ Patterns to look for:
 - **802.3x global pause left on.** *Symptom:* unrelated traffic classes, such as TCP control traffic,
   stall when RoCE is congested. *Cause:* link-level pause stops all priorities. *Fix:*
   `ethtool -A <if> rx off tx off` on hosts, and disable link pause on switch ports carrying PFC.
+  On ConnectX hosts the usual failure is the opposite: a script that "restores" global pause with
+  `ethtool -A <if> rx on tx on` silently disables PFC on every priority.
 - **Too many lossless priorities.** *Symptom:* headroom cannot be allocated, or the shared buffer
   is too small and lossy traffic drops early. *Cause:* each lossless PG on each port needs headroom.
   *Fix:* keep one lossless priority for RoCE (two at most, for example RoCE and storage).

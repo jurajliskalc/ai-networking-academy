@@ -147,21 +147,21 @@ On a Linux host with rdma-core installed, list the RDMA devices:
 
 ```text
 $ ibv_devices
-    device                 node GUID
-    ------              ----------------
-    mlx5_0              b83fd20300a1b2c4
-    mlx5_1              b83fd20300a1b2c5
+    device          	   node GUID
+    ------          	----------------
+    mlx5_0          	b83fd20300a1b2c4
+    mlx5_1          	b83fd20300a1b2c5
 ```
 
-*(Illustrative output.)* `mlx5_*` devices are NVIDIA (Mellanox) ConnectX adapters driven by the `mlx5_ib` driver. A device name such as `rxe0` would be Soft-RoCE, a software RDMA implementation useful for learning (you will use it in labs), and `irdma*` would be an Intel adapter. The full Linux stack is covered in `rdma-on-linux`.
+*(Illustrative output.)* `mlx5_*` devices are NVIDIA (Mellanox) ConnectX adapters driven by the `mlx5_ib` driver; that is the name NVIDIA's driver stack uses. A distribution's own rdma-core names the same adapter after its PCI address, for example `rocep3s0f0` (RoCE) or `ibp3s0f0` (InfiniBand), so use whatever name `ibv_devices` prints in the commands that follow. A device name such as `rxe0` would be Soft-RoCE, a software RDMA implementation useful for learning (you will use it in labs), and `irdma*` would be an Intel adapter. The full Linux stack is covered in `rdma-on-linux`.
 
 To see whether a port is InfiniBand or Ethernet (RoCE):
 
 ```text
 $ ibv_devinfo -d mlx5_0 | grep -E "state|link_layer|active_mtu"
-            state:          PORT_ACTIVE (4)
-            active_mtu:     4096 (5)
-            link_layer:     InfiniBand
+			state:			PORT_ACTIVE (4)
+			active_mtu:		4096 (5)
+			link_layer:		InfiniBand
 ```
 
 *(Illustrative.)* `link_layer: Ethernet` would mean RoCE.

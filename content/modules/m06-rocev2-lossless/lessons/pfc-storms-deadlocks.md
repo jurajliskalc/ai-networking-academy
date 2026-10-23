@@ -204,7 +204,7 @@ carrying traffic for a hundred other hosts.
 | Pause duration | Small fraction of time | Close to 100 % on the root port |
 | Queue transmit progress | Drains between bursts | Zero on the root queue |
 | Throughput | Near line rate in aggregate | Collapses across many unrelated hosts |
-| Host NIC `tx_prioN_pause` | Near zero | Climbing fast on one host (the root) |
+| Host NIC `tx_prioN_pause` | Low and bursty (a receiving NIC pauses occasionally even at full health) | Climbing fast on one host (the root) |
 
 ### Tracing a storm to its origin
 

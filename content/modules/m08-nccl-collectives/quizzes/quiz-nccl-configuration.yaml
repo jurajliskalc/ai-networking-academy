@@ -46,7 +46,7 @@ questions:
       - id: a
         text: "Which GID table entry (and so IP address and RoCE version) NCCL uses; it must be a RoCEv2 entry on the back-end network."
         correct: true
-        explanation: "show_gids or sysfs shows each index's IP and version."
+        explanation: "show_gids (NVIDIA driver stack) or sysfs (any stack) shows each index's IP and version."
       - id: b
         text: "The InfiniBand service level that NCCL stamps on its traffic, which switches map to a virtual lane."
         explanation: "That is NCCL_IB_SL."

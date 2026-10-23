@@ -141,6 +141,8 @@ RDMA rarely bootstraps itself. **perftest** tools exchange QP information over a
 
 For the RDMA data path itself, host packet filters (iptables/nftables) usually **do not see** hardware-offloaded RoCE traffic, because the NIC handles it without the kernel network stack. Soft-RoCE (`rdma_rxe`) is the exception: it runs over the kernel UDP stack, so a firewall rule dropping UDP 4791 breaks it. On real fabrics, UDP 4791 is blocked by **router ACLs, cloud security groups or firewall appliances** in the path, which typically matters only when traffic is routed between segments.
 
+The same offload hides RoCE from packet capture on the netdev: `tcpdump -i <netdev> udp port 4791` shows nothing on mlx5 while traffic flows. To see the packets on the host, capture on the RDMA device with libpcap's RDMA sniffer (`tcpdump -D` lists it as `mlx5_0 (RDMA sniffer)`; use `tcpdump -i mlx5_0 -w roce.pcap` with the RDMA device name, root, and on Ubuntu an AppArmor profile that allows it), or NVIDIA's `ibdump` on the NVIDIA stack. Otherwise capture on a switch mirror port.
+
 ## In practice
 
 ### A triage flowchart
@@ -160,6 +162,11 @@ flowchart TD
 
 ### Step 1: verify the port and the GID table
 
+The examples use `mlx5_0`, the device name the NVIDIA stack (MLNX_OFED / DOCA-OFED) gives the first
+port. Distro rdma-core names devices after their PCI address instead (for example `rocep3s0f0`), so
+take the name from `rdma link show` or `ibv_devices` on your host. A wrong name fails immediately:
+`IB device 'mlx5_0' wasn't found` from `ibv_devinfo`, `IB device mlx5_0 not found` from perftest.
+
 ```bash
 ibv_devinfo -d mlx5_0 -v | grep -E 'state|active_mtu|link_layer|GID'
 ```
@@ -170,21 +177,24 @@ Illustrative output (trimmed):
 			state:			PORT_ACTIVE (4)
 			active_mtu:		4096 (5)        <- RoCE MTU derived from netdev MTU 9000
 			link_layer:		Ethernet         <- RoCE (InfiniBand would say InfiniBand)
-			GID[  0]:		fe80::a288:c2ff:fe1a:2b3c, RoCE v1
+			GID[  0]:		fe80:0000:0000:0000:a288:c2ff:fe1a:2b3c, RoCE v1
 			GID[  1]:		fe80::a288:c2ff:fe1a:2b3c, RoCE v2
-			GID[  2]:		::ffff:10.20.3.11, RoCE v1
+			GID[  2]:		0000:0000:0000:0000:0000:ffff:0a14:030b, RoCE v1
 			GID[  3]:		::ffff:10.20.3.11, RoCE v2   <- IPv4 RoCE v2: the one you want here
 ```
+
+(`ibv_devinfo` prints RoCE v1 entries in full hexadecimal and RoCE v2 entries in compressed form; both
+lines of a pair hold the same address.)
 
 The same information is in sysfs, which is handy for scripts:
 
 ```bash
 cat /sys/class/infiniband/mlx5_0/ports/1/gids/3                 # the GID itself
-cat /sys/class/infiniband/mlx5_0/ports/1/gid_attrs/types/3      # e.g. "RoCE v2"
+cat /sys/class/infiniband/mlx5_0/ports/1/gid_attrs/types/3      # "RoCE v2" (v1 entries read "IB/RoCE v1")
 cat /sys/class/infiniband/mlx5_0/ports/1/gid_attrs/ndevs/3      # netdev the GID belongs to
 ```
 
-Some NVIDIA driver packages also ship a `show_gids` script that prints a table of device, port, index, GID, IPv4 address, RoCE version and netdev. Use it when present, but do not assume it exists on every host.
+The NVIDIA stack also ships a `show_gids` script (mlnx-tools; not part of rdma-core or distro packages) that prints a table of device, port, index, GID, IPv4 address, RoCE version (`v1`/`v2`) and netdev, ending with `n_gids_found=N`. Use it when present, but do not assume it exists on every host; the sysfs files above work everywhere.
 
 > [!TIP]
 > Make GID selection a property of the address, not the index. In admission checks, assert that the GID index your jobs use resolves to `RoCE v2` and to the expected subnet on every NIC. A one-line sysfs check in a node health script catches the most common RoCE connection failure before any job runs.
@@ -198,28 +208,40 @@ ib_write_bw -d mlx5_0 -x 3 --report_gbits
 ib_write_bw -d mlx5_0 -x 3 --report_gbits 10.20.3.11
 ```
 
-`-x` selects the GID index (RoCE). If this fails while TCP ping works, try a minimal test that removes even more variables:
+`-x` selects the GID index (RoCE). If the client prints `Couldn't connect to 10.20.3.11:18515` followed by `Unable to open file descriptor for socket connection`, the TCP side channel failed (no server running, wrong address or a firewall), not RDMA. If perftest fails while TCP ping works, try a minimal test that removes even more variables:
 
 ```bash
 ibv_rc_pingpong -d mlx5_0 -g 3            # server
 ibv_rc_pingpong -d mlx5_0 -g 3 10.20.3.11 # client
 ```
 
-To test rdma_cm-based address resolution (what many storage and MPI stacks use), run `rping -s -v` on the server and `rping -c -a 10.20.3.11 -v -C 5` on the client, or add `-R` to perftest commands.
+```text
+# Illustrative client output when it works
+  local address:  LID 0x0000, QPN 0x000048, PSN 0x7bb49d, GID ::ffff:10.20.3.12
+  remote address: LID 0x0000, QPN 0x000183, PSN 0xa6939e, GID ::ffff:10.20.3.11
+8192000 bytes in 0.01 seconds = 11330.57 Mbit/sec
+1000 iters in 0.01 seconds = 5.78 usec/iter
+```
+
+On RoCE the LID is always 0 and the GID carries the address. When the two sides use GID indices of different types (for example the client on `-g 0`, the fe80 link-local entry, and the server on `-g 3`), the exchange fails with `client read/write: No space left on device` and `Couldn't read/write remote address`, which says nothing about GIDs: compare the `GID` both sides print.
+
+To test rdma_cm-based address resolution (what many storage and MPI stacks use), run `rping -s -v` on the server and `rping -c -a 10.20.3.11 -v -C 5` on the client (`rping` is in the `rdmacm-utils` package, often not installed by default), or add `-R` to perftest commands.
 
 Sweep sizes to find an MTU black hole:
 
 ```bash
-ib_write_bw -d mlx5_0 -x 3 -a --report_gbits 10.20.3.11   # -a: all sizes from 2 bytes upward
+ib_write_bw -d mlx5_0 -x 3 -a --report_gbits 10.20.3.11   # -a: all sizes from 2 bytes up to 8 MiB
 ```
+
+`-a` registers large buffers: with the common default locked-memory limit (`ulimit -l` of 8192 KiB) it fails with `Couldn't allocate MR` / `Couldn't create IB resources` before any traffic. Raise memlock to unlimited for the test user first.
 
 Illustrative failing output:
 
 ```text
- #bytes     #iterations    BW peak[Gb/sec]    BW average[Gb/sec]
- 2          5000           0.11               0.11
+ #bytes     #iterations    BW peak[Gb/sec]    BW average[Gb/sec]   MsgRate[Mpps]
+ 2          5000           0.11               0.11   		     4.222733
  ...
- 2048       5000           98.20              97.95
+ 2048       5000           98.20              97.95  		     5.978027
  4096       5000           ...
  Completion with error at client
  Failed status 12: wr_id 0 syndrom 0x81     <- 12 = IBV_WC_RETRY_EXC_ERR; the syndrome is device-specific

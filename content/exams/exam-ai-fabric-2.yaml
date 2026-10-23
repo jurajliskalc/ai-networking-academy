@@ -496,6 +496,7 @@ questions:
       Two RoCE hosts are in different subnets behind a routed leaf-spine fabric. ibv_rc_pingpong works within one rack but fails between racks. show_gids on both hosts gives (illustrative):
 
         DEV     PORT INDEX GID                                      IPv4         VER  DEV
+        ---     ---- ----- ---                                      ------------ ---  ---
         mlx5_0  1    0     fe80:0000:0000:0000:....                              v1   ens1f0np0
         mlx5_0  1    1     fe80:0000:0000:0000:....                              v2   ens1f0np0
         mlx5_0  1    2     0000:0000:0000:0000:0000:ffff:0a00:0101  10.0.1.1     v1   ens1f0np0
@@ -506,7 +507,7 @@ questions:
       - id: a
         text: "Use -g 3, the RoCEv2 GID built from the routable IPv4 address."
         correct: true
-        explanation: "Index 0 is a link-local RoCEv1 GID, which cannot be routed. Index 3 is RoCEv2 (UDP/IP) on 10.0.1.1, which works across L3 hops. Always check show_gids, because the index can differ per host."
+        explanation: "Index 0 is a link-local RoCEv1 GID, which cannot be routed. Index 3 is RoCEv2 (UDP/IP) on 10.0.1.1, which works across L3 hops. Always check the GID table (show_gids on the NVIDIA stack, or sysfs gid_attrs/types on any host), because the index can differ per host."
       - id: b
         text: "Use -g 2, because the RoCEv1 GID carries the IPv4 address that routers need."
         explanation: "Index 2 embeds the IPv4 address in the GID, but RoCEv1 is an Ethernet-layer protocol without an IP header on the wire, so it cannot cross a router."

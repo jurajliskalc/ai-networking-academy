@@ -106,9 +106,10 @@ function emptyNicCounters(r: number): Record<string, number> {
   void r;
   return c;
 }
+/** A subset of the mlx5 RDMA hw_counters, in the order `rdma statistic show link` prints them. */
 const emptyHw = () => ({
-  rx_write_requests: 0, rx_read_requests: 0, out_of_sequence: 0, packet_seq_err: 0, local_ack_timeout_err: 0,
-  implied_nak_seq_err: 0, duplicate_request: 0, np_ecn_marked_roce_packets: 0, np_cnp_sent: 0, rp_cnp_handled: 0, rp_cnp_ignored: 0,
+  rx_write_requests: 0, rx_read_requests: 0, out_of_sequence: 0, duplicate_request: 0, packet_seq_err: 0,
+  implied_nak_seq_err: 0, local_ack_timeout_err: 0, rp_cnp_ignored: 0, rp_cnp_handled: 0, np_ecn_marked_roce_packets: 0, np_cnp_sent: 0,
 });
 /** InfiniBand PortCounters in perfquery order, with their width in bits (counters saturate at their maximum). */
 export const IB_PC_FIELDS: [string, number][] = [

@@ -277,7 +277,9 @@ periodic_key_update      1440           # minutes; rotates per-class keys
 The same guide recommends making end nodes **limited** members of the default partition (in UFM,
 `default_membership = limited`), so tenants can reach shared services but not each other, and blocking
 SMPs on every non-SM host with the adapter firmware parameter `SM_DISABLE` (set with `mlxconfig`; query
-it first and follow the guide for your adapter).
+it first and follow the guide for your adapter). On hosts with Secure Boot and kernel lockdown, MFT may
+be unable to reach the adapter's non-volatile configuration at all (`mlxconfig ... q` fails), so plan
+this step for provisioning, with Secure Boot off or a signed MFT kernel module.
 
 ### Is there exactly one, expected master?
 

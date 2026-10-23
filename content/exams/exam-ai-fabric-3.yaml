@@ -651,7 +651,9 @@ questions:
       400 Gb/s RoCE hosts (RDMA MTU 4096):
 
         #bytes     #iterations    BW peak[Gb/sec]    BW average[Gb/sec]   MsgRate[Mpps]
-        1048576    467340         392.10             392.04               0.046734
+        1048576    467340           0.00               392.04               0.046734
+
+      (With -D, perftest does not measure the peak and prints 0.00 in that column.)
 
       How should you interpret it?
     options:
@@ -675,10 +677,12 @@ questions:
     type: scenario
     prompt: |
       A routed (L3, untagged) RoCEv2 fabric marks RoCE with DSCP 26 and expects it in lossless
-      priority 3. A host's illustrative mlnx_qos -i eth2 output:
+      priority 3. A host's illustrative mlnx_qos -i eth2 output (trimmed):
 
         DCBX mode: OS controlled
         Priority trust state: pcp
+        Receive buffer size (bytes): 130944,130944,0,0,0,0,0,0,max_buffer_size=262016
+        Cable len: 7
         PFC configuration:
                 priority    0   1   2   3   4   5   6   7
                 enabled     0   0   0   1   0   0   0   0
@@ -1154,9 +1158,10 @@ questions:
     prompt: |
       Illustrative mlxlink excerpt for a 400G PAM4 link that has had no link flaps yet:
 
-        Effective Physical Errors       : 0
-        Raw Physical Errors Per Lane    : 1102,987,4859321,1210
-        Raw Physical BER                : 2E-6
+        Effective Physical Errors          : 0
+        Raw Physical Errors Per Lane       : 1102,987,4859321,1210
+        Effective Physical BER             : 15E-255
+        Raw Physical BER                   : 2E-6
 
       What is the best action?
     options:

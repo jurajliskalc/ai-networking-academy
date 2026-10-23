@@ -67,7 +67,9 @@ describe('sim-14 ECN off, PFC on', () => {
     expect(bw).toBeLessThan(230);
     sh(s, 'node01', AR);
     const r4 = sh(s, 'node02', 'rdma statistic show link mlx5_4/1');
-    expect(r4).toMatch(/np_ecn_marked_roce_packets 0 np_cnp_sent 0 rp_cnp_handled 0 rp_cnp_ignored 0/);
+    // iproute2 6.x layout: "link <dev>/1 " then one indented counter per line.
+    expect(r4).toMatch(/^link mlx5_4\/1 \n {4}rx_write_requests \d+ \n/);
+    expect(r4).toMatch(/\n {4}rp_cnp_ignored 0 \n {4}rp_cnp_handled 0 \n {4}np_ecn_marked_roce_packets 0 \n {4}np_cnp_sent 0 \n$/);
     expect(num(sh(s, 'node02', 'rdma statistic show link mlx5_3/1'), /np_cnp_sent (\d+)/)).toBeGreaterThan(1000);
     expect(num(sh(s, 'node02', 'ethtool -S enp154s0np0'), /rx_prio3_pause: (\d+)/)).toBeGreaterThan(1_000_000);
     expect(sh(s, 'leaf05', 'nv show interface swp2 qos roce counters')).toMatch(/ecn-marked-packets\s+0\s/);

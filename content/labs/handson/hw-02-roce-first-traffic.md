@@ -63,7 +63,7 @@ On **both** hosts, look at the data interface:
 
 ```bash
 ip -br addr show dev {{A_NETDEV}}        # on host B: {{B_NETDEV}}
-ip -d link show dev {{A_NETDEV}} | grep -o 'mtu [0-9]*'
+ip link show dev {{A_NETDEV}} | grep -o 'mtu [0-9]*'
 ```
 
 If the MTU is not `{{MTU}}` yet, set it at runtime on both hosts (and on the switch ports, if
@@ -73,6 +73,9 @@ there is a switch: they need at least this MTU plus headers, 9216 is common):
 sudo ip link set dev {{A_NETDEV}} mtu {{MTU}}      # host B: {{B_NETDEV}}
 ```
 
+The largest value the NIC accepts is the `maxmtu` in `ip -d link show` (9978 on ConnectX-5, for
+example); above it `ip` answers `Error: mtu greater than device maximum.`
+
 From host A, send a ping that **must not be fragmented** and exactly fills the MTU (IPv4 header 20
 bytes + ICMP header 8 bytes = 28):
 
@@ -80,12 +83,28 @@ bytes + ICMP header 8 bytes = 28):
 ping -M do -s $(({{MTU}} - 28)) -c 3 {{B_IP}}
 ```
 
+Illustrative output with a 9000-byte MTU (the replies are 8972 bytes of payload plus the 8-byte ICMP header):
+
+```
+PING 192.168.50.12 (192.168.50.12) 8972(9000) bytes of data.
+8980 bytes from 192.168.50.12: icmp_seq=1 ttl=64 time=0.275 ms
+8980 bytes from 192.168.50.12: icmp_seq=2 ttl=64 time=0.229 ms
+8980 bytes from 192.168.50.12: icmp_seq=3 ttl=64 time=0.270 ms
+
+--- 192.168.50.12 ping statistics ---
+3 packets transmitted, 3 received, 0% packet loss, time 2034ms
+```
+
+If the **local** netdev MTU is smaller than the packet, `ping` refuses to send it and says
+`ping: sendmsg: Message too long` (the statistics then show `+1 errors`).
+
 **Why:** RDMA tools fail with timeouts that look like RDMA problems when the real problem is an IP
 path that drops large frames. A small ping succeeding proves very little; a full-size,
 don't-fragment ping proves the whole path carries jumbo frames.
 
 > [!WARNING]
-> If small pings work and this one fails silently, something on the path has a smaller MTU. That
+> If small pings work and this one gets no replies at all (`100% packet loss`, no error message),
+> something further along the path has a smaller MTU. That
 > is the classic jumbo-frame black hole: fix it before going further.
 
 ### Task 2: Inspect the RDMA port and find the right GID
@@ -100,16 +119,23 @@ ibv_devinfo -d {{A_RDMA_DEV}} -i {{RDMA_PORT}}     # host B: {{B_RDMA_DEV}}
 Illustrative excerpt:
 
 ```
-hca_id: mlx5_0
-        transport:                      InfiniBand (0)
-        fw_ver:                         28.39.1002
-        ...
-                port:   1
-                        state:                  PORT_ACTIVE (4)
-                        max_mtu:                4096 (5)
-                        active_mtu:             4096 (5)
-                        link_layer:             Ethernet
+hca_id:	mlx5_0
+	transport:			InfiniBand (0)
+	fw_ver:				28.39.1002
+	...
+		port:	1
+			state:			PORT_ACTIVE (4)
+			max_mtu:		4096 (5)
+			active_mtu:		4096 (5)
+			sm_lid:			0
+			port_lid:		0
+			port_lmc:		0x00
+			link_layer:		Ethernet
 ```
+
+The device name is `mlx5_0` with NVIDIA's OFED/DOCA stack; distribution rdma-core names it after
+the PCI address (for example `rocep59s0f0`). Use whatever `rdma link show` prints on your host.
+`transport: InfiniBand (0)` is normal on RoCE too: it names the verbs transport, not the link.
 
 **Check:** `state PORT_ACTIVE`, `link_layer Ethernet`, and `active_mtu 4096`. The active MTU is the
 largest InfiniBand MTU (256 to 4096) that fits in the netdev MTU with the RoCE headers; with a
@@ -138,7 +164,8 @@ Illustrative output:
 The entry you want is **RoCE v2** with the IPv4-mapped address `::ffff:` + your IP in hex
 (`c0a8:320b` is 192.168.50.11). Write down the index on each host. Your profile says
 `GID_INDEX={{GID_INDEX}}`; if your hosts disagree with it, update the profile. If you have NVIDIA's
-OFED/DOCA tools installed, `show_gids` prints the same table.
+OFED/DOCA tools installed, `show_gids` prints the same table (it is not part of upstream rdma-core,
+which is why this lab reads sysfs).
 
 **Why:** with explicit-GID tools (`ibv_*_pingpong`, perftest without `-R`, NCCL), the GID index
 selects the source address **and** the RoCE version. Pick a RoCE v1 entry and your packets are not
@@ -191,11 +218,18 @@ Illustrative client output:
 ping data: rdma-ping-0: ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqr
 ping data: rdma-ping-1: BCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqrs
 ...
+client DISCONNECT EVENT...
 ```
 
+`rping` is in the `rdmacm-utils` package, which distributions do not install by default (the setup
+script does). With NVIDIA's DOCA-Host stack, RDMA CM tools may also print a harmless
+`libibverbs: Warning: couldn't load driver 'libionic-rdmav59.so': ...` line first.
+
 **Compare with Task 3:** no `-g` here. RDMA CM picked the GID from the route to `{{B_IP}}`, and it
-uses the default RoCE version configured for the device (RoCE v2 on current stacks; NVIDIA's
-`cma_roce_mode` script can show or change it). When `rping` works but `ibv_rc_pingpong` does not,
+uses the default RoCE version configured for the device (RoCE v2 on current stacks). NVIDIA's
+stack has a `cma_roce_mode` script to show or change it; on any stack the same setting lives in
+the rdma_cm configfs (`sudo mkdir /sys/kernel/config/rdma_cm/{{A_RDMA_DEV}}`, then read
+`ports/{{RDMA_PORT}}/default_roce_mode` in that directory). When `rping` works but `ibv_rc_pingpong` does not,
 suspect the GID index you typed.
 
 ### Task 5: Bandwidth with perftest
@@ -207,11 +241,14 @@ ib_write_bw -d {{B_RDMA_DEV}} -i {{RDMA_PORT}} -x {{GID_INDEX}} -F --report_gbit
 ib_write_bw -d {{A_RDMA_DEV}} -i {{RDMA_PORT}} -x {{GID_INDEX}} -F --report_gbits {{B_IP}}         # host A
 ```
 
-Illustrative result (100 GbE link):
+Illustrative result (100 GbE link; the client first prints a header with the device, QP and MTU
+settings and one `local address` / `remote address` pair with GIDs per QP):
 
 ```
+---------------------------------------------------------------------------------------
  #bytes     #iterations    BW peak[Gb/sec]    BW average[Gb/sec]   MsgRate[Mpps]
- 65536      5000             97.62              97.58              0.186117
+ 65536      5000             95.59              95.57  		     0.182279
+---------------------------------------------------------------------------------------
 ```
 
 Compare with the port rate:
@@ -226,7 +263,13 @@ preamble and inter-frame gap (roughly 80 bytes, so about 98% efficiency at a 409
 1024). If you are far below that, it is not the protocol: look at PCIe (Task 6 and the Inventory
 lab), CPU/NUMA placement, or a single QP being unable to fill a very fast link.
 
-Now run the variations, each time restarting the server with the same extra options:
+Now run the variations, each time restarting the server with the same extra options.
+
+> [!NOTE]
+> `-a` registers buffers up to 8 MiB, which together with the queues is more than the default
+> memlock limit (often 8192 KiB) allows: the run then stops with `Couldn't allocate MR` and ` Couldn't create IB resources`. Set
+> memlock to unlimited first (`labs/hw-toolkit/setup-rdma-host.sh --set-memlock`, then log in again)
+> and check with `ulimit -l` on both hosts.
 
 ```bash
 # 4 queue pairs: what fast links (200G and up) often need to reach line rate
@@ -258,7 +301,7 @@ Illustrative excerpt:
 
 ```
  #bytes #iterations    t_min[usec]    t_max[usec]  t_typical[usec]    t_avg[usec]    t_stdev[usec]   99% percentile[usec]   99.9% percentile[usec]
- 2       1000          1.62           6.85         1.68               1.70           0.06            1.98                   6.85
+ 2       1000          1.62           6.85         1.68     	       1.70        	0.06   		1.98    		6.85
 ```
 
 **Read it:** report `t_typical` (the median) and the 99th/99.9th percentiles, not `t_min`. On a
@@ -284,13 +327,21 @@ on one host" quietly costs performance even when everything works.
 
 ### Task 8: Watch the counters while traffic runs
 
-Start a long run (`-D 30` on both sides) and, in a third terminal on host B:
+Start a long run (`-D 30` on both sides) and, in a third terminal on host B, watch the counters
+with the commands below. With `-D` perftest prints ` WARNING: BW peak won't be measured in this run.`
+and reports `BW peak` as `0.00`; read `BW average`.
 
 ```bash
 rdma statistic show link {{B_RDMA_DEV}}/{{RDMA_PORT}}
 grep -H . /sys/class/infiniband/{{B_RDMA_DEV}}/ports/{{RDMA_PORT}}/hw_counters/{out_of_sequence,packet_seq_err,local_ack_timeout_err} 2>/dev/null
 ethtool -S {{B_NETDEV}} | grep -E 'vport_rdma_unicast|discard|pause' | head -20
 ```
+
+Recent iproute2 prints one counter per line under `link <dev>/<port>` (older versions put them all
+on one line). In `ethtool -S`, RDMA traffic shows up in the `*_vport_rdma_unicast_*` counters, not in
+the ordinary netdev packet counters; per-priority pause counters (`rx_prio3_pause` ...) appear only
+for priorities with PFC enabled, so here (global pause on, PFC off) you see the `*_global_pause*`
+ones instead.
 
 **What to look for:** byte and packet counters rising with the test, and the **error** counters
 staying flat. `out_of_sequence` and `packet_seq_err` count gaps in packet sequence numbers seen by
@@ -340,8 +391,12 @@ sudo ip link set dev {{A_NETDEV}} mtu 1500        # host B: {{B_NETDEV}}; use yo
 ## Going further
 
 - Repeat Task 5 with `-R` (RDMA CM connection setup in perftest) and confirm you no longer need `-x`.
-- Capture the connection-setup TCP exchange with `tcpdump -i {{A_NETDEV}} tcp port 18515`, then
-  try to capture RoCE data with `tcpdump ... udp port 4791`: on most NICs you will see nothing,
-  because the NIC handles RoCE in hardware. NVIDIA documents ways to mirror offloaded traffic on
-  some stacks; check your NIC's documentation.
+- Capture the connection-setup TCP exchange with `sudo tcpdump -i {{A_NETDEV}} tcp port 18515`, then
+  try to capture RoCE data with `sudo tcpdump -i {{A_NETDEV}} udp port 4791`: you will see nothing,
+  because the NIC handles RoCE in hardware and the packets never pass the netdev. On mlx5 NICs,
+  libpcap's **RDMA sniffer** does see them: `sudo tcpdump -D` lists the RDMA device (for example
+  `mlx5_0 (RDMA sniffer)`), and `sudo tcpdump -i {{A_RDMA_DEV}} -w /tmp/roce.pcap` (the RDMA device,
+  not the netdev) records the RoCEv2 packets; filter when reading (`tcpdump -r /tmp/roce.pcap 'udp
+  port 4791'`). On Ubuntu the tcpdump AppArmor profile blocks this (`No such device exists`) unless
+  you put it in complain mode; NVIDIA's stack also ships `ibdump`.
 - Run the [simulator's GID-index incident](#/labs/sim-08-gid-index) and compare it with what you saw.

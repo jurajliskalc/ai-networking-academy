@@ -93,12 +93,25 @@ The steps below use NVIDIA's OFED tools (`mlnx_qos`, `cma_roce_mode`, `cma_roce_
 and upstream tools (`ip`, `ethtool`). Replace `ens1f0np0` / `mlx5_0` with your devices, and repeat
 on **every** RDMA NIC (in a rail-optimised server, typically eight).
 
+> [!NOTE]
+> `mlnx_qos`, `cma_roce_mode`, `cma_roce_tos`, `show_gids` and the `/sys/class/net/<if>/ecn/` tree
+> come with NVIDIA's stack (MLNX_OFED / DOCA-OFED). A distro (inbox) driver with upstream rdma-core
+> does not ship them; the equivalents are iproute2's `dcb` for trust, PFC and ETS, the rdma_cm
+> configfs files for the ToS and mode, and the sysfs GID table. Device names also follow the stack:
+> `mlx5_0` with NVIDIA's stack, names like `rocep3s0f0` (built from the PCI address) with distro
+> rdma-core. Take yours from `rdma link`, which also shows the netdev for each RDMA port.
+
 **1. MTU and global pause**
 
 ```bash
 ip link set dev ens1f0np0 mtu 9000
 ethtool -A ens1f0np0 rx off tx off        # disable 802.3x link-level pause
 ```
+
+On ConnectX (mlx5) global pause is on by default, and enabling PFC on any priority turns it off
+by itself, so this line mainly documents intent. The reverse is the trap: running
+`ethtool -A <if> rx on tx on` later silently clears PFC on every priority (no error, exit code 0).
+Check both with `ethtool -a <if>` (expect `RX: off`, `TX: off`) after the PFC step.
 
 Before moving on, check that the contract's MTUs agree: enter 9000 on the host and 9216 on each hop, then try a hop left at a default MTU and see what breaks.
 
@@ -114,7 +127,20 @@ mlnx_qos -i ens1f0np0 --pfc 0,0,0,1,0,0,0,0     # PFC on priority 3 only
 ```
 
 With trust DSCP, the NIC's default DSCP-to-priority map already sends DSCP 26 to priority 3 and DSCP
-48 to priority 6 (DSCP >> 3). Verify it in the `mlnx_qos` output rather than assuming it.
+48 to priority 6 (DSCP >> 3). Verify it in the `mlnx_qos` output rather than assuming it: after
+`--trust dscp` it prints a `dscp2prio mapping:` block, and the `PFC configuration:` table shows `1`
+under priority 3 in the `enabled` row.
+
+With the inbox driver, use iproute2's `dcb` instead. `dcb apptrust` is not supported by mlx5 (it
+prints `Attribute not found`); adding a DSCP entry to the APP table is what switches the port to
+DSCP trust:
+
+```bash
+dcb pfc set dev ens1f0np0 prio-pfc all:off 3:on
+dcb app replace dev ens1f0np0 dscp-prio 26:3     # DSCP 26 -> prio 3; also switches mlx5 to DSCP trust
+dcb pfc show dev ens1f0np0 prio-pfc               # prio-pfc 0:off 1:off 2:off 3:on 4:off ...
+dcb app show dev ens1f0np0                        # prints dscp-prio AF31:3 (use 'dcb -N' for 26:3)
+```
 
 **3. ETS (optional, if you want explicit shares)**
 
@@ -122,11 +148,18 @@ With trust DSCP, the NIC's default DSCP-to-priority map already sends DSCP 26 to
 mlnx_qos -i ens1f0np0 --tsa ets,ets,ets,ets,ets,ets,strict,ets --tcbw 10,5,5,60,5,5,0,10
 ```
 
+The shares are per TC, and mlx5's default map puts priority 0 in TC1 and priority 1 in TC0, so
+check the `priority:` line under each `tc:` in the output (or set `--prio_tc` explicitly) before
+deciding which share your default traffic gets. The percentages must add up to 100.
+
 **4. ECN / DCQCN and CNP marking**
 
-On ConnectX with MLNX_OFED, DCQCN is often enabled by default on recent generations, but
-verify it. The sysfs interface has historically looked like this. Paths and availability depend on
-driver release (inbox versus OFED) and NIC generation, so check NVIDIA's documentation for your version.
+On ConnectX with NVIDIA's stack, DCQCN is typically enabled by default: on a ConnectX-5 with
+DOCA-OFED, NP and RP were enabled on all eight priorities, with `cnp_dscp` 48 and `cnp_802p_prio` 6.
+Verify it on yours. The per-netdev `ecn/` sysfs tree below exists **only with NVIDIA's stack**. With
+the inbox driver the directory does not exist; DCQCN parameters live in debugfs
+(`/sys/kernel/debug/mlx5/<pci-address>/cc_params/`), which kernel lockdown blocks even for root
+when Secure Boot is on. Defaults and availability vary by driver release and NIC generation.
 
 ```bash
 echo 1  > /sys/class/net/ens1f0np0/ecn/roce_np/enable/3    # send CNPs for CE-marked prio-3 packets
@@ -141,27 +174,37 @@ through NIC firmware configuration. Follow NVIDIA's documentation for your NIC a
 **5. rdma_cm defaults (for rdma_cm-based applications)**
 
 ```bash
-cma_roce_mode -d mlx5_0 -p 1 -m 2      # default RoCE mode for rdma_cm: v2
+cma_roce_mode -d mlx5_0 -p 1 -m 2      # default RoCE mode for rdma_cm: v2 (prints "RoCE v2")
 cma_roce_tos  -d mlx5_0 -t 106         # default ToS for rdma_cm: DSCP 26, ECT(0)
 ```
 
 These write to the rdma_cm configfs tree (`/sys/kernel/config/rdma_cm/`), which must be mounted.
+Without NVIDIA's scripts, write the same files directly (the defaults are ToS `0` and mode `RoCE v2`):
+
+```bash
+mkdir /sys/kernel/config/rdma_cm/rocep3s0f0           # creates ports/1/default_roce_tos and default_roce_mode
+echo 106 > /sys/kernel/config/rdma_cm/rocep3s0f0/ports/1/default_roce_tos
+```
+
 They do **not** affect applications that create QPs without rdma_cm.
 
 **6. Application settings**
 
 ```bash
 export NCCL_IB_TC=106                  # traffic class (ToS byte) for NCCL's RoCE QPs
-export NCCL_IB_GID_INDEX=3             # only if auto-selection is not used or not correct; check show_gids
+export NCCL_IB_GID_INDEX=3             # only if auto-selection is not used or not correct; check the GID table
 export NCCL_IB_HCA=mlx5_0,mlx5_1       # restrict NCCL to the back-end NICs (example)
 ```
 
 Check the NCCL environment-variable documentation for your NCCL version: recent versions can select
-the RoCEv2 GID automatically, and defaults change between releases.
+the RoCEv2 GID automatically, and defaults change between releases. `show_gids` (NVIDIA stack) lists
+the GID table; without it, read `/sys/class/infiniband/<dev>/ports/1/gids/N` and
+`gid_attrs/types/N` (`RoCE v2`). With one IPv4 address per port, index 3 is typically the RoCEv2
+IPv4 GID, but check rather than assume.
 
 **7. Persistence**
 
-`mlnx_qos`, sysfs writes, `ethtool -A` and configfs writes do **not** survive a reboot or a driver
+`mlnx_qos` or `dcb` settings, sysfs writes, `ethtool -A` and configfs writes do **not** survive a reboot or a driver
 reload. Apply them from a boot-time mechanism that runs after the NIC driver loads, such as a
 systemd unit, a NetworkManager dispatcher script or your cluster manager's node-configuration
 system, and re-verify after every reboot and firmware upgrade. Decide also who owns DCBX. If NIC
@@ -355,9 +398,10 @@ default QoS config, a firmware upgrade resets a setting.
 
 - Write a **QoS contract** first: MTU, trust, DSCP/priority plan, PFC, ECN, CNP, ETS, watchdog,
   application traffic class. Then implement it identically on every device.
-- **Host:** jumbo MTU, global pause off, `mlnx_qos --trust dscp`, `--pfc 0,0,0,1,0,0,0,0`, ECN
-  NP/RP on the RoCE priority, CNP DSCP and priority, `cma_roce_mode` / `cma_roce_tos` for rdma_cm,
-  and `NCCL_IB_TC` for NCCL. Make all of it persistent.
+- **Host:** jumbo MTU, global pause off, `mlnx_qos --trust dscp`, `--pfc 0,0,0,1,0,0,0,0` (inbox:
+  `dcb pfc` and `dcb app`), ECN NP/RP on the RoCE priority, CNP DSCP and priority,
+  `cma_roce_mode` / `cma_roce_tos` (or the rdma_cm configfs files) for rdma_cm, and `NCCL_IB_TC` for
+  NCCL. Make all of it persistent.
 - **Cumulus:** `nv set qos roce` (mode lossless or lossy) applies the NVIDIA RoCE profile, and
   `nv show qos roce` shows it. **SONiC:** read `PORT_QOS_MAP`, `WRED_PROFILE`, `QUEUE` and the buffer
   tables, and note that its default lossless priorities may differ.

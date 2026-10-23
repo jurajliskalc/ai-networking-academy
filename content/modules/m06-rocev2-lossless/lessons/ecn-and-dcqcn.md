@@ -202,8 +202,15 @@ give shorter queues but risk under-utilisation. Thresholds near XOFF let PFC fir
 The RP and NP algorithms run in NIC hardware and firmware. Their parameters (rate-increase timer,
 byte counter, R_AI, R_HAI, g, minimum time between CNPs, the rate to set on the first CNP, the
 minimum rate, and so on) have vendor- and firmware-specific names and defaults. On ConnectX NICs
-with MLNX_OFED, many are exposed through sysfs under `/sys/class/net/<if>/ecn/` (see In practice),
-and NVIDIA also documents firmware-level configuration. Treat any specific default you read about,
+with NVIDIA's stack (MLNX_OFED / DOCA-OFED), many are exposed through sysfs under
+`/sys/class/net/<if>/ecn/`: `roce_np/` holds `enable/<prio>`, `cnp_dscp`, `cnp_802p_prio` and
+`min_time_between_cnps`, and `roce_rp/` holds `enable/<prio>` plus the RP parameters (`rpg_ai_rate`,
+`rpg_hai_rate`, `rpg_gd`, `rpg_time_reset`, `rpg_byte_reset`, `rpg_threshold`, `rpg_min_dec_fac`,
+`rpg_min_rate`, `rpg_max_rate`, `initial_alpha_value`, `dce_tcp_g`, `dce_tcp_rtt`,
+`rate_to_set_on_first_cnp`, `rate_reduce_monitor_period`, `clamp_tgt_rate`, ...). The inbox mlx5
+driver has no `ecn/` directory; it exposes similar parameters in debugfs
+(`/sys/kernel/debug/mlx5/<pci-address>/cc_params/`), which kernel lockdown blocks, even for root,
+when Secure Boot is on. NVIDIA also documents firmware-level configuration. Treat any specific default you read about,
 including those in this lesson, as illustrative, and check the release notes and documentation for
 your NIC generation and firmware.
 
@@ -243,9 +250,9 @@ Module 7 covers telemetry-driven congestion control in end-to-end Ethernet AI pl
 
 ### Host: is ECN enabled, and is it working?
 
-On ConnectX NICs with MLNX_OFED, the per-priority ECN enables for the NP and RP roles have
-historically been exposed in sysfs like this. These paths are driver-specific and may be absent or
-different with inbox drivers or newer releases, so check NVIDIA's documentation for your release.
+On ConnectX NICs with NVIDIA's stack (MLNX_OFED / DOCA-OFED), the per-priority ECN enables for the
+NP and RP roles are exposed in sysfs like this. The `ecn/` directory does not exist with the inbox
+driver (`cat` reports `No such file or directory`); see the debugfs note above.
 
 ```bash
 cat /sys/class/net/ens1f0np0/ecn/roce_np/enable/3    # 1 = act as NP (send CNPs) for prio 3
@@ -254,30 +261,47 @@ cat /sys/class/net/ens1f0np0/ecn/roce_np/cnp_dscp    # DSCP used for generated C
 cat /sys/class/net/ens1f0np0/ecn/roce_np/cnp_802p_prio
 ```
 
-The most reliable evidence comes from the RDMA hardware counters, which exist in the upstream
-mlx5 driver:
+```text
+# illustrative: ConnectX-5 with DOCA-OFED, defaults
+1
+1
+48
+6
+```
+
+On that setup NP and RP were enabled on all eight priorities by default, so the question is less
+"is it on?" than "is RoCE actually on the priority you think?". Defaults can differ by NIC
+generation and driver release.
+
+The most reliable evidence comes from the RDMA hardware counters, which exist with both the inbox
+and NVIDIA's driver. The RDMA device is `mlx5_0` with NVIDIA's stack and has a name like
+`rocep3s0f0` with distro rdma-core; take it from `rdma link`.
 
 ```bash
-rdma statistic show link mlx5_0/1
+rdma statistic show link mlx5_0/1 | grep -E '_cnp_|np_ecn'
 # or
 grep . /sys/class/infiniband/mlx5_0/ports/1/hw_counters/{np_ecn_marked_roce_packets,np_cnp_sent,rp_cnp_handled,rp_cnp_ignored}
 ```
 
 ```text
-# illustrative, receiver host during an incast test
-np_ecn_marked_roce_packets: 1843221   # CE-marked RoCE packets received (switch marked)
-np_cnp_sent:                  61004   # CNPs this NIC sent as NP
-rp_cnp_handled:                   0   # CNPs this NIC reacted to as RP (it is not sending much)
-rp_cnp_ignored:                   0
+# illustrative, receiver host during an incast test (recent iproute2: one counter per line)
+    rp_cnp_ignored 0
+    rp_cnp_handled 0                    # CNPs this NIC reacted to as RP (it is not sending much)
+    np_ecn_marked_roce_packets 1843221  # CE-marked RoCE packets received (switch marked)
+    np_cnp_sent 61004                   # CNPs this NIC sent as NP
 ```
 
 ```text
 # illustrative, one of the sender hosts
-np_ecn_marked_roce_packets:       0
-np_cnp_sent:                      0
-rp_cnp_handled:               7720    # CNPs received and acted on: DCQCN is throttling this sender
-rp_cnp_ignored:                   0
+    rp_cnp_ignored 0
+    rp_cnp_handled 7720                 # CNPs received and acted on: DCQCN is throttling this sender
+    np_ecn_marked_roce_packets 0
+    np_cnp_sent 0
 ```
+
+Older iproute2 releases print all counters of a link on one line, so adjust any parsing to your
+version. With two hosts cabled back to back, all four counters stay at 0 even at line rate: no
+switch is there to mark.
 
 How to read the pair:
 

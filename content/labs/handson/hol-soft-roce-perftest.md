@@ -96,7 +96,8 @@ link rxe0/1 state ACTIVE physical_state LINK_UP netdev enp0s3
 
 **Why:** `rdma` is the iproute2 tool for the RDMA subsystem, the counterpart of `ip`. `rxe0/1`
 means device `rxe0`, port 1. On a real server you would see one device per RDMA NIC port, for
-example `mlx5_0/1`, already present because the hardware driver created it; `rdma link add ...
+example `mlx5_0/1` (or `rocep59s0f0/1` with distribution rdma-core), already present because the
+hardware driver created it; `rdma link add ...
 type rxe` is only for software RDMA.
 
 ### Task 2: Inspect the device like a real NIC
@@ -110,18 +111,18 @@ ibv_devinfo -d rxe0 -v | less
 Illustrative excerpt of `ibv_devinfo -d rxe0`:
 
 ```
-hca_id: rxe0
-        transport:                      InfiniBand (0)
-        fw_ver:                         0.0.0
-        node_guid:                      ...
-        phys_port_cnt:                  1
-                port:   1
-                        state:                  PORT_ACTIVE (4)
-                        max_mtu:                4096 (5)
-                        active_mtu:             1024 (3)
-                        sm_lid:                 0
-                        port_lid:               0
-                        link_layer:             Ethernet
+hca_id:	rxe0
+	transport:			InfiniBand (0)
+	fw_ver:				0.0.0
+	node_guid:			...
+	phys_port_cnt:			1
+		port:	1
+			state:			PORT_ACTIVE (4)
+			max_mtu:		4096 (5)
+			active_mtu:		1024 (3)
+			sm_lid:			0
+			port_lid:		0
+			link_layer:		Ethernet
 ```
 
 **What to observe and why:**
@@ -228,7 +229,7 @@ Illustrative client result table:
 
 ```
  #bytes     #iterations    BW peak[Gb/sec]    BW average[Gb/sec]   MsgRate[Mpps]
- 65536      5000             2.10               2.05                0.003910
+ 65536      5000             2.10               2.05   		     0.003910
 ```
 
 **Read it:** `#bytes` is the message size (default 65536), `BW average` the number you report, and
@@ -263,7 +264,7 @@ Illustrative excerpt:
 
 ```
  #bytes #iterations    t_min[usec]    t_max[usec]  t_typical[usec]    t_avg[usec]    t_stdev[usec]   99% percentile[usec]   99.9% percentile[usec]
- 2       1000          8.12           65.30        9.05               9.40           1.20            14.10                  50.22
+ 2       1000          8.12           65.30        9.05     	       9.40        	1.20   		14.10   		50.22  
 ```
 
 **Read it:** `t_typical` (the median) and the high percentiles matter more than `t_min`. For AI
@@ -320,8 +321,9 @@ sudo ./cleanup.sh        # rdma link delete rxe0; modprobe -r rdma_rxe
   each (with the netdev facing the other VM), and run the server on VM A and the client on VM B
   with VM A's IP address. Allow UDP 4791 and TCP 18515 between them. Now the packets cross a real
   (virtual) wire, which the next lab uses for packet captures.
-- On a server with RDMA NICs, run the same commands against the hardware device (`-d mlx5_0` or
-  your vendor's name), with the GID index of the RoCEv2 IPv4 entry. Pin the test to the NIC's NUMA
+- On a server with RDMA NICs, run the same commands against the hardware device (`-d mlx5_0` with
+  NVIDIA's driver stack, a PCI-based name such as `rocep59s0f0` with distribution rdma-core: take it
+  from `rdma link`), with the GID index of the RoCEv2 IPv4 entry. Pin the test to the NIC's NUMA
   node (for example with `numactl`) and compare results with your vendor's published expectations
   for that NIC generation and link speed.
 - Use perftest options for multi-QP and bidirectional tests (`-q`, `-b`) and, if your build

@@ -154,6 +154,8 @@ $ sudo ip link set dev ens1f0np0 mtu 9000
 ```
 *(illustrative output)*
 
+The NIC has a hardware maximum (9978 bytes on ConnectX-5, for example); asking for more fails with `Error: mtu greater than device maximum.`
+
 Check what RDMA MTU the NIC derived from it:
 
 ```
@@ -165,9 +167,10 @@ hca_id: mlx5_0
                 state:                  PORT_ACTIVE (4)
                 max_mtu:                4096 (5)
                 active_mtu:             4096 (5)
+                ...
                 link_layer:             Ethernet
 ```
-*(illustrative output, trimmed)*
+*(illustrative output, trimmed; `mlx5_0` is the NVIDIA-stack device name, distribution rdma-core names it after the PCI address, for example `rocep3s0f0`: take the name from `rdma link` or `ibv_devices`)*
 
 `max_mtu` is what the hardware supports; `active_mtu` is what is in use now. If `active_mtu` shows `1024 (3)` on a RoCE port, the Ethernet MTU on the corresponding netdev is still around 1500.
 
@@ -180,13 +183,17 @@ PING 10.4.7.25 (10.4.7.25) from 10.0.0.11 : 8972(9000) bytes of data.
 ...
 
 $ ping -M do -s 8973 -c 1 -I 10.0.0.11 10.4.7.25
-ping: local error: message too long, mtu=9000
+PING 10.4.7.25 (10.4.7.25) from 10.0.0.11 : 8973(9001) bytes of data.
+ping: sendmsg: Message too long
+
+--- 10.4.7.25 ping statistics ---
+1 packets transmitted, 0 received, +1 errors, 100% packet loss, time 0ms
 ```
 *(illustrative output, Linux iputils ping)*
 
 - `-M do` sets the DF bit and prohibits local fragmentation.
 - `-s 8972` sets the ICMP payload size; the tool prints the resulting IP size in parentheses.
-- One byte more fails locally, confirming the host's own limit. If the 8972-byte ping gets **no reply at all** while small pings work, something in the path has a smaller MTU: you have found a black hole.
+- One byte more fails locally (`sendmsg: Message too long`, counted as `+1 errors`), confirming the host's own limit. A different message, `ping: local error: message too long, mtu=N`, means the kernel has learned a smaller path MTU for that destination from an ICMP "fragmentation needed" message. If the 8972-byte ping gets **no reply at all** while small pings work (no per-packet lines, then `0 received, 100% packet loss`), something in the path has a smaller MTU: you have found a black hole.
 
 For IPv6 the header is 40 bytes, so the equivalent payload is 9000 - 40 - 8 = 8952.
 

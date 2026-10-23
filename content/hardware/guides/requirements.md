@@ -198,7 +198,8 @@ lossless RoCE. The feature checklist:
 
 **Inbox versus DOCA-Host/MLNX_OFED:** both are valid. Inbox is simpler and enough for every lab
 except where a task uses an NVIDIA-only script (`mlnx_qos`, `show_gids`, `cma_roce_tos`), which
-come with DOCA/OFED or with NVIDIA's separately distributed tools. What you must not do is **mix**
+come with DOCA/OFED or with NVIDIA's separately distributed tools, not from the distribution
+archives; [Host setup](#/hw/host-setup) lists the inbox equivalents. What you must not do is **mix**
 them: installing the distribution's rdma-core packages on top of a DOCA/OFED install (or the
 reverse) leads to conflicting libraries and providers. `setup-rdma-host.sh` detects an OFED/DOCA
 install (via `ofed_info`) and skips the RDMA packages in that case.

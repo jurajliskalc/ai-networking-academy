@@ -179,6 +179,54 @@ class Parsers(unittest.TestCase):
             self.assertFalse(aina_hw.host_allowed(h, "127.0.0.1"), h)
         self.assertTrue(aina_hw.host_allowed("lab-host:8765", "0.0.0.0"))
 
+    def test_is_local(self):
+        self.assertTrue(aina_hw.is_local("localhost"))
+        self.assertTrue(aina_hw.is_local(socket.gethostname()))
+        # A data-network name for this host (HOST_A=node-a-data) resolves to one of its own addresses.
+        own = [(socket.AF_INET, socket.SOCK_DGRAM, 0, "", ("127.0.0.1", 0))]
+        with mock.patch("socket.getaddrinfo", return_value=own):
+            self.assertTrue(aina_hw.is_local("node-a-data"))
+        other = [(socket.AF_INET, socket.SOCK_DGRAM, 0, "", ("192.0.2.10", 0))]  # TEST-NET-1, never local
+        with mock.patch("socket.getaddrinfo", return_value=other):
+            self.assertFalse(aina_hw.is_local("node-b-data"))
+        with mock.patch("socket.getaddrinfo", side_effect=socket.gaierror("no such host")):
+            self.assertFalse(aina_hw.is_local("no-such-host"))
+
+
+def capture(name, stack="cx5-ubuntu2604-inbox"):
+    """Raw command output captured on real hardware (see tests/captures/README.md)."""
+    with open(os.path.join(HERE, "captures", stack, name), encoding="utf-8") as f:
+        return f.read()
+
+
+class RealCaptures(unittest.TestCase):
+    """Parsers against output captured on two ConnectX-5 hosts (Ubuntu 26.04, inbox mlx5 + rdma-core)."""
+
+    def test_dcb(self):
+        self.assertEqual(aina_hw.parse_dcb_pfc(capture("dcb-pfc-default.txt")), [])
+        self.assertEqual(aina_hw.parse_dcb_pfc(capture("dcb-pfc-prio-3on.txt")), [3])
+        # dcb prints well-known DSCP values by name: 26 shows up as AF31.
+        self.assertEqual(aina_hw.parse_dcb_dscp_prio(capture("dcb-app-dscp-af31.txt")), {"26": 3})
+        self.assertIsNone(aina_hw.parse_dcb_dscp_prio(capture("dcb-app-empty.txt")))
+
+    def test_ethtool(self):
+        self.assertEqual(aina_hw.parse_ethtool_pause(capture("ethtool-a-default.txt")), {"autonegotiate": False, "rx": True, "tx": True})
+        # Enabling PFC switches global pause off on mlx5.
+        self.assertEqual(aina_hw.parse_ethtool_pause(capture("ethtool-a-pfc-on.txt")), {"autonegotiate": False, "rx": False, "tx": False})
+        i = aina_hw.parse_ethtool_i(capture("ethtool-i.txt"))
+        self.assertEqual((i["driver"], i["firmware"], i["bus"]), ("mlx5_core", "16.29.1016 (MT_0000000008)", "0000:03:00.0"))
+        s = aina_hw.parse_ethtool_stats(capture("ethtool-S-prio-pfc-on.txt"))
+        self.assertGreater(s["rx_prio3_pause"], 0)
+        self.assertIn("tx_prio3_pause_duration", s)
+
+    def test_rdma_and_verbs(self):
+        links = json.loads(capture("rdma-j-link.txt"))
+        self.assertEqual([(l["ifname"], l["port"], l["state"], l["netdev"]) for l in links],
+                         [("rocep3s0f0", 1, "ACTIVE", "ens64f0np0"), ("rocep3s0f1", 1, "ACTIVE", "ens64f1np1")])
+        self.assertEqual(aina_hw.parse_ibv_active_mtu(capture("ibv_devinfo-d-i.txt")), 4096)
+        rate = [l for l in capture("ibstatus.txt").splitlines() if "rate:" in l][0].split(":", 1)[1]
+        self.assertEqual(aina_hw.parse_rate_gbps(rate), 100.0)
+
 
 class Collector(unittest.TestCase):
     def test_collect_fake_host(self):

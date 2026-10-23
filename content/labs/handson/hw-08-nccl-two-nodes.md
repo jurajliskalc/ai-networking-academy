@@ -165,6 +165,9 @@ node-a:2041:2063 [0] NCCL INFO Channel 00/0 : 1[0] -> 0[0] [receive] via NET/IB/
 node-a:2041:2063 [0] NCCL INFO Channel 00/0 : 0[0] -> 1[0] [send] via NET/IB/0/GDRDMA
 ```
 
+(NCCL prints the RDMA device names of your stack: `mlx5_0` with NVIDIA's OFED/DOCA, names such as
+`rocep59s0f0` with distribution rdma-core.)
+
 Read it in this order:
 
 1. **Bootstrap interface:** the IP interface and address NCCL used to find its peers. It should be

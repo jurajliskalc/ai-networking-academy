@@ -198,8 +198,11 @@ link mlx5_1/1 state ACTIVE physical_state LINK_UP netdev ens2np0
 ```
 
 `rdma` is part of iproute2. NVIDIA's driver package also ships `ibdev2netdev`, which prints the same
-mapping (`mlx5_0 port 1 ==> ens1np0 (Up)`). On InfiniBand ports there is no netdev unless IPoIB is
-configured.
+mapping (`mlx5_0 port 1 ==> ens1np0 (Up)`); it is not in distribution packages, where `rdma link show`
+is the equivalent. The RDMA device names also depend on the stack: NVIDIA's DOCA-OFED/MLNX_OFED uses
+`mlx5_0`, `mlx5_1`, ..., while distribution rdma-core names devices after their PCI address (for
+example `rocep3s0f0`), so take the name from `rdma link show` rather than assuming `mlx5_0`. On
+InfiniBand ports there is no netdev unless IPoIB is configured.
 
 ### Check device capabilities and link layer
 
@@ -214,7 +217,9 @@ hca_id: mlx5_0
         ...
         port:   1
                 state:                  PORT_ACTIVE (4)
+                max_mtu:                4096 (5)
                 active_mtu:             4096 (5)
+                ...
                 link_layer:             Ethernet
 ```
 
@@ -265,6 +270,12 @@ setting anything:
 sudo mst start
 sudo mlxconfig -d <device> query      # next-boot value of each parameter; add --enable_verbosity for default and current
 ```
+
+On a host with UEFI Secure Boot enabled, the kernel's lockdown mode can stop this: `mst start` creates no usable PCI devices and `mlxconfig`
+fails with `-E- Failed to open the device` (recent kernels and MFT releases offer a `fwctl` device
+path, but reading and writing the firmware configuration through it may still be refused). Plan
+port-protocol changes for a maintenance window with Secure Boot temporarily disabled or with signed
+MFT kernel modules, and check the MFT release notes for your version.
 
 ### Look at hardware counters
 

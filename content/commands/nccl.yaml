@@ -89,7 +89,7 @@ commands:
   - cmd: NCCL_IB_TC=106
     platform: nccl
     summary: Set the IP traffic class byte NCCL places on its RoCE packets; the DSCP is the upper six bits (106 = DSCP 26 with ECN bits 10).
-    notes: Must match the DSCP your switches map to the lossless (PFC/ECN) queue. Some deployments instead set the default via the NIC (cma_roce_tos or the device's traffic class setting); pick one and verify with a packet capture or switch queue counters.
+    notes: Must match the DSCP your switches map to the lossless (PFC/ECN) queue. Some deployments instead set a default on the NIC side (the device's traffic class setting; note that cma_roce_tos only changes the default for RDMA CM connections, which NCCL does not use); pick one and verify with a packet capture or switch queue counters.
     tags: [nccl, env, roce, qos, dscp]
 
   - cmd: NCCL_IB_SL=3

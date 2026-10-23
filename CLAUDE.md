@@ -12,6 +12,7 @@ Ethernet, NCCL, rail-optimized fabrics). Read `NEXT_STEPS.md` first, then `docs/
 - Technical accuracy first. Never invent CLI flags, counters, env vars or APIs; hedge vendor/version
   specifics; label sample output as illustrative; never present practice questions as real exam questions.
 - Content follows `docs/AUTHORING.md`; simulator labs follow `docs/SIMULATOR.md`. IDs are permanent.
+- Host-tool output and behaviour (in content and the simulator) must match `docs/HARDWARE_VERIFICATION.md`.
 - Never claim a hands-on lab works end to end unless it was run; keep `verified: false` until then.
 - Node is portable: prefix PATH with `.tools/node` (PowerShell: `$env:PATH="$PWD\.tools\node;$env:PATH"`).
 

@@ -304,7 +304,7 @@ the RDMA ones, see the [Soft-RoCE lab](#/hw/labs/hol-soft-roce-perftest); with t
 ibv_devinfo -v                  # device, port state, active MTU, link layer
 rdma link show                  # RDMA link state and associated netdev
 ethtool -S eth2 | grep -E 'pause|discard|ecn|cnp'   # driver-specific counter names
-ib_write_bw -d mlx5_0 -x 3 --report_gbits <server>  # client side; GID index depends on your setup
+ib_write_bw -d mlx5_0 -x 3 --report_gbits <server>  # client side; device name (mlx5_0 or rocep3s0f0 style) from rdma link, GID index from your setup
 nvidia-smi topo -m              # GPU/NIC affinity matrix
 ```
 

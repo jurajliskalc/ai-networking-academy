@@ -51,10 +51,10 @@ these (check your vendor's validated design):
 |---|---|---|
 | RoCE data DSCP | 26 | Application / NCCL (`NCCL_IB_TC`), RDMA CM ToS, or NIC default |
 | RoCE data priority / traffic class | 3 | NIC DSCP-to-priority map, switch DSCP-to-TC map |
-| PFC enabled on | priority 3 only | NIC (`mlnx_qos --pfc`) and every switch port in the path |
+| PFC enabled on | priority 3 only | NIC (`mlnx_qos --pfc` or `dcb pfc`) and every switch port in the path |
 | ECN marking | on the RoCE queue (TC 3) | Switch queue profile (min/max thresholds, probability) |
 | CNP DSCP / priority | 48 / 6, strict priority | NIC notification-point settings, switch scheduler |
-| Trust mode | DSCP (L3) on NIC and switch | `mlnx_qos --trust dscp`, switch QoS trust |
+| Trust mode | DSCP (L3) on NIC and switch | `mlnx_qos --trust dscp` (or a `dcb app` DSCP entry on mlx5), switch QoS trust |
 | MTU | Jumbo (for example 9000+ host, 9216 switch), RDMA path MTU 4096 | Netdev, switch ports, RoCE active MTU |
 
 Note on `NCCL_IB_TC`: it sets the full 8-bit traffic class (ToS byte), not the DSCP. DSCP 26 with
@@ -199,33 +199,60 @@ flowchart TD
 
 ### Host side: check trust, PFC and the DSCP map
 
-`mlnx_qos` (shipped with NVIDIA OFED / DOCA host packages) shows and sets the NIC's QoS state:
+`mlnx_qos` (shipped only with the NVIDIA stack, MLNX_OFED / DOCA-OFED, in mlnx-tools; it is not in
+distro archives) shows and sets the NIC's QoS state:
 
 ```bash
 mlnx_qos -i eth3
 ```
 
 ```text
-# Illustrative output, trimmed; layout differs by version
+# Illustrative output, trimmed (DOCA-OFED mlnx_qos); layout differs by version
 DCBX mode: OS controlled
 Priority trust state: dscp
 dscp2prio mapping:
-        prio:0 dscp:07,06,05,04,03,02,01,00,
-        ...
-        prio:3 dscp:31,30,29,28,27,26,25,24,
-        ...
-Receive buffer size (bytes): 130944,130944,0,0,0,0,0,0
+	prio:0 dscp:07,06,05,04,03,02,01,00,
+	...
+	prio:3 dscp:31,30,29,28,27,26,25,24,
+	...
+Receive buffer size (bytes): 130944,130944,0,0,0,0,0,0,max_buffer_size=262016
+Cable len: 7
 PFC configuration:
-        priority    0   1   2   3   4   5   6   7
-        enabled     0   0   0   1   0   0   0   0
+	priority    0   1   2   3   4   5   6   7
+	enabled     0   0   0   1   0   0   0   0
+	buffer      0   0   0   1   0   0   0   0
+tc: 0 ratelimit: unlimited, tsa: vendor
+	 priority:  1
+...
 ```
 
-Check: trust is `dscp`; DSCP 26 maps to priority 3; PFC is enabled on 3 and only 3. To correct:
+Check: trust is `dscp`; DSCP 26 maps to priority 3; PFC is enabled on 3 and only 3. The default trust
+state on mlx5 is `pcp`. To correct (each set command prints the full status again afterwards):
 
 ```bash
-mlnx_qos -i eth3 --trust dscp
-mlnx_qos -i eth3 --pfc 0,0,0,1,0,0,0,0
+sudo mlnx_qos -i eth3 --trust dscp
+sudo mlnx_qos -i eth3 --pfc 0,0,0,1,0,0,0,0
 ```
+
+With the distro (inbox) stack, use iproute2 `dcb` instead. On mlx5, adding a DSCP application entry
+also switches the port to DSCP trust (`dcb apptrust` is not supported by mlx5 on the releases we have
+tested):
+
+```bash
+sudo dcb app replace dev eth3 dscp-prio 26:3
+sudo dcb pfc set dev eth3 prio-pfc all:off 3:on
+dcb app show dev eth3                 # names well-known DSCPs: dscp-prio AF31:3 (dcb -N app show prints 26:3)
+dcb pfc show dev eth3 prio-pfc        # prio-pfc 0:off 1:off 2:off 3:on 4:off 5:off 6:off 7:off
+```
+
+### Host side: PFC and global pause interact
+
+On mlx5 (both driver stacks), 802.3x global pause is on by default. Enabling PFC on any priority turns
+global pause off (`ethtool -a eth3` then reports `RX: off`, `TX: off`). The reverse trap is worse: a
+tuning script or provisioning step that runs `ethtool -A eth3 rx on tx on` while PFC is enabled
+silently clears PFC on **all** priorities. The command returns success and prints no warning, so the
+host is lossy again until someone re-reads `mlnx_qos -i` or `dcb pfc show`. Make "global pause off,
+PFC on the RoCE priority" a node health check rather than a one-time setting.
 
 Make these persistent through your provisioning system; they do not survive every driver reload or
 reboot on their own.
@@ -249,12 +276,17 @@ rx_discards_phy:                          0
 
 RoCE is leaving on priority **0**, not 3: the traffic is unprotected. Typical causes are a NIC in
 PCP trust on an untagged fabric, an application not setting the traffic class, or a missing ToS
-setting for RDMA CM connections. For RDMA CM based apps, NVIDIA's `cma_roce_tos` utility sets the
-default ToS per device (for example `cma_roce_tos -d mlx5_3 -t 106`); NCCL uses `NCCL_IB_TC`.
+setting for RDMA CM connections. For RDMA CM based apps, NVIDIA's `cma_roce_tos` utility (NVIDIA
+stack only) sets the default ToS per device (for example `cma_roce_tos -d mlx5_3 -t 106`). It writes the
+rdma_cm configfs file `/sys/kernel/config/rdma_cm/<dev>/ports/1/default_roce_tos` (default 0), which you
+can set directly on the inbox stack after `mkdir /sys/kernel/config/rdma_cm/<dev>`. NCCL uses `NCCL_IB_TC`.
 
 On some driver versions you will also find per-priority discard counters and pause-storm counters
 (`tx_pause_storm_warning_events`, `tx_pause_storm_error_events`). Check the mlx5 counters
-documentation for your kernel and driver release.
+documentation for your kernel and driver release. Remember that `rx_prioN_pause` and `tx_prioN_pause`
+exist only for priorities with PFC enabled, while the `rx_global_pause`/`tx_global_pause` counters are listed only while global pause is on (they disappear once PFC is enabled).
+RoCE traffic is counted in `rx_vport_rdma_unicast_bytes`/`tx_vport_rdma_unicast_bytes` and the
+per-priority byte counters, not in the netdev packet counters.
 
 ### Host side: is DCQCN running?
 
@@ -263,6 +295,9 @@ mlx5 devices the congestion-related ones typically include `np_ecn_marked_roce_p
 `np_cnp_sent`, `rp_cnp_handled` and `rp_cnp_ignored`; transport-error ones include
 `out_of_sequence`, `packet_seq_err`, `local_ack_timeout_err` and `duplicate_request`. Exact names
 and availability depend on driver and firmware; check the mlx5 counters documentation.
+
+The RDMA device name depends on the stack (`mlx5_3` style with the NVIDIA stack, `rocep<bus>s<slot>f<fn>`
+with distro rdma-core); take it from `rdma link show`. `rdma statistic show link <dev>/1` prints the same counters.
 
 ```bash
 cd /sys/class/infiniband/mlx5_3/ports/1/hw_counters
@@ -282,10 +317,13 @@ being dropped and the fabric is not signalling congestion at all. Next step: swi
 ECN configuration on the RoCE queue and drop counters on the path.
 
 If instead `np_ecn_marked_roce_packets` is rising but `np_cnp_sent` is zero, the receiving NIC is not
-acting as a notification point for that priority. Older NVIDIA OFED releases exposed per-priority
-enable knobs under `/sys/class/net/<if>/ecn/` (for example `roce_np/enable/<prio>` and
-`roce_rp/enable/<prio>`); newer stacks may manage these differently. Check the documentation for
-your driver release rather than assuming the path exists.
+acting as a notification point for that priority. The NVIDIA stack (MLNX_OFED / DOCA-OFED) exposes
+per-priority enable knobs under `/sys/class/net/<if>/ecn/` (`roce_np/enable/<prio>` and
+`roce_rp/enable/<prio>`, 1 on all priorities by default, plus `roce_np/cnp_dscp` and
+`roce_np/cnp_802p_prio`). With the inbox kernel driver that directory does not exist; the DCQCN
+parameters live in debugfs (`/sys/kernel/debug/mlx5/<pci>/cc_params/`), which kernel lockdown (Secure
+Boot) blocks even for root. Check the documentation for your driver release rather than assuming a
+path exists.
 
 ### Host side: MTU chain
 
@@ -303,7 +341,9 @@ mtu 9000
 
 Then confirm every switch port in the path supports frames larger than a 4096-byte RoCE payload
 plus headers. A quick probe for the IP path (not RDMA itself) is a do-not-fragment ping at the size
-you expect: `ping -M do -s 4200 <peer>` should succeed. Compare large and small RDMA transfers with
+you expect: `ping -M do -s 4200 <peer>` should succeed. If the size exceeds the **local** netdev MTU,
+ping fails at once with `ping: sendmsg: Message too long`; a smaller MTU further along the path shows
+up as unanswered probes (100% packet loss) instead. Compare large and small RDMA transfers with
 perftest; if `-s 1024` succeeds and full-size transfers stall, suspect MTU.
 
 ### Switch side
@@ -339,8 +379,9 @@ against a healthy leaf shows what is missing.
 
 | Symptom | Likely cause | Evidence command | Fix |
 |---|---|---|---|
-| RoCE bytes on prio 0 | NIC trust PCP on untagged fabric, or app not setting TC | `mlnx_qos -i`, `ethtool -S` per-prio bytes | `--trust dscp`; set `NCCL_IB_TC` / `cma_roce_tos` |
-| Drops on RoCE queue, pause on another priority | PFC enabled on wrong priority | `mlnx_qos`, switch PFC config, per-prio pause | Align PFC priority on NIC and all switches |
+| RoCE bytes on prio 0 | NIC trust PCP on untagged fabric, or app not setting TC | `mlnx_qos -i` / `dcb app show`, `ethtool -S` per-prio bytes | DSCP trust; set `NCCL_IB_TC` / RDMA CM default ToS |
+| Drops on RoCE queue, pause on another priority | PFC enabled on wrong priority | `mlnx_qos -i` / `dcb pfc show`, switch PFC config, per-prio pause | Align PFC priority on NIC and all switches |
+| Host PFC off after a tuning run, global pause on | `ethtool -A rx on tx on` cleared PFC | `ethtool -a`, `dcb pfc show` / `mlnx_qos -i` | Re-enable PFC; remove the `ethtool -A` step |
 | Some flows retransmit, others fine | One hop missing lossless config | Per-hop switch counters, config diff | Fix and re-push template; add CI check |
 | Large transfers stall, small succeed | MTU too small on a hop | `ip link`, `ibv_devinfo`, switch MTU, oversize counters | Raise switch/host MTU consistently |
 | Heavy PFC, zero ECN marks | ECN disabled or on wrong queue | Switch ECN counters per queue | Enable ECN profile on RoCE queue |
@@ -368,6 +409,10 @@ against a healthy leaf shows what is missing.
   lossy queue on the way back. Fix: give CNPs their own high-priority DSCP and queue on every hop.
 - **Non-persistent host settings.** Symptom: a node behaves differently after reboot. Cause: QoS
   applied by hand. Fix: apply through provisioning and check on node health gates.
+- **Turning global pause back on.** Symptom: PFC was correct yesterday, now every priority reads
+  `off` and the per-priority pause counters are gone from `ethtool -S`. Cause: `ethtool -A <if> rx on
+  tx on` silently clears PFC on mlx5. Fix: keep global pause off on RoCE ports and check PFC state in
+  the node health gate.
 
 ## Key takeaways
 

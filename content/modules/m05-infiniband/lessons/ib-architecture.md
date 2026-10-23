@@ -162,22 +162,22 @@ ib-addressing
 ```text
 $ ibstat mlx5_0
 CA 'mlx5_0'
-        CA type: MT4129
-        Number of ports: 1
-        Firmware version: 28.39.1002
-        Hardware version: 0
-        Node GUID: 0xb83fd20300a1b2c4
-        System image GUID: 0xb83fd20300a1b2c4
-        Port 1:
-                State: Active
-                Physical state: LinkUp
-                Rate: 400
-                Base lid: 12
-                LMC: 0
-                SM lid: 1
-                Capability mask: 0xa751e848
-                Port GUID: 0xb83fd20300a1b2c4
-                Link layer: InfiniBand
+	CA type: MT4129
+	Number of ports: 1
+	Firmware version: 28.39.1002
+	Hardware version: 0
+	Node GUID: 0xb83fd20300a1b2c4
+	System image GUID: 0xb83fd20300a1b2c4
+	Port 1:
+		State: Active
+		Physical state: LinkUp
+		Rate: 400
+		Base lid: 12
+		LMC: 0
+		SM lid: 1
+		Capability mask: 0xa751e848
+		Port GUID: 0xb83fd20300a1b2c4
+		Link layer: InfiniBand
 ```
 
 *(Illustrative.)* Read it as: the logical state is Active and the physical state LinkUp; the port runs at 400 Gb/s (NDR 4x); the SM gave it LID 12 with LMC 0; the master SM is reachable at LID 1; the port GUID never changes, the LID can change if the SM restarts without a persistent GUID-to-LID mapping (OpenSM normally keeps one in its cache files).

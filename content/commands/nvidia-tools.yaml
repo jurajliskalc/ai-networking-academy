@@ -56,7 +56,7 @@ commands:
   - cmd: mst start
     platform: nvidia
     summary: Load the NVIDIA Firmware Tools (MFT) kernel modules and create the /dev/mst device nodes used by mlxconfig, mlxlink, flint and friends.
-    notes: Part of the MFT package (also bundled with DOCA/OFED installs). Many MFT tools also accept a PCI address or an RDMA device name directly, so mst start is not always required on recent MFT versions; check the MFT user manual for your release.
+    notes: "Part of the MFT package (also bundled with DOCA/OFED installs). Many MFT tools also accept a PCI address or an RDMA device name directly, so mst start is not always required on recent MFT versions; check the MFT user manual for your release. With UEFI Secure Boot on (kernel lockdown), the MST modules cannot be used: mst start prints 'Create devices' and then 'Unloading MST PCI module (unused) - Success' with exit code 0, and no usable /dev/mst devices exist. Recent kernels with recent MFT offer the fwctl path instead (see mst status -v)."
     tags: [mft, firmware, setup]
 
   - cmd: mst status
@@ -78,28 +78,37 @@ commands:
     platform: nvidia
     summary: Verbose MST listing that maps each MST device to its PCI address, RDMA device (mlx5_X), network interface and NUMA node.
     example: |
-      DEVICE_TYPE      MST                           PCI       RDMA     NET                NUMA
-      ConnectX7(rev:0) /dev/mst/mt4129_pciconf0      1a:00.0   mlx5_0   net-ens1f0np0      0
-      ConnectX7(rev:0) /dev/mst/mt4129_pciconf1      40:00.0   mlx5_1   net-ens2f0np0      0
-    notes: The fastest way to answer "which netdev, which mlx5 device and which NUMA node is this NIC?" in one table. Output is illustrative.
+      # illustrative output (MFT 4.37 on a kernel with fwctl, MST modules not loaded; trimmed)
+      PCI devices:
+      ------------
+      DEVICE_TYPE                                 MST      PCI       RDMA            NET             NUMA  VFIO              FWCTL                    STATE
+      NA                                          NA       1a:00.0   mlx5_0          net-ens1f0np0   0                       /dev/fwctl/fwctl0
+
+      NA                                          NA       40:00.0   mlx5_1          net-ens2f0np0   0                       /dev/fwctl/fwctl1
+    notes: "The fastest way to answer 'which netdev, which mlx5 device and which NUMA node is this NIC?' in one table. Columns differ between MFT releases (older ones end at NUMA; recent ones add VFIO, FWCTL and STATE). With the MST modules loaded, DEVICE_TYPE and MST show the chip and the /dev/mst path. Under Secure Boot the FWCTL device (/dev/fwctl/fwctlN) is the one mlxlink can open. Output is illustrative."
     tags: [mft, inventory, numa, mapping]
 
   - cmd: mlxlink -d /dev/mst/mt4129_pciconf0
     platform: nvidia
     summary: Show the physical link state of a ConnectX port - operational status, speed, width, FEC mode, and troubleshooting recommendations.
     example: |
+      # illustrative output (100GbE port, trimmed)
       Operational Info
       ----------------
-      State                           : Active
-      Physical state                  : LinkUp
-      Speed                           : 400G
-      Width                           : 4x
-      FEC                             : Standard_RS-FEC - (544,514)
+      State                              : Active
+      Physical state                     : LinkUp
+      Speed                              : 100GbE
+      Width                              : 4x
+      FEC                                : Standard RS-FEC - RS(528,514)
+      Loopback Mode                      : No Loopback
+      Auto Negotiation                   : ON
+
       Troubleshooting Info
       --------------------
-      Status Opcode                   : 0
-      Recommendation                  : No issue was observed
-    notes: The device can be given as an MST path or a PCI address. Field names and available sections vary by MFT version and by InfiniBand vs Ethernet mode. Output is illustrative.
+      Status Opcode                      : 0
+      Group Opcode                       : N/A
+      Recommendation                     : No issue was observed
+    notes: "The device can be given as an MST path or a PCI address; on a terminal the values are colored. Field names and available sections vary by MFT version and by InfiniBand vs Ethernet mode (Port Info, Supported Info and Tool Information sections follow on recent MFT). Under Secure Boot, -d mlx5_0 or a PCI address fails with '-E- Failed to open device: ... No such file or directory'; use the /dev/fwctl/fwctlN device from mst status -v. Output is illustrative."
     tags: [mft, link, phy, troubleshooting]
 
   - cmd: mlxlink -d /dev/mst/mt4129_pciconf0 -c
@@ -125,13 +134,13 @@ commands:
                LINK_TYPE_P1                ETH(2)
                SRIOV_EN                    False(0)
                NUM_OF_VFS                  0
-    notes: Parameter names and availability vary by adapter and firmware; query before you set. Output is illustrative.
+    notes: "Parameter names and availability vary by adapter and firmware; query before you set. mlxconfig needs a working MST/PCI access path: when it has none (for example under Secure Boot) it prints '-E- Failed to open the device', and through /dev/fwctl it refuses NV access ('HW access is disabled'). Output is illustrative."
     tags: [mft, firmware, config]
 
   - cmd: mlxconfig -d /dev/mst/mt4129_pciconf0 set LINK_TYPE_P1=2
     platform: nvidia
     summary: Change a firmware configuration parameter; this example sets port 1 of a VPI adapter to Ethernet (1 = InfiniBand, 2 = Ethernet).
-    notes: Changes apply on the next firmware reset or reboot, not immediately. Only VPI-capable adapters support changing the link type; confirm parameter names and values with mlxconfig query and the firmware release notes for your card. Treat this as a change-controlled operation on production nodes.
+    notes: Changes apply on the next firmware reset or reboot, not immediately. Only VPI-capable adapters support changing the link type; confirm parameter names and values with mlxconfig query and the firmware release notes for your card. With UEFI Secure Boot on, mlxconfig cannot reach the card, so changing the port type needs Secure Boot temporarily off (or a signed MFT kernel module). Treat this as a change-controlled operation on production nodes.
     tags: [mft, firmware, config, infiniband, ethernet]
 
   - cmd: mlxfwmanager --query
@@ -145,7 +154,7 @@ commands:
         PCI Device Name:  /dev/mst/mt4129_pciconf0
         Versions:         Current        Available
            FW             28.xx.xxxx     N/A
-    notes: Use it to confirm the whole fleet runs the firmware version your validated stack expects. Output is illustrative.
+    notes: "Use it to confirm the whole fleet runs the firmware version your validated stack expects. Without MST devices it prints '-E- No devices found or specified, mst might be stopped, run 'mst start' to load MST modules'; ethtool -i and devlink dev info (fw.psid, fw.version) still show the PSID and firmware version. Output is illustrative."
     tags: [mft, firmware, inventory]
 
   - cmd: flint -d /dev/mst/mt4129_pciconf0 q
@@ -158,25 +167,42 @@ commands:
     platform: nvidia
     summary: Show the NIC's QoS state for one interface - trust mode (pcp or dscp), PFC enabled per priority, ETS/TSA per traffic class, priority-to-TC mapping and DSCP-to-priority mapping.
     example: |
+      # illustrative output (DSCP trust, DSCP 26 on priority 3, PFC on priority 3; trimmed)
       DCBX mode: OS controlled
       Priority trust state: dscp
-      Receive buffer size (bytes): ...
+      dscp2prio mapping:
+              prio:0 dscp:07,06,05,04,03,02,01,00,
+              prio:1 dscp:15,14,13,12,11,10,09,08,
+              prio:2 dscp:23,22,21,20,19,18,17,16,
+              prio:3 dscp:26,31,30,29,28,27,25,24,
+              ...
+              prio:7 dscp:63,62,61,60,59,58,57,56,
+      Receive buffer size (bytes): 130944,130944,0,0,0,0,0,0,max_buffer_size=262016
+      Cable len: 7
       PFC configuration:
               priority    0   1   2   3   4   5   6   7
               enabled     0   0   0   1   0   0   0   0
-    notes: The tool is mlnx_qos (shipped with MLNX_OFED / DOCA host packages); "mlx_qos" is a common misspelling. Its output must agree with the switch - same trust mode, same lossless priority. Output is illustrative and its layout differs between releases.
+              buffer      0   0   0   1   0   0   0   0
+      tc: 0 ratelimit: unlimited, tsa: vendor
+               priority:  1
+      tc: 1 ratelimit: unlimited, tsa: vendor
+               priority:  0
+      tc: 2 ratelimit: unlimited, tsa: vendor
+               priority:  2
+      ...
+    notes: "The tool is mlnx_qos (NVIDIA's mlnx-tools, shipped with MLNX_OFED / DOCA host packages, not in distribution archives); 'mlx_qos' is a common misspelling. The default is 'Priority trust state: pcp' with no dscp2prio block and PFC off. Note the mlx5 default TC mapping: priority 1 is in TC 0 and priority 0 in TC 1. Its output must agree with the switch - same trust mode, same lossless priority. With the inbox stack use dcb instead (dcb pfc show, dcb app show, dcb ets show, dcb buffer show). Output is illustrative and its layout differs between releases."
     tags: [roce, qos, pfc, verify]
 
   - cmd: mlnx_qos -i ens1f0np0 --trust dscp
     platform: nvidia
     summary: Set the NIC to classify received traffic by DSCP rather than by the VLAN PCP bits.
-    notes: L3 (routed) RoCEv2 fabrics normally use DSCP trust because there is no VLAN tag on routed links. Not persistent across reboot on its own; apply it from your node configuration management or the vendor's recommended persistence mechanism.
+    notes: "L3 (routed) RoCEv2 fabrics normally use DSCP trust because there is no VLAN tag on routed links. Like every mlnx_qos set option it prints the full status afterwards; an invalid value prints 'Invalid trust state command. Refer to the help.'. Map a DSCP to a priority with --dscp2prio set,26,3. Not persistent across reboot on its own; apply it from your node configuration management or the vendor's recommended persistence mechanism. Inbox equivalent on mlx5: 'dcb app replace dev <if> dscp-prio 26:3' maps the DSCP and switches the port to DSCP trust (dcb apptrust is not supported by mlx5)."
     tags: [roce, qos, dscp]
 
   - cmd: mlnx_qos -i ens1f0np0 --pfc 0,0,0,1,0,0,0,0
     platform: nvidia
     summary: Enable PFC on priority 3 only (one comma-separated flag per priority 0..7).
-    notes: Priority 3 is a common RoCE convention, not a rule - use whatever priority your switch fabric treats as lossless, and make both ends agree. Enabling PFC on a priority the switch does not honour gives you a NIC that pauses a link that never pauses back. Not persistent across reboot by itself.
+    notes: Priority 3 is a common RoCE convention, not a rule - use whatever priority your switch fabric treats as lossless, and make both ends agree. Enabling PFC on a priority the switch does not honour gives you a NIC that pauses a link that never pauses back. The list must have exactly 8 values ('pfc list must have 8 items' otherwise). On mlx5 enabling PFC switches global 802.3x pause off, and a later 'ethtool -A <if> rx on tx on' silently clears PFC again. Not persistent across reboot by itself. Inbox equivalent is 'dcb pfc set dev <if> prio-pfc all:off 3:on'.
     tags: [roce, pfc, lossless, config]
 
   - cmd: dcgmi discovery -l

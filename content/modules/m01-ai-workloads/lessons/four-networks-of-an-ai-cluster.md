@@ -142,13 +142,13 @@ On a GPU server, part of bring-up is identifying which interface belongs to whic
 
 ```
 $ ip -br link
-lo               UNKNOWN        00:00:00:00:00:00
-eno1             UP             3c:ec:ef:00:00:01      # onboard 1/10G: in-band or provisioning
-enp170s0f0np0    UP             b8:3f:d2:aa:00:10      # dual-port NIC: storage
-enp170s0f1np1    UP             b8:3f:d2:aa:00:11      # dual-port NIC: front-end / in-band
-ens1f0np0        UP             b8:3f:d2:12:34:50      # compute rail 0
-ens2f0np0        UP             b8:3f:d2:12:34:51      # compute rail 1
-...                                                    # compute rails 2-7
+lo               UNKNOWN        00:00:00:00:00:00 <LOOPBACK,UP,LOWER_UP>
+eno1             UP             3c:ec:ef:00:00:01 <BROADCAST,MULTICAST,UP,LOWER_UP>   # onboard 1/10G: in-band or provisioning
+enp170s0f0np0    UP             b8:3f:d2:aa:00:10 <BROADCAST,MULTICAST,UP,LOWER_UP>   # dual-port NIC: storage
+enp170s0f1np1    UP             b8:3f:d2:aa:00:11 <BROADCAST,MULTICAST,UP,LOWER_UP>   # dual-port NIC: front-end / in-band
+ens1f0np0        UP             b8:3f:d2:12:34:50 <BROADCAST,MULTICAST,UP,LOWER_UP>   # compute rail 0
+ens2f0np0        UP             b8:3f:d2:12:34:51 <BROADCAST,MULTICAST,UP,LOWER_UP>   # compute rail 1
+...                                                                                    # compute rails 2-7
 ```
 *(illustrative output; names, counts and roles depend entirely on the platform and design, and comments are added for explanation)*
 

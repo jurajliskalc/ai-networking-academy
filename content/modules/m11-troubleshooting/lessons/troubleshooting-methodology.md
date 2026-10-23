@@ -271,11 +271,17 @@ using RDMA at all. Exact log wording varies by NCCL version.
 ### Mapping a NIC suspect with perftest
 
 ```bash
-# On the server side (nodeB), NIC mlx5_3, GID index 3 (RoCEv2; check show_gids)
+# On the server side (nodeB), NIC mlx5_3, GID index 3 (RoCEv2; confirm with
+# cat /sys/class/infiniband/mlx5_3/ports/1/gid_attrs/types/3, or show_gids on the NVIDIA stack)
 ib_write_bw -d mlx5_3 -x 3 --report_gbits -s 1048576 -D 10
 # On the client side (nodeA)
 ib_write_bw -d mlx5_3 -x 3 --report_gbits -s 1048576 -D 10 nodeB
 ```
+
+`mlx5_3` is an NVIDIA-stack style name; with distro rdma-core the devices are named after their PCI
+address (for example `rocep3s0f0`), so list them with `rdma link show`, which also shows each one's
+netdev. With `-D` (a timed run) perftest warns `BW peak won't be measured in this run.` and prints
+`0.00` in the BW peak column: read `BW average`.
 
 Run it NIC by NIC (rail by rail). A single NIC far below its peers isolates the problem to that
 NIC, its PCIe link, its cable, or its leaf port. Then look at `lspci -vv` for that NIC

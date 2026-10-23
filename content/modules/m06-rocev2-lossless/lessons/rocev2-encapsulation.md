@@ -236,7 +236,7 @@ flowchart TD
 > [!WARNING]
 > "GID index 3" is a habit, not a law. The layout depends on how many IP addresses, VLAN
 > subinterfaces and IPv6 addresses the interface has, and the order in which they were added. Adding
-> an address can shift indexes. Always look the index up (`show_gids` or sysfs) rather than
+> an address can shift indexes. Always look the index up (`show_gids` with NVIDIA's stack, or sysfs) rather than
 > hard-coding it across a heterogeneous fleet.
 
 ### MTU: Ethernet MTU versus RDMA path MTU
@@ -280,7 +280,9 @@ for the same bandwidth.
 ## In practice
 
 The examples below assume an NVIDIA ConnectX NIC with rdma-core (and, where noted, the MLNX_OFED or
-DOCA-OFED utilities). Output is **illustrative** and trimmed. Your device names and values will differ.
+DOCA-OFED utilities). Output is **illustrative** and trimmed. Your device names and values will differ:
+`mlx5_0` is the name NVIDIA's stack gives the first device, while distro rdma-core names it after
+the PCI address (for example `rocep3s0f0`). Take the name from `rdma link` or `ibv_devices`.
 
 ### Is the device RoCE, and what MTU is active?
 
@@ -290,38 +292,43 @@ ibv_devinfo -d mlx5_0
 
 ```text
 # illustrative output
-hca_id: mlx5_0
-        transport:                      InfiniBand (0)
-        fw_ver:                         28.xx.xxxx
-        ...
-        port:   1
-                state:                  PORT_ACTIVE (4)
-                max_mtu:                4096 (5)
-                active_mtu:             4096 (5)
-                link_layer:             Ethernet
+hca_id:	mlx5_0
+	transport:			InfiniBand (0)
+	fw_ver:				28.xx.xxxx
+	...
+		port:	1
+			state:			PORT_ACTIVE (4)
+			max_mtu:		4096 (5)
+			active_mtu:		4096 (5)
+			sm_lid:			0
+			port_lid:		0
+			port_lmc:		0x00
+			link_layer:		Ethernet
 ```
 
 - `transport: InfiniBand` is normal even on RoCE. It describes the transport layer, which *is*
   InfiniBand.
-- `link_layer: Ethernet` is what tells you this is RoCE.
+- `link_layer: Ethernet` is what tells you this is RoCE. `sm_lid` and `port_lid` are 0 because
+  RoCE has no subnet manager and no LIDs.
 - `active_mtu: 1024 (3)` on a fabric meant for jumbo frames is a red flag: check `ip link show` for the netdev MTU.
 
 ### Read the GID table
 
-`show_gids` is a script shipped with NVIDIA's OFED distributions. It reads sysfs and prints one
-line per GID:
+`show_gids` is a script shipped with NVIDIA's OFED distributions (MLNX_OFED / DOCA-OFED); it is not
+part of upstream rdma-core. It reads sysfs and prints one line per GID (tab-separated):
 
 ```text
 # illustrative output of: show_gids mlx5_0
-DEV     PORT  INDEX  GID                                      IPv4         VER  DEV
----     ----  -----  ---                                      ----         ---  ---
-mlx5_0  1     0      fe80:0000:0000:0000:0e42:a1ff:fe12:3456               v1   ens1f0np0
-mlx5_0  1     1      fe80:0000:0000:0000:0e42:a1ff:fe12:3456               v2   ens1f0np0
-mlx5_0  1     2      0000:0000:0000:0000:0000:ffff:0a00:000b  10.0.0.11    v1   ens1f0np0
-mlx5_0  1     3      0000:0000:0000:0000:0000:ffff:0a00:000b  10.0.0.11    v2   ens1f0np0
+DEV	PORT	INDEX	GID					IPv4  		VER	DEV
+---	----	-----	---					------------  	---	---
+mlx5_0	1	0	fe80:0000:0000:0000:0e42:a1ff:fe12:3456			v1	ens1f0np0
+mlx5_0	1	1	fe80:0000:0000:0000:0e42:a1ff:fe12:3456			v2	ens1f0np0
+mlx5_0	1	2	0000:0000:0000:0000:0000:ffff:0a00:000b	10.0.0.11  	v1	ens1f0np0
+mlx5_0	1	3	0000:0000:0000:0000:0000:ffff:0a00:000b	10.0.0.11  	v2	ens1f0np0
+n_gids_found=4
 ```
 
-Without the script, the same information is in sysfs:
+Without the script (for example with a distro rdma-core install), the same information is in sysfs:
 
 ```bash
 cat /sys/class/infiniband/mlx5_0/ports/1/gids/3              # the 128-bit GID
@@ -329,7 +336,8 @@ cat /sys/class/infiniband/mlx5_0/ports/1/gid_attrs/types/3   # "RoCE v2" or "IB/
 cat /sys/class/infiniband/mlx5_0/ports/1/gid_attrs/ndevs/3   # bound netdev, e.g. ens1f0np0
 ```
 
-`ibv_devinfo -v` also lists the GIDs together with their type in recent rdma-core versions.
+`ibv_devinfo -v` also lists the GIDs together with their type in recent rdma-core versions
+(lines like `GID[  3]:  ::ffff:10.0.0.11, RoCE v2`).
 
 ### Prove RoCEv2 connectivity with perftest
 
@@ -345,14 +353,18 @@ between hosts on *different* subnets, the connection fails, because v1 cannot be
 
 ### Seeing the packets
 
-RDMA traffic bypasses the kernel network stack, so a plain `tcpdump -i ens1f0np0` usually shows
-**nothing** for an active RDMA flow. Your options are:
+RDMA traffic bypasses the kernel network stack, so a plain `tcpdump -i ens1f0np0 udp port 4791`
+captures **nothing** for an active RDMA flow (`0 packets captured`). Your options are:
 
 - Mirror the switch port (SPAN/ERSPAN) to a capture host. Wireshark decodes UDP 4791 as RoCEv2 and
   dissects the BTH and extended headers.
-- Use the NIC vendor's RDMA traffic sniffing support, where available. NVIDIA documents an offloaded
-  capture mechanism for ConnectX. Check the documentation for your driver release, because the
-  mechanism has changed between versions.
+- Use the NIC's RDMA traffic sniffing support. On ConnectX (mlx5), libpcap has an **RDMA sniffer**:
+  `tcpdump -D` lists the RDMA device (for example `mlx5_0 (RDMA sniffer)`), and
+  `tcpdump -i mlx5_0 -w roce.pcap` captures on the **RDMA device name**, not the netdev, including
+  the offloaded RoCEv2 packets. Filter when reading (`tcpdump -r roce.pcap 'udp port 4791'`). Your
+  distro's tcpdump build and security profile must allow it: on Ubuntu, for example, the AppArmor
+  profile for tcpdump blocks it until relaxed. NVIDIA also ships `ibdump` with its stack. The
+  mechanisms have changed between driver releases, so check the documentation for yours.
 - Look at counters instead of packets. Much of RoCE troubleshooting happens with counters, which
   later lessons cover.
 
@@ -379,7 +391,8 @@ normally see RDMA traffic at all. On switches and any middlebox, it does.
   *Cause:* an ACL, security group or firewall permits only known TCP ports. *Fix:* permit UDP 4791
   on the RDMA path in both directions.
 - **Expecting tcpdump to show RDMA.** *Symptom:* "there is no traffic" while counters climb.
-  *Cause:* kernel bypass. *Fix:* use switch mirroring, vendor sniffing support, or counters.
+  *Cause:* kernel bypass. *Fix:* use switch mirroring, the RDMA sniffer (`tcpdump -i <rdma-dev>`),
+  or counters.
 - **Middleboxes that rewrite headers.** *Symptom:* ICRC error counters climb and RDMA throughput
   collapses only along one path. *Cause:* a device on that path modifies fields covered by the ICRC.
   *Fix:* keep the RDMA path free of NAT and rewriting devices. Only DSCP/ECN/TTL changes are safe.

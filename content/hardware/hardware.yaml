@@ -67,7 +67,7 @@ variables:
   - { name: A_NETDEV, group: hosts, label: Host A RDMA netdev, default: ens1f0np0, help: "The Ethernet interface of the RDMA port (rdma link show prints it). Leave as-is on InfiniBand if you use IPoIB: then it is the ib0-style interface." }
   - { name: B_NETDEV, group: hosts, label: Host B RDMA netdev, default: ens1f0np0 }
   - { name: C_NETDEV, group: hosts, label: Host C RDMA netdev, default: ens1f0np0 }
-  - { name: A_RDMA_DEV, group: hosts, label: Host A RDMA device, default: mlx5_0, help: Name from ibv_devices or rdma dev show. }
+  - { name: A_RDMA_DEV, group: hosts, label: Host A RDMA device, default: mlx5_0, help: "Name from rdma link or ibv_devices. NVIDIA's DOCA/MLNX_OFED stack names devices mlx5_0, mlx5_1, ...; distribution rdma-core names them from the PCI address, for example rocep3s0f0. Use what your host prints." }
   - { name: B_RDMA_DEV, group: hosts, label: Host B RDMA device, default: mlx5_0 }
   - { name: C_RDMA_DEV, group: hosts, label: Host C RDMA device, default: mlx5_0 }
   - { name: RDMA_PORT, group: hosts, label: RDMA port number, default: "1" }
@@ -76,7 +76,7 @@ variables:
   - { name: GID_INDEX, group: qos, label: RoCEv2 GID index, default: "3", help: "Index of the RoCE v2 IPv4 entry in the GID table (the Inventory lab shows how to find it). 3 is common on ConnectX defaults but not guaranteed." }
   - { name: ROCE_PRIO, group: qos, label: Lossless priority, default: "3", help: Priority (0-7) with PFC enabled for RoCE traffic. Must match the switch. }
   - { name: ROCE_DSCP, group: qos, label: RoCE DSCP, default: "26", help: DSCP stamped on RoCE data packets and mapped to the lossless priority. }
-  - { name: CNP_DSCP, group: qos, label: CNP DSCP, default: "48", help: DSCP of congestion notification packets (a common convention; check your NIC defaults). }
+  - { name: CNP_DSCP, group: qos, label: CNP DSCP, default: "48", help: "DSCP of congestion notification packets. 48 is a common convention and the mlx5 default with NVIDIA's stack (/sys/class/net/<netdev>/ecn/roce_np/cnp_dscp); check your NIC and switch." }
   - { name: TCLASS, group: qos, label: Traffic class byte, derived: "ROCE_DSCP * 4 + 2", help: "DSCP shifted left by two plus ECT(0): the value for perftest --tclass and NCCL_IB_TC." }
 
   - { name: SWITCH, group: switch, label: Switch name, default: leaf1, help: Leave the defaults if you cable back to back. }

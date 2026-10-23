@@ -57,7 +57,9 @@ By the end you can:
   - `dcb` from iproute2 (included in the `iproute2` package on current Ubuntu and RHEL-family
     releases).
 
-  The lab scripts pick `mlnx_qos` when it exists and fall back to `dcb`.
+  The lab scripts pick `mlnx_qos` when it exists and fall back to `dcb`. With the distribution's
+  inbox stack you only have `dcb`: `mlnx_qos`, `cma_roce_tos` and the `/sys/class/net/<if>/ecn/`
+  files used below all come with NVIDIA's stack. Each task gives the inbox equivalent.
 - **Root** on both hosts and **SSH** from A to B (for the check).
 - **Profile on both hosts:** the save, apply and restore scripts run on each host and read
   `{{AINA_DIR}}/labs/hw-toolkit/lab.env` there (to find the netdev, priority and DSCP, and to tell
@@ -93,16 +95,23 @@ Illustrative `mlnx_qos` excerpt (factory defaults on many ConnectX releases):
 ```
 DCBX mode: OS controlled
 Priority trust state: pcp
-...
+Receive buffer size (bytes): 262016,0,0,0,0,0,0,0,max_buffer_size=262016
+Cable len: 7
 PFC configuration:
-        priority    0   1   2   3   4   5   6   7
-        enabled     0   0   0   0   0   0   0   0
+	priority    0   1   2   3   4   5   6   7
+	enabled     0   0   0   0   0   0   0   0
+	buffer      0   0   0   0   0   0   0   0
+tc: 0 ratelimit: unlimited, tsa: vendor
+	 priority:  1
+tc: 1 ratelimit: unlimited, tsa: vendor
+	 priority:  0
+...
 ```
 
-Illustrative `dcb` output:
+Illustrative `dcb` output (`dcb app show` prints nothing while the APP table is empty):
 
 ```
-pfc-cap 8 macsec-bypass off delay 0
+pfc-cap 8 macsec-bypass off delay 7
 prio-pfc 0:off 1:off 2:off 3:off 4:off 5:off 6:off 7:off
 ```
 
@@ -137,9 +146,14 @@ With `dcb`:
 ```bash
 sudo dcb app replace dev {{A_NETDEV}} dscp-prio {{ROCE_DSCP}}:{{ROCE_PRIO}}
 dcb app show dev {{A_NETDEV}} dscp-prio
+dcb -N app show dev {{A_NETDEV}} dscp-prio     # numeric DSCP values
 ```
 
-**What to observe:** after `--trust dscp`, `mlnx_qos` prints a `dscp2prio mapping` table. On
+`dcb app show` prints well-known DSCP values by name, so DSCP 26 appears as `dscp-prio AF31:3`;
+`-N` prints `dscp-prio 26:3`.
+
+**What to observe:** after `--trust dscp`, `mlnx_qos` prints a `dscp2prio mapping` table (one
+`prio:N dscp:...` line per priority) right after the trust line. On
 ConnectX the default map takes the top three bits of the DSCP as the priority, so DSCP 26 (binary
 011010) already lands in priority 3, and DSCP 48 (CNPs, binary 110000) in priority 6. That is why
 "DSCP 26 / priority 3" became a common convention: it works with the defaults. The explicit
@@ -147,10 +161,12 @@ ConnectX the default map takes the top three bits of the DSCP as the priority, s
 on current `mlnx_qos` releases; if yours rejects it, check `mlnx_qos --help` and rely on the default
 map.)
 
-With `dcb`, there is no separate "trust" command in every iproute2 release. On mlx5, the driver
-switches the port to DSCP trust when the first DSCP APP entry is added and back to PCP when the last
-one is removed; other drivers can behave differently, so check your NIC's documentation. Newer
-iproute2 releases add `dcb apptrust`; see `man dcb-apptrust` if your system has it.
+With `dcb`, there is no separate "trust" step on mlx5: the driver switches the port to DSCP trust
+when the first DSCP APP entry is added (traffic with DSCP {{ROCE_DSCP}} is then counted in priority
+{{ROCE_PRIO}}) and back to PCP when the last one is removed; other drivers can behave differently,
+so check your NIC's documentation. Newer iproute2 releases have `dcb apptrust`, but mlx5 (at least
+on current kernels) does not support it: `dcb apptrust show` answers `Attribute not found: Success`, so there is no `dcb`
+read-out of the trust state on these NICs.
 
 > [!TIP]
 > DSCP {{ROCE_DSCP}} in decimal is what switches and `dcb` use. Tools that set the whole IP
@@ -168,7 +184,37 @@ or
 ```bash
 sudo dcb pfc set dev {{A_NETDEV}} prio-pfc all:off {{ROCE_PRIO}}:on
 dcb pfc show dev {{A_NETDEV}} prio-pfc
+dcb buffer show dev {{A_NETDEV}}
 ```
+
+`mlnx_qos --pfc` needs exactly eight flags (otherwise: `pfc list must have 8 items`). After the
+change the NIC gives the lossless priority its own receive buffer; illustrative `dcb buffer show`
+with PFC on priority 3 (`mlnx_qos` shows the same as `Receive buffer size (bytes):
+130944,130944,0,...` and a `buffer` row):
+
+```
+prio-buffer 0:0 1:0 2:0 3:1 4:0 5:0 6:0 7:0
+buffer-size 0:130944b 1:130944b 2:0b 3:0b 4:0b 5:0b 6:0b 7:0b
+total-size 262016b
+```
+
+Now look at link-level (802.3x) pause, which is on by default on mlx5:
+
+```bash
+ethtool -a {{A_NETDEV}}
+```
+
+```
+Pause parameters for ens1f0np0:
+Autonegotiate:	off
+RX:		off
+TX:		off
+```
+
+Enabling PFC on any priority turned global pause **off** by itself: the two are mutually exclusive
+on a port. The reverse is a trap: `sudo ethtool -A {{A_NETDEV}} rx on tx on` succeeds without a
+warning and **silently disables PFC on every priority**. A provisioning script or tuning guide that
+"enables flow control" after your QoS setup undoes it, so check PFC again after any `ethtool -A`.
 
 **Why only one priority:** PFC makes a priority lossless by letting a receiver stop its neighbour,
 and the price is head-of-line blocking and, in the worst case, pause storms and deadlocks. You want
@@ -211,8 +257,14 @@ Illustrative excerpt:
      rx_prio0_bytes: 18234
      rx_prio3_bytes: 241953488712
      rx_prio3_pause: 0
-     tx_prio3_pause: 0
+     rx_prio3_pause_duration: 0
+     tx_prio3_pause: 696
+     tx_prio3_pause_duration: 608
+     rx_prio3_pause_transition: 0
 ```
+
+The `*_prioN_pause*` counters appear only for priorities with PFC enabled; the `*_global_pause*`
+counters are listed only while global pause is on, so they disappear once PFC is enabled.
 
 **What to observe:** the bytes accumulate on `rx_prio{{ROCE_PRIO}}_bytes`, not on priority 0. Now
 run the same test **without** `--tclass`: the packets carry DSCP 0, so they land in priority 0, the
@@ -221,13 +273,25 @@ fabrics: the lossless queue is configured perfectly and nothing uses it.
 
 The `--tclass` option exists on recent perftest releases (check `ib_write_bw --help`). For NCCL,
 the equivalent is `NCCL_IB_TC={{TCLASS}}`. For RDMA CM applications, NVIDIA's OFED/DOCA packages
-include a `cma_roce_tos` script that sets a default traffic class per device; options vary between
-versions, so check its usage text.
+include a `cma_roce_tos` script that sets a default traffic class per device (`sudo cma_roce_tos -d
+{{A_RDMA_DEV}} -t {{TCLASS}}`). It writes the kernel's rdma_cm configfs, which you can use directly
+on any stack:
+
+```bash
+sudo modprobe configfs
+sudo mkdir -p /sys/kernel/config/rdma_cm/{{A_RDMA_DEV}}
+echo {{TCLASS}} | sudo tee /sys/kernel/config/rdma_cm/{{A_RDMA_DEV}}/ports/{{RDMA_PORT}}/default_roce_tos
+```
+
+(The default is `0`; `default_roce_mode` in the same directory reads `RoCE v2`.)
 
 > [!NOTE]
-> Expect **zero pause frames** here. A receiver only sends PFC when its receive buffer for that
-> priority fills, and a single sender into a host that drains at line rate rarely gets there. Seeing
-> PFC and ECN fire needs congestion: two senders into one receiver, which is the switch lab.
+> A **few pause frames** here are normal, even back to back: under a line-rate `ib_write_bw` the
+> receiving NIC briefly fills its priority buffer and pauses the sender (one 100G back-to-back pair showed several hundred in
+> 10 seconds; look at `tx_prio3_pause` on host B and `rx_prio3_pause` on host
+> A). What would be wrong is pauses on a priority that should be lossy, a steadily climbing
+> `tx_pause_storm_warning_events`, or pauses with the throughput collapsing. Seeing ECN and CNPs fire
+> needs a switch that marks: two senders into one receiver, which is the switch lab.
 
 ### Task 5: ECN and DCQCN on the host
 
@@ -236,16 +300,23 @@ dropping them; the receiving NIC, the **notification point** (NP), sees the mark
 **CNP** back to the sender; the sending NIC, the **reaction point** (RP), slows that QP down. PFC is
 the emergency brake; ECN is the steering. Both NICs take part, so both need it enabled.
 
-Some NVIDIA driver stacks expose per-priority switches in sysfs. Check whether yours does:
+NVIDIA's driver stack (MLNX_OFED / DOCA-Host) exposes per-priority switches in sysfs; the inbox
+mlx5 driver does not. Check whether yours does:
 
 ```bash
 ls /sys/class/net/{{A_NETDEV}}/ecn/ 2>/dev/null || echo "not exposed by this driver stack"
 cat /sys/class/net/{{A_NETDEV}}/ecn/roce_np/enable/{{ROCE_PRIO}} /sys/class/net/{{A_NETDEV}}/ecn/roce_rp/enable/{{ROCE_PRIO}} 2>/dev/null
+cat /sys/class/net/{{A_NETDEV}}/ecn/roce_np/cnp_dscp /sys/class/net/{{A_NETDEV}}/ecn/roce_np/cnp_802p_prio 2>/dev/null
 ```
 
-If the files exist, `apply-qos.sh` has set both to `1` for priority {{ROCE_PRIO}}. If they do not,
-your stack controls DCQCN another way (on many recent stacks it is enabled by default); check the
-driver documentation for your release rather than guessing at paths.
+If the files exist, both switches are normally already `1`: the NVIDIA stack enables the NP and RP
+on all eight priorities by default, and `apply-qos.sh` only makes sure of it for priority
+{{ROCE_PRIO}}. `cnp_dscp` (default 48) and `cnp_802p_prio` (default 6) show how CNPs are marked;
+the `roce_rp/` directory holds the DCQCN rate parameters (`rpg_ai_rate`, `rpg_hai_rate`,
+`rpg_min_dec_fac` ...). With the inbox driver the directory is missing and DCQCN runs with its
+defaults; the inbox driver exposes the same parameters only in debugfs
+(`/sys/kernel/debug/mlx5/<pci-address>/cc_params/`), which kernel lockdown blocks, even for root,
+on hosts with Secure Boot.
 
 The evidence of DCQCN at work lives in the RDMA hardware counters:
 
@@ -253,8 +324,9 @@ The evidence of DCQCN at work lives in the RDMA hardware counters:
 grep -H . /sys/class/infiniband/{{A_RDMA_DEV}}/ports/{{RDMA_PORT}}/hw_counters/{np_ecn_marked_roce_packets,np_cnp_sent,rp_cnp_handled,rp_cnp_ignored} 2>/dev/null
 ```
 
-`np_*` counters move on the receiver (marked packets seen, CNPs sent), `rp_*` on the sender (CNPs
-received and acted on). On an uncongested back-to-back link they stay at zero, which is the correct
+The same counters appear in `rdma statistic show link {{A_RDMA_DEV}}/{{RDMA_PORT}}`. `np_*` counters
+move on the receiver (marked packets seen, CNPs sent), `rp_*` on the sender (CNPs received and acted
+on). On an uncongested back-to-back link they stay at zero, which is the correct
 answer. Remember the names: they are the first thing to look at in the switch lab.
 
 ### Task 6: Break the contract on purpose
@@ -323,10 +395,14 @@ distribution's or NIC vendor's mechanism.
 
 - Compare `mlnx_qos -i {{A_NETDEV}}` with `dcb ets show dev {{A_NETDEV}}`: ETS decides bandwidth
   shares between traffic classes. Read the [buffers, headroom and ETS](#/lesson/buffers-headroom-ets)
-  lesson and find where your NIC maps priority {{ROCE_PRIO}}.
+  lesson and find where your NIC maps priority {{ROCE_PRIO}} (the `prio-tc` line; note that mlx5's
+  default maps priority 0 to TC 1 and priority 1 to TC 0).
 - Repeat Task 4 with other `--tclass` values (for example DSCP 0, or a DSCP that maps to another
   priority) and predict which `rx_prioN_bytes` counter moves before you look. (`tcpdump` on the
-  host usually cannot show RoCE packets, including RDMA CM's, because the NIC sends and receives
-  them without the kernel's network stack; a switch port mirror can.)
+  netdev cannot show RoCE packets, including RDMA CM's, because the NIC sends and receives them
+  without the kernel's network stack. A switch port mirror can, and on mlx5 so can libpcap's RDMA
+  sniffer: `sudo tcpdump -i {{A_RDMA_DEV}} -w /tmp/roce.pcap` on the RDMA device, not the netdev;
+  then look at the DSCP in Wireshark. Ubuntu's tcpdump AppArmor profile must be in complain mode
+  for this.)
 - Write the configuration into your node provisioning (systemd unit, NetworkManager dispatcher, or
   your vendor's persistence mechanism) and reboot to prove it survives.

@@ -29,7 +29,7 @@ further_reading:
 
 An AI training job does not fail loudly when the network is unhealthy. It slows down. A 2,048-GPU job whose all-reduce has dropped from 380 GB/s to 290 GB/s bus bandwidth still finishes its step, still writes checkpoints, and still looks "green" on a ping-based dashboard. What it is actually doing is burning roughly a quarter of a very expensive cluster on waiting. The only way to see that waste, and to locate it, is through counters: the hardware registers that every NIC, HCA, switch ASIC and GPU keep for packets, bytes, pauses, drops, retransmissions and errors.
 
-The difficulty is not getting counters. A ConnectX NIC exposes hundreds of them, a Spectrum or Quantum switch thousands, and a GPU hundreds more through DCGM. The difficulty is knowing which twenty matter, what "normal" looks like for each, and which ones are only meaningful as a rate or a ratio. This lesson is the curated list an experienced AI fabric SRE carries in their head, organised by layer, with the reasoning that turns a number into a diagnosis.
+The difficulty is not getting counters. A ConnectX NIC exposes thousands of them (most of them per-queue counters in `ethtool -S`), a Spectrum or Quantum switch thousands, and a GPU hundreds more through DCGM. The difficulty is knowing which twenty matter, what "normal" looks like for each, and which ones are only meaningful as a rate or a ratio. This lesson is the curated list an experienced AI fabric SRE carries in their head, organised by layer, with the reasoning that turns a number into a diagnosis.
 
 ## Concepts
 
@@ -87,6 +87,7 @@ The per-priority pause counters (`rx_prioN_pause`, `rx_prioN_pause_duration`, `r
 | `rx_prio3_pause_duration` / `tx_prio3_pause_duration` | Time spent paused (the kernel mlx5 counters documentation gives microseconds; still compare across peers rather than reading it in isolation) | Small fraction of interval |
 | `rx_prio3_bytes` / `rx_prio3_packets` | Traffic received on that priority | Should carry essentially all RoCE traffic; if it is on prio 0 instead, mapping is wrong |
 | `rx_discards_phy` | Packets dropped by the port because of lack of buffer at the physical level | Zero on a lossless priority |
+| `rx_vport_rdma_unicast_bytes` / `tx_vport_rdma_unicast_bytes` (and `_packets`) | RDMA (RoCE) traffic counted at the vport. RoCE does not appear in the netdev packet counters such as `rx_packets` | Tracks the RDMA load you expect; flat while a job runs means the traffic is elsewhere |
 | `rx_out_of_buffer` | Packets dropped because no receive descriptor (WQE) was available on the host side (kernel netdev queues) | Zero or near zero |
 | `rx_crc_errors_phy`, `rx_symbol_err_phy` | Physical-layer corruption | Zero after FEC on a healthy link |
 | `rx_corrected_bits_phy` | Bits corrected by FEC | Non-zero is normal on PAM4 links; trend matters |
@@ -161,7 +162,7 @@ A collective is only as fast as its slowest participant, and sometimes that part
 Take two snapshots and diff only the counters that changed:
 
 ```bash
-DEV=eth2   # netdev of the RoCE port; map with: rdma link show / ibdev2netdev
+DEV=eth2   # netdev of the RoCE port; map with: rdma link show (ibdev2netdev also works, NVIDIA stack only)
 ethtool -S $DEV > /tmp/c1; sleep 10; ethtool -S $DEV > /tmp/c2
 paste /tmp/c1 /tmp/c2 | awk '$2 != $4 {printf "%-40s %15d\n", $1, $4-$2}'
 ```
@@ -182,10 +183,12 @@ Interpretation: the NIC receives some pauses from its leaf (congestion somewhere
 
 ### RDMA hw_counters
 
+The RDMA device name depends on the driver stack: `mlx5_0` is the NVIDIA (DOCA/MLNX_OFED) style, while distro rdma-core names devices after their PCI address (for example `rocep3s0f0`). Take the name from `rdma link show`.
+
 ```bash
 grep -H . /sys/class/infiniband/mlx5_0/ports/1/hw_counters/{np_cnp_sent,np_ecn_marked_roce_packets,rp_cnp_handled,out_of_sequence,packet_seq_err,local_ack_timeout_err} 2>/dev/null
 # or, with iproute2:
-rdma statistic show link mlx5_0/1
+rdma statistic show link mlx5_0/1   # recent iproute2 prints one counter per line; older releases put them on one line
 ```
 
 Illustrative output (deltas over 60 s on two nodes in the same job):

@@ -18,7 +18,7 @@ commands:
                       SM lid: 1
                       Port GUID: 0xb83fd20300aabb01
                       Link layer: InfiniBand
-    notes: "State Active + Physical state LinkUp is healthy. State Initializing with LinkUp means the link trained but no SM has configured the port. Physical state Polling means no link (cable, optic, peer down). Rate below the expected speed indicates a degraded link (fewer lanes or a lower speed)."
+    notes: "State Active + Physical state LinkUp is healthy. State Initializing with LinkUp means the link trained but no SM has configured the port. Physical state Polling means no link (cable, optic, peer down). Rate below the expected speed indicates a degraded link (fewer lanes or a lower speed). ibstat also works on RoCE ports: they show 'Link layer: Ethernet', 'Base lid: 0' and 'SM lid: 0', and the CA name is whatever the stack called the device (mlx5_0 with NVIDIA's stack, for example rocep59s0f0 with distribution rdma-core)."
     tags: [infiniband-diags, port, verify]
 
   - cmd: ibstat mlx5_0 1
@@ -40,6 +40,7 @@ commands:
               phys state:      5: LinkUp
               rate:            400 Gb/sec (4X NDR)
               link_layer:      InfiniBand
+    notes: "On a RoCE port the same fields appear with base lid and sm lid 0x0 and link_layer Ethernet; the rate keeps its InfiniBand-style label (a 100GbE ConnectX-5 port prints '100 Gb/sec (4X EDR)')."
     tags: [infiniband-diags, port, verify]
 
   - cmd: iblinkinfo

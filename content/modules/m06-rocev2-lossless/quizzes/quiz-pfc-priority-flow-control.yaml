@@ -130,3 +130,21 @@ questions:
         text: "802.3x cannot be used on links faster than 10 Gb/s, which rules it out on AI fabrics."
         explanation: "There is no such speed limit. It is disabled because of its coarse scope."
     tags: [pause, 802.3x]
+  - id: q8
+    type: scenario
+    prompt: "On a ConnectX host, PFC was enabled on priority 3 and verified. Later a hardening script ran 'ethtool -A ens1f0np0 rx on tx on' and exited with code 0. Under the next incast the host shows no prio-3 pause counters at all and RoCE retransmissions rise. What happened?"
+    options:
+      - id: a
+        text: "Enabling global pause on mlx5 silently cleared PFC on every priority, so priority 3 is lossy again."
+        correct: true
+        explanation: "On mlx5, global pause and PFC are mutually exclusive: enabling PFC turns global pause off, and turning global pause back on clears PFC without any warning. Re-check the PFC vector after any ethtool -A."
+      - id: b
+        text: "Global pause and PFC now run together, and the per-priority counters are folded into the global ones."
+        explanation: "They do not run together on mlx5. The per-priority pause counters disappear because PFC is no longer enabled on priority 3."
+      - id: c
+        text: "The switch detected the 802.3x frames and disabled PFC on its port, so the host stopped receiving pauses."
+        explanation: "The change happened on the host. The NIC itself dropped its PFC configuration when global pause was enabled."
+      - id: d
+        text: "ethtool -A only affects the kernel's software queues, so the NIC's PFC state is unchanged and correct."
+        explanation: "ethtool -A configures the NIC's MAC pause settings, and on mlx5 that overrides the PFC configuration."
+    tags: [pfc, pause, 802.3x, mlx5]

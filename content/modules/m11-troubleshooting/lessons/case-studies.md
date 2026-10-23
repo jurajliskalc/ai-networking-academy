@@ -217,8 +217,8 @@ Use the widget to see how a few elephant flows map onto uplinks under static ECM
 
 ```text
 $ sudo lspci -vv -s 0000:c1:00.0 | grep -E 'LnkCap:|LnkSta:'
-LnkCap: Port #0, Speed 32GT/s, Width x16
-LnkSta: Speed 32GT/s, Width x8 (downgraded)
+		LnkCap:	Port #0, Speed 32GT/s, Width x16, ASPM not supported
+		LnkSta:	Speed 32GT/s, Width x8 (downgraded)
 ```
 
 Gen5 x8 delivers roughly half the PCIe bandwidth of x16 (about 252 Gb/s per direction before protocol overhead), so rail 5 of this node could not get near 400G line rate. Because the job's collectives span all rails and every ring step waits for its slowest hop, the whole job slowed.

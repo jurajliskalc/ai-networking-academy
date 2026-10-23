@@ -567,7 +567,22 @@ def is_local(host):
     if host in ("localhost", "127.0.0.1", "::1", "local"):
         return True
     names = {socket.gethostname(), socket.getfqdn(), socket.gethostname().split(".")[0]}
-    return host in names
+    if host in names:
+        return True
+    # HOST_A is often a data-network name or an IP of this host: it is local if it resolves to an address that
+    # a socket here can bind to (binding only works for the host's own addresses).
+    try:
+        infos = socket.getaddrinfo(host, None, type=socket.SOCK_DGRAM)
+    except (OSError, UnicodeError):
+        return False
+    for family, _, _, _, sockaddr in infos:
+        try:
+            with socket.socket(family, socket.SOCK_DGRAM) as s:
+                s.bind((sockaddr[0], 0))
+            return True
+        except OSError:
+            continue
+    return False
 
 
 def collect_remote(host, user, role, netdev, sudo, redact):

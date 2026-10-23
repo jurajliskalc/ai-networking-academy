@@ -70,6 +70,6 @@ fi
 if [[ -n "$tx0" && -n "$tx1" ]]; then
   info "host A sent $(( (tx1 - tx0) / 1000000 )) MB on priority $ROCE_PRIO"
 fi
-[[ -n "$p0" && -n "$p1" ]] && info "host B sent $((p1 - p0)) PFC pause frames on priority $ROCE_PRIO (zero is normal on an uncongested link)"
+[[ -n "$p0" && -n "$p1" ]] && info "host B sent $((p1 - p0)) PFC pause frames on priority $ROCE_PRIO (zero or a few hundred is normal: a receiver at line rate pauses briefly even back to back)"
 
 aina_finish

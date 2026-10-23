@@ -71,18 +71,25 @@ rdma dev show
 rdma link show
 ```
 
-Illustrative output of `rdma link show` on a RoCE host:
+Illustrative output of `rdma link show` on a RoCE host with the distribution's rdma-core:
 
 ```
-link mlx5_0/1 state ACTIVE physical_state LINK_UP netdev ens1f0np0
-link mlx5_1/1 state DOWN physical_state DISABLED netdev ens1f1np1
+link rocep59s0f0/1 state ACTIVE physical_state LINK_UP netdev ens1f0np0
+link rocep59s0f1/1 state DOWN physical_state DISABLED netdev ens1f1np1
 ```
 
-**Why:** RDMA tools talk to **devices** (`mlx5_0`), IP tools talk to **netdevs** (`ens1f0np0`).
+**Device names depend on the driver stack.** Distribution rdma-core (Ubuntu, RHEL inbox) renames
+RDMA devices after their PCI address (`rocep<bus>s<slot>f<function>`, so `rocep59s0f0` is PCI
+`0000:3b:00.0`); NVIDIA's OFED / DOCA-Host stack keeps the kernel names `mlx5_0`, `mlx5_1`. The
+netdev names are the same on both. Always take the name from `rdma link` or `ibv_devices` on the
+host itself, never from a document (including this one).
+
+**Why:** RDMA tools talk to **devices** (`rocep59s0f0` or `mlx5_0`), IP tools talk to **netdevs** (`ens1f0np0`).
 Every command in later labs needs the right pair, and on a dual-port card or a server with eight
 NICs it is easy to grab the wrong one. `rdma link show` is the upstream (iproute2) way to see the
 mapping. If NVIDIA's OFED or DOCA-Host stack is installed you may also have `ibdev2netdev -v`,
-which prints the same mapping plus the PCI address and firmware; it is not part of upstream
+which prints the same mapping plus the PCI address and firmware (as non-root it also prints
+`Permission denied` lines for the VPD file, which are harmless); it is not part of upstream
 rdma-core, so do not rely on it in scripts that must run everywhere.
 
 On an InfiniBand host the `netdev` field is the IPoIB interface (for example `ibp1s0`) if IPoIB is
@@ -140,8 +147,8 @@ bus-info: 0000:3b:00.0
 supports-statistics: yes
 ```
 
-**Read it:** `driver` is the kernel driver; `version` is often just the kernel version for inbox
-drivers. `firmware-version` is the NIC firmware, and on NVIDIA NICs the text in parentheses is the
+**Read it:** `driver` is the kernel driver; `version` is the kernel version for the inbox
+driver and the driver package version (for example `26.04-0.8.5`) with NVIDIA's DOCA-Host stack. `firmware-version` is the NIC firmware, and on NVIDIA NICs the text in parentheses is the
 **PSID**, which identifies the board variant (and so which firmware images are valid for it).
 `hca_type` (for example `MT4129`) is the device ID, and `board_id` repeats the PSID. Not every
 vendor's driver exposes `hca_type` and `board_id`; that is why the command tolerates errors.
@@ -149,7 +156,11 @@ vendor's driver exposes `hca_type` and `board_id`; that is why the command toler
 **Why it matters:** two hosts with the same NIC model on different firmware are a classic source of
 "one node is slower" or "only this pair fails" incidents, because firmware changes congestion
 control defaults, link training and bug fixes. Record both versions. If NVIDIA's firmware tools
-(MFT) are installed, `mlxfwmanager --query` lists every adapter with its PSID and firmware in one go.
+(MFT) are installed, `sudo mlxfwmanager --query` lists every adapter with its PSID and firmware in one
+go. MFT reaches the NIC through its own kernel modules (`sudo mst start`). On a host with Secure Boot
+and kernel lockdown they cannot provide usable devices (`mst start` ends with `Unloading MST PCI
+module (unused)`), `mlxfwmanager` reports `-E- No devices found or specified, mst might be stopped,
+...`, and sysfs plus `ethtool -i` are your inventory.
 
 ### Task 4: The PCIe link: capability versus reality
 
@@ -164,8 +175,8 @@ grep -H . /sys/bus/pci/devices/$PCI/{max_link_speed,max_link_width,current_link_
 Illustrative output:
 
 ```
-        LnkCap: Port #0, Speed 16GT/s, Width x16, ASPM not supported
-        LnkSta: Speed 16GT/s, Width x16
+		LnkCap:	Port #0, Speed 16GT/s, Width x16, ASPM not supported
+		LnkSta:	Speed 16GT/s, Width x16
 /sys/bus/pci/devices/0000:3b:00.0/max_link_speed:16.0 GT/s PCIe
 /sys/bus/pci/devices/0000:3b:00.0/max_link_width:16
 /sys/bus/pci/devices/0000:3b:00.0/current_link_speed:16.0 GT/s PCIe
@@ -178,6 +189,11 @@ the `LnkSta` field. A NIC downgraded to x8, or to a lower generation, has had ha
 host bandwidth taken away and nothing else will tell you: RDMA still works, just slower. Typical
 causes are a slot that is mechanically x16 but electrically x8, a riser, a BIOS bifurcation
 setting, or a marginal connection.
+
+In a virtual machine with the NIC passed through (for example on ESXi), `lspci` and the sysfs link
+files describe the hypervisor's virtual PCIe port (values such as `Speed 5GT/s, Width x32`), not the
+physical slot. Check the PCIe link on the hypervisor or bare metal instead; the check's PCIe result
+means nothing inside such a VM.
 
 #### The arithmetic: can this slot carry this NIC?
 
@@ -223,6 +239,18 @@ for i in $(ls $D/gids | sort -n); do
 done
 ```
 
+Illustrative output for a port with one IPv4 address (unused indexes are skipped):
+
+```
+0   fe80:0000:0000:0000:268a:07ff:fe00:11ee  IB/RoCE v1
+1   fe80:0000:0000:0000:268a:07ff:fe00:11ee  RoCE v2
+2   0000:0000:0000:0000:0000:ffff:0a0a:0a01  IB/RoCE v1
+3   0000:0000:0000:0000:0000:ffff:0a0a:0a01  RoCE v2
+```
+
+`gid_attrs/ndevs/<index>` names the netdev each entry belongs to. NVIDIA's stack also ships a
+`show_gids` script that prints the same table; it is not part of upstream rdma-core.
+
 Note the index of the **RoCE v2** entry that carries your data IP (`{{A_IP}}` appears as
 `::ffff:` plus the address in hex). Your profile uses `GID_INDEX={{GID_INDEX}}`; correct it if your
 hosts disagree.
@@ -249,13 +277,15 @@ cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor 2>/dev/null
 
 - **Kernel and rdma-core**: inbox drivers come with the kernel; the user-space providers come with
   rdma-core. Mismatched versions across hosts make comparisons harder.
-- **OFED / DOCA-Host**: if `ofed_info` exists, NVIDIA's driver stack replaced the inbox one. Do not
+- **OFED / DOCA-Host**: if `ofed_info` exists, NVIDIA's driver stack replaced the inbox one
+  (`ofed_info -s` prints a one-line version string, for example `OFED-internal-26.04-0.8.6:`). Do not
   mix it with the distribution's rdma-core packages on the same host.
 - **memlock** (`ulimit -l`): RDMA pins ("registers") memory. A small limit makes large perftest or
-  NCCL runs fail with memory-registration errors. `unlimited` is the usual lab setting.
+  NCCL runs fail with memory-registration errors (perftest: `Couldn't allocate MR`). `unlimited` is
+  the usual lab setting; `labs/hw-toolkit/setup-rdma-host.sh --set-memlock` sets it (log in again).
 - **CPU governor**: power-saving governors make latency noisy, and perftest warns about CPU
   frequency. `performance` is the usual benchmarking choice; on some platforms the governor is
-  controlled by firmware and the file does not exist.
+  controlled by firmware and the file does not exist (it is also missing inside most VMs).
 
 ### Task 8: Collect everything automatically and run the health review
 

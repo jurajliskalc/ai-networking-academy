@@ -143,7 +143,7 @@ A back-of-envelope check prevents a TSDB meltdown:
 => ~1.25 million active series, before labels like job_id multiply them
 ```
 
-At a 10-second interval, that is roughly 125,000 samples per second ingested. That is manageable for a sharded or remote-write setup but painful for a single Prometheus. Rules of thumb: export only curated counters (not all 300 from `ethtool -S`), keep high-cardinality labels such as job ID in a separate join table or as a recording rule output, and downsample for long-term retention.
+At a 10-second interval, that is roughly 125,000 samples per second ingested. That is manageable for a sharded or remote-write setup but painful for a single Prometheus. Rules of thumb: export only curated counters (not the thousands of mostly per-channel counters a ConnectX port prints in `ethtool -S`), keep high-cardinality labels such as job ID in a separate join table or as a recording rule output, and downsample for long-term retention.
 
 ### From counters to signals
 

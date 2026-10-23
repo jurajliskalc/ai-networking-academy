@@ -200,10 +200,10 @@ $ ip link show
 - `link/ether b8:3f:d2:12:34:56` is the interface's MAC address; `brd ff:ff:ff:ff:ff:ff` is the broadcast address.
 - `mtu 9000` is the largest IP packet this interface will send, not the frame size: add 14 bytes of Ethernet header (18 with a VLAN tag) and 4 bytes of FCS to get the frame.
 
-Capture a few frames and print their Ethernet headers (`-e`) without resolving names (`-n`):
+Capture a few frames and print their Ethernet headers (`-e`) without resolving names (`-n`). For ordinary kernel traffic you capture on the netdev (`-i ens1f0np0`); RoCE traffic is offloaded, so this example captures on the RDMA device instead (see the warning below):
 
 ```
-$ sudo tcpdump -i ens1f0np0 -e -n -c 3
+$ sudo tcpdump -i mlx5_0 -e -n -c 3
 10:02:11.120391 b8:3f:d2:12:34:56 > b8:3f:d2:ab:cd:ef, ethertype IPv4 (0x0800), length 4154: 10.0.3.11.49152 > 10.0.3.12.4791: UDP, length 4112
 10:02:11.120393 b8:3f:d2:12:34:56 > b8:3f:d2:ab:cd:ef, ethertype IPv4 (0x0800), length 4154: 10.0.3.11.49152 > 10.0.3.12.4791: UDP, length 4112
 10:02:11.120410 b8:3f:d2:ab:cd:ef > b8:3f:d2:12:34:56, ethertype IPv4 (0x0800), length 62: 10.0.3.12.49152 > 10.0.3.11.4791: UDP, length 20
@@ -213,14 +213,14 @@ $ sudo tcpdump -i ens1f0np0 -e -n -c 3
 Reading line one: source MAC, then destination MAC, then the EtherType, then `length 4154` (the frame length as captured, without FCS on most NICs: 14 Ethernet + 20 IP + 8 UDP + 12 BTH + 4096 payload + 4 ICRC), then the IP and UDP details. Destination port 4791 tells you this is RoCEv2. The short 62-byte frame (BTH + 4-byte AETH + ICRC, no payload) in the other direction is typical of an RDMA acknowledgement.
 
 > [!WARNING]
-> On RDMA NICs, RoCE traffic is generated and consumed by the NIC hardware and normally bypasses the kernel network stack, so a plain `tcpdump` on the host often shows **nothing** of the RDMA data path. Capturing it needs vendor-specific support (for example, offloaded sniffer features in some NVIDIA/Mellanox driver stacks) or a port mirror on the switch. The output above illustrates what you would see in such a capture; check your NIC's documentation for how to enable RDMA traffic capture.
+> On RDMA NICs, RoCE traffic is generated and consumed by the NIC hardware and bypasses the kernel network stack, so `tcpdump` on the netdev shows **nothing** of the RDMA data path (a `udp port 4791` capture on `ens1f0np0` reports 0 packets while `ib_write_bw` runs). Capturing it needs NIC support or a port mirror on the switch. On NVIDIA mlx5 NICs, libpcap includes an **RDMA sniffer**: `tcpdump -D` lists the RDMA device (for example `mlx5_0 (RDMA sniffer)`, or `rocep3s0f0` with distribution rdma-core), and capturing on that name, as above, records the offloaded RoCE packets. Security profiles can block it (Ubuntu's AppArmor profile for tcpdump does; tcpdump then says `No such device exists`), and NVIDIA's stack also ships `ibdump` for the same job. Check your NIC's and distribution's documentation.
 
 To see only VLAN-tagged frames and their priority, `tcpdump -e -n vlan` prints the VLAN ID and the `p` (PCP) value for each tagged frame. If the capture shows no `vlan` keyword on traffic you expected to be tagged, the tag was either never added or stripped by NIC offload before capture, which is itself a common source of confusion.
 
 ## Common pitfalls
 
 - **Confusing MTU with frame size.** Symptom: a switch configured with "MTU 9000" drops 9000-byte IP packets from hosts. Cause: many switch platforms specify MTU as the L2 frame size (including Ethernet header), while Linux specifies the L3 packet size. Fix: know which convention each device uses; switches are commonly set to 9216 to leave headroom. Details in `mtu-jumbo-frames`.
-- **Assuming tcpdump sees RDMA traffic.** Symptom: "there is no traffic on the interface" while a job is clearly transmitting at hundreds of Gb/s. Cause: RDMA kernel bypass. Fix: use NIC port counters (`ethtool -S`, `rdma statistic`) or switch-side mirroring instead.
+- **Assuming tcpdump sees RDMA traffic.** Symptom: "there is no traffic on the interface" while a job is clearly transmitting at hundreds of Gb/s. Cause: RDMA kernel bypass. Fix: use NIC port counters (`ethtool -S`, `rdma statistic`), the NIC's RDMA sniffer where available (on mlx5, `tcpdump -i <rdma device>`), or switch-side mirroring instead.
 - **Expecting PCP to survive routing.** Symptom: priority-based QoS works within a rack but traffic lands in the wrong queue after the first routed hop. Cause: PCP lives in the Ethernet header, which a router rebuilds; untagged routed links carry no PCP at all. Fix: classify on DSCP in the IP header for routed fabrics.
 - **Forgetting the 20 hidden bytes.** Symptom: a benchmark tops out "below line rate" and someone opens a ticket. Cause: preamble, SFD and IPG consume wire time but are invisible in captures. Fix: compute expected goodput including all overheads before declaring a problem.
 - **Treating InfiniBand as "fast Ethernet".** Symptom: trying to use Ethernet tools (MAC tables, VLANs, `tcpdump` on IB ports) to debug an IB fabric. Cause: IB has its own addressing (LIDs, GUIDs) and management (Subnet Manager). Fix: use the IB toolset introduced in `ib-tools-diagnostics`.

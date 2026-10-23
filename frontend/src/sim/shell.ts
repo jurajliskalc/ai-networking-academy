@@ -311,11 +311,11 @@ function hostCmd(ctx: ShellCtx, h: Host, t: string[]): ExecResult {
     case 'ibdev2netdev':
       return { out: h.nics.map((n) => `${n.dev} port 1 ==> ${n.netdev} (${operUp(s, node, n) ? 'Up' : 'Down'})`).join('\n') + '\n' };
     case 'ibv_devices':
-      return { out: '    device                 node GUID\n    ------              ----------------\n' + h.nics.map((n) => `    ${pad(n.dev, 20)}${guid(node, n.rail)}`).join('\n') + '\n' };
+      return { out: '    device          \t   node GUID\n    ------          \t----------------\n' + h.nics.map((n) => `    ${pad(n.dev, 16)}\t${guid(node, n.rail)}`).join('\n') + '\n' };
     case 'ibv_devinfo': {
       const di = a.indexOf('-d');
       const sel = di >= 0 ? h.nics.filter((n) => n.dev === a[di + 1]) : h.nics;
-      if (di >= 0 && !sel.length) return { out: `ibv_devinfo: device ${a[di + 1]} not found\n` };
+      if (di >= 0 && !sel.length) return { out: `IB device '${a[di + 1]}' wasn't found\n` };
       return { out: sel.map((n) => devinfo(s, node, n)).join('\n') };
     }
     case 'show_gids': {
@@ -346,7 +346,8 @@ function hostCmd(ctx: ShellCtx, h: Host, t: string[]): ExecResult {
         const target = a.find((x) => x.includes('/')) ?? '';
         const nic = findNic(h, target.split('/')[0]);
         const sel = nic ? [nic] : h.nics;
-        return { out: sel.map((n) => `link ${n.dev}/1 ` + Object.entries(n.hw).map(([k, v]) => `${k} ${v}`).join(' ')).join('\n') + '\n' };
+        // iproute2 6.x prints one counter per indented line (older releases put them all on one line).
+        return { out: sel.map((n) => `link ${n.dev}/1 \n` + Object.entries(n.hw).map(([k, v]) => `    ${k} ${v} `).join('\n')).join('\n') + '\n' };
       }
       return { out: 'usage: rdma link | rdma statistic show link <dev>/1\n' };
     }
@@ -498,7 +499,7 @@ function ethtool(s: FabricState, h: Host, a: string[]): ExecResult {
     return { out: `\tIdentifier                                : 0x19 (OSFP 8X Pluggable Transceiver)
 \tVendor name                               : SIMOPTICS
 \tVendor PN                                 : SIM-OSFP-2x400G-DR4
-\tModule temperature                        : ${bad ? '71.25' : '48.50'} degrees C
+\tModule temperature                        : ${bad ? '71.25 degrees C / 160.25' : '48.50 degrees C / 119.30'} degrees F
 \tModule voltage                            : 3.2950 V
 \tLaser tx bias current (Channel 1)         : 6.810 mA
 \tRcvr signal avg optical power (Channel 1) : ${bad ? '0.0812 mW / -10.90 dBm' : '0.7943 mW / -1.00 dBm'}
@@ -518,10 +519,11 @@ function mlnxQos(h: Host, a: string[]): ExecResult {
   const nic = findNic(h, ii >= 0 ? a[ii + 1] : undefined);
   if (!nic) return { out: 'usage: mlnx_qos -i <interface> [--trust dscp|pcp] [--pfc 0,0,0,1,0,0,0,0]\n' };
   let changed = false;
+  // Error texts and layout follow mlnx_qos from mlnx-tools 2604 (DOCA 3.4) on a ConnectX-5.
   const ti = a.findIndex((x) => x === '--trust' || x.startsWith('--trust='));
   if (ti >= 0) {
     const v = a[ti].includes('=') ? a[ti].split('=')[1] : a[ti + 1];
-    if (v !== 'dscp' && v !== 'pcp') return { out: `Invalid trust state: ${v}\n` };
+    if (v !== 'dscp' && v !== 'pcp') return { out: 'Invalid trust state command. Refer to the help.\n' };
     nic.trust = v;
     changed = true;
   }
@@ -529,20 +531,22 @@ function mlnxQos(h: Host, a: string[]): ExecResult {
   if (pi >= 0) {
     const v = a[pi].includes('=') ? a[pi].split('=')[1] : a[pi + 1];
     const bits = (v ?? '').split(',').map(Number);
-    if (bits.length !== 8 || bits.some((b) => b !== 0 && b !== 1)) return { out: 'PFC must be 8 comma-separated values of 0 or 1\n' };
+    if (bits.length !== 8) return { out: 'pfc list must have 8 items\n' };
+    if (bits.some((b) => b !== 0 && b !== 1)) return { out: '(simulator: each PFC value must be 0 or 1)\n' };
     nic.pfc = bits.map((b) => b === 1);
     changed = true;
   }
   const dscpRows = Array.from({ length: 8 }, (_, p) => `\tprio:${p} dscp:${Array.from({ length: 8 }, (_, j) => String(p * 8 + 7 - j).padStart(2, '0')).join(',')},`).join('\n');
+  // The receive buffer is one 262016-byte pool until a lossless priority needs its own buffer.
+  const lossless = nic.pfc.some(Boolean);
   const out = `DCBX mode: OS controlled
 Priority trust state: ${nic.trust}
-${nic.trust === 'dscp' ? `dscp2prio mapping:\n${dscpRows}\n` : ''}default priority:
-Receive buffer size (bytes): 130944,${nic.pfc.some(Boolean) ? '262016' : '0'},0,0,0,0,0,0,
+${nic.trust === 'dscp' ? `dscp2prio mapping:\n${dscpRows}\n` : ''}Receive buffer size (bytes): ${lossless ? '130944,130944' : '262016,0'},0,0,0,0,0,0,max_buffer_size=262016
 Cable len: 7
 PFC configuration:
 \tpriority    0   1   2   3   4   5   6   7
-\tenabled     ${nic.pfc.map((b) => (b ? 1 : 0)).join('   ')}
-\tbuffer      ${nic.pfc.map((b) => (b ? 1 : 0)).join('   ')}
+\tenabled     ${nic.pfc.map((b) => (b ? 1 : 0)).join('   ')}${'   '}
+\tbuffer      ${nic.pfc.map((b) => (b ? 1 : 0)).join('   ')}${'   '}
 tc: 0 ratelimit: unlimited, tsa: vendor
 \t priority:  1
 tc: 1 ratelimit: unlimited, tsa: vendor
@@ -600,36 +604,45 @@ function mlxlink(s: FabricState, h: Host, a: string[]): ExecResult {
   // A bad link sits above the ~2.4E-4 pre-FEC limit of RS(544,514), so FEC no longer corrects everything.
   const rawBer = bad ? '3E-04' : '2E-08';
   const effBer = bad ? '1E-09' : '15E-255';
+  // Layout of MFT 4.3x mlxlink (labels padded to 35 columns), verified on a 100G ConnectX-5. For 400G, Speed uses
+  // the extended-speed form (a published ConnectX-6 sample shows "200G") and FEC follows the verified 100G
+  // pattern ("Standard RS-FEC - RS(528,514)"); neither 400G string has been captured on hardware yet.
+  const f = (label: string, value: string | number) => `${pad(label, 35)}: ${value}`;
   return { out: `
 Operational Info
 ----------------
-State                           : ${up ? 'Active' : 'Polling'}
-Physical state                  : ${up ? 'LinkUp' : 'ETH_AN_FSM_ENABLE'}
-Speed                           : ${up ? '400G' : 'N/A'}
-Width                           : 4x
-FEC                             : Standard_RS-FEC - (544,514)
-Loopback Mode                   : No Loopback
-Auto Negotiation                : ON
+${f('State', up ? 'Active' : 'Polling')}
+${f('Physical state', up ? 'LinkUp' : 'ETH_AN_FSM_ENABLE')}
+${f('Speed', up ? '400G' : 'N/A')}
+${f('Width', up ? '4x' : 'N/A')}
+${f('FEC', up ? 'Standard RS-FEC - RS(544,514)' : 'N/A')}
+${f('Loopback Mode', 'No Loopback')}
+${f('Auto Negotiation', 'ON')}
 
 Supported Info
 --------------
-Enabled Link Speed (Ext.)       : 0x00010000 (400G_4X)
+${f('Enabled Link Speed (Ext.)', '0x00010000 (400G_4X)')}
 
 Troubleshooting Info
 --------------------
-Status Opcode                   : 0
-Recommendation                  : No issue was observed
+${f('Status Opcode', 0)}
+${f('Group Opcode', 'N/A')}
+${f('Recommendation', 'No issue was observed')}
+
+Tool Information
+----------------
+${f('Firmware Version', '28.43.1014')}
 
 ${a.includes('-c') ? `Physical Counters and BER Info
 ------------------------------
-Time Since Last Clear [Min]     : 1440.0
-Effective Physical Errors       : ${bad ? 34560112 : 0}
-Effective Physical BER          : ${effBer}
-Raw Physical Errors Per Lane    : ${bad ? '10365419021170,12884100220,10938714550,13120937610' : '173211552,169872310,174930118,172201845'}
-Raw Physical BER                : ${rawBer}
-Link Down Counter               : ${nic.counters.link_down_events_phy}
-Link Error Recovery Counter     : ${bad ? 41 : 0}
-` : '(add -c for BER counters)\n'}` };
+${f('Time Since Last Clear [Min]', '1440.0')}
+${f('Effective Physical Errors', bad ? 34560112 : 0)}
+${f('Raw Physical Errors Per Lane', bad ? '10365419021170,12884100220,10938714550,13120937610' : '173211552,169872310,174930118,172201845')}
+${f('Effective Physical BER', effBer)}
+${f('Raw Physical BER', rawBer)}
+${f('Link Down Counter', nic.counters.link_down_events_phy)}
+${f('Link Error Recovery Counter', bad ? 41 : 0)}
+` : '(simulator: add -c for the BER counters)\n'}` };
 }
 
 function ping(s: FabricState, h: Host, a: string[]): ExecResult {
@@ -653,7 +666,8 @@ function ping(s: FabricState, h: Host, a: string[]): ExecResult {
   const lines = [`PING ${target} (${target}) ${size}(${size + 28}) bytes of data.`];
   const ipLen = size + 28;
   const fail = (msg: string) => ({ out: lines.concat(msg.split('\n')).join('\n') + '\n' });
-  if (df && ipLen > src.mtu) return fail(`ping: local error: message too long, mtu=${src.mtu}\n\n--- ${target} ping statistics ---\n${count} packets transmitted, 0 received, +${count} errors, 100% packet loss`);
+  // iputils: a DF packet larger than the local interface MTU fails in sendmsg(), once per attempt.
+  if (df && ipLen > src.mtu) return fail(`${'ping: sendmsg: Message too long\n'.repeat(count)}\n--- ${target} ping statistics ---\n${count} packets transmitted, 0 received, +${count} errors, 100% packet loss, time ${count * 1000 - 1000}ms\n`);
   const issues = nicIssues(s, h.name, src.rail).filter((i) => i.fatal);
   const path = [s.switches[LEAVES[src.rail]].ports[leafPortFor(h.name)]];
   if (!toLeaf) {
@@ -676,13 +690,14 @@ function ping(s: FabricState, h: Host, a: string[]): ExecResult {
 }
 
 function ibWriteBw(s: FabricState, h: Host, a: string[]): ExecResult {
-  let dev = 'mlx5_0', gid: number | null = null, qps = 1, gbits = false, peer: string | undefined;
+  let dev = 'mlx5_0', gid: number | null = null, qps = 1, gbits = false, peer: string | undefined, dur = 0;
   for (let i = 0; i < a.length; i++) {
     if (a[i] === '-d') dev = a[++i];
     else if (a[i] === '-x') gid = Number(a[++i]);
-    else if (a[i] === '-q') qps = Number(a[++i]) || 1;
+    else if (a[i] === '-q') qps = Math.min(16, Number(a[++i]) || 1);
+    else if (a[i] === '-D') dur = Number(a[++i]) || 0;
     else if (a[i] === '--report_gbits') gbits = true;
-    else if (['-s', '-n', '-D', '-p', '-m', '-i', '-c'].includes(a[i])) i++;
+    else if (['-s', '-n', '-p', '-m', '-i', '-c'].includes(a[i])) i++;
     else if (!a[i].startsWith('-')) peer = a[i];
   }
   const nic = findNic(h, dev);
@@ -703,47 +718,60 @@ function ibWriteBw(s: FabricState, h: Host, a: string[]): ExecResult {
     peerHost = NODES[Number(ipm[2]) - 1];
   }
   if (peerDev) peerRail = Number(peerDev.replace('mlx5_', ''));
-  if (!NODES.includes(peerHost as never)) return { out: `Couldn't connect to ${peer}:18515\n Unable to init the socket connection\n` };
+  const noServer = (to: string) => `Couldn't connect to ${to}:18515\nUnable to open file descriptor for socket connection\n Unable to init the socket connection\n`;
+  if (!NODES.includes(peerHost as never)) return { out: noServer(peer) };
   if (peerHost === h.name && peerRail === nic.rail) return { out: 'Use a different host or device as the server.\n' };
   const g = gid ?? 3;
   const r = evaluatePair(s, h.name, nic.rail, peerHost, peerRail, g);
   const lidHex = (n: number) => `0x${n.toString(16).padStart(2, '0')}`;
-  const addr = ib
-    ? ` local address: LID ${lidHex(ibHcaLid(s, h.name, nic.rail))} QPN 0x0127 PSN 0x3a1f2c RKey 0x1fd8bc VAddr 0x007f3a5c400000
- remote address: LID ${lidHex(ibHcaLid(s, peerHost, peerRail))} QPN 0x0129 PSN 0x7c02d1 RKey 0x1fe0a4 VAddr 0x007f91b8600000
-`
-    : ` local address: LID 0000 QPN 0x0127 PSN 0x3a1f2c RKey 0x1fd8bc VAddr 0x007f3a5c400000
- GID: 00:00:00:00:00:00:00:00:00:00:255:255:${hostIp(h.name, nic.rail).split('.').map((o) => o.padStart(2, '0')).join(':')}
- remote address: LID 0000 QPN 0x0129 PSN 0x7c02d1 RKey 0x1fe0a4 VAddr 0x007f91b8600000
- GID: 00:00:00:00:00:00:00:00:00:00:255:255:${hostIp(peerHost, peerRail).split('.').map((o) => o.padStart(2, '0')).join(':')}
-`;
-  const head = `---------------------------------------------------------------------------------------
+  const gidOf = (host: string, rail: number) => ` GID: 00:00:00:00:00:00:00:00:00:00:255:255:${hostIp(host, rail).split('.').map((o) => o.padStart(2, '0')).join(':')}\n`;
+  // One local and one remote address line per QP, like perftest; QPNs count up per QP.
+  const qpLine = (side: 'local' | 'remote', q: number) => {
+    const [host, rail, base] = side === 'local' ? [h.name, nic.rail, 0x127] : [peerHost, peerRail, 0x1a9];
+    const lid = ib ? lidHex(ibHcaLid(s, host, rail)) : '0000';
+    const qpn = `0x${(base + q).toString(16).padStart(4, '0')}`;
+    const va = `0x007f${side === 'local' ? '3a5c4' : '91b86'}${(q * 16).toString(16).padStart(2, '0')}000`;
+    return ` ${side} address: LID ${lid} QPN ${qpn} PSN 0x${((0x3a1f2c + q * 0x51f3d) & 0xffffff).toString(16)} RKey ${side === 'local' ? '0x1fd8bc' : '0x1fe0a4'} VAddr ${va}\n${ib ? '' : gidOf(host, rail)}`;
+  };
+  const addr = [...Array.from({ length: qps }, (_, q) => qpLine('local', q)), ...Array.from({ length: qps }, (_, q) => qpLine('remote', q))].join('');
+  // Header layout of perftest 6.29 (DOCA 3.4); older perftest builds show "Using DDP" and no "CQE Poll Batch" / "NUMA node".
+  const head = `${dur ? " WARNING: BW peak won't be measured in this run.\n" : ''}---------------------------------------------------------------------------------------
                     RDMA_Write BW Test
  Dual-port       : OFF\t\tDevice         : ${dev}
  Number of qps   : ${qps}\t\tTransport type : IB
  Connection type : RC\t\tUsing SRQ      : OFF
- PCIe relax order: ON
+ PCIe relax order: ON\t\tLock-free      : OFF
+ ibv_wr* API     : ON\t\tUsing Enhanced Reorder      : OFF
  TX depth        : 128
  CQ Moderation   : 1
+ CQE Poll Batch  : Dynamic
  Mtu             : ${r.mtu}[B]
  Link type       : ${ib ? 'IB' : 'Ethernet'}
 ${ib ? '' : ` GID index       : ${g}\n`} Max inline data : 0[B]
  rdma_cm QPs\t : OFF
  Data ex. method : Ethernet
+ NUMA node       : ${nic.rail < 4 ? 0 : 1}
 ---------------------------------------------------------------------------------------
 ${addr}---------------------------------------------------------------------------------------
 `;
+  const unit = gbits ? 'Gb/sec' : 'MiB/sec';
+  const cols = ` #bytes     #iterations    BW peak[${unit}]    BW average[${unit}]   MsgRate[Mpps]\n`;
   if (!r.ok) {
     if (r.error === 'no route to host' || (r.error && r.error !== 'mtu' && r.error !== 'gid'))
-      return { out: `Couldn't connect to ${peerHost}:18515\n Unable to init the socket connection\n(simulator: the RDMA path is down - ${r.error})\n` };
+      return { out: noServer(peerHost) + `(simulator: the RDMA path is down - ${r.error})\n` };
     nic.hw.local_ack_timeout_err += 7;
-    return { out: head + ` #bytes     #iterations    BW peak[${gbits ? 'Gb/sec' : 'MiB/sec'}]    BW average[${gbits ? 'Gb/sec' : 'MiB/sec'}]   MsgRate[Mpps]\n Completion with error at client\n Failed status-transport retry counter exceeded (12): wr_id 0 syndrom 0x81\n scnt=128, ccnt=0\n Failed to complete run_iter_bw function successfully\n`, changed: true };
+    return { out: head + cols + ` Completion with error at client\n Failed status-transport retry counter exceeded (12): wr_id 0 syndrom 0x81\n scnt=128, ccnt=0\n Failed to complete run_iter_bw function successfully\n`, changed: true };
   }
   accrueTraffic(s, 'pair', { nodes: [h.name, peerHost], rails: [...new Set([nic.rail, peerRail])] });
   const bw = r.gbps * (qps > 1 ? 1.002 : 1);
   const v = gbits ? bw : (bw * 1e9) / 8 / 1048576;
+  const mpps = (bw * 1e9) / 8 / 65536 / 1e6;
+  // perftest REPORT_FMT (" %-7lu    %-10lu       %-7.2lf            %-7.2lf\t\t     %-7.6lf", same as the
+  // PerftestExplorer widget), checked against real output; -D runs do not measure the peak.
+  const iters = dur ? Math.round(mpps * 1e6 * dur) : 5000;
+  const peak = dur ? '0.00' : (v * 1.0006).toFixed(2);
   return {
-    out: head + ` #bytes     #iterations    BW peak[${gbits ? 'Gb/sec' : 'MiB/sec'}]    BW average[${gbits ? 'Gb/sec' : 'MiB/sec'}]   MsgRate[Mpps]\n 65536      5000             ${(v * 1.0006).toFixed(2)}             ${v.toFixed(2)}\t\t   ${((bw * 1e9) / 8 / 65536 / 1e6).toFixed(6)}\n---------------------------------------------------------------------------------------\n`,
+    out: head + cols + ` ${pad(65536, 7)}    ${pad(iters, 10)}       ${pad(peak, 7)}            ${pad(v.toFixed(2), 7)}\t\t     ${mpps.toFixed(6)}\n---------------------------------------------------------------------------------------\n`,
     changed: true,
   };
 }

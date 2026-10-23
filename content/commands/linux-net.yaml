@@ -32,18 +32,21 @@ commands:
       4: ens1f0np0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 9000 qdisc mq state UP mode DEFAULT group default qlen 1000
           link/ether b8:3f:d2:aa:bb:01 brd ff:ff:ff:ff:ff:ff
           RX:  bytes packets errors dropped  missed   mcast
-          9182736455  8812734      0       0       0     112
+          9182736455 8812734      0       0       0     112
           RX errors:  length    crc   frame    fifo overrun
                            0      0       0       0       0
           TX:  bytes packets errors dropped carrier collsns
-          8273645512  7712345      0       0       0       0
-    notes: RDMA traffic bypasses the kernel stack, so these counters mostly reflect TCP/IP traffic. Use ethtool -S and the RDMA hw_counters for RoCE traffic.
+          8273645512 7712345      0       0       0       0
+          TX errors: aborted   fifo  window heartbt transns
+                           0      0       0       0       1
+          altname enp59s0f0np0
+    notes: "RDMA traffic bypasses the kernel stack, so these counters mostly reflect TCP/IP traffic. On mlx5, RoCE traffic shows up in ethtool -S (tx_vport_rdma_unicast_packets/bytes and the per-priority rx/tx_prioN_bytes counters) and in the RDMA port counters, not here. altname lines (alternative interface names) follow the counters."
     tags: [iproute2, counters]
 
   - cmd: ip link set dev ens1f0np0 mtu 9000
     platform: linux
     summary: Set the interface MTU (non-persistent; use your distribution's network config to persist it).
-    notes: "For RoCE the netdev MTU caps the RDMA path MTU: RoCE uses the largest IB MTU (256-4096) that fits within the Ethernet MTU, so a 9000-byte netdev MTU allows a 4096 active_mtu. Every switch port in the path needs an MTU at least as large."
+    notes: "For RoCE the netdev MTU caps the RDMA path MTU: RoCE uses the largest IB MTU (256-4096) that fits within the Ethernet MTU, so a 9000-byte netdev MTU allows a 4096 active_mtu. Every switch port in the path needs an MTU at least as large. Asking for more than the NIC supports fails with 'Error: mtu greater than device maximum.' (a ConnectX-5, for example, stops at 9978)."
     tags: [iproute2, mtu, config]
 
   - cmd: ip route get 10.0.1.21
@@ -73,13 +76,16 @@ commands:
     example: |
       # illustrative output (trimmed)
       Settings for ens1f0np0:
+              Supported ports: [ Backplane ]
               Supported link modes:   400000baseCR4/Full ...
+              Advertised FEC modes: RS
               Speed: 400000Mb/s
+              Lanes: 4
               Duplex: Full
               Auto-negotiation: on
               Port: Direct Attach Copper
               Link detected: yes
-    notes: A port that came up at a lower speed than expected (for example 200000Mb/s on a 400G link) is a classic cause of one slow rank in a collective.
+    notes: "A port that came up at a lower speed than expected (for example 200000Mb/s on a 400G link) is a classic cause of one slow rank in a collective. Run as a normal user, ethtool first prints 'netlink error: Operation not permitted' (the Wake-on-LAN query needs root) and then the settings; that line is harmless. Lanes is printed by recent ethtool versions."
     tags: [ethtool, link, speed]
 
   - cmd: ethtool -i ens1f0np0
@@ -91,40 +97,67 @@ commands:
       version: 6.8.0-45-generic
       firmware-version: 28.41.1000 (MT_0000000838)
       bus-info: 0000:3b:00.0
-    notes: Use bus-info with lspci and nvidia-smi topo to map the NIC to its NUMA node and GPU. Keep firmware consistent across the fleet.
+    notes: "Use bus-info with lspci and nvidia-smi topo to map the NIC to its NUMA node and GPU. Keep firmware consistent across the fleet. With the inbox driver, version is the kernel release; with NVIDIA's DOCA/MLNX_OFED driver it is the driver package version (for example 26.04-0.8.5). The part in brackets after the firmware version is the PSID."
     tags: [ethtool, driver, firmware, inventory]
+
+  - cmd: devlink dev info
+    platform: linux
+    summary: Show driver, PSID and running/stored firmware versions of every devlink-capable NIC, keyed by PCI address.
+    example: |
+      # illustrative output (trimmed)
+      pci/0000:3b:00.0:
+        driver mlx5_core
+        versions:
+            fixed:
+              fw.psid MT_0000000838
+            running:
+              fw.version 28.41.1000
+            stored:
+              fw.version 28.41.1000
+    notes: "Part of iproute2 and works with the inbox driver, without NVIDIA's firmware tools and under Secure Boot. A stored version different from the running one means a new image was burned but the card has not been reset yet. Serial numbers are printed too; remove them before sharing output."
+    tags: [devlink, firmware, inventory]
 
   - cmd: ethtool -S ens1f0np0
     platform: linux
     summary: Dump the driver's extended NIC statistics, including per-priority PFC pause, physical-layer errors and discards.
     example: |
-      # illustrative output from an mlx5 NIC, filtered and trimmed (the pattern also matches *_pause_duration / *_pause_transition lines)
+      # illustrative output from an mlx5 NIC with PFC enabled on priority 3 (values made up)
       $ ethtool -S ens1f0np0 | grep -E 'prio3_pause|discards_phy|crc_errors_phy|out_of_buffer|symbol_err'
            rx_out_of_buffer: 0
-           rx_discards_phy: 1834
            rx_crc_errors_phy: 0
            rx_symbol_err_phy: 0
+           rx_discards_phy: 1834
+           tx_discards_phy: 0
+           rx_pcs_symbol_err_phy: 0
            rx_prio3_pause: 551203
+           rx_prio3_pause_duration: 48210
            tx_prio3_pause: 12
-    notes: "Counter names are driver-specific; the examples are mlx5 names (see the kernel mlx5 counters documentation). Growing rx_prioN_pause means the switch is pausing you; growing tx_prioN_pause means your NIC is pausing the switch (receiver cannot keep up). rx_discards_phy indicates the NIC dropped packets for lack of buffer. Always read counters as deltas over time."
+           tx_prio3_pause_duration: 9
+           rx_prio3_pause_transition: 275601
+    notes: "Counter names are driver-specific; the examples are mlx5 names (see the kernel mlx5 counters documentation). The full list is long (thousands of lines on mlx5 because of per-channel counters), so always grep. Growing rx_prioN_pause means the switch (or peer NIC) is pausing you; growing tx_prioN_pause means your NIC is pausing the link partner (receiver cannot keep up). rx_discards_phy indicates the NIC dropped packets for lack of buffer. On mlx5 the prioN_pause* counters appear only for priorities with PFC enabled, and the rx/tx_global_pause* counters only while global 802.3x pause is on. RoCE traffic is counted in tx/rx_vport_rdma_unicast_packets/bytes and in rx/tx_prioN_bytes, not in the netdev packet counters. Always read counters as deltas over time."
     tags: [ethtool, counters, pfc, troubleshooting]
 
   - cmd: ethtool -m ens1f0np0
     platform: linux
     summary: Read the transceiver EEPROM/DOM - vendor, part number, cable type and length, and on optics the per-lane temperature, voltage, TX/RX power.
     example: |
-      # illustrative output (trimmed)
-      Identifier                                : 0x18 (QSFP-DD Double Density 8X Pluggable Transceiver)
-      Vendor name                               : EXAMPLE
-      Module temperature                        : 41.20 degrees C
-      Rx loss of signal                         : None
-      Rcvr signal avg optical power (Channel 1) : 0.9120 mW / -0.40 dBm
-    notes: Which fields appear depends on the module type and the ethtool/kernel version. A lane with RX power far below its siblings points to a dirty or damaged fiber. On NVIDIA NICs mlxlink gives a richer view.
+      # illustrative output (trimmed; run with sudo)
+              Identifier                                : 0x18 (QSFP-DD Double Density 8X Pluggable Transceiver)
+              Vendor name                               : EXAMPLE
+              Module temperature                        : 41.20 degrees C / 106.16 degrees F
+              Rx loss of signal                         : None
+              Rcvr signal avg optical power (Channel 1) : 0.9120 mW / -0.40 dBm
+    notes: "Needs root: as a normal user it prints only 'netlink error: Operation not permitted'. Which fields appear depends on the module type and the ethtool/kernel version; every line is indented by one tab. A passive DAC has no optical power or bias lines at all, and typically reports 'Module temperature : 0.00 degrees C / 32.00 degrees F' plus 'Transmitter technology : 0xa0 (Copper cable, unequalized)' and 'Length (Copper or Active cable) : 1m'. A lane with RX power far below its siblings points to a dirty or damaged fiber. On NVIDIA NICs mlxlink gives a richer view."
     tags: [ethtool, optics, dom, physical]
 
   - cmd: ethtool --show-fec ens1f0np0
     platform: linux
     summary: Show the configured and active Forward Error Correction mode (for example RS) on the port.
+    example: |
+      # illustrative output
+      FEC parameters for ens1f0np0:
+      Supported/Configured FEC encodings: Auto
+      Active FEC encoding: RS
     notes: FEC must agree with the link partner; a mismatch typically prevents link-up. High-speed PAM4 links (for example 200G/400G) depend on RS-FEC.
     tags: [ethtool, fec, physical]
 
@@ -138,13 +171,57 @@ commands:
     platform: linux
     summary: Show global (802.3x) link-level pause settings; -a is the short form.
     example: |
-      # illustrative output
+      # illustrative output (after PFC was enabled on one priority)
       Pause parameters for ens1f0np0:
       Autonegotiate:  off
       RX:             off
       TX:             off
-    notes: For RoCE with PFC you normally want global pause OFF and PFC enabled on the RoCE priority only. PFC is configured separately (mlnx_qos on NVIDIA NICs, or DCB tooling such as dcb/lldpad). Global pause and PFC are mutually exclusive on most NICs. Set with "ethtool -A <dev> rx off tx off".
+    notes: "For RoCE with PFC you normally want global pause OFF and PFC enabled on the RoCE priority only. PFC is configured separately (dcb pfc from iproute2 on any stack, or mlnx_qos with NVIDIA's DOCA/MLNX_OFED tools). Global pause and PFC are mutually exclusive on most NICs. On mlx5 global pause is ON by default (RX on, TX on); enabling PFC on any priority turns it off automatically, and 'ethtool -A <dev> rx on tx on' while PFC is enabled silently clears PFC on every priority (exit code 0, no warning). Set with 'ethtool -A <dev> rx off tx off'."
     tags: [ethtool, pause, pfc, lossless]
+
+  - cmd: dcb pfc show dev ens1f0np0
+    platform: linux
+    summary: iproute2's DCB tool - show which priorities have PFC enabled on a NIC port; works with the inbox driver and with NVIDIA's stack.
+    example: |
+      # illustrative output (mlx5, PFC on priority 3)
+      pfc-cap 8 macsec-bypass off delay 7
+      prio-pfc 0:off 1:off 2:off 3:on 4:off 5:off 6:off 7:off
+    notes: "The generic equivalent of mlnx_qos's PFC rows. Add 'prio-pfc' at the end to print only that line. Requires a NIC driver with DCB netlink support (mlx5 has it) and an iproute2 recent enough to ship dcb."
+    tags: [dcb, iproute2, pfc, lossless, verify]
+
+  - cmd: sudo dcb pfc set dev ens1f0np0 prio-pfc all:off 3:on
+    platform: linux
+    summary: Enable PFC on priority 3 only (all others off).
+    notes: "Prints nothing on success. On mlx5 enabling PFC turns global 802.3x pause off automatically (check with ethtool -a), and a later 'ethtool -A <dev> rx on tx on' silently turns PFC off again. Not persistent across reboot. Undo with 'prio-pfc all:off' and, if you want the default back, 'ethtool -A <dev> rx on tx on'."
+    tags: [dcb, iproute2, pfc, lossless, config]
+
+  - cmd: sudo dcb app replace dev ens1f0np0 dscp-prio 26:3
+    platform: linux
+    summary: Map DSCP 26 to priority 3 in the port's DCB application table.
+    example: |
+      # illustrative output
+      $ dcb app show dev ens1f0np0
+      dscp-prio AF31:3
+      $ dcb -N app show dev ens1f0np0
+      dscp-prio 26:3
+    notes: "dcb app show prints well-known DSCP values by name (26 is AF31); -N prints numbers. An empty table prints nothing. On mlx5, adding a DSCP entry also switches the port to DSCP trust (traffic with tclass 106 is then counted in priority 3); 'dcb apptrust' is not supported by mlx5 and fails with 'Attribute not found: Success'. Remove the entry with 'dcb app del dev <dev> dscp-prio 26:3'."
+    tags: [dcb, iproute2, dscp, qos, config]
+
+  - cmd: dcb ets show dev ens1f0np0
+    platform: linux
+    summary: Show ETS settings - traffic-class bandwidth shares, transmission selection algorithm per TC and the priority-to-TC map.
+    example: |
+      # illustrative output (mlx5 defaults)
+      willing off ets-cap 8 cbs off
+      tc-bw 0:0 1:0 2:0 3:0 4:0 5:0 6:0 7:0
+      pg-bw 0:0 1:0 2:0 3:0 4:0 5:0 6:0 7:0
+      tc-tsa 0:vendor 1:vendor 2:vendor 3:vendor 4:vendor 5:vendor 6:vendor 7:vendor
+      prio-tc 0:1 1:0 2:2 3:3 4:4 5:5 6:6 7:7
+      reco-tc-bw 0:0 1:0 2:0 3:0 4:0 5:0 6:0 7:0
+      reco-tc-tsa 0:strict 1:strict 2:strict 3:strict 4:strict 5:strict 6:strict 7:strict
+      reco-prio-tc 0:0 1:0 2:0 3:0 4:0 5:0 6:0 7:0
+    notes: "Note the mlx5 default mapping: priority 0 goes to TC 1 and priority 1 to TC 0; the others map one to one. 'dcb buffer show dev <dev>' shows the receive-buffer split, which the driver changes when PFC is enabled (for example prio-buffer 3:1 and two 130944-byte buffers out of 262016 on a ConnectX-5)."
+    tags: [dcb, iproute2, ets, qos]
 
   - cmd: ethtool -g ens1f0np0
     platform: linux
@@ -167,7 +244,7 @@ commands:
               NUMA node: 0
               LnkCap: Port #0, Speed 32GT/s, Width x16, ASPM not supported
               LnkSta: Speed 32GT/s, Width x16
-    notes: "Compare LnkSta with LnkCap: a Gen5 x16 NIC that trained at x8 or 16GT/s cannot reach line rate (look for '(downgraded)' on newer lspci). Run as root to see all capability fields. 32GT/s is PCIe Gen5, 16GT/s is Gen4."
+    notes: "Compare LnkSta with LnkCap: a Gen5 x16 NIC that trained at x8 or 16GT/s cannot reach line rate (look for '(downgraded)' on newer lspci). Run as root to see all capability fields. 32GT/s is PCIe Gen5, 16GT/s is Gen4. Inside a VM with PCI passthrough these fields describe the hypervisor's virtual root port (for example 'Speed 5GT/s, Width x32' under ESXi), so the check is only meaningful on bare metal."
     tags: [pcie, lspci, topology, troubleshooting]
 
   - cmd: lspci -tv
@@ -179,13 +256,28 @@ commands:
   - cmd: tcpdump -i ens1f0np0 -nn -c 20 udp port 4791
     platform: linux
     summary: Capture RoCEv2 packets (UDP destination port 4791) on an interface without name resolution.
-    notes: "RDMA traffic is offloaded and normally bypasses the kernel, so a plain tcpdump on the netdev usually sees only RDMA CM/control traffic or nothing. Capturing offloaded RoCE requires NIC/driver sniffer support (for example a recent libpcap with mlx5 RDMA capture via the RDMA device name, or a switch port mirror). Check your driver documentation."
+    notes: "RDMA traffic is offloaded and bypasses the kernel, so tcpdump on the netdev does not see RoCE data packets (on mlx5 this capture reports 0 packets even while ib_write_bw runs); it sees only TCP/IP traffic such as the perftest or RDMA CM setup. To see offloaded RoCE, capture on the RDMA device with libpcap's RDMA sniffer (next entry), use NVIDIA's ibdump (DOCA/MLNX_OFED), or mirror the switch port."
     tags: [tcpdump, roce, capture]
+
+  - cmd: sudo tcpdump -i mlx5_0 -w roce.pcap
+    platform: linux
+    summary: Capture offloaded RoCE traffic on an mlx5 NIC through libpcap's RDMA sniffer, by naming the RDMA device instead of the netdev.
+    example: |
+      # the sniffer is listed by tcpdump -D (illustrative)
+      $ tcpdump -D | grep -i rdma
+      17.mlx5_0 (RDMA sniffer)
+      # read it back with a filter (illustrative)
+      $ tcpdump -nn -r roce.pcap 'udp port 4791 and src 10.0.0.11' | head -2
+      14:02:11.120931 IP 10.0.0.11.55339 > 10.0.0.12.4791: UDP, length 3032
+      14:02:11.120934 IP 10.0.0.11.55339 > 10.0.0.12.4791: UDP, length 3032
+      # RDMA WRITE packets; the peer's ACKs (UDP, length 20) come back to port 4791 too
+    notes: "Use the RDMA device name from 'rdma link' (mlx5_0 with NVIDIA's stack, rocep<bus>s<slot>f<fn> with distro rdma-core). The sniffer records everything on the port (TCP, LLDP, RoCEv2 data and ACKs). Filtering on the sniffer itself was not verified, so capture everything and filter when reading with -r. On Ubuntu the AppArmor profile for tcpdump can block the sniffer (dmesg shows apparmor=\"DENIED\" for /etc/libibverbs.d/ and tcpdump reports 'No such device exists'); put the profile in complain mode or use an unconfined binary. tcpdump drops privileges, so write to a new file in a directory it can write to. Check that your libpcap build includes RDMA support."
+    tags: [tcpdump, roce, capture, mlx5]
 
   - cmd: tcpdump -i ens1f0np0 -nn -e ether proto 0x8808
     platform: linux
     summary: Capture MAC control frames (EtherType 0x8808), which include 802.3x PAUSE and PFC frames, when the NIC passes them to the host.
-    notes: Many NICs consume pause frames in hardware so they never reach tcpdump; prefer NIC pause counters (ethtool -S) or switch counters. A port mirror on the switch is the reliable way to see PFC on the wire.
+    notes: Many NICs consume pause frames in hardware so they never reach tcpdump (mlx5 does, and this capture stays at 0 packets); prefer NIC pause counters (ethtool -S) or switch counters. A port mirror on the switch is the reliable way to see PFC on the wire.
     tags: [tcpdump, pfc, capture]
 
   - cmd: ss -tinp
@@ -203,5 +295,15 @@ commands:
   - cmd: ping -M do -s 8972 -c 3 10.0.0.10
     platform: linux
     summary: Test the path MTU by sending non-fragmentable ICMP packets; 8972 bytes of payload + 28 bytes of IP/ICMP headers = 9000-byte IP packets.
-    notes: If this fails while smaller sizes work, some hop in the path has a smaller MTU. Tests the IP path only; it does not prove the RDMA active_mtu.
+    example: |
+      # illustrative output
+      PING 10.0.0.10 (10.0.0.10) 8972(9000) bytes of data.
+      8980 bytes from 10.0.0.10: icmp_seq=1 ttl=64 time=0.275 ms
+      8980 bytes from 10.0.0.10: icmp_seq=2 ttl=64 time=0.229 ms
+      8980 bytes from 10.0.0.10: icmp_seq=3 ttl=64 time=0.270 ms
+
+      --- 10.0.0.10 ping statistics ---
+      3 packets transmitted, 3 received, 0% packet loss, time 2034ms
+      rtt min/avg/max/mdev = 0.229/0.258/0.275/0.020 ms
+    notes: "Replies report 8980 bytes (the ICMP payload plus the 8-byte ICMP header). If the local interface MTU is too small, ping fails immediately with 'ping: sendmsg: Message too long' and the statistics show '+1 errors'; if a hop further along has a smaller MTU, the packets are silently lost (no reply lines, 100% packet loss) or, once the kernel has learned the path MTU, ping reports 'local error: message too long, mtu=N'. Add -I <source address> to pick the data interface on multi-NIC hosts. Tests the IP path only; it does not prove the RDMA active_mtu."
     tags: [mtu, verify]

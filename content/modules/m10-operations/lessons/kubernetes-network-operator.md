@@ -337,7 +337,8 @@ shows the IB/RoCE network plugin on the expected devices, not the socket transpo
   no errors. Cause: the pod has only `eth0` (no network annotation, or no RDMA resource requested),
   so NCCL uses TCP. Fix: request the RDMA resource and the secondary networks; check `NCCL_DEBUG=INFO`.
 - **Memory registration fails in the pod.** Symptom: `ibv_reg_mr` or NCCL fails with "Cannot allocate
-  memory". Cause: no `IPC_LOCK` capability or a low memlock limit in the container runtime. Fix: add
+  memory", or perftest (especially `-a`, which registers large buffers) prints `Couldn't allocate MR`
+  and `Couldn't create IB resources`. Cause: no `IPC_LOCK` capability or a low memlock limit in the container runtime. Fix: add
   the capability and raise the limit per your runtime's documentation.
 - **NUMA-aligned but PCIe-misaligned.** Symptom: some pods reach full bandwidth, others on the same
   node type reach much less. Cause: Topology Manager aligned NUMA nodes, but the GPU and NIC are on

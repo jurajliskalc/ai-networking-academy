@@ -53,13 +53,13 @@ Every test has a **server** (started without a peer address) and a **client** (g
 
 | Flag | Meaning |
 |---|---|
-| `-d <dev>` | RDMA device, for example `mlx5_0` |
+| `-d <dev>` | RDMA device, for example `mlx5_0` (NVIDIA stack) or `rocep3s0f0` (distro rdma-core); take the name from `ibv_devices` or `rdma link` |
 | `-i <port>` | Port number on the device (default 1) |
 | `-x <index>` | GID index (needed on RoCE unless `-R` is used; picks RoCE version, IP and VLAN) |
 | `-s <bytes>` | Message size |
 | `-a` | Sweep all message sizes from 2 bytes to 8 MiB (powers of two) |
 | `-n <iters>` | Number of iterations per size |
-| `-D <seconds>` | Run for a duration instead of an iteration count |
+| `-D <seconds>` | Run for a duration instead of an iteration count (the default is 5000 iterations); BW peak is then not measured and prints `0.00` |
 | `-q <num>` | Number of QPs (spreads traffic over more connections, and on RoCE over more ECMP hashes) |
 | `-b` | Bidirectional bandwidth test |
 | `-c <type>` | Connection (transport) type such as `RC`, `UC`, `UD`, where the operation supports it |
@@ -68,7 +68,7 @@ Every test has a **server** (started without a peer address) and a **client** (g
 | `-F` | Suppress the CPU-frequency-scaling check (current perftest only prints a "Conflicting CPU frequency values" warning without it; some older releases refused to produce a report) |
 | `-R` | Connect using rdma_cm |
 | `-p <port>` | TCP port for the out-of-band exchange (run several tests in parallel) |
-| `--use_cuda=<gpu>` | Use GPU memory for buffers, in builds compiled with CUDA support (check `--help` on your build; newer versions add further GPU options) |
+| `--use_cuda=<gpu>` | Use GPU memory for buffers, in builds compiled with CUDA support (check `ib_write_bw --help \| grep -i cuda` on your build: distribution packages often have none; NVIDIA's DOCA build adds options such as `--cuda_mem_type`, `--use_cuda_bus_id` and `--use_cuda_dmabuf`) |
 
 Always check `ib_write_bw --help` on your installed version: options evolve between perftest releases.
 
@@ -84,32 +84,38 @@ In `ib_write_bw` the client keeps up to `-t` (TX depth, default on the order of 
 ### Reading bandwidth output
 
 ```text
-$ ib_write_bw -d mlx5_0 -s 65536 -D 10 --report_gbits 10.0.0.12
+$ ib_write_bw -d mlx5_0 -x 3 -s 65536 -F --report_gbits 10.0.0.12
 ---------------------------------------------------------------------------------------
                     RDMA_Write BW Test
- Dual-port       : OFF          Device         : mlx5_0
- Number of qps   : 1            Transport type : IB
- Connection type : RC           Using SRQ      : OFF
+ Dual-port       : OFF		Device         : mlx5_0
+ Number of qps   : 1		Transport type : IB
+ Connection type : RC		Using SRQ      : OFF
+ PCIe relax order: ON		Lock-free      : OFF
+ ibv_wr* API     : ON		Using DDP      : OFF
  TX depth        : 128
+ CQ Moderation   : 1
  Mtu             : 4096[B]
- Link type       : IB
+ Link type       : Ethernet
+ GID index       : 3
  Max inline data : 0[B]
- rdma_cm QPs     : OFF
+ rdma_cm QPs	 : OFF
  Data ex. method : Ethernet
 ---------------------------------------------------------------------------------------
- local address: LID 0x0c QPN 0x0123 PSN 0x4a5b6c RKey 0x1fff00 VAddr 0x007f5a2c000000
- remote address: LID 0x0d QPN 0x0456 PSN 0x1c2d3e RKey 0x2fff00 VAddr 0x007f9b10000000
+ local address: LID 0000 QPN 0x0123 PSN 0x4a5b6c RKey 0x1fff00 VAddr 0x007f5a2c000000
+ GID: 00:00:00:00:00:00:00:00:00:00:255:255:10:00:00:11
+ remote address: LID 0000 QPN 0x0456 PSN 0x1c2d3e RKey 0x2fff00 VAddr 0x007f9b10000000
+ GID: 00:00:00:00:00:00:00:00:00:00:255:255:10:00:00:12
 ---------------------------------------------------------------------------------------
  #bytes     #iterations    BW peak[Gb/sec]    BW average[Gb/sec]   MsgRate[Mpps]
- 65536      7473000          392.10             391.85              0.747
+ 65536      5000             392.10             391.85  		     0.747395
 ---------------------------------------------------------------------------------------
 ```
 
-*(Illustrative output for a 400 Gb/s NDR link; exact layout varies by perftest version.)*
+*(Illustrative output for a 400 Gb/s RoCE link, client side; the header lines differ a little between perftest versions. NVIDIA's DOCA build, for example, prints `Using Enhanced Reorder` instead of `Using DDP` and adds `CQE Poll Batch` and `NUMA node` lines. The server prints a `Waiting for client to connect` banner first and has no `TX depth` line.)*
 
-- **Header block**: verify device, transport, connection type, MTU and link type match what you intended. `Data ex. method : Ethernet` means the out-of-band exchange used TCP; with `-R` it says rdma_cm.
-- **Address lines**: on InfiniBand you see LIDs; on RoCE you see the GID being used — the fastest way to confirm you picked the right GID index.
-- **BW average** is the number to report. **BW peak** is the best interval and is less meaningful.
+- **Header block**: verify device, transport, connection type, MTU, link type and GID index match what you intended. `Transport type : IB` is normal on RoCE too (the verbs transport). `Data ex. method : Ethernet` means the out-of-band exchange used TCP; with `-R` it says rdma_cm.
+- **Address lines**: on RoCE each address line is followed by the GID being used, printed as 16 decimal bytes (`...:255:255:10:00:00:11` is `::ffff:10.0.0.11`) — the fastest way to confirm you picked the right GID index. LIDs are 0 on RoCE; on InfiniBand the address lines carry the ports' LIDs. With `-q N` there is one local/remote pair per QP.
+- **BW average** is the number to report. **BW peak** is the best interval and is less meaningful; with `-D` perftest prints ` WARNING: BW peak won't be measured in this run.` and BW peak reads `0.00`.
 - **MsgRate** is messages per second in millions: here 391.85 Gb/s ÷ (65,536 B × 8) ≈ 0.75 million messages per second. At small message sizes the message rate, not the bandwidth, is the limit.
 
 ### What "line rate" really is
@@ -143,12 +149,13 @@ perftest-explorer
 ### Reading latency output
 
 ```text
-$ ib_write_lat -d mlx5_0 -s 8 -n 100000 -F 10.0.0.12
- #bytes #iterations  t_min[usec]  t_max[usec]  t_typical[usec]  t_avg[usec]  t_stdev[usec]  99% percentile[usec]  99.9% percentile[usec]
- 8      100000       0.98         6.10         1.02             1.03         0.05           1.10                  2.40
+$ ib_write_lat -d mlx5_0 -x 3 -s 8 -n 100000 -F 10.0.0.12
+...
+ #bytes #iterations    t_min[usec]    t_max[usec]  t_typical[usec]    t_avg[usec]    t_stdev[usec]   99% percentile[usec]   99.9% percentile[usec]
+ 8       100000          0.98           6.10         1.02     	       1.03        	0.05   		1.10    		2.40
 ```
 
-*(Illustrative; small-message latency on modern adapters through one switch is commonly around 1-2 µs, but depends on adapter, switch hops, CPU and settings.)* For write and send latency tests perftest reports half of the measured round trip; `ib_read_lat` reports the full time for the read to return, so read latency looks roughly double. Look at **t_typical** and the **99 %/99.9 % percentiles**: a large gap between typical and 99.9 % points at jitter from CPU power states, interrupts or a congested path.
+*(Illustrative, header block trimmed; small-message latency on modern adapters through one switch is commonly around 1-2 µs, but depends on adapter, switch hops, CPU and settings.)* For write and send latency tests perftest reports half of the measured round trip; `ib_read_lat` reports the full time for the read to return, so read latency looks roughly double. Look at **t_typical** and the **99 %/99.9 % percentiles**: a large gap between typical and 99.9 % points at jitter from CPU power states, interrupts or a congested path.
 
 ### Where the bottleneck can be
 
@@ -179,7 +186,7 @@ server$ ib_write_bw -d mlx5_0 -x 3 -q 4 -D 10 --report_gbits
 client$ ib_write_bw -d mlx5_0 -x 3 -q 4 -D 10 --report_gbits 10.0.0.12
 ```
 
-`-x 3` selects the RoCEv2 GID in our example table (confirm yours with `show_gids` or sysfs, see `rdma-on-linux`). `-q 4` uses four QPs; on RoCE each QP typically gets a different UDP source port, giving the fabric more ECMP entropy. Alternatively, `-R` lets rdma_cm choose the GID from the IP address.
+`-x 3` selects the RoCEv2 GID in our example table (confirm yours with `show_gids` on NVIDIA's stack or sysfs on any install, see `rdma-on-linux`). `-q 4` uses four QPs; on RoCE each QP typically gets a different UDP source port, giving the fabric more ECMP entropy. Alternatively, `-R` lets rdma_cm choose the GID from the IP address.
 
 ### Pin to the right NUMA node
 
@@ -198,6 +205,8 @@ If perftest was built with CUDA support, `--use_cuda=<gpu index>` places buffers
 ```text
 client$ ib_write_bw -d mlx5_0 --use_cuda=0 -D 10 --report_gbits 10.0.0.12
 ```
+
+Distribution perftest packages are often built without CUDA: `ib_write_bw --help | grep -i cuda` prints nothing, and `--use_cuda=0` fails with ` Parser function exited with Error` / ` Unsupported memory type`. Use NVIDIA's build (DOCA-Host) or build perftest yourself against CUDA.
 
 Pick a GPU that shares a PCIe switch with the NIC (`nvidia-smi topo -m`, see `reading-server-topology`). A large gap between host-memory and GPU-memory results points at topology or at GPUDirect RDMA not being active.
 
@@ -223,11 +232,13 @@ Record results per NIC and per pair in a table and compare against peers. Outlie
 ## Common pitfalls
 
 - **Misreading units.** Symptom: "only 46,000 — something is badly wrong". Cause: default output is in 2^20-byte units (labelled `MB/sec` in older perftest releases and `MiB/sec` in current ones), so 46,000 is about 386 Gb/s. Fix: use `--report_gbits`.
+- **Wrong device name.** Symptom: `IB device mlx5_0 not found` / ` Unable to find the Infiniband/RoCE device`. Cause: a command copied from a guide for the other driver stack (distro rdma-core names devices like `rocep3s0f0`). Fix: take the name from `ibv_devices` or `rdma link`.
+- **Locked-memory limit too low.** Symptom: single-size tests pass, but `-a` (up to 8 MiB buffers) fails with `Couldn't allocate MR` and ` Couldn't create IB resources`. Cause: the default memlock limit (8192 KiB on Ubuntu, for example). Fix: set memlock to unlimited for the test user and log in again.
 - **Wrong or missing GID index on RoCE.** Symptom: the client hangs or the test fails with a completion error. Cause: default GID index is not RoCEv2 with the fabric IP. Fix: pass `-x` with the right index or use `-R`.
 - **CPU frequency warnings.** Symptom: perftest prints "Conflicting CPU frequency values detected" (older releases could also abort without a report). Cause: frequency scaling makes the cycle-counter conversion unreliable. Fix: use `-F` to suppress the check (and consider setting a performance governor for repeatable latency).
 - **Testing the wrong path.** Symptom: excellent results that do not match production. Cause: both NICs on the same leaf switch, or the test used the management network's IP for the out-of-band exchange and an unexpected device. Fix: name the device with `-d`, check address lines, and test across the spine as well.
 - **Small messages or short runs.** Symptom: low and noisy bandwidth. Cause: message-rate limited sizes or too few iterations. Fix: use 64 KiB or larger and `-D 10` or more for bandwidth checks.
-- **TCP exchange blocked.** Symptom: the client reports that it could not connect to the server. Cause: host firewall or wrong IP for the exchange port. Fix: open the perftest TCP port or choose another with `-p`.
+- **TCP exchange blocked.** Symptom: the client prints `Couldn't connect to 10.0.0.12:18515` and ` Unable to init the socket connection` (the same happens when no server is running). Cause: host firewall or wrong IP for the exchange port. Fix: open the perftest TCP port or choose another with `-p`.
 - **Judging a fabric only by pair tests.** Symptom: perftest perfect, NCCL slow. Cause: collectives create many simultaneous flows, incast and ECMP collisions. Fix: graduate to multi-pair tests and nccl-tests.
 
 ## Key takeaways

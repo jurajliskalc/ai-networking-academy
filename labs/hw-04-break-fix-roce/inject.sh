@@ -38,6 +38,9 @@ describe() {
 
 qos_tool_local() { if command -v mlnx_qos >/dev/null 2>&1; then echo mlnx_qos; elif command -v dcb >/dev/null 2>&1; then echo dcb; fi; }
 
+# DSCP app entries of the data netdev as "dscp:prio" words (-N prints numbers instead of names like AF31).
+dcb_dscp_entries() { dcb -N app show dev "$NETDEV" dscp-prio 2>/dev/null | sed -n 's/^dscp-prio //p'; }
+
 # The data netdev must not be the path of this host's default route or of an SSH session.
 netdev_is_ssh_path() {
   local local_ips ip
@@ -59,8 +62,12 @@ applicable() {
         *) echo "needs mlnx_qos or dcb"; return 1 ;;
       esac || { echo "PFC is not enabled on any priority (apply hw-03 first)"; return 1; } ;;
     trust-pcp)
-      command -v mlnx_qos >/dev/null 2>&1 || { echo "needs mlnx_qos"; return 1; }
-      mlnx_qos -i "$NETDEV" 2>/dev/null | grep -qiE 'trust state: *dscp' || { echo "trust is not DSCP (apply hw-03 first)"; return 1; } ;;
+      case "$(qos_tool_local)" in
+        mlnx_qos) mlnx_qos -i "$NETDEV" 2>/dev/null | grep -qiE 'trust state: *dscp' ;;
+        # Inbox mlx5 trusts DSCP while the port has DSCP app entries (dcb apptrust is not supported there).
+        dcb) [[ -n "$(dcb_dscp_entries)" ]] ;;
+        *) echo "needs mlnx_qos or dcb"; return 1 ;;
+      esac || { echo "trust is not DSCP (apply hw-03 first)"; return 1; } ;;
     ip-missing|port-down)
       if [[ $1 == ip-missing ]] && ! ip -o -4 addr show dev "$NETDEV" 2>/dev/null | grep -q " $IP/"; then echo "$IP is not on $NETDEV"; return 1; fi
       if netdev_is_ssh_path; then echo "$NETDEV carries the default route or an SSH session"; return 1; fi ;;
@@ -86,7 +93,7 @@ save_state() {
   cat "/sys/class/net/$NETDEV/mtu" >"$DIR/mtu"
   case "$(qos_tool_local)" in
     mlnx_qos) mlnx_qos -i "$NETDEV" >"$DIR/qos.txt" 2>&1; echo mlnx_qos >"$DIR/qos_tool" ;;
-    dcb) dcb pfc show dev "$NETDEV" prio-pfc >"$DIR/qos.txt" 2>&1; echo dcb >"$DIR/qos_tool" ;;
+    dcb) dcb pfc show dev "$NETDEV" prio-pfc >"$DIR/qos.txt" 2>&1; dcb_dscp_entries >"$DIR/dscp_app"; echo dcb >"$DIR/qos_tool" ;;
     *) : >"$DIR/qos.txt"; : >"$DIR/qos_tool" ;;
   esac
 }
@@ -97,7 +104,10 @@ apply_fault() {
     pfc-off)
       if [[ "$(qos_tool_local)" == mlnx_qos ]]; then mlnx_qos -i "$NETDEV" --pfc 0,0,0,0,0,0,0,0 >/dev/null
       else dcb pfc set dev "$NETDEV" prio-pfc all:off; fi ;;
-    trust-pcp) mlnx_qos -i "$NETDEV" --trust pcp >/dev/null ;;
+    trust-pcp)
+      # shellcheck disable=SC2046
+      if [[ "$(qos_tool_local)" == mlnx_qos ]]; then mlnx_qos -i "$NETDEV" --trust pcp >/dev/null
+      else dcb app del dev "$NETDEV" dscp-prio $(cat "$DIR/dscp_app"); fi ;;
     ip-missing) ip addr del "$(cat "$DIR/addr")" dev "$NETDEV" ;;
     port-down) ip link set dev "$NETDEV" down ;;
   esac
@@ -111,8 +121,13 @@ restore_fault() {
     port-down) ip link set dev "$NETDEV" up ;;
     ip-missing) [[ -n "$addr" ]] && ip addr replace "$addr" dev "$NETDEV" ;;
     trust-pcp)
-      trust=$(awk -F: 'tolower($0) ~ /trust state/ {gsub(/[ \t]/, "", $2); print tolower($2); exit}' "$DIR/qos.txt")
-      mlnx_qos -i "$NETDEV" --trust "${trust:-dscp}" >/dev/null ;;
+      if [[ "$(cat "$DIR/qos_tool")" == mlnx_qos ]]; then
+        trust=$(awk -F: 'tolower($0) ~ /trust state/ {gsub(/[ \t]/, "", $2); print tolower($2); exit}' "$DIR/qos.txt")
+        mlnx_qos -i "$NETDEV" --trust "${trust:-dscp}" >/dev/null
+      else
+        # shellcheck disable=SC2046
+        dcb app add dev "$NETDEV" dscp-prio $(cat "$DIR/dscp_app")
+      fi ;;
     pfc-off)
       if [[ "$(cat "$DIR/qos_tool")" == mlnx_qos ]]; then
         pfc=$(awk '/PFC configuration/ {f=1} f && $1 == "enabled" {for (i = 2; i <= NF; i++) printf "%s%s", (i > 2 ? "," : ""), $i; exit}' "$DIR/qos.txt")

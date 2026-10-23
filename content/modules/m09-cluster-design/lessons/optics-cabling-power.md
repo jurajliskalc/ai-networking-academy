@@ -201,19 +201,22 @@ well. Treat the claimed ratios as vendor figures until independent data is avail
 
 ### Reading module health
 
-On Linux hosts, `ethtool -m <interface>` dumps the module EEPROM and digital diagnostics (DOM):
-type, vendor, temperature, supply voltage, and per-lane transmit and receive optical power. On
+On Linux hosts, `sudo ethtool -m <interface>` (it needs root; without it ethtool prints
+`netlink error: Operation not permitted`) dumps the module EEPROM and digital diagnostics (DOM):
+type, vendor, temperature, supply voltage, and per-lane transmit and receive optical power. A
+passive copper DAC has no optical power or bias lines at all, and may report a module
+temperature of 0.00 degrees C. On
 NVIDIA NICs and switches, the MFT tools `mlxlink` and `mlxcables` show link and cable details;
 check the MFT documentation for the options available in your version.
 
 ```text
 # Illustrative, trimmed output of: ethtool -m eth2
-Identifier                                : 0x19 (OSFP 8X Pluggable Transceiver)
-Vendor name                               : EXAMPLEVENDOR
-Module temperature                        : 52.30 degrees C
-Transmit avg optical power (Channel 1)    : 1.20 mW / 0.79 dBm
-Rcvr signal avg optical power (Channel 1) : 0.98 mW / -0.09 dBm
-Rcvr signal avg optical power (Channel 3) : 0.21 mW / -6.78 dBm     <- lane far below its peers
+	Identifier                                : 0x19 (OSFP 8X Pluggable Transceiver)
+	Vendor name                               : EXAMPLEVENDOR
+	Module temperature                        : 52.30 degrees C / 126.14 degrees F
+	Transmit avg optical power (Channel 1)    : 1.2000 mW / 0.79 dBm
+	Rcvr signal avg optical power (Channel 1) : 0.9800 mW / -0.09 dBm
+	Rcvr signal avg optical power (Channel 3) : 0.2100 mW / -6.78 dBm     <- lane far below its peers
 ```
 
 One lane receiving several dB less than its neighbours is a classic dirty or damaged connector.

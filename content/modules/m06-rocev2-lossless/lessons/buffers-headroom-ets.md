@@ -254,26 +254,39 @@ mlnx_qos -i ens1f0np0
 ```
 
 ```text
-# illustrative, trimmed
+# illustrative, trimmed (after the ETS command below)
+DCBX mode: OS controlled
 Priority trust state: dscp
-Receive buffer size (bytes): 130944,130944,0,0,0,0,0,0
+dscp2prio mapping:
+...
+Receive buffer size (bytes): 130944,130944,0,0,0,0,0,0,max_buffer_size=262016
 Cable len: 7
 PFC configuration:
-        priority    0   1   2   3   4   5   6   7
-        enabled     0   0   0   1   0   0   0   0
-        buffer      0   0   0   1   0   0   0   0
+	priority    0   1   2   3   4   5   6   7
+	enabled     0   0   0   1   0   0   0   0
+	buffer      0   0   0   1   0   0   0   0
 tc: 0 ratelimit: unlimited, tsa: ets, bw: 10%
-         priority:  0
+	 priority:  0
 ...
 tc: 3 ratelimit: unlimited, tsa: ets, bw: 60%
-         priority:  3
+	 priority:  3
 ...
 tc: 6 ratelimit: unlimited, tsa: strict
-         priority:  6
+	 priority:  6
+...
 ```
 
 Line by line: priority 3 is PFC-enabled and mapped to receive buffer 1 (the lossless one), TC3 gets
-an ETS share, and TC6 is strict for CNPs. The exact layout of this output varies between versions.
+an ETS share, and TC6 is strict for CNPs. On a ConnectX-5, enabling PFC on one priority split the
+262016-byte receive buffer into two buffers of 130944 bytes. Before any ETS configuration, every TC
+shows `tsa: vendor`. The exact layout of this output varies between versions.
+
+> [!WARNING]
+> Check the priority-to-TC map before you assign ETS shares. The default map on mlx5 is **not** the
+> identity: priority 0 sits in TC1 and priority 1 in TC0 (`tc: 0 ... priority: 1`, `tc: 1 ...
+> priority: 0`; `dcb ets show` prints `prio-tc 0:1 1:0 2:2 3:3 ...`). `--tcbw` values are per TC,
+> so without an explicit `--prio_tc` the first percentage applies to priority 1, not to default
+> traffic on priority 0.
 
 Setting ETS explicitly with `mlnx_qos` looks like this (the values are an example policy):
 
@@ -285,9 +298,17 @@ mlnx_qos -i ens1f0np0 \
 ```
 
 `--prio_tc` maps priority *i* to TC *i*. `--tsa` sets the selection algorithm per TC. `--tcbw`
-gives the ETS percentages, which must add up to 100, with 0 for strict TCs. The upstream Linux
-alternative is the iproute2 `dcb` tool (`dcb ets`, `dcb pfc`, `dcb buffer`). See `man dcb` for
-the syntax supported by your iproute2 version and driver.
+gives the ETS percentages, which must add up to 100, with 0 for strict TCs (otherwise the command
+fails with `Netlink error: Bad value. see dmesg.`). `mlnx_qos` comes with NVIDIA's stack only. The
+upstream Linux alternative is the iproute2 `dcb` tool (`dcb ets`, `dcb pfc`, `dcb buffer`). See
+`man dcb` for the syntax supported by your iproute2 version and driver.
+
+```text
+# illustrative: dcb buffer show dev ens1f0np0 (PFC on priority 3)
+prio-buffer 0:0 1:0 2:0 3:1 4:0 5:0 6:0 7:0
+buffer-size 0:130944b 1:130944b 2:0b 3:0b 4:0b 5:0b 6:0b 7:0b
+total-size 262016b
+```
 
 ### Switch: watch PG and queue watermarks
 

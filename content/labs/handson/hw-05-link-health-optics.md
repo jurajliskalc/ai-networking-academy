@@ -59,19 +59,26 @@ By the end you can:
 On an Ethernet (RoCE) host:
 
 ```bash
-ethtool {{A_NETDEV}}
+sudo ethtool {{A_NETDEV}}
 ```
 
-Illustrative excerpt:
+Without `sudo` the settings still print, preceded by `netlink error: Operation not permitted`
+(only the Wake-on-LAN query needs root). Illustrative excerpt (100GbE over a DAC):
 
 ```
 Settings for ens1f0np0:
-        Supported link modes:   ...
-        Advertised link modes:  ...
-        Speed: 100000Mb/s
-        Duplex: Full
-        Auto-negotiation: on
-        Link detected: yes
+	Supported ports: [ Backplane ]
+	Supported link modes:   ...
+	Advertised link modes:  ...
+	Advertised FEC modes: RS
+	Speed: 100000Mb/s
+	Lanes: 4
+	Duplex: Full
+	Auto-negotiation: on
+	Port: Direct Attach Copper
+	PHYAD: 0
+	Transceiver: internal
+	Link detected: yes
 ```
 
 On any RDMA host (Ethernet or InfiniBand):
@@ -93,22 +100,23 @@ rate and the physical state for each port.
 sudo ethtool -m {{A_NETDEV}}
 ```
 
+`ethtool -m` needs root: without `sudo` it only prints `netlink error: Operation not permitted`.
 Illustrative excerpt from an optical module:
 
 ```
-Identifier                                : 0x11 (QSFP28)
-Vendor name                               : EXAMPLE
-Vendor PN                                 : EX-100G-SR4
-Transmitter technology                    : 0x00 (850 nm VCSEL)
-Length (OM4)                              : 100m
-Module temperature                        : 41.20 degrees C
-Module voltage                            : 3.2950 V
-Transmit avg optical power (Channel 1)    : 0.8020 mW / -0.96 dBm
-...
-Rcvr signal avg optical power (Channel 1) : 0.7413 mW / -1.30 dBm
-Rcvr signal avg optical power (Channel 2) : 0.7012 mW / -1.54 dBm
-Rcvr signal avg optical power (Channel 3) : 0.1820 mW / -7.40 dBm
-Rcvr signal avg optical power (Channel 4) : 0.7230 mW / -1.41 dBm
+	Identifier                                : 0x11 (QSFP28)
+	Vendor name                               : EXAMPLE
+	Vendor PN                                 : EX-100G-SR4
+	Transmitter technology                    : 0x00 (850 nm VCSEL)
+	Length (OM4)                              : 100m
+	Module temperature                        : 41.20 degrees C / 106.16 degrees F
+	Module voltage                            : 3.2950 V
+	Transmit avg optical power (Channel 1)    : 0.8020 mW / -0.96 dBm
+	...
+	Rcvr signal avg optical power (Channel 1) : 0.7413 mW / -1.30 dBm
+	Rcvr signal avg optical power (Channel 2) : 0.7012 mW / -1.54 dBm
+	Rcvr signal avg optical power (Channel 3) : 0.1820 mW / -7.40 dBm
+	Rcvr signal avg optical power (Channel 4) : 0.7230 mW / -1.41 dBm
 ```
 
 **Read it:**
@@ -123,9 +131,21 @@ Rcvr signal avg optical power (Channel 4) : 0.7230 mW / -1.41 dBm
   values are module-specific. Compare against those thresholds and, above all, against identical
   healthy links rather than against a number you remember.
 
-Which fields appear depends on the module type and on your `ethtool` and kernel versions. A DAC
-usually shows only identification and length. If the command fails, the driver may not expose module
-EEPROM for that port; that is not an error in the link.
+Which fields appear depends on the module type and on your `ethtool` and kernel versions. A passive
+DAC shows identification, attenuation and length but no laser: illustrative lines from a 1 m
+100G DAC:
+
+```
+	Transceiver type                          : 100G Ethernet: 100G Base-CR4 or 25G Base-CR CA-L
+	Length (Copper or Active cable)           : 1m
+	Transmitter technology                    : 0xa0 (Copper cable, unequalized)
+	Module temperature                        : 0.00 degrees C / 32.00 degrees F
+	Module voltage                            : 0.0000 V
+```
+
+The zero temperature and voltage are normal for a passive cable (it has no monitoring), and there
+are no optical power lines at all. If the command fails even with `sudo`, the driver may not expose
+module EEPROM for that port; that is not an error in the link.
 
 ### Task 3: Forward error correction
 
@@ -137,7 +157,7 @@ Illustrative output:
 
 ```
 FEC parameters for ens1f0np0:
-Supported/Configured FEC encodings: Auto RS
+Supported/Configured FEC encodings: Auto
 Active FEC encoding: RS
 ```
 
@@ -166,9 +186,11 @@ Illustrative output:
 ```
      rx_crc_errors_phy: 0
      rx_symbol_err_phy: 0
-     link_down_events_phy: 1
-     rx_corrected_bits_phy: 18342
      rx_discards_phy: 0
+     tx_discards_phy: 0
+     link_down_events_phy: 1
+     rx_pcs_symbol_err_phy: 0
+     rx_corrected_bits_phy: 18342
 ```
 
 RDMA port counters (generic sysfs, present for InfiniBand ports and, on many drivers, for RoCE
@@ -200,14 +222,49 @@ If NVIDIA's MFT is installed:
 
 ```bash
 sudo mst start
-sudo mst status
-sudo mlxlink -d /dev/mst/<your device>          # state, speed, width, FEC, recommendations
-sudo mlxlink -d /dev/mst/<your device> -c       # add physical counters: raw and effective BER, symbol errors
-sudo mlxlink -d /dev/mst/<your device> -m       # module info: vendor, part, cable length, temperature, per-lane power
+sudo mst status -v
+sudo mlxlink -d <your device>          # state, speed, width, FEC, recommendations
+sudo mlxlink -d <your device> -c       # add physical counters: raw and effective BER, symbol errors
+sudo mlxlink -d <your device> -m       # module info: vendor, part, cable length, temperature, per-lane power
 ```
 
-Take the device name from `mst status` (for example `/dev/mst/mt4129_pciconf0`). Recent MFT versions
-also accept a PCI address; check the MFT user manual for your release.
+Take the device name from `mst status -v` (for example `/dev/mst/mt4129_pciconf0`). On a host with
+**Secure Boot** (kernel lockdown) the MST modules cannot provide devices: `mst start` ends with
+`Unloading MST PCI module (unused)` and `mlxlink -d mlx5_0` or `-d <pci-address>` fails with
+`-E- Failed to open device`. With a recent kernel and MFT, `mst status -v` then lists a
+`/dev/fwctl/fwctl0` device in its `FWCTL` column, and `sudo mlxlink -d /dev/fwctl/fwctl0` works.
+Without Secure Boot, recent MFT versions may also accept a PCI address; check the
+MFT user manual for your release.
+
+Illustrative excerpt (values start in a fixed column; on a terminal some are coloured):
+
+```
+Operational Info
+----------------
+State                              : Active
+Physical state                     : LinkUp
+Speed                              : 100GbE
+Width                              : 4x
+FEC                                : Standard RS-FEC - RS(528,514)
+Loopback Mode                      : No Loopback
+Auto Negotiation                   : ON
+...
+Troubleshooting Info
+--------------------
+Status Opcode                      : 0
+Group Opcode                       : N/A
+Recommendation                     : No issue was observed
+...
+Physical Counters and BER Info
+------------------------------
+Time Since Last Clear [Min]        : 12.6
+Effective Physical Errors          : 0
+Raw Physical Errors Per Lane       : 0,0,0,0
+Effective Physical BER             : 15E-255
+Raw Physical BER                   : 15E-255
+Link Down Counter                  : 0
+Link Error Recovery Counter        : 0
+```
 
 **Why:** `mlxlink` reports the **raw (pre-FEC) BER** and **effective (post-FEC) BER** directly, and
 prints troubleshooting recommendations. It is the quickest way to compare one link against its

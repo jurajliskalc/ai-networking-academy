@@ -70,7 +70,7 @@ Linux distributions ship rdma-core and in-kernel drivers ("inbox"). NVIDIA also 
 
 ### Naming: RDMA device, port, netdev
 
-An RDMA device (for example `mlx5_0`) has one or more ports numbered from 1. On RoCE, each port is associated with an Ethernet netdev (for example `ens1f0np0`); on InfiniBand there is no Ethernet netdev, although an IPoIB interface (`ib0`) may exist for IP traffic over the IB fabric. The `rdma link` command shows the mapping in one line.
+An RDMA device (for example `mlx5_0`) has one or more ports numbered from 1. The device name depends on the stack: NVIDIA's MLNX_OFED / DOCA-OFED names ConnectX devices `mlx5_0`, `mlx5_1`, ..., while a distribution's rdma-core udev rule names them after the PCI address, for example `rocep3s0f0` for a RoCE port at PCI `03:00.0`. Netdev names are the same on both. Never copy a device name from a guide: take it from `rdma link` or `ibv_devices`. On RoCE, each port is associated with an Ethernet netdev (for example `ens1f0np0`); on InfiniBand there is no Ethernet netdev, although an IPoIB interface (`ib0`) may exist for IP traffic over the IB fabric. The `rdma link` command shows the mapping in one line.
 
 ### GIDs and why RoCE needs the right index
 
@@ -93,33 +93,35 @@ So the "GID index" in NCCL (`NCCL_IB_GID_INDEX`), perftest (`-x`) and the rdma-c
 
 ```text
 $ ibv_devinfo -d mlx5_0
-hca_id: mlx5_0
-        transport:                      InfiniBand (0)
-        fw_ver:                         28.39.1002
-        node_guid:                      b83f:d203:00a1:b2c4
-        sys_image_guid:                 b83f:d203:00a1:b2c4
-        vendor_id:                      0x02c9
-        vendor_part_id:                 4129
-        phys_port_cnt:                  1
-                port:   1
-                        state:                  PORT_ACTIVE (4)
-                        max_mtu:                4096 (5)
-                        active_mtu:             4096 (5)
-                        sm_lid:                 0
-                        port_lid:               0
-                        port_lmc:               0x00
-                        link_layer:             Ethernet
+hca_id:	mlx5_0
+	transport:			InfiniBand (0)
+	fw_ver:				28.39.1002
+	node_guid:			b83f:d203:00a1:b2c4
+	sys_image_guid:			b83f:d203:00a1:b2c4
+	vendor_id:			0x02c9
+	vendor_part_id:			4129
+	hw_ver:				0x0
+	board_id:			MT_xxxxxxxxxx
+	phys_port_cnt:			1
+		port:	1
+			state:			PORT_ACTIVE (4)
+			max_mtu:		4096 (5)
+			active_mtu:		4096 (5)
+			sm_lid:			0
+			port_lid:		0
+			port_lmc:		0x00
+			link_layer:		Ethernet
 ```
 
 *(Illustrative; values depend on adapter and firmware.)* Line by line:
 
 - `transport: InfiniBand (0)` refers to the *verbs transport* (the IB transport), and it appears for RoCE too. The **`link_layer`** line is what tells you InfiniBand versus Ethernet.
-- `vendor_id 0x02c9` is Mellanox/NVIDIA; `vendor_part_id` identifies the adapter model (look it up in vendor docs rather than memorising).
+- `vendor_id 0x02c9` is Mellanox/NVIDIA; `vendor_part_id` identifies the adapter model (look it up in vendor docs rather than memorising; 4119 is a ConnectX-5, for example). `board_id` is the board's PSID, which firmware tools also report.
 - `state: PORT_ACTIVE` means the port is usable for RDMA. On InfiniBand, `PORT_INIT` means the physical link is up but the Subnet Manager has not configured the port yet — a classic sign of a missing or unreachable SM.
 - `active_mtu` is the RDMA path MTU available (256-4096 bytes). On RoCE it is derived from the netdev MTU: a 9000-byte Ethernet MTU gives an active MTU of 4096; a 1500-byte MTU gives 1024.
 - `sm_lid` and `port_lid` are meaningful only on InfiniBand; 0 is normal on Ethernet.
 
-`ibv_devinfo -v` adds the full capability list (limits such as `max_qp`, `max_mr`, atomics support).
+`ibv_devinfo -v` adds the full capability list (limits such as `max_qp`, `max_mr`, atomics support) and, in recent rdma-core versions, the GID table with types. Asking for a device that does not exist prints `IB device 'mlx5_0' wasn't found`: the usual cause is a name copied from a guide written for the other stack.
 
 ### The rdma tool (iproute2)
 
@@ -131,14 +133,14 @@ link mlx5_0/1 state ACTIVE physical_state LINK_UP netdev ens1f0np0
 link mlx5_1/1 state ACTIVE physical_state LINK_UP netdev ens1f1np1
 
 $ rdma dev show
-0: mlx5_0: node_type ca fw 28.39.1002 node_guid b83f:d203:00a1:b2c4 sys_image_guid b83f:d203:00a1:b2c4
-1: mlx5_1: node_type ca fw 28.39.1002 node_guid b83f:d203:00a1:b2c5 sys_image_guid b83f:d203:00a1:b2c5
+0: mlx5_0: node_type ca protocol roce fw 28.39.1002 node_guid b83f:d203:00a1:b2c4 sys_image_guid b83f:d203:00a1:b2c4
+1: mlx5_1: node_type ca protocol roce fw 28.39.1002 node_guid b83f:d203:00a1:b2c5 sys_image_guid b83f:d203:00a1:b2c4
 
 $ rdma resource show
 0: mlx5_0: pd 4 cq 12 qp 9 cm_id 0 mr 6 ctx 2 srq 0
 ```
 
-*(Illustrative.)* Useful sub-commands:
+*(Illustrative.)* Both ports of one dual-port adapter share the `sys_image_guid`. A port whose netdev is administratively down (`ip link set <if> down`) shows `state DOWN physical_state DISABLED`; on mlx5 the far end of a back-to-back cable can stay `ACTIVE`/`LINK_UP` meanwhile, because the downed side keeps its PHY up. Useful sub-commands:
 
 | Command | Shows |
 |---|---|
@@ -146,7 +148,7 @@ $ rdma resource show
 | `rdma dev show` | Devices, firmware and GUIDs |
 | `rdma resource show qp` (or `cq`, `mr`, `pd`, `cm_id`) | Per-process RDMA objects, QP state and type |
 | `rdma statistic show link mlx5_0/1` | Per-port RDMA counters exposed by the driver |
-| `rdma system show` | Whether RDMA devices are shared across network namespaces or exclusive to one |
+| `rdma system show` | Whether RDMA devices are shared across network namespaces or exclusive to one (`netns shared ...` or `netns exclusive ...`) |
 | `rdma link add rxe0 type rxe netdev eth0` | Create a Soft-RoCE device on top of `eth0` |
 
 The `rdma system` network-namespace mode matters for containers: in **shared** mode every namespace sees all RDMA devices; in **exclusive** mode a device is only visible in the namespace it was assigned to, which is how container network plugins isolate RDMA devices per pod.
@@ -157,17 +159,18 @@ The NVIDIA script `show_gids` (MLNX_OFED / DOCA) prints the table:
 
 ```text
 $ show_gids
-DEV     PORT  INDEX  GID                                      IPv4           VER  DEV
----     ----  -----  ---                                      ------------   ---  ---
-mlx5_0  1     0      fe80:0000:0000:0000:ba3f:d2ff:fea1:b2c4                 v1   ens1f0np0
-mlx5_0  1     1      fe80:0000:0000:0000:ba3f:d2ff:fea1:b2c4                 v2   ens1f0np0
-mlx5_0  1     2      0000:0000:0000:0000:0000:ffff:0a00:000b  10.0.0.11      v1   ens1f0np0
-mlx5_0  1     3      0000:0000:0000:0000:0000:ffff:0a00:000b  10.0.0.11      v2   ens1f0np0
+DEV	PORT	INDEX	GID					IPv4  		VER	DEV
+---	----	-----	---					------------  	---	---
+mlx5_0	1	0	fe80:0000:0000:0000:ba3f:d2ff:fea1:b2c4			v1	ens1f0np0
+mlx5_0	1	1	fe80:0000:0000:0000:ba3f:d2ff:fea1:b2c4			v2	ens1f0np0
+mlx5_0	1	2	0000:0000:0000:0000:0000:ffff:0a00:000b	10.0.0.11  	v1	ens1f0np0
+mlx5_0	1	3	0000:0000:0000:0000:0000:ffff:0a00:000b	10.0.0.11  	v2	ens1f0np0
+n_gids_found=4
 ```
 
-*(Illustrative.)* Indexes 0 and 1 come from the IPv6 link-local address; 2 and 3 from the IPv4 address, encoded as an IPv4-mapped IPv6 address (`::ffff:10.0.0.11`). On an IPv4 RoCEv2 fabric, the entry you want is the **v2** entry with your fabric IPv4 address — index 3 in this example, which is common but **not guaranteed**: indexes shift when addresses or VLAN interfaces are added or removed.
+*(Illustrative; the output is tab-separated, and without arguments it lists every device.)* Indexes 0 and 1 come from the IPv6 link-local address; 2 and 3 from the IPv4 address, encoded as an IPv4-mapped IPv6 address (`::ffff:10.0.0.11`). On an IPv4 RoCEv2 fabric, the entry you want is the **v2** entry with your fabric IPv4 address — index 3 in this example, which is common but **not guaranteed**: indexes shift when addresses or VLAN interfaces are added or removed.
 
-Without the script, read sysfs directly (this works on any distribution):
+Without the script, read sysfs directly (this works on any distribution, including inbox installs where `show_gids` does not exist; the type strings are `IB/RoCE v1` and `RoCE v2`):
 
 ```text
 $ cat /sys/class/infiniband/mlx5_0/ports/1/gids/3
@@ -178,7 +181,7 @@ $ cat /sys/class/infiniband/mlx5_0/ports/1/gid_attrs/ndevs/3
 ens1f0np0
 ```
 
-The RDMA connection manager (librdmacm) chooses the GID itself from the IP address you connect to, using a default RoCE mode that can be inspected and changed through configfs (`/sys/kernel/config/rdma_cm/<device>/ports/<n>/default_roce_mode`, after mounting configfs and creating the device directory). Applications that use raw verbs, including NCCL, need the index explicitly or detect it themselves; recent NCCL versions try to select a RoCEv2 GID automatically, but check your version's documentation.
+The RDMA connection manager (librdmacm) chooses the GID itself from the IP address you connect to, using a default RoCE mode that can be inspected and changed through configfs (`/sys/kernel/config/rdma_cm/<device>/ports/<n>/default_roce_mode`, after mounting configfs and creating the device directory with `mkdir`; it reads `RoCE v2` by default, and `default_roce_tos` next to it reads `0`). Applications that use raw verbs, including NCCL, need the index explicitly or detect it themselves; recent NCCL versions try to select a RoCEv2 GID automatically, but check your version's documentation.
 
 ### Counters
 
@@ -197,7 +200,7 @@ Two families of counters are exposed under `/sys/class/infiniband/<dev>/ports/<n
 | `out_of_buffer` | Packets dropped because no receive WQE was available |
 | `np_cnp_sent`, `rp_cnp_handled` | RoCE congestion notifications sent and handled (see `ecn-and-dcqcn`) |
 
-`rdma statistic show link mlx5_0/1` prints the same hardware counters. Watch them as *rates* during a test, not as absolute numbers since boot.
+`rdma statistic show link mlx5_0/1` prints the same hardware counters. Recent iproute2 prints a `link mlx5_0/1` line followed by one indented `name value` pair per line; older versions put everything on one line, so check before you parse it. Watch them as *rates* during a test, not as absolute numbers since boot.
 
 ## In practice
 
@@ -211,7 +214,7 @@ $ ls /dev/infiniband/
 $ ulimit -l
 ```
 
-Expect the RDMA modules to be loaded, `uverbs*` and `rdma_cm` device files present, and a locked-memory limit of `unlimited` (or at least large enough for all registered buffers).
+Expect the RDMA modules to be loaded, `uverbs*` and `rdma_cm` device files present, and a locked-memory limit of `unlimited` (or at least large enough for all registered buffers). Distribution defaults are often far lower (Ubuntu's is 8192 KiB): small tests pass, but a perftest sweep with `-a` then fails with `Couldn't allocate MR` and `Couldn't create IB resources`. Raise the limit in `/etc/security/limits.conf` (or a file under `limits.d`) and log in again. `rping` is often not installed by default: it comes from the `rdmacm-utils` / `librdmacm-utils` package.
 
 ### Mapping RDMA devices to interfaces and GPUs
 
@@ -221,7 +224,7 @@ mlx5_0/1 ens1f0np0
 mlx5_1/1 ens1f1np1
 ```
 
-On NVIDIA stacks `ibdev2netdev` gives the same mapping with port state. Combine it with `nvidia-smi topo -m` (see `reading-server-topology`) to confirm that each GPU has a nearby NIC — that mapping is what NCCL uses to build rails.
+On NVIDIA stacks `ibdev2netdev` gives the same mapping with port state (`mlx5_0 port 1 ==> ens1f0np0 (Up)`); it is not part of distribution rdma-core, where `rdma link` is the tool. Combine it with `nvidia-smi topo -m` (see `reading-server-topology`) to confirm that each GPU has a nearby NIC — that mapping is what NCCL uses to build rails.
 
 ### A first connection test with librdmacm
 

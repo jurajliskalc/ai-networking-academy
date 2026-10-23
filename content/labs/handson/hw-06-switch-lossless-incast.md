@@ -148,8 +148,11 @@ show pfc counters                                            # SONiC
 show queue counters                                          # SONiC: which queue carried the bytes
 ```
 
-**Expect:** near line rate, no PFC frames, no ECN marks. One sender into one equally fast receiver
-does not congest anything. Write the counter values down: they are your "before".
+**Expect:** near line rate, no ECN marks, and no PFC frames from the switch towards A. One sender
+into one equally fast receiver does not congest the switch. Host B's NIC may still send a few
+pauses of its own towards the switch (`tx_prio{{ROCE_PRIO}}_pause` on B), as it did back to back in
+the host QoS lab: that is the receiving NIC's buffer, not fabric congestion. Write the counter
+values down: they are your "before".
 
 ### Task 4: Fire the incast
 
@@ -195,7 +198,8 @@ transmitted PFC frames (`nv show interface {{A_SWITCH_PORT}} qos roce counters`,
 ### Task 5: Take ECN away: PFC does all the work
 
 On host **B** only, disable the notification point for priority {{ROCE_PRIO}}, if your driver
-exposes the switch (see Task 5 of the host QoS lab):
+exposes the switch (see Task 5 of the host QoS lab: these sysfs files exist only with NVIDIA's
+MLNX_OFED / DOCA-Host stack, not with the inbox mlx5 driver):
 
 ```bash
 cat /sys/class/net/{{B_NETDEV}}/ecn/roce_np/enable/{{ROCE_PRIO}}               # note the value (1)

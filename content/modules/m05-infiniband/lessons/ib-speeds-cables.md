@@ -140,9 +140,9 @@ Cable count follows directly: a non-blocking two-tier fabric has as many leaf-sp
 
 ```text
 $ ibstat mlx5_0 1 | grep -E "State|Rate|Physical"
-                State: Active
-                Physical state: LinkUp
-                Rate: 400
+		State: Active
+		Physical state: LinkUp
+		Rate: 400
 ```
 
 *(Illustrative.)* `Rate` is the data rate in Gb/s. For the full picture of every link in the fabric:

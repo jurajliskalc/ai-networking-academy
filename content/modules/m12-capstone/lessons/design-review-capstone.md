@@ -297,7 +297,7 @@ itself.
 | CNP | 48 | 6 | Strict priority or high-weight queue, lossy |
 | Everything else (control, BGP, telemetry) | other | 0 | Lossy, ETS remainder |
 
-- **Trust DSCP** on every switch port and on the NIC (`mlnx_qos --trust dscp` on NVIDIA NICs);
+- **Trust DSCP** on every switch port and on the NIC (`mlnx_qos --trust dscp` with the NVIDIA driver stack, or a `dcb app` DSCP entry with the inbox mlx5 driver);
   set the RoCE traffic class/DSCP for RDMA-CM and NCCL consistently (for example `NCCL_IB_TC`, whose
   value is the full ToS byte, so DSCP 26 → 104, or 106 if the ECN-capable bit is also set, as some
   vendor guides show).

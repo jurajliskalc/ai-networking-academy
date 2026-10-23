@@ -91,8 +91,9 @@ To the right of the matrix, current drivers print extra columns:
 | `GPU NUMA ID` | On systems where GPU memory is itself exposed as a NUMA node (for example Grace-based systems), that node's ID; otherwise N/A | Grace Hopper / Grace Blackwell memory placement |
 
 Newer versions also print a **NIC Legend** that maps `NIC0`, `NIC1`, ... to RDMA device names such as
-`mlx5_0`. That mapping is essential: the `NIC#` index is nvidia-smi's own numbering, and neither it nor
-the RDMA device names have to follow GPU order.
+`mlx5_0` (the NVIDIA-stack naming; distribution rdma-core names devices after their PCI address, for
+example `rocep25s0f0`). That mapping is essential: the `NIC#` index is nvidia-smi's own numbering, and
+neither it nor the RDMA device names have to follow GPU order.
 
 ## How it works
 
@@ -219,8 +220,8 @@ topology and is unaffected. But anything static that assumes "GPU *i* uses `mlx5
 GPUs 2 and 3: a launch wrapper that pins each local rank to `mlx5_<local rank>` (for example with a
 per-rank `NCCL_IB_HCA`), a cabling sheet, monitoring dashboards, or per-rail IP addressing. (The order
 of devices in a single shared `NCCL_IB_HCA` list does not assign NICs to GPUs; NCCL still pairs them by
-topology.) Device naming can change with firmware, PCIe enumeration order
-or OS upgrades; always derive the mapping from topology, not from names.
+topology.) Device naming can change with firmware, PCIe enumeration order,
+OS upgrades or a switch between the distribution and NVIDIA driver stacks (`rocep...` vs `mlx5_N`); always derive the mapping from topology, not from names.
 
 ### Example anomaly 3: missing NVLinks
 

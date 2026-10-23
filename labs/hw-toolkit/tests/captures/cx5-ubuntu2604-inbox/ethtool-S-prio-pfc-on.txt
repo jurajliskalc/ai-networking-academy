@@ -1,0 +1,17 @@
+     rx_prio0_bytes: 17733754135
+     rx_prio0_packets: 8676285
+     tx_prio0_bytes: 304352834939
+     tx_prio0_packets: 73817588
+     rx_prio3_bytes: 155986842
+     rx_prio3_packets: 2363437
+     tx_prio3_bytes: 124422973040
+     tx_prio3_packets: 29916560
+     rx_prio5_bytes: 15138
+     rx_prio5_packets: 42
+     tx_prio5_bytes: 14652
+     tx_prio5_packets: 51
+     rx_prio3_pause: 696
+     rx_prio3_pause_duration: 608
+     tx_prio3_pause: 26
+     tx_prio3_pause_duration: 114
+     rx_prio3_pause_transition: 348

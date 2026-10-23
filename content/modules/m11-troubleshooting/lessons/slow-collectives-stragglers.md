@@ -179,11 +179,11 @@ sudo lspci -vv -s 0000:3b:00.0 | grep -E 'LnkCap:|LnkSta:'
 Illustrative output:
 
 ```text
-LnkCap: Port #0, Speed 32GT/s, Width x16, ASPM not supported   <- what the device can do (Gen5 x16)
-LnkSta: Speed 16GT/s (downgraded), Width x8 (downgraded)        <- what it trained at (Gen4 x8)
+		LnkCap:	Port #0, Speed 32GT/s, Width x16, ASPM not supported   <- what the device can do (Gen5 x16)
+		LnkSta:	Speed 16GT/s (downgraded), Width x8 (downgraded)        <- what it trained at (Gen4 x8)
 ```
 
-Recent pciutils versions print `(downgraded)` when status is below capability; older versions do not, so compare the numbers yourself. Also check the *upstream* bridge port, because the device can only train as high as the slot allows. For GPUs, `nvidia-smi` exposes the same information:
+Recent pciutils versions print `(downgraded)` when status is below capability; older versions do not, so compare the numbers yourself. Also check the *upstream* bridge port, because the device can only train as high as the slot allows. Inside a virtual machine with PCI passthrough these values describe the hypervisor's virtual root port (for example `Speed 5GT/s, Width x32` for a Gen3 x16 NIC under ESXi), so run this check on the bare-metal host. For GPUs, `nvidia-smi` exposes the same information:
 
 ```bash
 nvidia-smi --query-gpu=index,pci.bus_id,pcie.link.gen.current,pcie.link.gen.max,pcie.link.width.current,pcie.link.width.max --format=csv
@@ -270,10 +270,12 @@ Illustrative output for a PCIe switch downstream port:
 For NUMA placement:
 
 ```bash
-cat /sys/class/infiniband/mlx5_0/device/numa_node      # NUMA node of the NIC
+cat /sys/class/infiniband/mlx5_0/device/numa_node      # NUMA node of the NIC (-1 means the platform reports none)
 nvidia-smi topo -m                                      # includes CPU and NUMA affinity columns
 numastat -p <pid>                                       # where a process's memory actually lives
 ```
+
+`mlx5_0` is the NVIDIA-stack device name; with distro rdma-core the same NIC is named after its PCI address (for example `rocep3s0f0` for a NIC at PCI bus 03), so take the name from `rdma link show`. To compare placements, pin a perftest run with `numactl --cpunodebind=<node> --membind=<node> ib_write_bw ...` on the NIC's node and on the remote node. A `--use_cuda` comparison needs a perftest built with CUDA support: distro packages usually are not (`ib_write_bw --help | grep -i cuda` prints nothing, and `--use_cuda=0` fails with `Parser function exited with Error` / `Unsupported memory type`; NVIDIA's DOCA perftest includes `--use_cuda`).
 
 ### The decision table
 

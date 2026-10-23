@@ -229,16 +229,16 @@ link mlx5_0/1 lqpn 1234 rqpn 5678 type RC state RTS sq-psn 9012 comm python3 pid
 link mlx5_0/1 lqpn 1235 rqpn 0 type RC state INIT sq-psn 0 comm python3 pid 4242
 ```
 
-*(Illustrative; exact fields depend on your iproute2 version.)* The first line is a connected QP in RTS. The second never left INIT — if it stays there, the process is probably stuck waiting for its peer's connection details over the out-of-band channel, which points at the bootstrap network, not the RDMA fabric. `rdma resource show` with `mr`, `cq` or `pd` lists the other objects.
+*(Illustrative; exact fields depend on your iproute2 version. Even an idle port shows the kernel's own GSI QP, `lqpn 1 type GSI state RTS ... comm [ib_core]`.)* The first line is a connected QP in RTS. The second never left INIT — if it stays there, the process is probably stuck waiting for its peer's connection details over the out-of-band channel, which points at the bootstrap network, not the RDMA fabric. `rdma resource show` with `mr`, `cq` or `pd` lists the other objects.
 
 ### Locked memory
 
 ```text
 $ ulimit -l
-65536
+8192
 ```
 
-*(Illustrative.)* A small memlock limit (in KiB) causes `ibv_reg_mr` to fail with "Cannot allocate memory". RDMA hosts and containers normally set it to `unlimited` (for example in `/etc/security/limits.conf` or the container runtime's ulimit settings).
+*(Illustrative; 8192 KiB is, for example, Ubuntu's default.)* A small memlock limit (in KiB) causes `ibv_reg_mr` to fail with "Cannot allocate memory". Tools report it in their own words: a perftest sweep with `-a`, which registers buffers up to 8 MiB, fails with `Couldn't allocate MR` and ` Couldn't create IB resources`. RDMA hosts and containers normally set it to `unlimited` (for example in `/etc/security/limits.conf` or the container runtime's ulimit settings).
 
 > [!INTERVIEW]
 > *"A NCCL job fails with `transport retry counter exceeded`. Walk me through what that means."* Strong answer: it is `IBV_WC_RETRY_EXC_ERR` — an RC QP sent packets and got no acknowledgement within the ACK timeout (4.096 µs × 2^timeout) for retry_cnt + 1 attempts, so the QP went to ERR and subsequent WRs flushed. It means the path failed: link down or flapping, wrong address (GID index on RoCE), routing or partition problem, persistent loss on a lossy RoCE fabric, or the peer process/host died. Then explain how you would check link state, counters and the peer before blaming the application.

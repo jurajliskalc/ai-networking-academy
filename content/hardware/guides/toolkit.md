@@ -58,7 +58,7 @@ before sharing a report. The result is one report with every host, and a short t
 ```
 == node-a  role A  Ubuntu 24.04.1 LTS  kernel 6.8.0-45-generic
    rdma-core 50.0-2build2  perftest 24.01.0  ofed -  nvidia -
-   mlx5_0     fw 28.42.1000   pci 0000:3b:00.0  PCIe 16.0 GT/s x16 (max 16.0 x16)  numa 0
+   rocep59s0f0 fw 28.42.1000    pci 0000:3b:00.0  PCIe 16.0 GT/s x16 (max 16.0 x16)  numa 0
      port 1  ACTIVE  Ethernet 100 Gb/sec (2X HDR)    mtu 4096  netdev ens1f0np0
 ...
 ERROR fabric: MTU differs between hosts: 1500=node-b (B):ens1f0np0; 9000=node-a (A):ens1f0np0
@@ -130,7 +130,7 @@ It does exactly the same thing.
 | Software | `dpkg-query`/`rpm` for rdma-core and perftest, `ofed_info -s`, the NVIDIA kernel module version, which diagnostic tools exist | Driver-stack consistency, missing tools |
 | Kernel modules | `/sys/module/*` for the RDMA, NIC and GPU modules | Provider driver, `nvidia_peermem` |
 | RDMA devices | `/sys/class/infiniband/*`: firmware, board ID, PCI address, NUMA node, PCIe current and maximum link, ports (state, rate, link layer, LIDs), GID table with types and netdevs, port and `hw_counters`; `ibv_devinfo` for the active MTU; `rdma -j link` for the netdev mapping | Most of the review |
-| Netdevs | `/sys/class/net/*`, `ip -j addr`, `ethtool -i`, `-a`, and `-S` (only pause, per-priority, discard, error, buffer, FEC and congestion counters), `mlnx_qos` or `dcb` for trust, PFC and DSCP mapping, the per-priority RoCE ECN switches where the driver exposes them | MTU, IPs, QoS consistency, PHY errors |
+| Netdevs | `/sys/class/net/*`, `ip -j addr`, `ethtool -i`, `-a`, and `-S` (only pause, per-priority, discard, error, buffer, FEC and congestion counters), `mlnx_qos` or `dcb` for trust, PFC and DSCP mapping, the per-priority RoCE ECN switches where the driver exposes them (NVIDIA's stack only) | MTU, IPs, QoS consistency, PHY errors |
 | Neighbours | `lldpcli -f json show neighbors` (if lldpd runs) | Cabling against the profile's port map |
 | GPUs | `nvidia-smi --query-gpu=...`, `nvidia-smi topo -m` | Tier 3 readiness, GPU and NIC affinity |
 

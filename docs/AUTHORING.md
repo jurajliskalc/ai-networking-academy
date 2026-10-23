@@ -12,7 +12,10 @@ IDs are permanent: progress is keyed by them (see [CURRICULUM_PLAN.md](CURRICULU
 2. **Hedge what is vendor-, version- or generation-specific.** Write "on ConnectX-7 (check your
    firmware release notes)" rather than presenting one product's default as universal truth.
 3. **Sample output is illustrative.** Label command output blocks as illustrative unless they are
-   real captures. Never show made-up output as if it were authoritative.
+   real captures. Never show made-up output as if it were authoritative. The layout, field names and
+   messages of host tools (verbs, perftest, `rdma`, `ethtool`, `dcb`, `mlnx_qos`, `mlxlink`, ...) must
+   match [HARDWARE_VERIFICATION.md](HARDWARE_VERIFICATION.md), including which tools and paths exist only
+   with NVIDIA's driver stack.
 4. **No fake exam questions.** Mock exams and quizzes are original practice material. Never claim
    that a question comes from a real certification exam.
 5. **Numbers need context.** For any number (latency, bandwidth, buffer size, port count) say which

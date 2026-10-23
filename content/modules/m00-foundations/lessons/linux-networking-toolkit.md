@@ -45,7 +45,7 @@ The tools in this lesson answer those questions. They are not AI-specific, which
 | L3 | Addresses, routes, policy rules, path | `ip addr`, `ip route`, `ip rule`, `ip route get`, `ping`, `traceroute`, `mtr` |
 | L4 | Sockets, TCP health, retransmissions | `ss`, `nstat` |
 | Throughput | How fast can TCP go between two hosts? | `iperf3` |
-| Packets | What is actually on the wire? | `tcpdump` (kernel path only) |
+| Packets | What is actually on the wire? | `tcpdump` (on the netdev: kernel path only) |
 | RDMA | Which RDMA devices exist, which netdev, which state? | `rdma`, `ibv_devices`, `ibv_devinfo` |
 
 Most of these ship in standard distribution packages: `iproute2` (provides `ip`, `ss`, `rdma`, `nstat`), `ethtool`, `tcpdump`, `iputils` (ping), `traceroute`, `mtr`, `iperf3`, `lldpd`, and `rdma-core` or `ibverbs-utils` (provides `ibv_devices`, `ibv_devinfo`). Vendor stacks such as NVIDIA's DOCA-OFED/MLNX_OFED add convenience scripts like `ibdev2netdev`.
@@ -55,7 +55,7 @@ Most of these ship in standard distribution packages: `iproute2` (provides `ip`,
 A modern RDMA NIC port appears twice in Linux:
 
 - As a **network device (netdev)** such as `ens1f0np0`, used by the kernel IP stack, `ip`, `ethtool`, `tcpdump`.
-- As an **RDMA device** such as `mlx5_0` (port 1), used by the verbs API, NCCL, and the `ibv_*` tools.
+- As an **RDMA device**, used by the verbs API, NCCL, and the `ibv_*` tools. NVIDIA's DOCA-OFED/MLNX_OFED stack names these `mlx5_0`, `mlx5_1`, ...; distribution rdma-core (the inbox stack) names them after the PCI address, for example `rocep3s0f0`. This course uses `mlx5_0` in examples; on your own hosts take the name from `rdma link` or `ibv_devices`.
 
 They are the same physical port. NCCL configuration usually names RDMA devices (`mlx5_0`), while IP and switch troubleshooting uses netdev names. Mapping one to the other is a routine first step, shown below.
 
@@ -83,12 +83,13 @@ Linux "predictable" names encode the hardware location: `eno1` (onboard), `ens1f
 $ ip -s link show dev ens1f0np0
 2: ens1f0np0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 9000 qdisc mq state UP mode DEFAULT group default qlen 1000
     link/ether b8:3f:d2:12:34:56 brd ff:ff:ff:ff:ff:ff
-    RX:  bytes    packets  errors  dropped  missed   mcast
-    81923311204  20114522       0        0       0     112
-    TX:  bytes    packets  errors  dropped carrier collsns
-    79201188321  19470031       0        0       0       0
+    RX:   bytes  packets errors dropped  missed   mcast
+    81923311204 20114522      0       0       0     112
+    TX:   bytes  packets errors dropped carrier collsns
+    79201188321 19470031      0       0       0       0
+    altname enp1s0f0np0
 ```
-*(illustrative output)*
+*(illustrative output; recent iproute2 sizes the columns to fit the largest value, and `-s -s` adds `RX errors:` and `TX errors:` detail rows)*
 
 These are **kernel-level** counters: on an RDMA NIC they usually do not include RDMA traffic handled entirely in hardware. For the full picture, use the NIC's own counters via `ethtool -S` or `rdma statistic`.
 
@@ -107,13 +108,15 @@ Settings for ens1f0np0:
 ```
 *(illustrative output, trimmed)*
 
+Run as a normal user, `ethtool <if>` first prints `netlink error: Operation not permitted` (the Wake-on-LAN query needs root) and then the settings; use `sudo` to get a clean output. On a copper DAC the `Port:` line reads `Direct Attach Copper`.
+
 Check `Speed` against what you expect (400000Mb/s = 400 Gb/s). A port that came up at a lower speed than its peers is a classic cause of one slow rank.
 
 | Command | What it tells you |
 |---|---|
 | `ethtool -i X` | Driver name, driver version, firmware version, PCI bus address |
 | `ethtool -S X` | Driver-specific statistics: per-queue, per-priority, physical-layer errors |
-| `ethtool -m X` | Transceiver (module) EEPROM: type, vendor, and, where supported, temperatures and optical power per lane |
+| `ethtool -m X` | Transceiver (module) EEPROM: type, vendor, and, where supported, temperatures and optical power per lane. Needs root (otherwise `netlink error: Operation not permitted`); a passive copper DAC reports no optical power at all |
 | `ethtool --show-fec X` | Configured and active forward error correction mode |
 | `ethtool -k X` | Offload features (checksum, segmentation, GRO) |
 | `ethtool -g X` / `-l X` | Ring sizes / number of queues (channels) |
@@ -121,15 +124,16 @@ Check `Speed` against what you expect (400000Mb/s = 400 Gb/s). A port that came 
 `ethtool -S` is where the interesting counters live, but **their names are chosen by each driver**. On the NVIDIA mlx5 driver, for example, you will find counters such as physical-port packet and byte counts, CRC/symbol error counters, discard counters, and per-priority pause counters (named along the lines of `rx_prio3_pause`). Other drivers use different names. Check your driver's documentation before building alerts on a counter name; module `m10-operations` (`telemetry-counters`) maps the important ones.
 
 ```
-$ ethtool -S ens1f0np0 | grep -E 'crc|discard|prio3_pause'
+$ ethtool -S ens1f0np0 | grep -E 'crc_errors_phy|discards_phy|prio3_pause:'
      rx_crc_errors_phy: 0
      rx_discards_phy: 0
+     tx_discards_phy: 0
      rx_prio3_pause: 18234
      tx_prio3_pause: 0
 ```
 *(illustrative output, mlx5-style counter names)*
 
-Reading it: no CRC errors and no discards at the physical port is good; the NIC has *received* pause frames on priority 3 (the switch asked it to slow down), but never *sent* any. Whether 18,234 pauses is a problem depends on rate and context, a question for `pfc-priority-flow-control`. Note that mlx5 only shows the `prioN_pause` counters for priorities with PFC enabled on the NIC, so if `rx_prio3_pause` does not appear at all, PFC is not enabled on priority 3.
+Reading it: no CRC errors and no discards at the physical port is good; the NIC has *received* pause frames on priority 3 (the switch asked it to slow down), but never *sent* any. Whether 18,234 pauses is a problem depends on rate and context, a question for `pfc-priority-flow-control`. Note that mlx5 only shows the `prioN_pause` counters (and their `_duration` and `_transition` companions) for priorities with PFC enabled on the NIC, so if `rx_prio3_pause` does not appear at all, PFC is not enabled on priority 3. RDMA traffic itself shows up in mlx5 counters such as `tx_vport_rdma_unicast_bytes` and the per-priority `tx_prioN_bytes`, not in the netdev packet counters.
 
 ### Finding your switch port with LLDP
 
@@ -182,7 +186,7 @@ ESTAB  0      0           10.0.0.11:51544      10.4.7.25:5201
 
 ### Seeing packets: `tcpdump`
 
-`tcpdump -i X -e -n` prints frames with MAC addresses; filters such as `udp port 4791`, `arp`, or `icmp` narrow it down; `-w file.pcap` saves for Wireshark. As covered in `osi-ethernet-frames`, kernel-bypass RDMA traffic is typically invisible to a host capture without vendor support.
+`tcpdump -i X -e -n` prints frames with MAC addresses; filters such as `udp port 4791`, `arp`, or `icmp` narrow it down; `-w file.pcap` saves for Wireshark. As covered in `osi-ethernet-frames`, kernel-bypass RDMA traffic is invisible to a capture on the netdev: `tcpdump -i ens1f0np0 udp port 4791` reports 0 packets even while `ib_write_bw` runs at line rate. On mlx5 NICs, libpcap's RDMA sniffer can capture it if you name the **RDMA device** instead (`tcpdump -D` lists it as `mlx5_0 (RDMA sniffer)`; `sudo tcpdump -i mlx5_0 -w roce.pcap`). Distribution security profiles can block this (on Ubuntu the AppArmor profile for tcpdump does, and tcpdump then reports `No such device exists`), and at line rate the capture is huge, so keep it short.
 
 To see why, step through a send on the kernel TCP/IP path and on the RDMA path below, and use the tool lens to check which of this lesson's tools can observe RDMA traffic at all.
 
@@ -202,9 +206,9 @@ $ ibdev2netdev
 mlx5_0 port 1 ==> ens1f0np0 (Up)
 mlx5_1 port 1 ==> ens2f0np0 (Up)
 ```
-*(illustrative output; `ibdev2netdev` is a script shipped with NVIDIA's OFED/DOCA stack, not part of upstream rdma-core)*
+*(illustrative output; `ibdev2netdev` is a script shipped with NVIDIA's OFED/DOCA stack, not part of upstream rdma-core. With distribution rdma-core the same port appears as, for example, `link rocep3s0f0/1 ... netdev ens1f0np0`)*
 
-`rdma link show` (from iproute2) is available everywhere and maps RDMA device and port to netdev. `ibv_devinfo -d mlx5_0` shows the port state, `link_layer` (`Ethernet` for RoCE, `InfiniBand` for IB) and the `active_mtu`.
+`rdma link show` (from iproute2) is available everywhere and maps RDMA device and port to netdev; it is the inbox replacement for `ibdev2netdev`. `ibv_devinfo -d mlx5_0` shows the port state, `link_layer` (`Ethernet` for RoCE, `InfiniBand` for IB) and the `active_mtu`.
 
 ### A bottom-up checklist
 
@@ -237,8 +241,8 @@ for i in ens1f0np0 ens2f0np0; do ethtool $i | grep -E 'Speed|Link detected'; don
 # 3. Look for physical errors and drops (driver-specific names)
 ethtool -S ens2f0np0 | grep -Ei 'err|discard|drop' | grep -v ': 0$'
 
-# 4. Check optics health (if the module supports diagnostics)
-ethtool -m ens2f0np0
+# 4. Check optics health (if the module supports diagnostics; needs root)
+sudo ethtool -m ens2f0np0
 
 # 5. Confirm cabling
 sudo lldpctl ens2f0np0
@@ -278,6 +282,6 @@ What you might find, and what it means:
 - `ethtool` shows speed and link; `-S` (driver-specific counters), `-m` (optics) and `--show-fec` reveal physical-layer health.
 - LLDP (`lldpctl`) proves which switch port each NIC is cabled to, which is critical in rail-optimized designs.
 - Each RDMA NIC port has a netdev name and an RDMA device name; `rdma link show` maps them.
-- Kernel counters and tcpdump miss kernel-bypass RDMA traffic; use NIC counters instead.
+- Kernel counters and tcpdump on the netdev miss kernel-bypass RDMA traffic; use NIC counters instead (or, on mlx5, the RDMA sniffer on the RDMA device).
 - iperf3 validates TCP paths, not RDMA performance; use perftest for RDMA.
 - Work bottom-up and treat counters as rates, not totals.

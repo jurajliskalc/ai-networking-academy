@@ -160,12 +160,12 @@ transport-matrix
 
 ```text
 $ ibv_devinfo -v -d mlx5_0 | grep -E "max_qp:|max_qp_wr|max_msg_sz|max_qp_rd_atom|max_srq:|atomic_cap"
-        max_qp:                 131072
-        max_qp_wr:              32768
-        max_qp_rd_atom:         16
-        atomic_cap:             ATOMIC_HCA (1)
-        max_srq:                8388608
-                max_msg_sz:     0x40000000
+	max_qp:				131072
+	max_qp_wr:			32768
+	max_qp_rd_atom:			16
+	atomic_cap:			ATOMIC_HCA (1)
+	max_srq:			8388608
+			max_msg_sz:		0x40000000
 ```
 
 *(Illustrative values; they vary with adapter, firmware and configuration.)* `max_qp` is a hard limit, not a performance guarantee — performance usually degrades well before you reach it. `max_qp_rd_atom` bounds how many RDMA Reads you can keep in flight per QP.
@@ -181,7 +181,16 @@ $ ibv_uc_pingpong -d mlx5_0 -g 3          $ ibv_uc_pingpong -d mlx5_0 -g 3 10.0.
 $ ibv_ud_pingpong -d mlx5_0 -g 3          $ ibv_ud_pingpong -d mlx5_0 -g 3 10.0.0.12
 ```
 
-On native InfiniBand the `-g` option is not needed. perftest (see `perftest-benchmarking`) selects the transport with `-c` (for example `ib_send_bw -c UD`), and only offers combinations the transport supports: you cannot run `ib_read_bw` over UC or UD.
+A successful RC run on RoCE prints something like this on the client (illustrative):
+
+```text
+  local address:  LID 0x0000, QPN 0x000048, PSN 0x7bb49d, GID ::ffff:10.0.0.11
+  remote address: LID 0x0000, QPN 0x000183, PSN 0xa6939e, GID ::ffff:10.0.0.12
+8192000 bytes in 0.01 seconds = 11330.57 Mbit/sec
+1000 iters in 0.01 seconds = 5.78 usec/iter
+```
+
+The default run is 1000 iterations of 4 KiB, so the Mbit/sec figure is a connectivity check, not a benchmark. Both sides must use the same kind of GID: a client started with `-g 0` (link-local) against a server on `-g 3` failed with `client read/write: No space left on device` and `Couldn't read/write remote address` on a ConnectX-5 test setup. On native InfiniBand the `-g` option is not needed. perftest (see `perftest-benchmarking`) selects the transport with `-c` (for example `ib_send_bw -c UD`), and only offers combinations the transport supports: you cannot run `ib_read_bw` over UC or UD.
 
 ### Recognising transports in captures and logs
 

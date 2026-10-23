@@ -42,8 +42,13 @@ if [[ "$LL" == Ethernet ]]; then
     nd=$(netdev_of "$r")
     fec=$(on_host_sh "$r" "ethtool --show-fec $nd 2>/dev/null | awk -F': *' '/Active FEC encoding/ {print \$2}'")
     if [[ -n "$fec" ]]; then pass "host $r: active FEC on $nd is '$fec'"; else warn "host $r: could not read the active FEC mode of $nd"; fi
-    mod=$(on_host_sh "$r" "ethtool -m $nd 2>/dev/null | awk -F': *' '/^Identifier/ {print \$2; exit}'")
-    if [[ -n "$mod" ]]; then pass "host $r: module information readable ($mod)"; else skip "host $r: no module EEPROM for $nd (DAC or not exposed by the driver)"; fi
+    # ethtool -m needs root on current kernels (non-root: "netlink error: Operation not permitted"), and its
+    # lines start with a tab. sudo -n never prompts; without passwordless sudo the check says so.
+    mod=$(on_host_sh "$r" "{ ethtool -m $nd 2>/dev/null || sudo -n ethtool -m $nd 2>/dev/null; } | awk -F': *' '/^[[:space:]]*Identifier[[:space:]]/ {print \$2; exit}'")
+    if [[ -n "$mod" ]]; then pass "host $r: module information readable ($mod)"
+    elif on_host_sh "$r" "ethtool -m $nd 2>&1 | grep -q 'Operation not permitted'" && ! on_host_sh "$r" "sudo -n true 2>/dev/null"; then
+      skip "host $r: reading the module EEPROM of $nd needs root (run: sudo ethtool -m $nd)"
+    else skip "host $r: no module EEPROM for $nd (not exposed by the driver or module)"; fi
   done
   fa=$(on_host_sh A "ethtool --show-fec $A_NETDEV 2>/dev/null | awk -F': *' '/Active FEC encoding/ {print \$2}'")
   fb=$(on_host_sh B "ethtool --show-fec $B_NETDEV 2>/dev/null | awk -F': *' '/Active FEC encoding/ {print \$2}'")

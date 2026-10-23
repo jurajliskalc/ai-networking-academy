@@ -183,8 +183,15 @@ sudo ip netns exec hol1-b ping -c 1 -M do -s 8972 10.10.0.1
 Illustrative output of the last command (wording depends on your iputils version):
 
 ```
-ping: local error: message too long, mtu=1500
+PING 10.10.0.1 (10.10.0.1) 8972(9000) bytes of data.
+ping: sendmsg: Message too long
+
+--- 10.10.0.1 ping statistics ---
+1 packets transmitted, 0 received, +1 errors, 100% packet loss, time 0ms
 ```
+
+(`ping: local error: message too long, mtu=1500` is the related message for a path MTU the host
+has *learned*, which you will see later in this lab.)
 
 **Why:** host B knows its own MTU and refuses to send. Host A only knows *its* MTU (9000); the frame
 is perfectly legal on every hop until the very last one, where the receiving interface (MTU 1500)

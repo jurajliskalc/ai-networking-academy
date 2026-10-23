@@ -320,10 +320,16 @@ sudo rm -f /tmp/roce-*.pcap
 
 ## Going further on real hardware
 
-- On servers with RDMA NICs, hardware RoCE traffic usually bypasses the kernel, so `tcpdump` on
-  the netdev does not see it. Vendors provide their own capture methods (for example, offloaded
-  traffic sniffing via a vendor tool or a port mirror on the switch); check your NIC's
-  documentation. Switch port mirroring (SPAN/ERSPAN) to a capture host is the generic approach.
+- On servers with RDMA NICs, hardware RoCE traffic bypasses the kernel, so `tcpdump` on the netdev
+  sees nothing of it (`udp port 4791` captures zero packets during a perftest run). On NVIDIA
+  ConnectX (mlx5) NICs, libpcap's **RDMA sniffer** can capture the offloaded traffic: `sudo tcpdump
+  -D` lists the RDMA device (for example `mlx5_0 (RDMA sniffer)`; with distribution rdma-core it is
+  named like `rocep59s0f0`), and `sudo tcpdump -i mlx5_0 -w /tmp/roce.pcap` on that RDMA device,
+  not the netdev, records RoCEv2 packets you can open in Wireshark exactly as in this lab. Filter
+  when reading (`tcpdump -r /tmp/roce.pcap 'udp port 4791'`). On Ubuntu, tcpdump's AppArmor
+  profile blocks the sniffer (tcpdump then reports `No such device exists`) until you put the
+  profile in complain mode. NVIDIA's driver stack also ships `ibdump`. Switch port mirroring
+  (SPAN/ERSPAN) to a capture host is the vendor-neutral approach.
 - Capture during an NCCL test and count opcodes per QP to see how NCCL splits traffic across QPs
   and how many distinct UDP source ports (ECMP entropy) it produces.
 - Compare the DSCP/ECN marking on the wire with your intended QoS design; mismatches between host

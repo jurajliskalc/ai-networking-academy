@@ -61,9 +61,16 @@ You have two valid options. Pick one and use it on **every** host.
 | | Inbox (distribution) | NVIDIA DOCA-Host (successor of MLNX_OFED) |
 |---|---|---|
 | Where it comes from | The kernel's `mlx5_core`/`mlx5_ib` drivers + distribution rdma-core | NVIDIA's packages for your exact OS release |
-| Effort | None: it is already there | Download and install per NVIDIA's instructions; rebuilds on kernel updates |
-| Extra tools | Generic tools only | NVIDIA scripts used by some tasks: `mlnx_qos`, `show_gids`, `ibdev2netdev`, `cma_roce_tos` |
+| Effort | None: it is already there | Download and install per NVIDIA's instructions; depending on the packaging, kernel modules are rebuilt (DKMS) or come as signed prebuilt packages for your kernel |
+| RDMA device names | From the PCI address, for example `rocep3s0f0` | `mlx5_0`, `mlx5_1`, ... |
+| Extra tools | Generic tools only: `rdma`, `dcb`, `ethtool`, sysfs and configfs | NVIDIA scripts used by some tasks: `mlnx_qos`, `show_gids`, `ibdev2netdev`, `cma_roce_tos`, `cma_roce_mode`, `ofed_info`; the `/sys/class/net/<netdev>/ecn/` DCQCN switches |
 | Good for | All labs (tasks that need NVIDIA-only scripts say so and give a generic alternative where one exists) | Matching what many production AI clusters run |
+
+The NVIDIA scripts are not in the distribution archives. Their inbox equivalents: `dcb pfc`, `dcb app`,
+`dcb ets` and `dcb buffer` for `mlnx_qos`; `/sys/class/infiniband/<dev>/ports/1/gids/N` and
+`gid_attrs/types/N` for `show_gids`; `rdma link show` for `ibdev2netdev`; the rdma_cm configfs files
+(`/sys/kernel/config/rdma_cm/<dev>/ports/1/default_roce_tos` and `default_roce_mode`) for `cma_roce_tos`
+and `cma_roce_mode`.
 
 Install DOCA-Host following NVIDIA's DOCA installation guide for your distribution; the package
 names and repository setup change between releases, so this course does not repeat them.
@@ -106,8 +113,19 @@ sudo mst start && sudo mst status      # MST device names for flint/mlxconfig/ml
 sudo flint -d /dev/mst/<device> q      # the burned image: version, PSID, GUIDs/MACs
 ```
 
-Without MFT, the firmware version is still visible: `ethtool -i {{A_NETDEV}}` (`firmware-version`)
-and `cat /sys/class/infiniband/{{A_RDMA_DEV}}/fw_ver`. hw-01 compares it across hosts.
+Without MFT, the firmware version is still visible: `ethtool -i {{A_NETDEV}}` (`firmware-version`,
+with the PSID in brackets), `devlink dev info` (`fw.psid`, `fw.version`) and
+`cat /sys/class/infiniband/{{A_RDMA_DEV}}/fw_ver`. hw-01 compares it across hosts.
+
+> [!NOTE]
+> With **UEFI Secure Boot** on, the kernel's lockdown mode blocks the access MFT needs: `mst start`
+> loads and immediately unloads its modules ("(unused)") without creating usable `/dev/mst` devices,
+> `mlxfwmanager --query` finds no devices, `mlxconfig` fails with `-E- Failed to open the device` and
+> `flint` with `-E- Cannot open Device: mlx5_0.`. Recent kernels with recent MFT list a
+> `/dev/fwctl/fwctlN` device in `mst status -v`, and `mlxlink -d /dev/fwctl/fwctl0` works through it,
+> but `mlxconfig` still cannot read NV configuration (`... or HW access is disabled`) and `flint`
+> reports `Operation not supported`. Query
+> firmware with `ethtool -i` or `devlink dev info` instead; for changes, see the next section.
 
 > [!WARNING]
 > A firmware update is the most dangerous thing in this guide. Use only the image for your card's
@@ -127,15 +145,21 @@ sudo mlxconfig -d /dev/mst/<device> set LINK_TYPE_P1=2      # Ethernet for RoCE 
 
 The setting is stored in the adapter and survives reboots, but takes effect only after a firmware
 reset or a reboot. Ethernet-only adapters have no such parameter. Parameter names vary by adapter
-and firmware; trust what `query` shows.
+and firmware; trust what `query` shows. Under Secure Boot `mlxconfig` cannot reach the card (see the
+note above), so turn Secure Boot off for the change (or use a signed MFT kernel module) and back on
+afterwards.
 
 ## 7. Configure the data interface
 
 Find the netdev that belongs to your RDMA port:
 
 ```bash
-rdma link show        # e.g. link mlx5_0/1 state ACTIVE physical_state LINK_UP netdev ens1f0np0
+rdma link show        # e.g. link rocep59s0f0/1 state ACTIVE physical_state LINK_UP netdev ens1f0np0
 ```
+
+The first field is the RDMA device name you put in your profile ({{A_RDMA_DEV}}): distribution
+rdma-core names devices from the PCI address (`rocep59s0f0`), NVIDIA's stack calls them `mlx5_0`,
+`mlx5_1`, ... Use what your host prints.
 
 ### Ubuntu (netplan)
 
@@ -224,7 +248,9 @@ file, edited with `visudo -f`.
 ## 10. Locked memory
 
 RDMA registers memory and pins it. A low `memlock` limit makes perftest and NCCL fail to register
-buffers (often reported as a failure to allocate or register a memory region).
+buffers. A typical default of 8192 KiB is enough for a default perftest run but not for the
+all-sizes sweep (`ib_write_bw -a`), which then fails with `Couldn't allocate MR`, `Failed to create
+MR` and `Couldn't create IB resources`.
 
 ```bash
 ulimit -l        # want: unlimited

@@ -220,13 +220,19 @@ When a step time regresses, use the cost model to check whether the regression i
 ### Useful host checks
 
 ```bash
-# Illustrative host checks; adjust device names
+# Illustrative host checks; adjust device names (take them from `rdma link`)
 nvidia-smi topo -m                     # GPU-NIC PCIe/NVLink relationships
 lsmod | grep -E 'nvidia_peermem'       # peer-memory module, if your stack uses it for GDR
 ibv_devinfo -d mlx5_3 | grep -E 'state|active_mtu|link_layer'
 cat /sys/class/infiniband/mlx5_3/ports/1/counters/port_rcv_errors
-dmesg -T | grep -iE 'xid|mlx5|nvrm' | tail
+rdma statistic show link mlx5_3/1      # RDMA hw counters: out_of_sequence, local_ack_timeout_err, ...
+sudo dmesg -T | grep -iE 'xid|mlx5|nvrm' | tail   # many distros restrict dmesg to root
 ```
+
+`mlx5_3` is the NVIDIA-stack (MLNX_OFED/DOCA) naming that NCCL logs on most GPU servers; with the
+distro's inbox rdma-core the same device is named like `rocep3s0f0`, so copy the name NCCL printed
+or read it from `rdma link`. A missing device fails clearly: `ibv_devinfo -d` prints
+`IB device 'mlx5_3' wasn't found`.
 
 On recent driver stacks GPUDirect RDMA may use DMA-BUF instead of `nvidia-peermem`; the NCCL INFO
 output (GDRDMA on NET hops) is the definitive check of what is in use.

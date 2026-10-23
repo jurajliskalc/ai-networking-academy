@@ -250,7 +250,10 @@ ib_write_bw -d mlx5_0 --use_cuda=0 --report_gbits <server>   # client side
 Compare against the same test with host memory. On a healthy platform with GPU and NIC under one
 switch, GPU-memory bandwidth should be close to host-memory bandwidth. A large gap points at PCIe
 topology, ACS, or IOMMU settings (`pcie-numa-topology`). Check `ib_write_bw --help` for the CUDA and
-DMA-BUF options supported by your build.
+DMA-BUF options supported by your build: distribution perftest packages (Ubuntu's, for example) may be built without CUDA
+(`ib_write_bw --help | grep -i cuda` prints nothing, and `--use_cuda` fails with `Unsupported memory
+type`), while NVIDIA's DOCA perftest lists `--use_cuda`, `--use_cuda_dmabuf` and related options. Replace
+`mlx5_0` with your RDMA device name from `rdma link show`.
 
 ### Check GDS
 

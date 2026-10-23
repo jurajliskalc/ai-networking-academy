@@ -178,16 +178,26 @@ received by it.
 Illustrative Linux view of NIC-side counters during an MoE all-to-all benchmark:
 
 ```text
-# Illustrative: per-priority pause and CNP counters on a ConnectX port (names vary by driver)
-$ ethtool -S ens1f0 | grep -E 'prio3_pause|cnp'
+# Illustrative: per-priority pause counters (netdev) and CNP counters (RDMA device) on a ConnectX port
+$ ethtool -S ens1f0 | grep prio3_pause
      rx_prio3_pause: 18234
-     tx_prio3_pause: 12
      rx_prio3_pause_duration: 912340
-$ cat /sys/class/infiniband/mlx5_0/ports/1/hw_counters/np_cnp_sent
-4410923
+     tx_prio3_pause: 12
+     tx_prio3_pause_duration: 40
+     rx_prio3_pause_transition: 9117
+$ grep -H . /sys/class/infiniband/mlx5_0/ports/1/hw_counters/{np_cnp_sent,rp_cnp_handled}
+/sys/class/infiniband/mlx5_0/ports/1/hw_counters/np_cnp_sent:4410923
+/sys/class/infiniband/mlx5_0/ports/1/hw_counters/rp_cnp_handled:1022
 ```
 
-Reading it: the NIC is **receiving** many pauses for priority 3 (it is being told to stop, so the
+Where the counters live: on mlx5 the per-priority `prioN_pause` counters appear in `ethtool -S` only
+for priorities that have PFC enabled, while CNP and ECN counters (`np_cnp_sent`,
+`np_ecn_marked_roce_packets`, `rp_cnp_handled`, `rp_cnp_ignored`) are RDMA hardware counters, not
+in `ethtool -S`; `rdma statistic show link <dev>/1` shows the same set. Take `<dev>` from
+`rdma link`: NVIDIA's driver stack names it `mlx5_0`, distro rdma-core names it like `rocep3s0f0`.
+On a back-to-back link or any path where nothing ECN-marks, the CNP counters stay at 0.
+
+Reading the output: the NIC is **receiving** many pauses for priority 3 (it is being told to stop, so the
 network in front of it is congested), but sending almost none (it is not the bottleneck itself). As
 the notification point it is also sending many CNPs, meaning traffic arriving at it is ECN-marked.
 Consistent with the host being one of several receivers that are hot spots during all-to-all.

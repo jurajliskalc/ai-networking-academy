@@ -236,7 +236,7 @@ Automation should do the same steps: stage, diff, apply, verify. Prefer applying
 
 ### Host-side automation
 
-Remember the other end of every link. Host NIC settings (trust mode, PFC priorities, RoCE mode, MTU, firmware) must be automated from the same policy file. Tools vary (vendor utilities such as `mlnx_qos` from MLNX_OFED/DOCA for trust and PFC, `mlxconfig` for firmware parameters, netplan or NetworkManager for MTU, the cluster's configuration management for packages). A host agent or a daily audit job compares the actual host state with policy and reports drift.
+Remember the other end of every link. Host NIC settings (trust mode, PFC priorities, RoCE mode, MTU, firmware) must be automated from the same policy file. Tools vary (vendor utilities such as `mlnx_qos` from MLNX_OFED/DOCA for trust and PFC, or iproute2 `dcb` with the distro inbox driver; `mlxconfig` for firmware parameters, which needs MFT device access that Secure Boot kernel lockdown blocks; netplan or NetworkManager for MTU, the cluster's configuration management for packages). A host agent or a daily audit job compares the actual host state with policy and reports drift.
 
 ### Decision table: automation failure modes
 

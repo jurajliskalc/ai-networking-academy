@@ -280,6 +280,9 @@ LnkSta: Speed 32GT/s, Width x16
   problem, not a network problem. Two caveats: GPUs commonly lower their link speed when idle to save
   power (check under load), and some platforms downgrade certain functions by design, so compare against
   a known-good node of the same model before opening a ticket.
+- Inside a virtual machine with PCI passthrough, `lspci` shows the hypervisor's virtual root port, not the
+  physical slot: a passed-through ConnectX NIC can report something like `Speed 5GT/s, Width x32`. Check
+  PCIe speed and width on bare metal or from the hypervisor.
 - Run it for every GPU and every NIC during node acceptance (see `fabric-validation-burn-in`).
 
 ### Find the NUMA node of a device

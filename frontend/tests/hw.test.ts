@@ -8,6 +8,7 @@ import { dataPort, detectedProfile, parseReport, readiness, review, type Report 
 import { fromPastedText, mergeChecks, parseCheckJson, parseCheckLines } from '../src/hw/checks';
 import { emptyProgress, recordHwCheck } from '../src/progress';
 import demo from '../src/hw/demo-report.json';
+import real from './fixtures/real-report-cx5-doca.json';
 
 const ROOT = path.resolve(__dirname, '..', '..');
 const hw = yaml.load(fs.readFileSync(path.join(ROOT, 'content/hardware/hardware.yaml'), 'utf8')) as { variables: HwVariable[] };
@@ -88,6 +89,17 @@ describe('inventory report and health review', () => {
     expect(parseReport(report.hosts[0]).hosts).toHaveLength(1);
     expect(() => parseReport({ schema: 'nope' })).toThrow(/Unknown schema/);
     expect(() => parseReport({ schema: 'aina.hw.report/1', hosts: [{}] })).toThrow(/malformed/);
+  });
+
+  it('reads a report collected on real hardware', () => {
+    // aina-hw collect-all --redact on two ConnectX-5 hosts (Ubuntu 26.04, DOCA-OFED 3.4), default QoS, fw 16.29 vs 16.34.
+    const r = parseReport(real);
+    expect(r.hosts.map((h) => h.role)).toEqual(['A', 'B']);
+    const prof = { ...P, A_RDMA_DEV: 'mlx5_0', B_RDMA_DEV: 'mlx5_0', A_NETDEV: 'ens64f0np0', B_NETDEV: 'ens64f0np0', A_IP: '10.10.10.1', B_IP: '10.10.10.2', MTU: '9000' };
+    expect(dataPort(r.hosts[0], prof)?.dev.name).toBe('mlx5_0');
+    const ids = review(r, prof, new Date('2026-10-23')).map((x) => `${x.severity}:${x.id}`);
+    expect(ids).toEqual(expect.arrayContaining(['warn:trust', 'warn:fw-mismatch', 'info:pfc']));
+    expect(ids.filter((x) => x.startsWith('error:'))).toEqual([]);
   });
 
   it('picks the profile device as the data port', () => {

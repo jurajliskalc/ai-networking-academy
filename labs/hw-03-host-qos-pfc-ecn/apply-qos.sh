@@ -54,5 +54,11 @@ echo
 echo "Result:"
 case "$TOOL" in
   mlnx_qos) mlnx_qos -i "$NETDEV" | sed 's/^/  /' ;;
-  dcb) { dcb pfc show dev "$NETDEV" prio-pfc; dcb app show dev "$NETDEV" dscp-prio; } | sed 's/^/  /' ;;
+  dcb) { dcb pfc show dev "$NETDEV" prio-pfc; dcb -N app show dev "$NETDEV" dscp-prio; } | sed 's/^/  /' ;;
 esac
+# On mlx5, enabling PFC switches 802.3x global pause off, and a later "ethtool -A <if> rx on tx on" silently
+# clears PFC again: show the global pause state so a leftover tuning script is easy to spot.
+if command -v ethtool >/dev/null 2>&1; then
+  echo "Global pause (should read off while PFC is on):"
+  ethtool -a "$NETDEV" 2>/dev/null | grep -E '^(RX|TX):' | sed 's/^/  /'
+fi
