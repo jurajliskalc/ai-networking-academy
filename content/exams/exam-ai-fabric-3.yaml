@@ -1205,11 +1205,11 @@ questions:
     prompt: |
       On an NDR InfiniBand fabric, illustrative iblinkinfo output shows most links like this:
 
-        ( 4X   106.25 Gbps Active/  LinkUp)
+        ( 4X        106.25 Gbps Active/  LinkUp)
 
       One leaf-to-spine link shows:
 
-        ( 4X    53.125 Gbps Active/  LinkUp)
+        ( 4X        53.125 Gbps Active/  LinkUp)
 
       What is the most likely issue?
     options:

@@ -98,9 +98,10 @@ which prints the same mapping plus the PCI address and firmware (as non-root it 
 `Permission denied` lines for the VPD file, which are harmless); it is not part of upstream
 rdma-core, so do not rely on it in scripts that must run everywhere.
 
-On an InfiniBand host the `netdev` field is the IPoIB interface (for example `ibp1s0`) if IPoIB is
-loaded, and may be absent otherwise. That is normal: InfiniBand does not need an IP interface to
-carry RDMA.
+On an InfiniBand port `rdma link` prints no `netdev` field at all, even when an IPoIB interface
+exists; it shows `subnet_prefix`, `lid`, `sm_lid` and `lmc` instead. `ibdev2netdev` still lists the
+IPoIB interface (for example `mlx5_1 port 1 ==> ibs64f1 (Down)`). That is normal: InfiniBand does
+not need an IP interface to carry RDMA.
 
 Confirm the profile: host A should use `{{A_RDMA_DEV}}` / `{{A_NETDEV}}`, host B `{{B_RDMA_DEV}}` /
 `{{B_NETDEV}}`. Fix the profile now if they differ.

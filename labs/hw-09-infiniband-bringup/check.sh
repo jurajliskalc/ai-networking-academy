@@ -33,8 +33,8 @@ if [[ -n "${SMLID[A]:-}" ]] && (( ${SMLID[A]} > 0 )) && [[ "${SMLID[A]}" == "${S
 else
   fail "SM LID A='${SMLID[A]:-}' B='${SMLID[B]:-}': hosts must see the same non-zero SM LID"
 fi
-SMINFO=(sminfo); [[ $EUID -eq 0 ]] || SMINFO=(sudo -n sminfo)
-if s=$("${SMINFO[@]}" 2>/dev/null) && [[ "$s" == *MASTER* ]]; then pass "sminfo: $s"
+SMINFO=(sminfo -C "$A_RDMA_DEV" -P "$RDMA_PORT"); [[ $EUID -eq 0 ]] || SMINFO=(sudo -n "${SMINFO[@]}")
+if s=$("${SMINFO[@]}" 2>/dev/null) && [[ "$s" == *MASTER* ]]; then pass "$s"
 else fail "sminfo finds no master subnet manager (or could not run it as root: run 'sudo -v' first)"; fi
 
 log=$(mktemp); out=$(mktemp)

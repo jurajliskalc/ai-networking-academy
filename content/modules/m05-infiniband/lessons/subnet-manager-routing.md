@@ -48,13 +48,13 @@ In an Ethernet AI fabric, path selection is spread across ECMP hash functions in
 
 ### Where the SM runs
 
-- **OpenSM**: the open-source SM, packaged with Linux distributions and run as a daemon on a host (or on a managed switch's CPU).
+- **OpenSM**: the open-source SM, packaged with Linux distributions and run as a daemon on a host (or on a managed switch's CPU). The service name depends on the packaging: NVIDIA's DOCA-OFED installs `opensmd.service` (there is no `opensm.service`), while distribution packages may use `opensm`.
 - **Switch-embedded SM**: managed NVIDIA switches can run an SM on the switch itself, which is convenient for small fabrics; vendor guidance typically recommends a host-based SM for large fabrics because of CPU and memory requirements (check current NVIDIA guidance for your scale).
 - **NVIDIA UFM** (Unified Fabric Manager): a management platform that includes an SM derived from OpenSM plus telemetry, monitoring and configuration management. Large AI clusters commonly run UFM on a pair of dedicated servers. UFM is covered further in `ufm-netq-management`.
 
 ### Election: master and standby
 
-Several SMs can run on one subnet for redundancy, but only one is **master**. Election compares the SM **priority** (0-15, higher wins) and, on a tie, the **lower port GUID** wins. Other SMs become **standby**, poll the master and take over if it stops responding. A higher-priority SM that comes up later can take over the master role (OpenSM has options that control whether it does).
+Several SMs can run on one subnet for redundancy, but only one is **master**. Election compares the SM **priority** (0-15, higher wins) and, on a tie, the **lower port GUID** wins. Other SMs become **standby**, poll the master and take over if it stops responding. If no SM is left at all, ports that are already Active stay Active and running traffic is unaffected, because the SM does not forward data; what stops is change handling (a port that resets comes back in Init and stays there), SA queries and `sminfo` answers. A higher-priority SM that comes up later can take over the master role (OpenSM has options that control whether it does).
 
 > [!WARNING]
 > An unmanaged extra SM is a classic incident source: someone starts OpenSM on a test host plugged into the production fabric with a higher priority, it becomes master, and it reprograms the fabric with its own (default) routing engine and configuration. Lock down which hosts may run an SM, set priorities deliberately, and monitor `sminfo`.

@@ -18,13 +18,26 @@ commands:
                       SM lid: 1
                       Port GUID: 0xb83fd20300aabb01
                       Link layer: InfiniBand
-    notes: "State Active + Physical state LinkUp is healthy. State Initializing with LinkUp means the link trained but no SM has configured the port. Physical state Polling means no link (cable, optic, peer down). Rate below the expected speed indicates a degraded link (fewer lanes or a lower speed). ibstat also works on RoCE ports: they show 'Link layer: Ethernet', 'Base lid: 0' and 'SM lid: 0', and the CA name is whatever the stack called the device (mlx5_0 with NVIDIA's stack, for example rocep59s0f0 with distribution rdma-core)."
+    notes: "State Active + Physical state LinkUp is healthy. State Initializing with LinkUp means the link trained but no SM has configured the port; such a port shows 'Base lid: 65535' (0xffff, unassigned, not 0) and 'SM lid: 0'. Physical state Polling means no link (cable, optic, peer down). Rate below the expected speed indicates a degraded link (fewer lanes or a lower speed). ibstat also works on RoCE ports: they show 'Link layer: Ethernet', 'Base lid: 0' and 'SM lid: 0', and the CA name is whatever the stack called the device (mlx5_0 with NVIDIA's stack, for example rocep59s0f0 with distribution rdma-core)."
     tags: [infiniband-diags, port, verify]
 
   - cmd: ibstat mlx5_0 1
     platform: infiniband
     summary: Show one CA and port only.
-    notes: "'ibstat -p' prints just the port GUIDs, which is handy for scripts and SM configuration."
+    example: |
+      # illustrative output
+      CA: 'mlx5_0'
+      Port 1:
+      State: Active
+      Physical state: LinkUp
+      Rate: 400
+      Base lid: 117
+      LMC: 0
+      SM lid: 1
+      Capability mask: 0x...
+      Port GUID: 0xb83fd20300aabb01
+      Link layer: InfiniBand
+    notes: "With a device and port given, ibstat prints a flat, unindented block without the CA type, firmware and node GUID lines ('ibstat mlx5_0' alone prints the tab-indented form), which matters for scripts that parse it. 'ibstat -l' lists every CA name, RoCE devices included. 'ibstat -p' prints just the port GUIDs, which is handy for scripts and SM configuration."
     tags: [infiniband-diags, port]
 
   - cmd: ibstatus
@@ -40,7 +53,7 @@ commands:
               phys state:      5: LinkUp
               rate:            400 Gb/sec (4X NDR)
               link_layer:      InfiniBand
-    notes: "On a RoCE port the same fields appear with base lid and sm lid 0x0 and link_layer Ethernet; the rate keeps its InfiniBand-style label (a 100GbE ConnectX-5 port prints '100 Gb/sec (4X EDR)')."
+    notes: "A port waiting for the SM shows 'base lid: 0xffff', 'sm lid: 0x0' and 'state: 2: INIT' with 'phys state: 5: LinkUp'. On a RoCE port the same fields appear with base lid and sm lid 0x0 and link_layer Ethernet; the rate keeps its InfiniBand-style label (a 100GbE ConnectX-5 port prints '100 Gb/sec (4X EDR)')."
     tags: [infiniband-diags, port, verify]
 
   - cmd: iblinkinfo
@@ -49,16 +62,16 @@ commands:
     example: |
       # illustrative output (trimmed)
       Switch: 0x... leaf01:
-                12    1[  ] ==( 4X  106.25 Gbps Active/  LinkUp)==>     117    1[  ] "gpu-node-01 mlx5_0" ( )
-                12    2[  ] ==( 4X  106.25 Gbps Active/  LinkUp)==>     118    1[  ] "gpu-node-02 mlx5_0" ( )
+                12    1[  ] ==( 4X        106.25 Gbps Active/  LinkUp)==>     117    1[  ] "gpu-node-01 mlx5_0" ( )
+                12    2[  ] ==( 4X        106.25 Gbps Active/  LinkUp)==>     118    1[  ] "gpu-node-02 mlx5_0" ( )
                 12    3[  ] ==(                Down/ Polling)==>             [  ] "" ( )
-    notes: The per-lane speed column depends on the generation and tool version. Look for ports at the wrong width (1X instead of 4X) or speed, and for Polling ports that should be cabled. Run from a host with an active port on the fabric; large fabrics take a while.
+    notes: "The per-lane speed column depends on the generation and tool version. Look for ports at the wrong width (1X instead of 4X) or speed, and for Polling ports that should be cabled (an EDR link reads '4X      25.78125 Gbps'). Without switches (back to back) it prints one 'CA: <node description>:' block per HCA instead. It discovers by directed route, so it already works while ports are still Initialize (LIDs then show as 65535); large fabrics take a while. On a host whose first RDMA device is a RoCE port, name the IB port with -C <ca> -P <port>."
     tags: [infiniband-diags, topology, links]
 
   - cmd: ibnetdiscover > fabric-topology.txt
     platform: infiniband
     summary: Discover the full fabric topology (switches, CAs, links, GUIDs, LIDs) and save it as a topology file.
-    notes: Diff a fresh capture against a known-good one to detect miscabling or missing links after maintenance. Node descriptions (hostnames) make the output far more readable, so set them on hosts and switches.
+    notes: Diff a fresh capture against a known-good one to detect miscabling or missing links after maintenance. Node descriptions (hostnames) make the output far more readable, so set them on hosts and switches. Discovery uses directed routes, so it also works before an SM has run (every LID then reads 65535).
     tags: [infiniband-diags, topology, discovery]
 
   - cmd: ibhosts
@@ -86,7 +99,7 @@ commands:
       PortRcvRemotePhysicalErrors:.....0
       PortXmitDiscards:................0
       PortXmitWait:....................18342
-    notes: Basic counters are 32-bit or smaller and saturate; use -x for 64-bit data counters. PortXmitWait counts time the port had data to send but no credits - the IB symptom of congestion. SymbolErrorCounter or LinkErrorRecoveryCounter increasing points to a marginal cable or optic.
+    notes: "Basic counters are 32-bit or smaller and saturate; use -x for 64-bit data counters. PortXmitWait counts time the port had data to send but no credits - the IB symptom of congestion. SymbolErrorCounter or LinkErrorRecoveryCounter increasing points to a marginal cable or optic. perfquery addresses the port by LID, so it needs an SM-assigned LID: on an unconfigured port it times out ('_do_madrpc failed; dport (Lid 65535)', then 'perfquery: iberror: failed: classportinfo query'). On a host whose first RDMA device is a RoCE port, add -C <ca> -P <port>; without them it fails with \"Failed to open '(null)' port '0'\"."
     tags: [infiniband-diags, counters]
 
   - cmd: perfquery -x 117 1
@@ -104,7 +117,18 @@ commands:
   - cmd: ibqueryerrors
     platform: infiniband
     summary: Scan the fabric and report only ports whose error counters exceed thresholds.
-    notes: The fastest fabric-wide "where are the errors" check. Options for clearing counters, thresholds and suppressing specific counters differ across infiniband-diags versions; see "ibqueryerrors --help".
+    example: |
+      # illustrative output (back-to-back pair)
+      Errors for "node-b mlx5_0"
+         GUID 0x... port 1: [PortRcvErrors == 3]
+      Errors for "node-a mlx5_0"
+         GUID 0x... port 1: [PortXmitDiscards == 11] [PortXmitWait == 65571]
+
+      ## Summary: 2 nodes checked, 2 bad nodes found
+      ##          2 ports checked, 2 ports have errors beyond threshold
+      ## Thresholds:
+      ## Suppressed:
+    notes: "The fastest fabric-wide \"where are the errors\" check; it exits non-zero when ports exceed thresholds. It lists the ports through the SA, so without an SM it prints only 'ibwarn: [...] sa_get_handle: No SM/SA found on port :1' (exit 0 in the version we tested) - not a clean result. Options for clearing counters, thresholds and suppressing specific counters differ across infiniband-diags versions; see \"ibqueryerrors --help\"."
     tags: [infiniband-diags, counters, troubleshooting]
 
   - cmd: ibdiagnet
@@ -119,7 +143,7 @@ commands:
     example: |
       # illustrative output
       sminfo: sm lid 1 sm guid 0x..., activity count 518231 priority 14 state 3 SMINFO_MASTER
-    notes: A steadily increasing activity count shows the SM is alive. If you expect a specific SM (for example on UFM) to be master and another one is, check SM priorities.
+    notes: "A steadily increasing activity count shows the SM is alive. If you expect a specific SM (for example on UFM) to be master and another one is, check SM priorities. With no SM on the subnet it times out with '_do_madrpc failed; dport (DR path slid 0; dlid 0; 0)' and 'sminfo: iberror: failed: query' (exit status 255). On a host whose first RDMA device is a RoCE port, run 'sminfo -C <ca> -P <port>'; a bare sminfo fails with 'client_register for mgmt 1 failed' and \"Failed to open '(null)' port '0'\"."
     tags: [infiniband-diags, subnet-manager]
 
   - cmd: saquery
@@ -142,7 +166,16 @@ commands:
   - cmd: ibping -S
     platform: infiniband
     summary: Start an ibping responder; on another host run "ibping <lid>" to ping it over IB management datagrams.
-    notes: Verifies IB reachability without IP, independent of IPoIB.
+    example: |
+      # illustrative client output (ibping -c 3 2)
+      Pong from node-b.(none) (Lid 2): time 0.048 ms
+      Pong from node-b.(none) (Lid 2): time 0.045 ms
+      Pong from node-b.(none) (Lid 2): time 0.052 ms
+
+      --- node-b.(none) (Lid 2) ibping statistics ---
+      3 packets transmitted, 3 received, 0% packet loss, time 3000 ms
+      rtt min/avg/max = 0.045/0.048/0.052 ms
+    notes: "Verifies IB reachability without IP, independent of IPoIB. The target is a LID, so it only works once the SM has assigned LIDs: given the unassigned value 65535 the client fails with 'ibping: iberror: failed: can't resolve destination port 65535'."
     tags: [infiniband-diags, connectivity]
 
   - cmd: ibportstate 117 1 query
@@ -153,8 +186,8 @@ commands:
 
   - cmd: opensm -B
     platform: infiniband
-    summary: Start the OpenSM subnet manager as a background daemon on this host's first active port.
-    notes: In production it is normally run as a system service (or replaced by the switch-embedded SM or UFM). Use -g <port GUID> to bind to a specific port and set a priority so the intended SM becomes master. Configuration lives in an opensm.conf (location depends on packaging); routing engine, for example ftree or updn, is chosen there. Check "opensm --help" for options on your version.
+    summary: Start the OpenSM subnet manager as a background daemon on a local port it picks itself.
+    notes: In production it is normally run as a system service (or replaced by the switch-embedded SM or UFM); the unit name depends on packaging (NVIDIA's DOCA-OFED installs opensmd.service, distribution packages may call it opensm). Use -g <port GUID> to bind to a specific port, which is the safe choice on a host with several RDMA ports (the port GUID is the low 64 bits of /sys/class/infiniband/<ca>/ports/<port>/gids/0, or see 'ibstat -p'), and set a priority so the intended SM becomes master. Stopping the only SM leaves Active ports Active and running traffic unaffected; it only stops the subnet from reacting to changes. Configuration lives in an opensm.conf (location depends on packaging); routing engine, for example ftree or updn, is chosen there. Check "opensm --help" for options on your version.
     tags: [opensm, subnet-manager]
 
   - cmd: smpquery nodeinfo 117

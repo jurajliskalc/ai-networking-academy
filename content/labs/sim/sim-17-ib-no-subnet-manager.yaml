@@ -27,7 +27,7 @@ diagnosis:
     - id: a
       text: No subnet manager is running. opensm on node01 is stopped and disabled after the patch, so no port gets a LID or leaves INIT, and NCCL falls back to sockets.
       correct: true
-      explanation: An InfiniBand port trains physically on its own (LinkUp), but only a subnet manager assigns LIDs, programs the switch forwarding tables and moves ports through ARMED to ACTIVE. ibstat shows State Initializing, Base lid 0 and SM lid 0 everywhere, sminfo fails, and systemctl shows opensm inactive and disabled on node01, so the reboot after patching left the subnet unmanaged. perftest refuses a non-ACTIVE port, and NCCL's IB transport skips non-ACTIVE ports, finds no device and silently uses TCP sockets over eno1.
+      explanation: An InfiniBand port trains physically on its own (LinkUp), but only a subnet manager assigns LIDs, programs the switch forwarding tables and moves ports through ARMED to ACTIVE. ibstat shows State Initializing, Base lid 65535 (unassigned) and SM lid 0 everywhere, sminfo fails, and systemctl shows opensm inactive and disabled on node01, so the reboot after patching left the subnet unmanaged. perftest refuses a non-ACTIVE port, and NCCL's IB transport skips non-ACTIVE ports, finds no device and silently uses TCP sockets over eno1.
     - id: b
       text: The patch reset the HCAs to Ethernet link layer, so the ports cannot reach ACTIVE on an InfiniBand switch and NCCL has to use TCP sockets instead.
       explanation: ibstat and ibv_devinfo report Link layer InfiniBand and the links train to 4X NDR on the Quantum switches. A port in Ethernet mode would not train against an InfiniBand switch port at all.
@@ -43,11 +43,11 @@ checks:
   - { description: "every HCA port is ACTIVE", check: ib_ports_active, args: { node: all } }
   - { description: "all_reduce bus bandwidth is above 360 GB/s", check: allreduce_min_busbw, args: { value: 360 } }
 solution: |
-  `ibstat` on any node shows `State: Initializing`, `Physical state: LinkUp`, `Base lid: 0`, `SM lid: 0`.
+  `ibstat` on any node shows `State: Initializing`, `Physical state: LinkUp`, `Base lid: 65535` (the reserved value 0xFFFF: no LID assigned), `SM lid: 0`.
   `ibstatus` reads `2: INIT` from sysfs, `rdma link` shows `state INIT physical_state LINK_UP`, and
   `ibdev2netdev` shows the IPoIB netdevs Down. `ib_write_bw` stops at `Port number 1 state is Init`.
   `sminfo` fails, and `iblinkinfo` (which discovers by directed route, without LIDs) shows every link as
-  `4X 106.25 Gbps Initialize/ LinkUp` with LID 0. With `NCCL_DEBUG=INFO`, NCCL logs `NET/IB : No device
+  `4X 106.25 Gbps Initialize/ LinkUp` with LID 65535. With `NCCL_DEBUG=INFO`, NCCL logs `NET/IB : No device
   found.` and `Using network Socket`.
 
   On node01, `systemctl status opensm` shows the service inactive and disabled. Fix:

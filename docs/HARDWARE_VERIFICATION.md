@@ -271,6 +271,13 @@ mlnx-ofed-kernel-utils). Not in Ubuntu's archive. INBOX equivalents:
   With -m: `Module Info` (`Temperature [C]`, `Voltage [mV]`, `Bias Current [mA]`, `Rx Power Current [dBm]`,
   `Tx Power Current [dBm]` per lane, `Identifier`, `Compliance`, `Cable Technology`, `Vendor Part Number`,
   `Transfer Distance [m]`, ...). A passive DAC reports zeros for temperature/power.
+- Changing the port type inside a VM (ESXi PCI passthrough, Secure Boot off): `mlxconfig -d 03:00.0 set
+  LINK_TYPE_P2=1` succeeds (`-I- Please power cycle machine to load new configurations.` with fw 16.29,
+  `... reboot machine ...` with fw 16.34); `mlxconfig -e q` then shows Default `IB(1)` (the factory default of
+  this VPI card), Current `ETH(2)`, Next Boot `IB(1)`. Neither a guest reboot nor a full VM power-off/power-on
+  loads it (Current stays `ETH(2)`), and `mlxfwreset -d 03:00.0 reset` refuses with `-E- The tool is not
+  supported on virtual machines.` (its `query` lists level 3 "Driver restart and PCI reset" as supported).
+  The physical host has to reset the adapter.
 - `devlink dev info` -> `pci/0000:03:00.0:` / `  driver mlx5_core` / `  versions:` / `      fixed:` /
   `        fw.psid MT_0000000008` / `      running:` / `        fw.version 16.29.1016`.
 
@@ -311,3 +318,87 @@ mlnx-ofed-kernel-utils). Not in Ubuntu's archive. INBOX equivalents:
 - `setup-rdma-host.sh` ran clean on both hosts (installs rdmacm-utils, lldpd, ...); flags memlock 8192 KiB;
   `--set-memlock` fixes it after re-login.
 - `ethtool -m` needs sudo (closes the hw-05 open question in NEXT_STEPS).
+
+## InfiniBand mode (verified 2026-10-23)
+
+Port 2 of both ConnectX-5 VPI cards switched to InfiniBand (`mlxconfig ... LINK_TYPE_P2=1`, applied by a
+physical host reboot), cabled back to back, DOCA-OFED 3.4 (infiniband-diags 2604.0.7, OpenSM from DOCA).
+Port 1 stayed Ethernet, so `mlx5_0` is RoCE and `mlx5_1` is InfiniBand on the same host.
+
+**Without a subnet manager** (link trained, fabric not configured):
+- `ibstat mlx5_1`: `State: Initializing`, `Physical state: LinkUp`, `Rate: 100`, `Base lid: 65535`, `LMC: 0`,
+  `SM lid: 0`, `Capability mask: 0x2651e848`. The unassigned LID is **65535** (`0xffff` in sysfs `lid` and in
+  `ibstatus` `base lid: 0xffff`), not 0. `ibstatus`: `state: 2: INIT`, `phys state: 5: LinkUp`,
+  `rate: 100 Gb/sec (4X EDR)`.
+- `rdma link`: `link mlx5_1/1 subnet_prefix fe80:0000:0000:0000 lid 65535 sm_lid 0 lmc 0 state INIT
+  physical_state LINK_UP ` (no `netdev` field in IB mode, even with an IPoIB interface present).
+- `iblinkinfo` works without an SM (directed routes): `==( 4X      25.78125 Gbps Initialize/  LinkUp)==>`,
+  LIDs shown as 65535. `ibnetdiscover` also works and prints `# lid 65535 lmc 0 ... 4xEDR`.
+- `sminfo` -> `ibwarn: [pid] _do_madrpc: recv failed: Connection timed out` /
+  `ibwarn: [pid] mad_rpc: _do_madrpc failed; dport (DR path slid 0; dlid 0; 0)` / `sminfo: iberror: failed: query`
+  (exit 255). `perfquery` -> `... dport (Lid 65535)` / `perfquery: iberror: failed: classportinfo query`.
+  `ibping` -> `ibping: iberror: failed: can't resolve destination port 65535` (exit 255). `ibqueryerrors` ->
+  `sa_get_handle: No SM/SA found on port :1`. `ibhosts` works (directed routes). Trap: `ibaddr -C mlx5_1 -P 1`
+  printed the PEER's GID (`GID fe80::1c34:da03:0:2229 LID start 0xffff end 0xffff`) because 0xffff is also the
+  permissive LID.
+- perftest on an INIT port: ` Port number 1 state is Init` / ` Couldn't set the link layer` /
+  ` Couldn't get context for the device`. `ibv_rc_pingpong`: `Failed status transport retry counter exceeded
+  (12) for wr_id 2` / `parse WC failed 1`, addresses `LID 0xffff ... GID ::`.
+
+**Mixed RoCE + IB host:** umad tools open the FIRST RDMA device unless told otherwise. With `mlx5_0` RoCE,
+`sudo sminfo` / `sudo perfquery` fail: `ibwarn: [pid] mad_rpc_open_port2: client_register for mgmt 1 failed` /
+`sminfo: iberror: failed: Failed to open '(null)' port '0'` (bare `iblinkinfo` prints the unquoted
+`Failed to open (null) port 0`). Always pass `-C <ca> -P <port>` (`ibdiagnet` uses
+`-i <dev> -p <port>`). `ibstat -l` lists every CA, RoCE ones included.
+
+**OpenSM:** DOCA's unit is `opensmd.service` (`opensm.service` does not exist; Ubuntu's own opensm package
+differs). `opensm -B -g <port GUID>` binds it to one port; port GUID = low 64 bits of `gids/0`. With the SM up:
+`sminfo -C mlx5_1 -P 1` -> `sminfo: sm lid 1 sm guid 0x248a0703000011ef, activity count 47 priority 0 state 3
+SMINFO_MASTER`. Capability mask gains IsSM on the SM's port (`0x2651e84a`). Stopping the SM leaves ports ACTIVE
+and running traffic unaffected (a 60 s ib_write_bw finished at 97.44 Gb/s), `sminfo` fails with `iberror: failed: query`.
+
+**With the SM running** (formats):
+- `ibstat mlx5_1 1` (device AND port) prints a flat block with no indentation and no CA header fields:
+  `CA: 'mlx5_1'` / `Port 1:` / `State: Active` / `Physical state: LinkUp` / `Rate: 100` / `Base lid: 1` / `LMC: 0` /
+  `SM lid: 1` / `Capability mask: 0x2651e84a` / `Port GUID: 0x248a0703000011ef` / `Link layer: InfiniBand`.
+  `ibstat mlx5_1` (device only) prints the usual indented block (`CA 'mlx5_1'`, `\tCA type: MT4119`, ...).
+- `ibv_devinfo -d mlx5_1`: `transport: InfiniBand (0)`, `sm_lid: 1`, `port_lid: 1`, `link_layer: InfiniBand`.
+- `rdma link`: `... lid 1 sm_lid 1 lmc 0 state ACTIVE physical_state LINK_UP `.
+- P_Keys: `pkeys/0` = `0xffff`, `pkeys/1`, `pkeys/2` = `0x0000` (they exist in IB mode; in RoCE mode only index 0).
+- `perfquery -C mlx5_1 -P 1`: `# Port counters: Lid 1 port 1 (CapMask: 0x5A00)` then dotted fields
+  (`PortSelect:......................1`, `SymbolErrorCounter`, `LinkErrorRecoveryCounter`, `LinkDownedCounter`,
+  `PortRcvErrors`, ..., `PortXmitWait`). `-x`: `# Port extended counters: Lid 1 port 1 (CapMask: 0x5A00 CapMask2:
+  0x0000000)` for the local port (host B's port, queried as `-x 2 1`, reported `CapMask2: 0x0000002`) with
+  `PortUnicastXmitPkts` etc. The 32-bit `PortXmitData` of plain `perfquery` saturates: it read `4294967295` while
+  `-x` showed `199294892652` for the same port.
+- `ibqueryerrors`: `Errors for "<node desc> mlx5_1"` / `   GUID 0x... port 1: [PortXmitDiscards == 11] [PortXmitWait
+  == 65571]`, summary `## Summary: 2 nodes checked, 2 bad nodes found` / `##          2 ports checked, 2 ports have
+  errors beyond threshold` / `## Thresholds: ` / `## Suppressed:` (exit 1). Counters with a rate threshold print as `[PortRcvErrors == 3 (3.000)]`. Node descriptions are
+  `<hostname> mlx5_1`. Without an SM it prints only `ibwarn: [pid] sa_get_handle: No SM/SA found on port :1`
+  (exit 0).
+- `ibnetdiscover`: `Ca	1 "H-<guid>"		# "<host> mlx5_1"` and `[1](<guid>) 	"H-<peer guid>"[1] (<peer guid>) 		# lid 2
+  lmc 0 "<peer>" lid 1 4xEDR`. `ibhosts`: `Ca	: 0x1c34da0300002229 ports 1 "ESXI-2-UbuntuServer-1 mlx5_1"`.
+  `ibswitches` prints nothing back to back. `iblinkinfo`: `4X      25.78125 Gbps Active/  LinkUp` (the speed column is right-aligned; spacing for other
+  speeds such as NDR `106.25` is inferred from that, not captured).
+- `ibtracert -C mlx5_1 -P 1 1 2`: `From ca {0x...} portnum 1 lid 1-1 "<host> mlx5_1"` / `[1] -> ca port {0x...}[1]
+  lid 2-2 "<peer> mlx5_1"` / `To ca {...} portnum 1 lid 2-2 "..."`. `ibaddr`: `GID fe80::248a:703:0:11ef LID start 0x1
+  end 0x1`. `smpquery nodeinfo`: `# Node info: Lid 1`, `NodeType:........................Channel Adapter`.
+- `ibping -S` (server) / `ibping -c 5 <lid>` (lab run; the capture used `-c 3 -L <lid>`): `Pong from <host>.(none) (Lid 2): time 0.057 ms`, then
+  `--- <host>.(none) (Lid 2) ibping statistics ---` / `5 packets transmitted, 5 received, 0% packet loss, time 5000 ms`
+  / `rtt min/avg/max = 0.036/0.046/0.060 ms`.
+- perftest over IB: header ` Link type       : IB`, no `GID index` line, address lines ` local address: LID 0x01 QPN
+  0x0149 PSN 0x5360f3 RKey ... VAddr ...` with NO `GID:` line. 94.8-97.2 Gb/s write (5000 iterations, two runs),
+  97.4 Gb/s over 60 s, 0.83 us minimum write latency.
+  `ibv_rc_pingpong`: `local address:  LID 0x0001, QPN 0x00014e, PSN 0x636282, GID ::`.
+- `ibdiagnet -i mlx5_1 -p 1` runs (DOCA ibutils2): `-I- Fabric Discover finished successfully`, `Total switches/ports
+  [0/0], CAs/ports [2/2]`, warns about mixed firmware (`... has FW version 16.29.1016 while the latest FW version for
+  the same Devid/PSID on this fabric is 16.34.1002`), `Fabric Summary` / `Total Nodes : 2`.
+- `smpquery portinfo` on this EDR link shows `LinkSpeedActive: 10.0 Gbps` / `LinkSpeedSupported: 2.5/5/10`: EDR
+  lives in the extended-speed fields further down, so read those before concluding a link trained slowly.
+- `mlxlink -d 03:00.1` (IB port): `Speed : IB-EDR`, `FEC : No FEC`, `Enabled Link Speed : 0x0000003f
+  (EDR,FDR,FDR10,QDR,DDR,SDR)`.
+- IPoIB: netdev `ibs64f1` (altname `ibp3s0f1`), DOWN until configured, `mtu 4092`, `ipoib pkey 0xffff mode datagram`,
+  `link/infiniband 00:00:09:47:fe:80:...`. `ibdev2netdev`: `mlx5_1 port 1 ==> ibs64f1 (Down)`. `show_gids mlx5_1`:
+  one row, `fe80:...` with empty IPv4 and DEV columns, VER `v1`, `n_gids_found=1`.
+- RDMA hw_counters on an IB port: the same mlx5 set minus the CNP/ECN counters (no `np_cnp_sent`,
+  `rp_cnp_handled`, `np_ecn_marked_roce_packets`; `lifespan` appears).

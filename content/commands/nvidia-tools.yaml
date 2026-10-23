@@ -108,7 +108,7 @@ commands:
       Status Opcode                      : 0
       Group Opcode                       : N/A
       Recommendation                     : No issue was observed
-    notes: "The device can be given as an MST path or a PCI address; on a terminal the values are colored. Field names and available sections vary by MFT version and by InfiniBand vs Ethernet mode (Port Info, Supported Info and Tool Information sections follow on recent MFT). Under Secure Boot, -d mlx5_0 or a PCI address fails with '-E- Failed to open device: ... No such file or directory'; use the /dev/fwctl/fwctlN device from mst status -v. Output is illustrative."
+    notes: "The device can be given as an MST path or a PCI address; on a terminal the values are colored. Field names and available sections vary by MFT version and by InfiniBand vs Ethernet mode (Port Info, Supported Info and Tool Information sections follow on recent MFT). On a port in InfiniBand mode the same layout shows IB rates, for example 'Speed : IB-EDR' and 'Enabled Link Speed : 0x0000003f (EDR,FDR,FDR10,QDR,DDR,SDR)' on a ConnectX-5 (an EDR link may report 'FEC : No FEC'); on a dual-port ConnectX each port is its own PCI function, so address the IB port by it (for example 03:00.1 for port 2). Under Secure Boot, -d mlx5_0 or a PCI address fails with '-E- Failed to open device: ... No such file or directory'; use the /dev/fwctl/fwctlN device from mst status -v. Output is illustrative."
     tags: [mft, link, phy, troubleshooting]
 
   - cmd: mlxlink -d /dev/mst/mt4129_pciconf0 -c

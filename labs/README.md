@@ -13,13 +13,13 @@ themselves live in `content/labs/handson/<lab-id>.md` (and in the web app); each
 directory here with its scripts, topologies and a `check.sh` that prints `PASS:`/`FAIL:` lines and
 exits non-zero if any check fails.
 
-> **Status:** ten labs are `verified: true` (see [Verification record](#verification-record) and
+> **Status:** eleven labs are `verified: true` (see [Verification record](#verification-record) and
 > [Hardware verification record](#hardware-verification-record) below). Tier 0:
 > `hol-linux-net-basics`, `hol-ecmp-entropy`, `hol-ecn-congestion`, `hol-clos-bgp-unnumbered` and
-> `hol-evpn-vxlan`. Tier 1 on real ConnectX-5 hardware: `hw-01` to `hw-05`.
+> `hol-evpn-vxlan`. Tier 1 on real ConnectX-5 hardware: `hw-01` to `hw-05` and `hw-09` (InfiniBand).
 > `hol-rocev2-wireshark` (only its synthetic-capture path was run), `hol-soft-roce-perftest` (not run:
-> no `rdma_rxe` in the test kernel), `hw-06` (needs a lossless switch), `hw-07`/`hw-08` (need GPU nodes)
-> and `hw-09` (InfiniBand) stay `verified: false`. Every shell script has been syntax-checked with
+> no `rdma_rxe` in the test kernel), `hw-06` (needs a lossless switch) and `hw-07`/`hw-08` (need GPU nodes)
+> stay `verified: false`. Every shell script has been syntax-checked with
 > `bash -n` and every YAML file parsed. Please report anything that behaves differently on your system.
 
 ## The labs
@@ -185,6 +185,7 @@ reference were also compared with this hardware on both driver stacks: see
 | `hw-03-host-qos-pfc-ecn` | Passed after fixes: `restore-qos.sh` now also restores 802.3x global pause (enabling PFC had switched it off) and the rdma_cm default ToS; `apply-qos.sh` shows the global pause state. |
 | `hw-04-break-fix-roce` | Passed: every fault injected, diagnosed and restored, and one random fault diagnosed from the lab's commands alone. Fixed: `trust-pcp` on the inbox stack; checks now say when host B is unreachable rather than suggesting `ssh-copy-id`; `HOST_*` must be management addresses (the data-path faults cut the checks off otherwise). |
 | `hw-05-link-health-optics` | Passed after a fix: the module check now uses `sudo -n ethtool -m` and matches tab-indented fields. |
+| `hw-09-infiniband-bringup` | Passed after fixes (port 2 of both cards in InfiniBand mode, back to back, DOCA OpenSM): the umad tools opened the first RDMA device (the RoCE port) and failed, so `start-sm.sh`, the check and the lab commands now name the device and port (`-C`/`-P`); `start-sm.sh` binds OpenSM to the lab port's GUID. 97 Gb/s over IB, SM loss leaves ports ACTIVE as the lab says. In a VM the port-type change needed a physical host reboot. |
 
 **Caveats:** one NIC model, back to back, inside VMs, and the DOCA stack for the lab runs. The inbox-stack
 paths of the labs (`dcb` instead of `mlnx_qos`) were exercised command by command but not run end to end.

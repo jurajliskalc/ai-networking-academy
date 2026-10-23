@@ -209,11 +209,13 @@ and programs the forwarding tables.
 | Managed IB switch with an embedded SM | The switch's SM, enabled per the switch documentation |
 | Both available | Either, but make sure exactly **one** is master: set priorities deliberately |
 
-On the host that runs OpenSM, the distribution package normally provides a system service; check
-`systemctl status opensm`, or start it in the background with `sudo opensm -B`. Then, from any host:
+On the host that runs OpenSM, the package normally provides a system service; check
+`systemctl status opensm` (NVIDIA's DOCA-OFED names it `opensmd`), or start it in the background with
+`sudo opensm -B`. Then, from any host (add `-C <device> -P <port>` to `sminfo` if the host's first RDMA
+device is a RoCE port):
 
 ```bash
-ibstat                 # port State: Active, Physical state: LinkUp, a non-zero Base lid
+ibstat                 # port State: Active, Physical state: LinkUp, a Base lid other than 65535 (unassigned)
 sminfo                 # which SM is master, and its priority
 ```
 

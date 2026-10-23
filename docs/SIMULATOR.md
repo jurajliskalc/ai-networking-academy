@@ -37,7 +37,7 @@ the `opensm` service on node01 and uses node01 `mlx5_0` as its port.
 * **Port state** is computed, not stored. The SM sweeps the subnet from its own port over links that are
   physically up; every port it reaches is `Active` with a LID (switches 1-10 in the order leaf01-leaf08,
   spine01, spine02; HCA `mlx5_r` of node *n* gets `11 + 8(n-1) + r`, so the SM's own port is LID 11).
-  Without a running SM every trained port stays `Initialize`/`INIT` with LID 0 and SM LID 0.
+  Without a running SM every trained port stays `Initialize`/`INIT` with LID 65535 (0xFFFF, unassigned; as on real ConnectX hardware) and SM LID 0.
 * **NCCL**: the IB plugin skips ports that are not ACTIVE (as NCCL's `net_ib` does); when no port is
   usable it logs `NET/IB : No device found.` and falls back to sockets. `NCCL_IB_GID_INDEX` and
   `NCCL_IB_TC` are removed from `/etc/nccl.conf` in this variant.

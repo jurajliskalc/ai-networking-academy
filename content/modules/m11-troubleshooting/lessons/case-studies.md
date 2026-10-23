@@ -110,8 +110,10 @@ Many signals in an AI fabric are **consequences**. PFC pauses can be caused by c
 **Evidence.** A fabric-wide error sweep with `ibqueryerrors` (from infiniband-diags) listed ports whose counters exceeded thresholds. Illustrative output:
 
 ```text
-Errors for "spine-07" port 23:  [SymbolErrorCounter == 65535] [PortRcvErrors == 20419] [LinkDownedCounter == 4]
-Errors for "leaf-31" port 61:   [PortXmitDiscards == 112]
+Errors for 0xfc6a1c0300e5f700 "spine-07"
+   GUID 0xfc6a1c0300e5f700 port 23: [SymbolErrorCounter == 65535] [PortRcvErrors == 20419] [LinkDownedCounter == 4]
+Errors for 0xfc6a1c0300e4fa00 "leaf-31"
+   GUID 0xfc6a1c0300e4fa00 port 61: [PortXmitDiscards == 112]
 ```
 
 The legacy `SymbolErrorCounter` is only 16 bits wide and saturates at 65535, so the swept value only says "a lot". After saving the evidence, the team cleared the port's counters and re-read them (`perfquery <lid> 23`) a minute apart: `SymbolErrorCounter` and `PortRcvErrors` were increasing by thousands per minute; every other spine port was at or near zero. Link diagnostics with `mlxlink` (field names depend on the MFT version; check its documentation) showed an effective (post-FEC) BER several orders of magnitude worse than other links, and module diagnostics showed one receive lane several dB weaker than its neighbours.

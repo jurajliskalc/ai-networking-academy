@@ -202,7 +202,8 @@ mapping (`mlx5_0 port 1 ==> ens1np0 (Up)`); it is not in distribution packages, 
 is the equivalent. The RDMA device names also depend on the stack: NVIDIA's DOCA-OFED/MLNX_OFED uses
 `mlx5_0`, `mlx5_1`, ..., while distribution rdma-core names devices after their PCI address (for
 example `rocep3s0f0`), so take the name from `rdma link show` rather than assuming `mlx5_0`. On
-InfiniBand ports there is no netdev unless IPoIB is configured.
+InfiniBand ports `rdma link show` prints no netdev, even when an IPoIB interface exists (`ibdev2netdev`
+lists the IPoIB interface).
 
 ### Check device capabilities and link layer
 

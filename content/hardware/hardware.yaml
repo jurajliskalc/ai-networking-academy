@@ -64,7 +64,7 @@ variables:
   - { name: B_IP, group: hosts, label: Host B data IP, default: 192.168.50.12 }
   - { name: C_IP, group: hosts, label: Host C data IP, default: 192.168.50.13 }
   - { name: PREFIX_LEN, group: hosts, label: Data subnet prefix length, default: "24" }
-  - { name: A_NETDEV, group: hosts, label: Host A RDMA netdev, default: ens1f0np0, help: "The Ethernet interface of the RDMA port (rdma link show prints it). Leave as-is on InfiniBand if you use IPoIB: then it is the ib0-style interface." }
+  - { name: A_NETDEV, group: hosts, label: Host A RDMA netdev, default: ens1f0np0, help: "The Ethernet interface of the RDMA port (rdma link show prints it). Leave as-is on InfiniBand if you use IPoIB: then it is the ib0-style interface, which rdma link does not print for an InfiniBand port (ibdev2netdev or ip link shows it)." }
   - { name: B_NETDEV, group: hosts, label: Host B RDMA netdev, default: ens1f0np0 }
   - { name: C_NETDEV, group: hosts, label: Host C RDMA netdev, default: ens1f0np0 }
   - { name: A_RDMA_DEV, group: hosts, label: Host A RDMA device, default: mlx5_0, help: "Name from rdma link or ibv_devices. NVIDIA's DOCA/MLNX_OFED stack names devices mlx5_0, mlx5_1, ...; distribution rdma-core names them from the PCI address, for example rocep3s0f0. Use what your host prints." }

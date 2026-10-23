@@ -70,7 +70,7 @@ Linux distributions ship rdma-core and in-kernel drivers ("inbox"). NVIDIA also 
 
 ### Naming: RDMA device, port, netdev
 
-An RDMA device (for example `mlx5_0`) has one or more ports numbered from 1. The device name depends on the stack: NVIDIA's MLNX_OFED / DOCA-OFED names ConnectX devices `mlx5_0`, `mlx5_1`, ..., while a distribution's rdma-core udev rule names them after the PCI address, for example `rocep3s0f0` for a RoCE port at PCI `03:00.0`. Netdev names are the same on both. Never copy a device name from a guide: take it from `rdma link` or `ibv_devices`. On RoCE, each port is associated with an Ethernet netdev (for example `ens1f0np0`); on InfiniBand there is no Ethernet netdev, although an IPoIB interface (`ib0`) may exist for IP traffic over the IB fabric. The `rdma link` command shows the mapping in one line.
+An RDMA device (for example `mlx5_0`) has one or more ports numbered from 1. The device name depends on the stack: NVIDIA's MLNX_OFED / DOCA-OFED names ConnectX devices `mlx5_0`, `mlx5_1`, ..., while a distribution's rdma-core udev rule names them after the PCI address, for example `rocep3s0f0` for a RoCE port at PCI `03:00.0`. Netdev names are the same on both. Never copy a device name from a guide: take it from `rdma link` or `ibv_devices`. On RoCE, each port is associated with an Ethernet netdev (for example `ens1f0np0`); on InfiniBand there is no Ethernet netdev, although an IPoIB interface (`ib0`) may exist for IP traffic over the IB fabric. The `rdma link` command shows the mapping in one line for RoCE ports; for an InfiniBand port it prints the LID, SM LID and state but no netdev, even when an IPoIB interface exists.
 
 ### GIDs and why RoCE needs the right index
 

@@ -45,7 +45,7 @@ An InfiniBand link is made of **lanes** (a transmit and receive pair of signals)
 | QDR | 10 Gb/s | 8b/10b, NRZ | 32 Gb/s (40 signalling) | QSFP | ~2008 |
 | FDR10 | 10.3125 Gb/s | 64b/66b, NRZ | ~40 Gb/s | QSFP | ~2011 |
 | FDR | 14.0625 Gb/s | 64b/66b, NRZ | ~54 Gb/s (56 signalling) | QSFP | ~2011 |
-| EDR | 25.78125 Gb/s | 64b/66b, NRZ, RS-FEC | 100 Gb/s | QSFP28 | ~2014 |
+| EDR | 25.78125 Gb/s | 64b/66b, NRZ, RS-FEC optional (an EDR link can run with `No FEC` in mlxlink) | 100 Gb/s | QSFP28 | ~2014 |
 | HDR | 53.125 Gb/s | PAM4, RS-FEC | 200 Gb/s (HDR100: 2 lanes, 100 Gb/s) | QSFP56 | ~2018-2019 |
 | NDR | 106.25 Gb/s | PAM4, RS-FEC | 400 Gb/s (NDR200: 2 lanes, 200 Gb/s) | OSFP, QSFP112 | ~2021-2022 |
 | XDR | ~200 Gb/s class | PAM4 | 800 Gb/s | OSFP | ~2024-2025 |
@@ -140,18 +140,18 @@ Cable count follows directly: a non-blocking two-tier fabric has as many leaf-sp
 
 ```text
 $ ibstat mlx5_0 1 | grep -E "State|Rate|Physical"
-		State: Active
-		Physical state: LinkUp
-		Rate: 400
+State: Active
+Physical state: LinkUp
+Rate: 400
 ```
 
-*(Illustrative.)* `Rate` is the data rate in Gb/s. For the full picture of every link in the fabric:
+*(Illustrative.)* With a device and port given, `ibstat` prints a flat, unindented list (plain `ibstat` or `ibstat mlx5_0` indents the port block). `Rate` is the data rate in Gb/s. For the full picture of every link in the fabric:
 
 ```text
 $ iblinkinfo | grep -vE "4X +106.25 Gbps"
 Switch: 0xfc6a1c0300e4f100 leaf01:
-          2    17[  ] ==( 4X      53.125 Gbps Active/  LinkUp)==>      57    1[  ] "node09 HCA-1" ( Could be 106.25 Gbps)
-          2    18[  ] ==( 2X     106.25 Gbps Active/  LinkUp)==>      58    1[  ] "node09 HCA-2" ( Could be 4X)
+          2    17[  ] ==( 4X        53.125 Gbps Active/  LinkUp)==>      57    1[  ] "node09 HCA-1" ( Could be 106.25 Gbps)
+          2    18[  ] ==( 2X        106.25 Gbps Active/  LinkUp)==>      58    1[  ] "node09 HCA-2" ( Could be 4X)
 ```
 
 *(Illustrative; exact formatting depends on the infiniband-diags version.)* Filtering out links at the expected 4X width and NDR lane rate leaves only the anomalies (a plain `grep -v "106.25 Gbps"` would also hide port 17, because its "Could be" annotation contains that string). Here port 17 trained at HDR lane speed (perhaps an HDR cable or an adapter set to a lower speed), and port 18 trained at NDR speed but only 2x width (a failed lane, a damaged cable or a dirty connector). Recent iblinkinfo versions annotate links that "could be" faster or wider; check your version's options.

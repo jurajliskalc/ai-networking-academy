@@ -57,7 +57,7 @@ Every switch and HCA also runs a **Subnet Management Agent (SMA)** that answers 
 | **GID** (Global Identifier) | 128 bits | Subnet prefix (from SM) + port GUID | Global, IPv6-formatted | Routing between subnets, multicast, and as the address on RoCE |
 
 - A **node GUID** identifies a device (an HCA or a switch ASIC); each **port GUID** identifies a port; the **system image GUID** groups devices that belong to one system (for example several ASICs inside one modular switch).
-- **LIDs**: unicast LIDs are 0x0001-0xBFFF (49,151 addresses), multicast LIDs 0xC000-0xFFFE, and 0xFFFF is the permissive LID used in management. On a switch, only port 0 (the management port) gets a LID; on an HCA each port gets one.
+- **LIDs**: unicast LIDs are 0x0001-0xBFFF (49,151 addresses), multicast LIDs 0xC000-0xFFFE, and 0xFFFF is the permissive LID used in management. A port that has no LID yet reports 0xFFFF as well (`Base lid: 65535` in `ibstat`). On a switch, only port 0 (the management port) gets a LID; on an HCA each port gets one.
 - **LMC** (LID Mask Control) lets the SM assign 2^LMC consecutive LIDs to a port. The SM can route each LID over a different path, giving applications a way to choose among multiple paths to the same port. LMC is 0 (one LID per port) unless configured otherwise.
 - **GIDs**: the default GID of a port is the 64-bit subnet prefix (default `fe80:0000:0000:0000`) concatenated with the port GUID.
 
@@ -191,7 +191,7 @@ $ cat /sys/class/infiniband/mlx5_0/ports/1/pkeys/0
 0xffff
 ```
 
-*(Illustrative.)* GID 0 is the default subnet prefix plus the port GUID; P_Key index 0 holds the default full-membership key.
+*(Illustrative.)* GID 0 is the default subnet prefix plus the port GUID; P_Key index 0 holds the default full-membership key. An InfiniBand port has a whole P_Key table (`pkeys/1`, `pkeys/2`, ... exist and read `0x0000` while unused; `ibv_devinfo -v` shows its size as `max_pkeys`), whereas a RoCE port exposes only index 0.
 
 ### Seeing the subnet
 
@@ -207,7 +207,7 @@ Switch  : 0xfc6a1c0300e4f200 ports 65 "Quantum-2 leaf02" enhanced port 0 lid 3 l
 
 ## Common pitfalls
 
-- **Port stuck in Init.** Symptom: `State: Initializing`, `Physical state: LinkUp`, RDMA fails. Cause: no SM running, SM not reaching this part of the fabric, or SM rejecting the port. Fix: check `sminfo`, SM logs and whether the SM's own port is up.
+- **Port stuck in Init.** Symptom: `State: Initializing`, `Physical state: LinkUp`, `Base lid: 65535` (unassigned), `SM lid: 0`, RDMA fails. Cause: no SM running, SM not reaching this part of the fabric, or SM rejecting the port. Fix: check `sminfo`, SM logs and whether the SM's own port is up.
 - **Treating LIDs as permanent identities.** Symptom: scripts or inventories break after an SM change. Cause: LIDs are assigned by the SM and can change. Fix: identify ports by GUID (and node description); use LIDs only for live operations.
 - **Partition mismatch.** Symptom: two hosts on the same fabric cannot talk, while others can; ibping between them fails. Cause: no common P_Key, or both are limited members. Fix: check the P_Key tables in sysfs and the SM's partition configuration.
 - **Assuming switches learn.** Symptom: expecting a newly cabled host to "just work" without an SM sweep. Cause: no LFT entry exists for a new LID until the SM programs it. Fix: let the SM sweep (it reacts to link-state change traps) and verify with diagnostics.

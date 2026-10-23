@@ -163,19 +163,19 @@ Content is written for engineers who will act on it, so accuracy comes first:
   and a recomputation of every number in the newer material. Details in
   [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md). The hands-on and hardware labs are
   syntax-checked (`bash -n`; the original Tier 0 labs also with ShellCheck) and are marked `verified: false`
-  until they have been run end to end on a reference VM or reference hardware. Ten labs have been run end to end
-  and are marked verified: five Tier 0 labs on a VM and the five Tier 1 labs (`hw-01` to `hw-05`) on real
-  ConnectX-5 hardware (see `labs/README.md`).
+  until they have been run end to end on a reference VM or reference hardware. Eleven labs have been run end to end
+  and are marked verified: five Tier 0 labs on a VM and six real-hardware labs (`hw-01` to `hw-05` and the
+  InfiniBand bring-up `hw-09`) on ConnectX-5 hosts (see `labs/README.md`).
 * **Checked on real hardware.** Every host command and sample output in the lessons, labs, guides,
   command reference, quizzes, exams and the Fabric Simulator was compared with what the tools print on
-  two ConnectX-5 hosts (100GbE back to back, Ubuntu 26.04, kernel 7.0), on both the inbox stack
+  two ConnectX-5 hosts (100GbE and EDR InfiniBand back to back, Ubuntu 26.04, kernel 7.0), on both the inbox stack
   (kernel mlx5 + distribution rdma-core) and NVIDIA DOCA-OFED 3.4. Real-world behaviour that the docs
   rarely mention is taught where it matters: device names differ per driver stack, enabling PFC turns
   802.3x pause off and re-enabling pause silently clears PFC, which tools exist only with NVIDIA's stack,
   what Secure Boot lockdown blocks, and how to capture offloaded RoCE. The verified formats and behaviours
   are recorded in [docs/HARDWARE_VERIFICATION.md](docs/HARDWARE_VERIFICATION.md) and pinned by tests.
-  Not yet verified on hardware: InfiniBand-mode output, 400G-specific strings, optical-module readouts,
-  switch CLIs (NVUE, SONiC) and GPU/NCCL output.
+  Not yet verified on hardware: output that needs a switch (InfiniBand switch LIDs and routing, PFC and
+  ECN at a switch), 400G-specific strings, optical-module readouts, switch CLIs (NVUE, SONiC) and GPU/NCCL output.
 
 Found an error? Please [open an issue](https://github.com/jurajliskalc/ai-networking-academy/issues/new?template=content-error.md)
 with a source. See [CONTRIBUTING.md](CONTRIBUTING.md).

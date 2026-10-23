@@ -29,7 +29,8 @@ export function hcaView(s: FabricState, node: string, nic: Nic, act = ibActive(s
   if (!nic.admin) return { state: 'Down', phys: 'Disabled', lanes: 4, lid: 0 };
   if (!linkUp(s, p)) return { state: 'Down', phys: 'Polling', lanes: 4, lid: 0 };
   const active = act.has(`${node}:${nic.rail}`);
-  return { state: active ? 'Active' : 'Initialize', phys: 'LinkUp', lanes: p.lanes ?? 4, lid: ibHcaLid(s, node, nic.rail, act) };
+  // Until an SM assigns one, the port reports the reserved LID 0xFFFF (ibstat: "Base lid: 65535").
+  return { state: active ? 'Active' : 'Initialize', phys: 'LinkUp', lanes: p.lanes ?? 4, lid: active ? ibHcaLid(s, node, nic.rail, act) : 0xffff };
 }
 
 function swPortView(s: FabricState, sw: Switch, p: Port, act: Set<string>): PortView {
@@ -77,7 +78,9 @@ ${pre}Port GUID: 0x${hcaGuid(h.name, n.rail)}
 ${pre}Link layer: InfiniBand
 `;
   };
-  if (pos[0] && pos[1]) return port(sel[0], true);
+  // "ibstat <ca> <port>" prints a flat block that starts with "CA: '<ca>'".
+  if (pos[0] && pos[1]) return `CA: '${sel[0].dev}'
+` + port(sel[0], true);
   return sel.map((n) => `CA '${n.dev}'
 \tCA type: MT4129
 \tNumber of ports: 1
@@ -205,7 +208,8 @@ export function perfquery(s: FabricState, h: Host, a: string[]): string {
   const act = ibActive(s);
   const lv = hcaView(s, h.name, local, act);
   // PerfMgt MADs are LID-routed: without an SM (LID 0) nothing answers.
-  if (lv.state !== 'Active') return 'perfquery: iberror: failed: classportinfo query\n';
+  if (lv.state !== 'Active')
+    return `ibwarn: [41013] _do_madrpc: recv failed: Connection timed out\nibwarn: [41013] mad_rpc: _do_madrpc failed; dport (Lid ${lv.lid})\nperfquery: iberror: failed: classportinfo query\n`;
   let target: Target | null;
   let portN = 1;
   if (pos.length) {
@@ -251,7 +255,8 @@ export function perfquery(s: FabricState, h: Host, a: string[]): string {
 export function sminfo(s: FabricState, h: Host): string {
   const act = ibActive(s);
   const local = h.nics.find((n) => hcaView(s, h.name, n, act).state !== 'Down');
-  if (!local || hcaView(s, h.name, local, act).state !== 'Active' || !s.sm) return 'sminfo: iberror: failed: query\n';
+  if (!local || hcaView(s, h.name, local, act).state !== 'Active' || !s.sm)
+    return 'ibwarn: [41011] _do_madrpc: recv failed: Connection timed out\nibwarn: [41011] mad_rpc: _do_madrpc failed; dport (DR path slid 0; dlid 0; 0)\nsminfo: iberror: failed: query\n';
   return `sminfo: sm lid ${ibSmLid(s)} sm guid 0x${hcaGuid(s.sm.node, s.sm.rail)}, activity count ${48213 + s.actions.length * 17} priority 0 state 3 SMINFO_MASTER\n`;
 }
 

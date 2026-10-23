@@ -338,7 +338,7 @@ function hostCmd(ctx: ShellCtx, h: Host, t: string[]): ExecResult {
           const v = hcaView(s, node, n, act);
           const st = { Down: 'DOWN', Initialize: 'INIT', Active: 'ACTIVE' }[v.state];
           const ph = { LinkUp: 'LINK_UP', Polling: 'POLLING', Disabled: 'DISABLED' }[v.phys];
-          return `link ${n.dev}/1 subnet_prefix fe80:0000:0000:0000 lid ${v.lid} sm_lid ${v.state === 'Active' ? ibSmLid(s) : 0} lmc 0 state ${st} physical_state ${ph} netdev ${n.netdev}`;
+          return `link ${n.dev}/1 subnet_prefix fe80:0000:0000:0000 lid ${v.lid} sm_lid ${v.state === 'Active' ? ibSmLid(s) : 0} lmc 0 state ${st} physical_state ${ph} `; // IB-mode rdma link prints no netdev
         }).join('\n') + '\n' };
       }
       if (a[0] === 'link') return { out: h.nics.map((n) => `link ${n.dev}/1 state ${operUp(s, node, n) ? 'ACTIVE' : 'DOWN'} physical_state ${operUp(s, node, n) ? 'LINK_UP' : 'DISABLED'} netdev ${n.netdev}`).join('\n') + '\n' };

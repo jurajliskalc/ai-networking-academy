@@ -11,9 +11,15 @@ requires: [infiniband, two-rdma-hosts, root, ssh-mesh]
 changes_config: true
 lessons: [ib-architecture, subnet-manager-routing, ib-tools-diagnostics, ib-speeds-cables]
 files: labs/hw-09-infiniband-bringup
-verified: false
+verified: true
 summary: "Watch an InfiniBand fabric come alive: ports stuck in INIT until a subnet manager assigns LIDs, then discovery, counters, ibping and RDMA bandwidth addressed by LID instead of IP."
 ---
+
+> [!NOTE]
+> Verified end to end (every task, the check and the restore step) on 2026-10-23 on two ConnectX-5
+> VPI cards with port 2 in InfiniBand mode, cabled back to back (EDR DAC, no switch; ESXi VMs with PCI
+> passthrough; Ubuntu 26.04.1, kernel 7.0.0-38, NVIDIA DOCA-OFED 3.4 with its OpenSM); see
+> `labs/README.md`. Output with a switch (switch LIDs, `ibswitches`, routing) was not part of that run.
 
 ## Goal
 
@@ -51,9 +57,10 @@ By the end you can:
   InfiniBand first. With NVIDIA's MFT installed:
 
   ```bash
-  sudo mst start && sudo mst status
-  sudo mlxconfig -d /dev/mst/<your device> query | grep LINK_TYPE
-  sudo mlxconfig -d /dev/mst/<your device> set LINK_TYPE_P1=1     # 1 = InfiniBand, 2 = Ethernet
+  sudo mst start && sudo mst status -v   # the PCI column gives the device, e.g. 03:00.0
+  sudo mlxconfig -d <pci-address> query | grep LINK_TYPE
+  sudo mlxconfig -d <pci-address> set LINK_TYPE_P1=1     # 1 = InfiniBand, 2 = Ethernet
+  sudo mlxconfig -d <pci-address> -e q LINK_TYPE_P1      # Default, Current and Next Boot values
   ```
 
   > [!WARNING]
@@ -61,6 +68,10 @@ By the end you can:
   > after a firmware reset or reboot, and changes what every other lab sees. Only VPI adapters
   > support it; confirm the parameter name and values with `mlxconfig ... query` and your firmware
   > release notes. Switch back with `LINK_TYPE_P1=2` when you return to the RoCE labs.
+  > In a **virtual machine** with the NIC passed through, neither a guest reboot nor a VM power
+  > cycle applies it (`-e q` keeps showing Current `ETH(2)`, Next Boot `IB(1)`), and `mlxfwreset`
+  > answers `-E- The tool is not supported on virtual machines.`: reboot the physical host. On a
+  > dual-port VPI card you can switch one port only (`LINK_TYPE_P2`) and keep the other on Ethernet.
 
   Recent MFT addresses the adapter by PCI address or RDMA name (`mlxconfig -d 03:00.0 q`); `mst start`
   ending with `Unloading MST PCI module (unused)` is normal. On a host with **Secure Boot** (kernel
@@ -117,7 +128,8 @@ grep -H . /sys/class/infiniband/{{A_RDMA_DEV}}/ports/{{RDMA_PORT}}/{state,phys_s
 
 **Read it:** `Physical state: LinkUp` means the cable trained: electrically, the link is fine.
 `State: Initializing` (`2: INIT` in sysfs) means the port is waiting for the SM. The LID is
-unassigned (shown as 0 or the "permissive" `65535`/`0xffff`, depending on tool and driver) and
+unassigned (`ibstat` shows `Base lid: 65535`, sysfs and `ibstatus` `0xffff`; that value is also the
+"permissive" LID, which is why `ibaddr` can answer with the peer's GID before an SM runs) and
 `SM lid` is 0: nobody manages this subnet. RDMA traffic is impossible in this state. On a real
 cluster, "links up but everything INIT" after a power event almost always means the SM is down or
 cannot reach that part of the fabric.
@@ -139,11 +151,15 @@ service may need the port GUID set in its defaults file. If the service starts b
 `INIT`, stop it and run `sudo opensm -B` directly, which binds to a local port automatically
 (`-g <port GUID>` chooses one explicitly; see `opensm --help` for your version).
 
-Wait a few seconds, then on both hosts:
+Wait a few seconds, then on both hosts. The diagnostic tools (`sminfo`, `ibnetdiscover`, `perfquery`,
+`ibping`, ...) open the **first** RDMA device unless told otherwise: on a host whose first device is a
+RoCE port (here the other port of a VPI card) a bare `sudo sminfo` fails with `ibwarn: ...
+client_register for mgmt 1 failed` / `Failed to open '(null)' port '0'`, so this lab always names the
+InfiniBand device and port with `-C` and `-P`:
 
 ```bash
 ibstat {{A_RDMA_DEV}} {{RDMA_PORT}}
-sudo sminfo
+sudo sminfo -C {{A_RDMA_DEV}} -P {{RDMA_PORT}}
 ```
 
 Illustrative output:
@@ -169,17 +185,17 @@ over if the master fails.
 ### Task 3: Discover the fabric
 
 ```bash
-sudo ibnetdiscover > /tmp/fabric-topology.txt; less /tmp/fabric-topology.txt
-sudo ibhosts
-sudo ibswitches
-sudo iblinkinfo
+sudo ibnetdiscover -C {{A_RDMA_DEV}} -P {{RDMA_PORT}} > /tmp/fabric-topology.txt; less /tmp/fabric-topology.txt
+sudo ibhosts -C {{A_RDMA_DEV}} -P {{RDMA_PORT}}
+sudo ibswitches -C {{A_RDMA_DEV}} -P {{RDMA_PORT}}
+sudo iblinkinfo -C {{A_RDMA_DEV}} -P {{RDMA_PORT}}
 ```
 
 Illustrative `ibhosts` output:
 
 ```
-Ca      : 0x... ports 1 "node-a mlx5_0"
-Ca      : 0x... ports 1 "node-b mlx5_0"
+Ca	: 0x... ports 1 "node-b mlx5_0"
+Ca	: 0x... ports 1 "node-a mlx5_0"
 ```
 
 **Read it:** `ibnetdiscover` walks the fabric with management datagrams and prints every node, port
@@ -194,8 +210,8 @@ speed. Back to back, you will see no switches and a single link.
 On host A, read the local port, then the remote port by its LID (from `ibstat` on host B):
 
 ```bash
-sudo perfquery
-sudo perfquery -x <LID of host B> 1
+sudo perfquery -C {{A_RDMA_DEV}} -P {{RDMA_PORT}}
+sudo perfquery -C {{A_RDMA_DEV}} -P {{RDMA_PORT}} -x <LID of host B> 1
 ```
 
 Illustrative excerpt:
@@ -203,14 +219,20 @@ Illustrative excerpt:
 ```
 # Port counters: Lid 2 port 1 (CapMask: 0x...)
 PortSelect:......................1
+CounterSelect:...................0x0000
 SymbolErrorCounter:..............0
 LinkErrorRecoveryCounter:........0
 LinkDownedCounter:...............0
 PortRcvErrors:...................0
+PortRcvRemotePhysicalErrors:.....0
+PortRcvSwitchRelayErrors:........0
 PortXmitDiscards:................0
 ...
 PortXmitData:....................123456
 PortRcvData:.....................123400
+PortXmitPkts:....................2210
+PortRcvPkts:.....................2190
+PortXmitWait:....................0
 ```
 
 **Read it:**
@@ -234,8 +256,8 @@ thresholds (its options vary across `infiniband-diags` versions; see `ibqueryerr
 On host B start a responder; on host A ping B's LID:
 
 ```bash
-sudo ibping -S                          # host B (Ctrl-C when done)
-sudo ibping -c 5 <LID of host B>        # host A
+sudo ibping -C {{B_RDMA_DEV}} -P {{RDMA_PORT}} -S          # host B (Ctrl-C when done)
+sudo ibping -C {{A_RDMA_DEV}} -P {{RDMA_PORT}} -c 5 <LID of host B>        # host A
 ```
 
 **Why:** `ibping` uses InfiniBand management datagrams, so it tests the InfiniBand path itself,
@@ -271,7 +293,7 @@ you are far below it. While it runs, watch `sudo perfquery -x` data counters ris
 If NVIDIA's OFED/DOCA stack or the `ibdiagnet` package is installed:
 
 ```bash
-sudo ibdiagnet
+sudo ibdiagnet -i {{A_RDMA_DEV}} -p {{RDMA_PORT}}
 ```
 
 It runs a full fabric check (discovery, duplicate GUID and LID checks, link speed and width checks,

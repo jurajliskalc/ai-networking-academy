@@ -144,7 +144,7 @@ $ ibstat mlx5_3 | grep -E "State|Physical|Rate|Base lid|SM lid"
 
 ```text
 $ iblinkinfo | grep '"node09 HCA-4"'
-          2    17[  ] ==( 4X     106.25 Gbps Active/  LinkUp)==>      57    1[  ] "node09 HCA-4" ( )
+          2    17[  ] ==( 4X        106.25 Gbps Active/  LinkUp)==>      57    1[  ] "node09 HCA-4" ( )
 ```
 
 *(Illustrative.)* The leaf side (LID 2, port 17) agrees: 4X at NDR lane speed. Filtering on the node description is the simplest version-independent way to find one link; your iblinkinfo version may also offer options to select a switch or port directly.
@@ -168,6 +168,7 @@ PortRcvConstraintErrors:.........0
 CounterSelect2:..................0x00
 LocalLinkIntegrityErrors:........0
 ExcessiveBufferOverrunErrors:....0
+QP1Dropped:......................0
 VL15Dropped:.....................0
 PortXmitData:....................4294967295
 PortRcvData:.....................4294967295
@@ -195,7 +196,7 @@ Errors for 0xfc6a1c0300e50b00 "spine02"
    GUID 0xfc6a1c0300e50b00 port 3: [PortRcvRemotePhysicalErrors == 409]
 ```
 
-*(Illustrative.)* `ibqueryerrors` scans the fabric and reports ports whose error counters exceed thresholds (and has options to adjust thresholds, include data counters or suppress specific counters; see its man page). Read it with the localisation rule: leaf03 port 7 is the culprit link, spine02 port 3 is a downstream victim.
+*(Illustrative.)* `ibqueryerrors` scans the fabric and reports ports whose error counters exceed thresholds (and has options to adjust thresholds, include data counters or suppress specific counters; see its man page). Read it with the localisation rule: leaf03 port 7 is the culprit link, spine02 port 3 is a downstream victim. The report ends with a `## Summary:` of the nodes and ports checked, and the exit status is non-zero when ports exceed thresholds. It finds the ports through the SA: with no SM running it prints only a warning such as `ibwarn: [...] sa_get_handle: No SM/SA found on port :1` (with exit status 0 in the version we tested), which is not a clean bill of health.
 
 ### Step 5: the path and the SM
 
@@ -222,7 +223,7 @@ Pong from node77.(none) (Lid 88): time 0.012 ms
 
 | # | Check | Tool | Bad sign |
 |---|---|---|---|
-| 1 | Host port state, rate, LID | `ibstat` | Init, Down, wrong rate, no LID |
+| 1 | Host port state, rate, LID | `ibstat` | Init, Down, wrong rate, no LID (`Base lid: 65535`) |
 | 2 | Master SM present and expected | `sminfo` | No SM, unexpected GUID, state not master |
 | 3 | Link speed and width on both ends | `iblinkinfo` | 2X/1X width, lower lane speed |
 | 4 | Physical error counter rates | `perfquery`, `ibqueryerrors` | Growing SymbolError, PortRcvErrors, LinkDowned |
@@ -247,6 +248,7 @@ Pong from node77.(none) (Lid 88): time 0.012 ms
 - **Clearing counters without coordination.** Symptom: monitoring loses history, alerts reset. Cause: a fabric-wide clear by one engineer. Fix: agree on when counters are cleared, or rely on rates computed by monitoring.
 - **Ignoring the SM.** Symptom: intermittent fabric-wide hiccups that no single port explains. Cause: heavy sweeps from a flapping link or a master SM change. Fix: read the SM log and `sminfo` as part of every investigation.
 - **Running diagnostics without permissions.** Symptom: tools fail with "can't open MAD port" style errors. Cause: no access to `/dev/infiniband/umad*`. Fix: run as root or with appropriate permissions on a host with an Active port.
+- **Querying the wrong local device.** Symptom: `sminfo`, `perfquery` or `iblinkinfo` fail even as root, with `ibwarn: [...] mad_rpc_open_port2: client_register for mgmt 1 failed` and `Failed to open '(null)' port '0'`. Cause: without options the tools open the first RDMA device, and on this host that is a RoCE (Ethernet) port, for example a frontend NIC or the other port of a VPI card. Fix: name the InfiniBand device and port with `-C <ca> -P <port>` (`ibdiagnet` uses `-i <dev> -p <port>`); `ibstat -l` lists every CA, RoCE ones included.
 
 ## Key takeaways
 

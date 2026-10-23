@@ -147,14 +147,14 @@ describe('sim-16 cross-rail traffic over the spines', () => {
 });
 
 describe('sim-17 InfiniBand without a subnet manager', () => {
-  it('links train but ports stay INIT with LID 0, perftest refuses, NCCL falls back to sockets', () => {
+  it('links train but ports stay INIT with LID 65535, perftest refuses, NCCL falls back to sockets', () => {
     const s = labState(lab('sim-17-ib-no-subnet-manager').faults);
     const st = sh(s, 'node02', 'ibstat mlx5_3');
     expect(st).toMatch(/State: Initializing\n\t\tPhysical state: LinkUp\n/);
-    expect(st).toMatch(/Base lid: 0\n\t\tLMC: 0\n\t\tSM lid: 0\n/);
+    expect(st).toMatch(/Base lid: 65535\n\t\tLMC: 0\n\t\tSM lid: 0\n/);
     expect(sh(s, 'node02', 'ibstatus mlx5_3')).toMatch(/state:\t\t 2: INIT\n\tphys state:\t 5: LinkUp/);
     expect(sh(s, 'node02', 'ib_write_bw -d mlx5_3 --report_gbits node03')).toBe(" Port number 1 state is Init\n Couldn't set the link layer\n Couldn't get context for the device\n");
-    expect(sh(s, 'node02', 'sminfo')).toBe('sminfo: iberror: failed: query\n');
+    expect(sh(s, 'node02', 'sminfo')).toMatch(/^ibwarn: \[\d+\] _do_madrpc: recv failed: Connection timed out\nibwarn: [\s\S]*\nsminfo: iberror: failed: query\n$/);
     expect(sh(s, 'node01', 'perfquery')).toMatch(/iberror: failed/);
     expect(sh(s, 'node01', 'iblinkinfo | grep -c "Initialize/  LinkUp"')).toBe('96\n');
     expect(sh(s, 'node01', 'ibdev2netdev | grep -c Down')).toBe('8\n');

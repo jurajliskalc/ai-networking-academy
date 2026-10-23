@@ -4,6 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import { createFabric, type FabricState } from '../src/sim/fabric';
 import { exec } from '../src/sim/shell';
+import { labState } from '../src/sim/lab';
 
 const sh = (s: FabricState, host: string, cmd: string) => exec({ state: s, host }, cmd).out;
 
@@ -48,6 +49,21 @@ describe('host tools match the real output format', () => {
     expect(q).toMatch(/\nReceive buffer size \(bytes\): \d+,\d+,0,0,0,0,0,0,max_buffer_size=262016\nCable len: 7\nPFC configuration:\n\tpriority {4}0 {3}1 {3}2 {3}3 {3}4 {3}5 {3}6 {3}7\n\tenabled {5}(\d {3}){8}\n\tbuffer {6}(\d {3}){8}\ntc: 0 ratelimit: unlimited, tsa: vendor\n\t priority:  1\n/);
     expect(sh(s, 'node01', `mlnx_qos -i ${nd} --pfc 0,0,0,1`)).toBe('pfc list must have 8 items\n');
     expect(sh(s, 'node01', `mlnx_qos -i ${nd} --trust foo`)).toBe('Invalid trust state command. Refer to the help.\n');
+  });
+
+  it('InfiniBand tools (checked against ConnectX-5 ports in IB mode, with and without OpenSM)', () => {
+    const s = labState([{ type: 'ib_fabric' }]);
+    // ibstat <ca> <port>: flat block that starts with "CA: '<ca>'"
+    expect(sh(s, 'node02', 'ibstat mlx5_3 1')).toMatch(/^CA: 'mlx5_3'\nPort 1:\nState: Active\nPhysical state: LinkUp\nRate: \d+\nBase lid: \d+\nLMC: 0\nSM lid: \d+\nCapability mask: 0x[0-9a-f]{8}\nPort GUID: 0x[0-9a-f]{16}\nLink layer: InfiniBand\n$/);
+    // IB-mode rdma link has no netdev field
+    expect(sh(s, 'node02', 'rdma link')).toMatch(/^link mlx5_0\/1 subnet_prefix fe80:0000:0000:0000 lid \d+ sm_lid \d+ lmc 0 state ACTIVE physical_state LINK_UP \n/);
+    expect(sh(s, 'node02', 'rdma link')).not.toMatch(/netdev/);
+    expect(sh(s, 'node01', 'perfquery')).toMatch(/^# Port counters: Lid \d+ port 1 \(CapMask: 0x5A00\)\nPortSelect:\.{22}1\n/);
+    // Without an SM: LID 65535, and the MAD tools fail after ibwarn lines
+    const n = labState([{ type: 'ib_fabric' }, { type: 'sm_down' }]);
+    expect(sh(n, 'node02', 'ibstat mlx5_3 1')).toMatch(/\nState: Initializing\nPhysical state: LinkUp\n[\s\S]*\nBase lid: 65535\nLMC: 0\nSM lid: 0\n/);
+    expect(sh(n, 'node02', 'sminfo')).toMatch(/\nsminfo: iberror: failed: query\n$/);
+    expect(sh(n, 'node01', 'perfquery')).toMatch(/^ibwarn: [\s\S]*dport \(Lid 65535\)\nperfquery: iberror: failed: classportinfo query\n$/);
   });
 
   it('rdma statistic, ethtool -m and mlxlink', () => {
