@@ -43,6 +43,201 @@
   --code-text: #d5deea;
 }
 
+/* Colour schemes (Settings). Each defines the full token set for light and dark; every text token keeps
+   4.5:1 on every surface (7:1 in High contrast); tests/schemes.test.ts checks every pair. The selectors match
+   any element, so <html data-scheme> recolours the app and a preview element carries its own scheme;
+   the noc blocks repeat the :root defaults for those previews. */
+[data-scheme="noc"] {
+  --bg: #f6f7f9;
+  --bg-soft: #eef0f4;
+  --panel: #ffffff;
+  --panel-2: #f3f5f8;
+  --border: #dde2ea;
+  --text: #0f172a;
+  --muted: #5b6577;
+  --accent: #07733f;
+  --accent-soft: #e3f5ea;
+  --on-accent: #ffffff;
+  --data: #0c6f8a;
+  --warn: #a64b07;
+  --danger: #b91c1c;
+  --analogy: #6d28d9;
+  --interview: #be185d;
+  --code-bg: #0b1220;
+  --code-text: #dbe4f0;
+}
+.dark[data-scheme="noc"], .dark [data-scheme="noc"] {
+  --bg: #080c14;
+  --bg-soft: #0c121d;
+  --panel: #0f1622;
+  --panel-2: #141d2b;
+  --border: #1f2a3b;
+  --text: #e3e9f2;
+  --muted: #8b97ab;
+  --accent: #4ade80;
+  --accent-soft: #11291c;
+  --on-accent: #04120a;
+  --data: #22d3ee;
+  --warn: #fbbf24;
+  --danger: #f87171;
+  --analogy: #a78bfa;
+  --interview: #f472b6;
+  --code-bg: #060a11;
+  --code-text: #d5deea;
+}
+[data-scheme="ocean"] {
+  --bg: #f4f7fb;
+  --bg-soft: #e9f0f7;
+  --panel: #ffffff;
+  --panel-2: #eff4fa;
+  --border: #d4dfea;
+  --text: #0b1a2e;
+  --muted: #4b5d73;
+  --accent: #1c5bb0;
+  --accent-soft: #e1ecfb;
+  --on-accent: #ffffff;
+  --data: #08697a;
+  --warn: #9a4705;
+  --danger: #b42318;
+  --analogy: #6b3fc4;
+  --interview: #ad1659;
+  --code-bg: #0a1626;
+  --code-text: #d9e6f4;
+}
+.dark[data-scheme="ocean"], .dark [data-scheme="ocean"] {
+  --bg: #06101b;
+  --bg-soft: #0a1624;
+  --panel: #0d1a2a;
+  --panel-2: #122334;
+  --border: #1d3349;
+  --text: #e2ecf6;
+  --muted: #8fa4bb;
+  --accent: #60a5fa;
+  --accent-soft: #0f2540;
+  --on-accent: #04101f;
+  --data: #2dd4bf;
+  --warn: #fbbf24;
+  --danger: #f87171;
+  --analogy: #b39dfa;
+  --interview: #f472b6;
+  --code-bg: #050c15;
+  --code-text: #d6e3f1;
+}
+[data-scheme="violet"] {
+  --bg: #f8f7fc;
+  --bg-soft: #f0eef8;
+  --panel: #ffffff;
+  --panel-2: #f4f2fb;
+  --border: #e0dbee;
+  --text: #1a1530;
+  --muted: #5b5573;
+  --accent: #6527cf;
+  --accent-soft: #efe7fd;
+  --on-accent: #ffffff;
+  --data: #0a6a84;
+  --warn: #a14806;
+  --danger: #b31b1b;
+  --analogy: #0f6e66;
+  --interview: #b8165a;
+  --code-bg: #120d22;
+  --code-text: #e2dcf2;
+}
+.dark[data-scheme="violet"], .dark [data-scheme="violet"] {
+  --bg: #0c0915;
+  --bg-soft: #110d1d;
+  --panel: #151125;
+  --panel-2: #1b162f;
+  --border: #2c2442;
+  --text: #ece8f6;
+  --muted: #9c95b5;
+  --accent: #c4b5fd;
+  --accent-soft: #241a40;
+  --on-accent: #160d2b;
+  --data: #22d3ee;
+  --warn: #fbbf24;
+  --danger: #f87171;
+  --analogy: #5eead4;
+  --interview: #f9a8d4;
+  --code-bg: #08060f;
+  --code-text: #ddd7ee;
+}
+[data-scheme="sepia"] {
+  --bg: #f6f0e3;
+  --bg-soft: #eee5d3;
+  --panel: #fbf7ee;
+  --panel-2: #f1e9d7;
+  --border: #dccfb5;
+  --text: #2a2015;
+  --muted: #67563f;
+  --accent: #2d6637;
+  --accent-soft: #e3efd9;
+  --on-accent: #ffffff;
+  --data: #1d5b76;
+  --warn: #8a4709;
+  --danger: #a2221a;
+  --analogy: #64388f;
+  --interview: #9d1b58;
+  --code-bg: #1d170f;
+  --code-text: #ece2cf;
+}
+.dark[data-scheme="sepia"], .dark [data-scheme="sepia"] {
+  --bg: #16120c;
+  --bg-soft: #1b1610;
+  --panel: #201a12;
+  --panel-2: #282117;
+  --border: #3a3022;
+  --text: #efe6d6;
+  --muted: #b2a38a;
+  --accent: #9fd38f;
+  --accent-soft: #213120;
+  --on-accent: #10180c;
+  --data: #7cc6e0;
+  --warn: #f2c14e;
+  --danger: #f28b82;
+  --analogy: #c9a7f5;
+  --interview: #f5a3c7;
+  --code-bg: #0f0c07;
+  --code-text: #e8dfcd;
+}
+[data-scheme="contrast"] {
+  --bg: #ffffff;
+  --bg-soft: #f2f2f2;
+  --panel: #ffffff;
+  --panel-2: #ededed;
+  --border: #4d4d4d;
+  --text: #000000;
+  --muted: #2b2b2b;
+  --accent: #00501e;
+  --accent-soft: #dcf1e3;
+  --on-accent: #ffffff;
+  --data: #00456e;
+  --warn: #643000;
+  --danger: #8a0000;
+  --analogy: #48188f;
+  --interview: #7d003b;
+  --code-bg: #000000;
+  --code-text: #ffffff;
+}
+.dark[data-scheme="contrast"], .dark [data-scheme="contrast"] {
+  --bg: #000000;
+  --bg-soft: #0a0a0a;
+  --panel: #000000;
+  --panel-2: #141414;
+  --border: #9a9a9a;
+  --text: #ffffff;
+  --muted: #d4d4d4;
+  --accent: #5dff9a;
+  --accent-soft: #0b2a17;
+  --on-accent: #000000;
+  --data: #5fe3ff;
+  --warn: #ffd24d;
+  --danger: #ff9a9a;
+  --analogy: #cdb8ff;
+  --interview: #ffa6d4;
+  --code-bg: #000000;
+  --code-text: #ffffff;
+}
+
 @theme inline {
   --color-bg: var(--bg);
   --color-bg-soft: var(--bg-soft);

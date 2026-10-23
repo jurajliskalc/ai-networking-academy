@@ -17,9 +17,13 @@ function load(): Progress {
   }
 }
 
-export function applyTheme(theme: Progress['settings']['theme']) {
+export function applyTheme(theme: Progress['settings']['theme'], scheme: Progress['settings']['scheme'] = 'noc') {
   const dark = theme === 'dark' || (theme === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
-  document.documentElement.classList.toggle('dark', dark);
+  const root = document.documentElement;
+  root.classList.toggle('dark', dark);
+  // The default scheme is the plain :root tokens; the others are selected by data-scheme (index.css).
+  if (scheme === 'noc') root.removeAttribute('data-scheme');
+  else root.dataset.scheme = scheme;
 }
 
 export function ProgressProvider({ children }: { children: ReactNode }) {
@@ -34,12 +38,12 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
   }, [progress]);
 
   useEffect(() => {
-    applyTheme(progress.settings.theme);
+    applyTheme(progress.settings.theme, progress.settings.scheme);
     const mq = matchMedia('(prefers-color-scheme: dark)');
-    const onChange = () => applyTheme(progress.settings.theme);
+    const onChange = () => applyTheme(progress.settings.theme, progress.settings.scheme);
     mq.addEventListener('change', onChange);
     return () => mq.removeEventListener('change', onChange);
-  }, [progress.settings.theme]);
+  }, [progress.settings.theme, progress.settings.scheme]);
 
   // Keep several open tabs in sync.
   useEffect(() => {

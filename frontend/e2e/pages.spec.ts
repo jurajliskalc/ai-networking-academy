@@ -128,3 +128,30 @@ test('an unknown route shows the not-found page with a way back', async ({ page 
   await page.goto('#/labs/sim-99-does-not-exist');
   await expect(page.getByText(/(^|\s)404$/).first()).toBeVisible();
 });
+
+test('colour scheme picker applies the scheme, persists it and keeps the light/dark choice', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.goto('#/settings');
+  const html = page.locator('html');
+  await expect(html).not.toHaveAttribute('data-scheme');
+  const group = page.getByRole('group', { name: 'Colour scheme' });
+  await expect(group.getByRole('button')).toHaveCount(5);
+  await expect(group.getByRole('button', { name: /^NOC/ })).toHaveAttribute('aria-pressed', 'true');
+  const bg = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  const before = await bg();
+  await group.getByRole('button', { name: /^Sepia/ }).click();
+  await expect(html).toHaveAttribute('data-scheme', 'sepia');
+  await expect(html).toHaveClass(/\bdark\b/);
+  await expect(group.getByRole('button', { name: /^Sepia/ })).toHaveAttribute('aria-pressed', 'true');
+  expect(await bg()).not.toBe(before);
+  expect((await progressOf(page)).settings).toMatchObject({ theme: 'system', scheme: 'sepia' });
+  // Applied before first paint on reload, and the theme toggle still switches the variant.
+  await page.reload();
+  await expect(html).toHaveAttribute('data-scheme', 'sepia');
+  await page.getByRole('button', { name: /^(toggle theme|switch to (light|dark) theme)$/i }).click();
+  await expect(html).not.toHaveClass(/\bdark\b/);
+  await expect(html).toHaveAttribute('data-scheme', 'sepia');
+  // Back to the default removes the attribute.
+  await group.getByRole('button', { name: /^NOC/ }).click();
+  await expect(html).not.toHaveAttribute('data-scheme');
+});
