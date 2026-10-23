@@ -12,6 +12,7 @@ aina_load_env
 
 need_cmd ib_write_bw ethtool || aina_finish
 check_ssh B || aina_finish
+need_cmd_on B ib_write_bw ethtool || aina_finish
 info "expecting PFC on priority $ROCE_PRIO only, DSCP $ROCE_DSCP -> priority $ROCE_PRIO, traffic class $TCLASS"
 
 for r in A B; do

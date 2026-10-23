@@ -11,6 +11,7 @@ aina_load_env
 
 need_cmd mpirun nvidia-smi || aina_finish
 check_ssh B || aina_finish
+need_cmd_on B mpirun nvidia-smi || aina_finish
 for r in A B; do
   if on_host_sh $r "test -x $(printf '%q' "$NCCL_TESTS_DIR")/all_reduce_perf"; then
     pass "host $r: $NCCL_TESTS_DIR/all_reduce_perf exists"

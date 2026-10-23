@@ -1,0 +1,68 @@
+id: sim-21-ib-spine-down-leaf-isolated
+title: "InfiniBand: one spine in maintenance, one leaf cut off"
+level: 3
+estimated_minutes: 35
+lessons: [ib-tools-diagnostics, subnet-manager-routing, ib-architecture, rail-optimized-topology]
+summary: InfiniBand variant. With spine02 powered off for planned work, leaf06 turns out to have no other path to the subnet manager.
+start: node01
+ticket: |
+  **INC-5040 · Sev2 · InfiniBand cluster: rail 5 down during planned spine maintenance**
+
+  > CHG-2231 powered off spine02 at 06:00 for a fan-tray replacement. The design has two spines, so losing
+  > one "only halves the leaf-to-spine bandwidth, and rail-local NCCL traffic never touches the spines". At
+  > 06:20 leaf06 (rail 5, every node's `mlx5_5`) rebooted after a power-supply alarm and came back with green
+  > host-port LEDs. Since then `ib_write_bw` on `mlx5_5` fails everywhere and `all_reduce_perf` peaks at about
+  > 325 GB/s. The other rails are fine and `sminfo` answers normally. - HPC operations
+
+  spine02 stays down until the parts arrive. Restore rail 5 without it and explain why one spine was not enough.
+faults:
+  - { type: ib_fabric }
+  - { type: cable_unplugged, switch: leaf06, port: swp31 }
+  - { type: ib_counters, switch: spine01, port: swp6, counters: { SymbolErrorCounter: 4093, LinkErrorRecoveryCounter: 12, LinkDownedCounter: 1 } }
+  - { type: switch_down, switch: spine02 }
+  - { type: ib_port_reset, switch: leaf06 }
+hints:
+  - "`ibstat mlx5_5 1` on any node: the link is up, so why is the port not ACTIVE? `sminfo` answers, so an SM is running. Can it reach the port?"
+  - "`iblinkinfo` discovers the fabric by directed route from the first HCA of this node. Which switches does it list, and which ports are Down? Then look from rail 5 itself: `iblinkinfo -C mlx5_5`."
+  - "A down port does not tell you when it went down. `perfquery <lid> <port>` on the far end of a dead link still answers if that switch has a LID (spine01 is LID 9)."
+diagnosis:
+  prompt: What is the root cause?
+  options:
+    - id: a
+      text: leaf06's link to spine01 has been dead for a while, so spine02 was its only path. With spine02 off, the SM cannot reach leaf06, and its rebooted ports stay in INIT.
+      correct: true
+      explanation: The SM on node01 configures switches and HCAs by sweeping out from its own port, and in this fabric a leaf is reachable only through the spines (HCAs do not forward subnet management packets). leaf06 port 31 to spine01 is Down/Polling, with LinkDowned and symbol-error history on spine01 port 6, so the redundancy was already gone. Powering off spine02 removed the last path. The ports kept their configuration until leaf06 rebooted; after that nothing could activate them.
+    - id: b
+      text: Losing spine02 halved the leaf-to-spine bandwidth, so rail 5 congests during collectives and NCCL drops it from the job after timeouts.
+      explanation: Rail-aligned collectives stay inside each leaf and do not use the spines. The rail-5 ports are not slow, they are in INIT with no LID, and every other rail runs at full speed with the same spine capacity.
+    - id: c
+      text: leaf06 lost its configuration in the reboot and now runs with the wrong port speed, so the host links train but the ports cannot reach ACTIVE.
+      explanation: The host links of leaf06 are LinkUp at 4X NDR, and a speed mismatch would show in the link width and rate, not as INIT. INIT means no subnet manager has configured the ports.
+    - id: d
+      text: OpenSM's routing engine could not handle the asymmetric fabric without spine02 and fell back to a mode that leaves leaf06 without routes.
+      explanation: Any routing engine still activates every port the SM discovers. leaf06 is not discovered at all. `iblinkinfo` on node01 does not list it, because no working link leads there from the rest of the fabric.
+checks:
+  - { description: "leaf06 port 31 to spine01 is up", check: port_up, args: { switch: leaf06, port: swp31 } }
+  - { description: "the subnet manager reaches leaf06 again", check: ib_switch_reachable, args: { switch: leaf06 } }
+  - { description: "every rail-5 HCA port is ACTIVE", check: ib_ports_active, args: { node: all, rail: 5 } }
+  - { description: "all_reduce bus bandwidth is above 360 GB/s", check: allreduce_min_busbw, args: { value: 360 } }
+solution: |
+  `ibstat mlx5_5 1` shows `State: Initializing`, `Physical state: LinkUp`, `Base lid: 65535`. `sminfo` answers
+  (`SMINFO_MASTER`, LID 11), so an SM is running; it just never configures these ports. `iblinkinfo` on node01
+  lists seven leaves and spine01 but no leaf06 and no spine02. Every leaf's port 32 is `Down/ Polling`
+  (spine02 is off, as planned), and spine01 port 6, the link to leaf06, is `Down/ Polling` as well.
+  `iblinkinfo -C mlx5_5` starts the directed-route walk from rail 5 instead: it finds only leaf06, its four
+  host ports `Initialize/  LinkUp` and both uplinks down. `perfquery 9 6` (spine01 port 6) shows
+  `LinkDownedCounter` 1 and thousands of symbol errors: that link degraded and died some time ago, and since
+  then leaf06 had only one path.
+
+  Fix: replace the cable or optic between leaf06 port 31 and spine01 port 6 (`replace-cable leaf06 31`).
+  The link trains, the next SM sweep reaches leaf06 through spine01, rail 5 goes ACTIVE, and the collective
+  is back at ~372 GB/s while spine02 is still off.
+
+  Lesson: "N spines" is only redundancy if every leaf has a working link to every spine. Before planned
+  maintenance, check `iblinkinfo -d` (down ports only) for links that should be up. A single dead uplink is
+  invisible to rail-local jobs and to the SM until the last path goes. In InfiniBand the SM depends on the
+  same switches as the data, so a leaf it cannot reach cannot be brought up.
+fix:
+  - "node01: replace-cable leaf06 31"

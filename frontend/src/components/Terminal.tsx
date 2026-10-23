@@ -11,7 +11,8 @@ const WORDS = [
   'ssh', 'exit', 'clear', 'help', 'hostname', 'ip', 'link', 'addr', 'route', 'set', 'dev', 'mtu', 'show', 'ibdev2netdev', 'ibv_devices', 'ibv_devinfo', 'rdma',
   'statistic', 'show_gids', 'ethtool', 'mlnx_qos', '--trust', '--pfc', 'lspci', 'nvidia-smi', 'topo', 'dmesg', 'mlxlink', 'ping', 'ib_write_bw',
   '--report_gbits', 'all_reduce_perf', 'cat', '/etc/nccl.conf', 'sed', 'echo', 'grep', 'replace-cable', 'reseat-nic', 'nv', 'interface', 'counters', 'qos', 'roce',
-  'config', 'apply', 'diff', 'unset', 'state', 'lossless', ...NODES, ...LEAVES, ...SPINES, ...NETDEVS, ...Array.from({ length: 8 }, (_, i) => `mlx5_${i}`),
+  'config', 'apply', 'diff', 'unset', 'state', 'lossless', 'ibstat', 'ibstatus', 'iblinkinfo', 'perfquery', 'sminfo', 'ibqueryerrors',
+  'systemctl', 'opensm', 'sleep', ...NODES, ...LEAVES, ...SPINES, ...NETDEVS, ...Array.from({ length: 8 }, (_, i) => `mlx5_${i}`),
   ...Array.from({ length: 8 }, (_, i) => `swp${i + 1}`), 'swp31', 'swp32',
 ];
 

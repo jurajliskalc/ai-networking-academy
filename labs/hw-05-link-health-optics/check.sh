@@ -25,6 +25,7 @@ snapshot() {
 
 need_cmd ethtool ib_write_bw || aina_finish
 check_ssh B || aina_finish
+need_cmd_on B ib_write_bw ethtool || aina_finish
 
 LL=$(port_attr A link_layer)
 declare -A RATE

@@ -55,6 +55,8 @@ export interface Port {
   wd?: { status: ('OK' | 'DEADLOCK')[]; deadlocks: number[] };
   /** InfiniBand PMA PortCounters of the switch port (IB variant only). */
   ib?: Record<string, number>;
+  /** The switch this port belongs to is powered off. */
+  dead?: boolean;
 }
 export interface PortCfg { mtu: number; admin: boolean; pfcwd?: boolean }
 export interface SwitchCfg {
@@ -63,16 +65,31 @@ export interface SwitchCfg {
   /** Traffic classes whose ECN marking is disabled in the congestion-control profile. */
   ecnOff?: number[];
 }
-export interface Switch { name: string; role: 'leaf' | 'spine'; rail?: number; cfg: SwitchCfg; pending: SwitchCfg | null; ports: Record<string, Port> }
-export interface SmState { node: string; rail: number; running: boolean; enabled: boolean }
+export interface Switch {
+  name: string; role: 'leaf' | 'spine'; rail?: number; cfg: SwitchCfg; pending: SwitchCfg | null; ports: Record<string, Port>;
+  /** Powered off (switch_down): every link on it is down and it does not answer SSH. */
+  off?: boolean;
+}
+/** One OpenSM instance (IB variant). The master is elected among running instances: priority, then lower port GUID. */
+export interface SmState { node: string; rail: number; running: boolean; enabled: boolean; priority?: number; failed?: boolean }
 export interface FabricState {
   hosts: Record<string, Host>;
   switches: Record<string, Switch>;
   actions: string[];
   /** 'roce' (default, also when absent in an older saved state) or the 'ib' InfiniBand variant. */
   mode?: FabricMode;
-  /** IB variant: the OpenSM instance that manages the subnet. */
+  /** Older saved states: a single OpenSM instance. Read through smList(), which migrates it to `sms`. */
   sm?: SmState;
+  /** IB variant: the OpenSM instances on the subnet (master and standbys). */
+  sms?: SmState[];
+  /** Simulated seconds since the lab started: every command adds 1 s, `sleep N` adds N, a collective 20 s. */
+  clock?: number;
+  /** IB variant: when the master SM stopped while a standby was running (the standby takes over SM_TAKEOVER_S later). */
+  smLostAt?: number;
+  /** IB variant: ports an SM has configured (ACTIVE, with a LID). They stay ACTIVE without an SM until their link drops. */
+  ibConfigured?: string[];
+  /** IB variant: the SM LID programmed into the ports by the last master. */
+  ibSmLid?: number;
 }
 
 export type Fault = Record<string, unknown> & { type: string };
@@ -88,8 +105,13 @@ NCCL_SOCKET_IFNAME=eno1
 NCCL_IB_HCA=mlx5
 NCCL_IB_GID_INDEX=3
 NCCL_IB_TC=106
+NCCL_IB_QPS_PER_CONNECTION=4
 NCCL_DEBUG=WARN
 `;
+
+/** Node/port GUID of an HCA (shared by the RoCE and InfiniBand commands so GIDs and GUIDs stay consistent). */
+export const hcaGuid = (node: string, rail: number) =>
+  `b83f${(0xd2 + rail).toString(16)}0300${(0x4a + nodeIndex(node)).toString(16)}c1${rail}${rail}`.slice(0, 16);
 
 function emptyNicCounters(r: number): Record<string, number> {
   const c: Record<string, number> = {
@@ -165,7 +187,10 @@ function syncCfg(sw: Switch) {
 }
 
 export function applyFaults(s: FabricState, faults: Fault[]): FabricState {
-  for (const f of faults) applyFault(s, f);
+  for (const f of faults) {
+    applyFault(s, f);
+    ibSettle(s);
+  }
   return s;
 }
 
@@ -222,9 +247,42 @@ export function applyFault(s: FabricState, f: Fault) {
     case 'pfcwd': port!.pfcwd = f.enabled !== false; break;
     case 'ib_fabric': toInfiniBand(s); break;
     case 'sm_down':
-      if (!s.sm) throw new Error('sm_down needs the ib_fabric variant first');
-      s.sm.running = false;
-      s.sm.enabled = f.enabled === true;
+      // No SM runs, and the fabric has been power-cycled since (a patch window), so no port is configured.
+      if (!smList(s).length) throw new Error('sm_down needs the ib_fabric variant first');
+      for (const x of smList(s)) {
+        x.running = false;
+        x.enabled = f.enabled === true;
+      }
+      s.ibConfigured = [];
+      break;
+    case 'ib_sm': {
+      // Add or change an OpenSM instance: { node, rail?, priority?, state?: running|stopped|failed, enabled? }.
+      if (s.mode !== 'ib') throw new Error('ib_sm needs the ib_fabric variant first');
+      const node = String(f.node);
+      const before = masterSm(s);
+      let x = smList(s).find((y) => y.node === node);
+      if (!x) {
+        x = { node, rail: 0, running: true, enabled: true, priority: 0 };
+        s.sms!.push(x);
+      }
+      if (f.rail !== undefined) x.rail = Number(f.rail);
+      if (f.priority !== undefined) x.priority = Number(f.priority);
+      if (f.enabled !== undefined) x.enabled = f.enabled === true;
+      const st = String(f.state ?? 'running');
+      x.running = st === 'running';
+      x.failed = st === 'failed';
+      smStopped(s, x, before);
+      break;
+    }
+    case 'ib_port_reset':
+      // The links of a switch (or of one HCA) retrained, e.g. after a reboot: the ports wait in INIT for an SM.
+      if (sw) unconfigure(s, Object.values(sw.ports).flatMap((p) => linkKeys(sw.name, p)).concat(sw.name));
+      else unconfigure(s, [`${String(f.node)}:${Number(f.rail)}`, ...linkKeys(LEAVES[Number(f.rail)], s.switches[LEAVES[Number(f.rail)]].ports[leafPortFor(String(f.node))])]);
+      break;
+    case 'switch_down':
+      sw!.off = true;
+      for (const p of Object.values(sw!.ports)) p.dead = true;
+      unconfigure(s, Object.values(sw!.ports).flatMap((p) => linkKeys(sw!.name, p)).concat(sw!.name));
       break;
     case 'link_degraded': {
       port!.lanes = Number(f.lanes ?? 1);
@@ -261,19 +319,22 @@ export function applyFault(s: FabricState, f: Fault) {
 }
 
 export const FAULT_TYPES = ['switch_port_mtu', 'switch_port_admin_down', 'cable_unplugged', 'bad_cable', 'switch_roce', 'host_mtu', 'host_pfc', 'host_trust', 'nic_admin_down', 'pcie_downtrain', 'nccl_conf',
-  'switch_ecn', 'nic_rx_stall', 'pfcwd', 'ib_fabric', 'sm_down', 'link_degraded', 'ib_counters'];
+  'switch_ecn', 'nic_rx_stall', 'pfcwd', 'ib_fabric', 'sm_down', 'link_degraded', 'ib_counters', 'ib_sm', 'ib_port_reset', 'switch_down'];
 
 /** Convert a fresh cluster to the InfiniBand variant (NDR, one subnet, OpenSM on node01 mlx5_0). */
 function toInfiniBand(s: FabricState) {
   s.mode = 'ib';
-  s.sm = { node: 'node01', rail: 0, running: true, enabled: true };
+  s.sms = [{ node: 'node01', rail: 0, running: true, enabled: true, priority: 0 }];
+  delete s.sm;
   for (const h of Object.values(s.hosts)) {
     for (const n of h.nics) {
       n.netdev = IB_NETDEVS[n.rail];
       n.ib = emptyIb();
     }
-    // No RoCE knobs in an InfiniBand cluster's NCCL config.
-    h.files['/etc/nccl.conf'] = setConfKey(setConfKey(h.files['/etc/nccl.conf'], 'NCCL_IB_GID_INDEX', null), 'NCCL_IB_TC', null);
+    // No RoCE knobs in an InfiniBand cluster's NCCL config (no GID index or traffic class, no ECMP entropy tuning).
+    let conf = h.files['/etc/nccl.conf'];
+    for (const k of ['NCCL_IB_GID_INDEX', 'NCCL_IB_TC', 'NCCL_IB_QPS_PER_CONNECTION']) conf = setConfKey(conf, k, null);
+    h.files['/etc/nccl.conf'] = conf;
   }
   for (const sw of Object.values(s.switches)) for (const p of Object.values(sw.ports)) p.ib = emptyIb();
 }
@@ -329,23 +390,53 @@ export const pcieGbps = (n: Nic) => {
 
 export interface Issue { fatal: boolean; underLoadOnly?: boolean; factor: number; kind: string; detail: string }
 
-/** Physical link up: both ends enabled and a working cable. */
+/** Physical link up: both ends enabled and powered, and a working cable. */
 export function linkUp(s: FabricState, p: Port): boolean {
-  if (!p.admin || p.cable !== 'ok') return false;
-  return p.peer.kind === 'host' ? s.hosts[p.peer.node].nics[p.peer.rail].admin : s.switches[p.peer.sw].ports[p.peer.port].admin;
+  if (!p.admin || p.cable !== 'ok' || p.dead) return false;
+  if (p.peer.kind === 'host') return s.hosts[p.peer.node].nics[p.peer.rail].admin;
+  const q = s.switches[p.peer.sw].ports[p.peer.port];
+  return q.admin && q.cable === 'ok' && !q.dead;
 }
 
-/**
- * IB variant: the ports the subnet manager has discovered and brought to ACTIVE. OpenSM sweeps the
- * subnet from its own port over physically-up links; anything it cannot reach (or everything, when no SM
- * runs) stays in INIT with LID 0. Keys: "node:rail" for HCA ports, "switch" and "switch:port" for switches.
- */
-export function ibActive(s: FabricState): Set<string> {
+// ---------------------------------------------------------------- InfiniBand subnet management
+
+/** A standby declares the master dead after OpenSM's polling_timeout (10 s) x polling_retry_number (4) defaults. */
+// Measured on two ConnectX-5 ports back to back with DOCA OpenSM defaults: the standby became master 53 s
+// after the master was killed.
+export const SM_TAKEOVER_S = 50;
+
+/** The OpenSM instances of the subnet (migrates the single `sm` of older saved states). */
+export function smList(s: FabricState): SmState[] {
+  if (!s.sms && s.sm) {
+    s.sms = [{ priority: 0, ...s.sm }];
+    delete s.sm;
+  }
+  return s.sms ?? [];
+}
+const smPortOf = (s: FabricState, x: SmState) => s.switches[LEAVES[x.rail]].ports[leafPortFor(x.node)];
+/** Election order: higher priority first, then the lower port GUID. */
+const smOrder = (a: SmState, b: SmState) => (b.priority ?? 0) - (a.priority ?? 0) || (hcaGuid(a.node, a.rail) < hcaGuid(b.node, b.rail) ? -1 : 1);
+
+/** The master SM, or null: none running, or the standbys are still polling a master that died. */
+export function masterSm(s: FabricState): SmState | null {
+  if (s.mode !== 'ib') return null;
+  const up = smList(s).filter((x) => x.running && linkUp(s, smPortOf(s, x)));
+  if (!up.length) return null;
+  if (s.smLostAt !== undefined && (s.clock ?? 0) < s.smLostAt + SM_TAKEOVER_S) return null;
+  return [...up].sort(smOrder)[0];
+}
+
+/** Bookkeeping after an SM stopped: if it was the master and a standby runs, the standby takes over later. */
+export function smStopped(s: FabricState, x: SmState, before: SmState | null) {
+  if (before === x && !x.running && smList(s).some((y) => y !== x && y.running)) s.smLostAt = s.clock ?? 0;
+}
+
+/** Ports the master SM reaches by sweeping the subnet from its own port over links that are physically up. */
+export function smSweep(s: FabricState): Set<string> {
   const act = new Set<string>();
-  if (s.mode !== 'ib' || !s.sm?.running) return act;
-  const smPort = s.switches[LEAVES[s.sm.rail]].ports[leafPortFor(s.sm.node)];
-  if (!linkUp(s, smPort)) return act;
-  const queue = [LEAVES[s.sm.rail]];
+  const m = masterSm(s);
+  if (!m) return act;
+  const queue = [LEAVES[m.rail]];
   act.add(queue[0]);
   while (queue.length) {
     const sw = s.switches[queue.shift()!];
@@ -362,12 +453,57 @@ export function ibActive(s: FabricState): Set<string> {
   return act;
 }
 
+/** Is a configured port (or switch) still physically up? */
+function keyUp(s: FabricState, k: string): boolean {
+  const [a, b] = k.split(':');
+  if (b === undefined) return !!s.switches[a] && !s.switches[a].off;
+  if (s.hosts[a]) return linkUp(s, s.switches[LEAVES[Number(b)]].ports[leafPortFor(a)]);
+  const p = s.switches[a]?.ports[b];
+  return !!p && linkUp(s, p);
+}
+
+/**
+ * IB variant: the ports that are ACTIVE. The master SM configures every port it reaches; a configured port
+ * stays ACTIVE without an SM (traffic keeps flowing) until its link drops, and then waits in INIT for an SM.
+ * Keys: "node:rail" for HCA ports, "switch" and "switch:port" for switches.
+ */
+export function ibActive(s: FabricState): Set<string> {
+  if (s.mode !== 'ib') return new Set<string>();
+  const act = smSweep(s);
+  for (const k of s.ibConfigured ?? []) if (keyUp(s, k)) act.add(k);
+  return act;
+}
+
+/** Record which ports are configured now (called after every fault and command). */
+export function ibSettle(s: FabricState) {
+  if (s.mode !== 'ib') return;
+  const act = ibActive(s);
+  s.ibConfigured = [...act];
+  const m = masterSm(s);
+  if (m) s.ibSmLid = ibHcaLid(s, m.node, m.rail, act);
+}
+
+/** Both ends of a link, as ibActive keys. */
+export function linkKeys(sw: string, p: Port): string[] {
+  return [`${sw}:${p.name}`, p.peer.kind === 'host' ? `${p.peer.node}:${p.peer.rail}` : `${p.peer.sw}:${p.peer.port}`];
+}
+/** These ports retrained (or rebooted): they lose their configuration until an SM sweeps them again. */
+export function unconfigure(s: FabricState, keys: string[]) {
+  if (s.mode !== 'ib' || !s.ibConfigured) return;
+  const drop = new Set(keys);
+  s.ibConfigured = s.ibConfigured.filter((k) => !drop.has(k));
+}
+
 /** IB variant: LIDs the SM assigns (switches 1-10, HCAs from 11; the SM's own port gets 11). 0 = unassigned. */
 export const SWITCH_ORDER = [...LEAVES, ...SPINES];
 export const ibSwitchLid = (s: FabricState, sw: string, act = ibActive(s)) => (act.has(sw) ? SWITCH_ORDER.indexOf(sw) + 1 : 0);
 export const ibHcaLid = (s: FabricState, node: string, rail: number, act = ibActive(s)) =>
   act.has(`${node}:${rail}`) ? 11 + nodeIndex(node) * RAILS + rail : 0;
-export const ibSmLid = (s: FabricState) => (s.sm ? ibHcaLid(s, s.sm.node, s.sm.rail) : 0);
+/** The SM LID the ports report: the master's port, or (no master) the one the last master programmed. */
+export const ibSmLid = (s: FabricState) => {
+  const m = masterSm(s);
+  return m ? ibHcaLid(s, m.node, m.rail) : (s.ibSmLid ?? 0);
+};
 
 /** Issues on the access link and NIC of (node, rail), independent of the far end. */
 export function nicIssues(s: FabricState, node: string, rail: number): Issue[] {
@@ -378,6 +514,7 @@ export function nicIssues(s: FabricState, node: string, rail: number): Issue[] {
   if (!nic.admin) issues.push({ fatal: true, factor: 0, kind: 'down', detail: `${nic.netdev} administratively down` });
   if (!port.admin) issues.push({ fatal: true, factor: 0, kind: 'down', detail: `${leaf.name} ${port.name} administratively down` });
   if (port.cable === 'unplugged') issues.push({ fatal: true, factor: 0, kind: 'down', detail: `no carrier between ${node} ${nic.netdev} and ${leaf.name} ${port.name}` });
+  if (port.dead) issues.push({ fatal: true, factor: 0, kind: 'down', detail: `${leaf.name} is powered off` });
   if (s.mode === 'ib' && !issues.some((i) => i.fatal) && !ibActive(s).has(`${node}:${rail}`))
     issues.push({ fatal: true, factor: 0, kind: 'init', detail: `${nic.dev} port 1 is INIT: no subnet manager has configured it` });
   const lanes = port.lanes ?? 4;
@@ -412,7 +549,7 @@ export function evaluatePair(s: FabricState, a: string, ra: number, b: string, r
   const mtu = ib ? 4096 : Math.min(roceMtu(na.mtu), roceMtu(nb.mtu));
   const path: Port[] = [s.switches[LEAVES[ra]].ports[leafPortFor(a)]];
   if (ra !== rb) {
-    const up = (leaf: string) => ['swp31', 'swp32'].map((p) => s.switches[leaf].ports[p]).filter((p) => p.admin && p.cable === 'ok');
+    const up = (leaf: string) => ['swp31', 'swp32'].map((p) => s.switches[leaf].ports[p]).filter((p) => linkUp(s, p));
     const ua = up(LEAVES[ra]);
     const ub = up(LEAVES[rb]);
     const spineOf = (p: Port) => (p.peer.kind === 'switch' ? p.peer.sw : null);
@@ -449,6 +586,118 @@ export interface CollectiveResult {
   conf: Record<string, string>;
   /** NCCL_CROSS_NIC=1: rings leave a node on a different NIC than they enter, so inter-node hops change rail. */
   crossRail?: boolean;
+  /** Cross-rail runs: which leaf uplink and spine each flow (QP) hashed onto. */
+  ecmp?: EcmpPlan;
+}
+
+// ---------------------------------------------------------------- ECMP over the leaf uplinks (cross-rail traffic)
+
+/** Each NCCL connection opens NCCL_IB_QPS_PER_CONNECTION QPs (NCCL's documented default is 1; the variable accepts 1-128). */
+export const qpsPerConnection = (c: Record<string, string>) => Math.min(128, Math.max(1, Math.floor(Number(c.NCCL_IB_QPS_PER_CONNECTION ?? 1)) || 1));
+
+/**
+ * UDP source port of a RoCEv2 QP. Modelled on the Linux helpers rdma_calc_flow_label() and
+ * rdma_flow_label_to_udp_sport(): a 20-bit flow label hashed from the two QP numbers, folded into 0xC000-0xFFFF.
+ * How a given NIC and firmware really derive the port varies; what matters is one fixed port per QP.
+ */
+export function roceUdpSport(lqpn: number, rqpn: number): number {
+  const v = lqpn * rqpn; // below 2^48, exact in a double
+  const fl = ((v % 0x100000) ^ (Math.floor(v / 0x100000) % 0x100000) ^ (Math.floor(v / 2 ** 40) & 0xff)) & 0xfffff;
+  return ((fl & 0x3fff) ^ ((fl & 0xfc000) >> 14)) | 0xc000;
+}
+
+/** The ECMP hash seed every leaf uses (identical switches with default settings). */
+export const ECMP_SEED = 49;
+
+/**
+ * Switch ECMP hash over the 5-tuple (source IP, destination IP, protocol 17, UDP source port, destination port 4791).
+ * Switch ASICs use CRC-style functions with a configurable seed; this model uses FNV-1a plus a murmur3 finaliser so
+ * that the result behaves like a well-mixed hash. Only the inputs and the seed decide the uplink, as on a real switch.
+ */
+export function ecmpHash(src: string, dst: string, sport: number, seed = ECMP_SEED): number {
+  const bytes = [...src.split('.').map(Number), ...dst.split('.').map(Number), 17, sport >> 8, sport & 0xff, 4791 >> 8, 4791 & 0xff];
+  let h = (0x811c9dc5 ^ seed) >>> 0;
+  for (const x of bytes) h = Math.imul(h ^ x, 0x01000193) >>> 0;
+  h ^= h >>> 16;
+  h = Math.imul(h, 0x85ebca6b) >>> 0;
+  h ^= h >>> 13;
+  h = Math.imul(h, 0xc2b2ae35) >>> 0;
+  return (h ^ (h >>> 16)) >>> 0;
+}
+
+export interface EcmpFlow { src: string; dst: string; sport: number; srcLeaf: string; up: string; spine: string; spinePort: string; dstLeaf: string; qps: number }
+export interface EcmpPlan {
+  flows: EcmpFlow[];
+  /** Flows per directed link ("switch:port", egress side): leaf uplinks and spine ports toward the destination leaf. */
+  load: Record<string, number>;
+  /** Fair share of flows per link (flows the leaf sends or receives over the spines / usable uplinks). */
+  fair: Record<string, number>;
+  /** Worst link: fair share / flows on it (1 = perfectly spread). */
+  efficiency: number;
+  /** Pace of the slowest flow relative to the NIC's own share (0.5 = the 2:1 uplink bound). */
+  pace: number;
+  noRoute?: { a: string; ra: number; b: string; rb: number };
+}
+
+/**
+ * Cross-rail rings: each of the 2 channels per rail makes 4 inter-node hops from NIC `last` of one node to NIC `c` of the
+ * next, and every hop opens NCCL_IB_QPS_PER_CONNECTION QPs. RoCE: each QP is one flow with its own UDP source port and the
+ * source leaf hashes it onto one uplink (static ECMP). InfiniBand: the SM's routing spreads destinations evenly.
+ */
+export function crossRailPlan(s: FabricState, rails: number[], confs: Record<string, string>[], seed = ECMP_SEED): EcmpPlan {
+  const ib = s.mode === 'ib';
+  const n = rails.length;
+  const flows: EcmpFlow[] = [];
+  const load: Record<string, number> = {};
+  const fair: Record<string, number> = {};
+  const out: Record<string, { flows: number; ups: number }> = {};
+  const into: Record<string, { flows: number; spines: Set<string> }> = {};
+  const paths: { keys: string[]; qps: number }[] = [];
+  for (let k = 0; k < 2 * n; k++) {
+    const c = rails[k % n];
+    const last = rails[((k % n) + n - 1) % n];
+    const srcLeaf = LEAVES[last];
+    const dstLeaf = LEAVES[c];
+    for (const [i, a] of NODES.entries()) {
+      const b = NODES[(i + 1) % NODES.length];
+      const qps = qpsPerConnection(confs[i]);
+      const cands = ['swp31', 'swp32'].map((x) => s.switches[srcLeaf].ports[x])
+        .filter((p) => linkUp(s, p) && p.peer.kind === 'switch' && linkUp(s, s.switches[p.peer.sw].ports[`swp${c + 1}`]));
+      if (!cands.length) return { flows, load, fair, efficiency: 0, pace: 0, noRoute: { a, ra: last, b, rb: c } };
+      out[srcLeaf] = { flows: (out[srcLeaf]?.flows ?? 0) + qps, ups: cands.length };
+      into[dstLeaf] ??= { flows: 0, spines: new Set() };
+      into[dstLeaf].flows += qps;
+      for (const p of cands) if (p.peer.kind === 'switch') into[dstLeaf].spines.add(p.peer.sw);
+      for (let q = 0; q < qps; q++) {
+        // QP numbers are handed out in order on each device; the receiving side's QP is created when it accepts.
+        const lqpn = 0x1c4 + 0x2d * last + 0x11 * i + k * 128 + q;
+        const rqpn = 0x2a9 + 0x2d * c + 0x11 * ((i + 1) % NODES.length) + k * 128 + q;
+        const sport = roceUdpSport(lqpn, rqpn);
+        const src = hostIp(a, last);
+        const dst = hostIp(b, c);
+        const pick = cands[(ib ? k * qps + q + i : ecmpHash(src, dst, sport, seed)) % cands.length];
+        const spine = pick.peer.kind === 'switch' ? pick.peer.sw : '';
+        const f: EcmpFlow = { src, dst, sport, srcLeaf, up: pick.name, spine, spinePort: `swp${c + 1}`, dstLeaf, qps };
+        flows.push(f);
+        const keys = [`${srcLeaf}:${pick.name}`, `${spine}:${f.spinePort}`];
+        for (const key of keys) load[key] = (load[key] ?? 0) + 1;
+        paths.push({ keys, qps });
+      }
+    }
+  }
+  for (const key of Object.keys(load)) {
+    const [sw, port] = key.split(':');
+    if (LEAVES.includes(sw)) fair[key] = out[sw].flows / out[sw].ups;
+    else {
+      const leaf = LEAVES[Number(port.slice(3)) - 1];
+      fair[key] = into[leaf].flows / into[leaf].spines.size;
+    }
+  }
+  // Every NIC carries 2 channels x qps flows at line rate; a link shared by m flows gives each 1/m of it.
+  let pace = 1;
+  for (const p of paths) for (const key of p.keys) pace = Math.min(pace, (2 * p.qps) / load[key]);
+  const efficiency = Math.min(1, ...Object.keys(load).map((key) => fair[key] / load[key]));
+  return { flows, load, fair, efficiency, pace };
 }
 
 export function hcaSelected(spec: string | undefined, dev: string): boolean {
@@ -510,19 +759,31 @@ export function evaluateAllReduce(s: FabricState): CollectiveResult {
     }
   }
   // NCCL_CROSS_NIC=1 lets a ring enter a node on NIC n and leave on NIC m, so every inter-node hop goes
-  // leaf -> spine -> leaf. Each leaf has 4 x 400G down and 2 x 400G up: at best half the bandwidth, minus collisions.
+  // leaf -> spine -> leaf. Each leaf has 4 x 400G down and 2 x 400G up: at best half the bandwidth, and only if
+  // the hash spreads the flows evenly over the uplinks (crossRailPlan); 0.97 is protocol and congestion overhead.
   const crossRail = confs.some((c) => c.NCCL_CROSS_NIC === '1') && rails.length > 1;
+  let ecmp: EcmpPlan | undefined;
   if (crossRail) {
-    const upsDown = LEAVES.some((l) => ['swp31', 'swp32'].some((p) => !linkUp(s, s.switches[l].ports[p])));
-    const f = upsDown ? 0.24 : 0.46;
-    if (f < minFactor) { minFactor = f; limiting = { fatal: false, underLoadOnly: true, factor: f, kind: 'cross-rail', detail: 'inter-node traffic crosses rails through the spines (NCCL_CROSS_NIC=1)' }; }
+    ecmp = crossRailPlan(s, rails, confs);
+    if (ecmp.noRoute) {
+      const { a, ra, b, rb } = ecmp.noRoute;
+      return { ...base, rails, ok: false, busbw: 0, errorNode: a, errorSrc: 'transport/net_ib.cc',
+        error: `NET/IB : Got completion from peer ${hostIp(b, rb)}<${45000 + rb * 7}> with status=12 opcode=0 len=0 vendor err 129 (Send) localGid ::ffff:${hostIp(a, ra)} remoteGid ::ffff:${hostIp(b, rb)} hca mlx5_${ra}` };
+    }
+    const f = 0.97 * ecmp.pace;
+    if (f < minFactor) {
+      minFactor = f;
+      limiting = ecmp.efficiency < 0.85
+        ? { fatal: false, underLoadOnly: true, factor: f, kind: 'ecmp', detail: 'cross-rail flows collide on leaf uplinks (too few flows for ECMP to spread)' }
+        : { fatal: false, underLoadOnly: true, factor: f, kind: 'cross-rail', detail: 'inter-node traffic crosses rails through the spines (NCCL_CROSS_NIC=1)' };
+    }
   }
   // Traffic class: NCCL_IB_TC=106 is DSCP 26 (106 >> 2) with ECT. Anything else lands outside the lossless class.
   if (!ib && tcs.some((t) => t >> 2 !== 26)) {
     const f = 0.35;
     if (f < minFactor) { minFactor = f; limiting = { fatal: false, underLoadOnly: true, factor: f, kind: 'tc', detail: `NCCL_IB_TC=${tcs.find((t) => t >> 2 !== 26)} (DSCP ${tcs.find((t) => t >> 2 !== 26)! >> 2}) is not the lossless RoCE class` }; }
   }
-  return { ...base, ok: true, rails, busbw: Math.round(PER_RAIL_BUSBW * rails.length * minFactor * 100) / 100, limiting, crossRail };
+  return { ...base, ok: true, rails, busbw: Math.round(PER_RAIL_BUSBW * rails.length * minFactor * 100) / 100, limiting, crossRail, ecmp };
 }
 
 /** Advance counters as if `kind` traffic ran. Deterministic so the same lab always tells the same story. */
@@ -624,7 +885,7 @@ export function accrueTraffic(s: FabricState, kind: 'collective' | 'pair', scope
       hw.local_ack_timeout_err += Math.round(d.drops / 2700);
     }
   }
-  if (load && ar?.crossRail) accrueSpines(s, ib);
+  if (load && ar?.ecmp) accrueSpines(s, ar.ecmp);
 }
 
 /** InfiniBand PMA counters: data in 4-byte words, PortXmitWait in ticks spent waiting for credits. */
@@ -646,27 +907,46 @@ function accrueIb(nic: Nic, port: Port, pkts: number, errors: boolean, load: boo
   }
 }
 
-/** Cross-rail rings: the leaf uplinks and spines carry the inter-node traffic and congest. */
-function accrueSpines(s: FabricState, ib: boolean) {
-  LEAVES.forEach((leaf, r) => {
-    for (const up of ['swp31', 'swp32']) {
-      const p = s.switches[leaf].ports[up];
-      if (!linkUp(s, p) || p.peer.kind !== 'switch') continue;
-      const q = s.switches[p.peer.sw].ports[p.peer.port];
-      const pkts = 41_600_000 + r * 1_777;
-      for (const x of [p, q]) {
-        x.counters.tx_packets += pkts; x.counters.rx_packets += pkts;
-        if (x.ib) {
-          x.ib.PortXmitData += Math.round((pkts * 4154) / 4); x.ib.PortRcvData += Math.round((pkts * 4154) / 4);
-          x.ib.PortXmitPkts += pkts; x.ib.PortRcvPkts += pkts; x.ib.PortXmitWait += 19_400_000 + r * 3_331;
-        }
-      }
-      if (!ib) {
-        p.counters.ecn_marked += 286_000 + r * 1_171; q.counters.ecn_marked += 151_000 + r * 733;
-        p.counters.tx_pfc_pause += 3_100 + r; q.counters.rx_pfc_pause += 3_100 + r;
-      }
+/** Cross-rail rings: the leaf uplinks and spines carry the inter-node traffic, flow by flow, and congest where flows pile up. */
+function accrueSpines(s: FabricState, plan: EcmpPlan) {
+  const ib = s.mode === 'ib';
+  const add = (p: Port, dir: 'tx' | 'rx', pkts: number) => {
+    p.counters[`${dir}_packets`] += pkts;
+    if (p.ib) {
+      p.ib[dir === 'tx' ? 'PortXmitData' : 'PortRcvData'] += Math.round((pkts * 4154) / 4);
+      p.ib[dir === 'tx' ? 'PortXmitPkts' : 'PortRcvPkts'] += pkts;
     }
-  });
+  };
+  for (const f of plan.flows) {
+    const r = LEAVES.indexOf(f.srcLeaf);
+    const pkts = Math.round((10_400_000 + r * 222) / f.qps);
+    const up = s.switches[f.srcLeaf].ports[f.up];
+    const spineIn = up.peer.kind === 'switch' ? s.switches[up.peer.sw].ports[up.peer.port] : null;
+    const spineOut = s.switches[f.spine].ports[f.spinePort];
+    const down = spineOut.peer.kind === 'switch' ? s.switches[spineOut.peer.sw].ports[spineOut.peer.port] : null;
+    add(up, 'tx', pkts);
+    if (spineIn) add(spineIn, 'rx', pkts);
+    add(spineOut, 'tx', pkts);
+    if (down) add(down, 'rx', pkts);
+  }
+  // Egress queues mark (RoCE) or wait for credits (IB) in proportion to how far their load exceeds the fair share.
+  for (const [key, flows] of Object.entries(plan.load)) {
+    const [sw, port] = key.split(':');
+    const p = s.switches[sw].ports[port];
+    const x = flows / plan.fair[key];
+    const leaf = LEAVES.includes(sw);
+    const r = leaf ? LEAVES.indexOf(sw) : Number(port.slice(3)) - 1;
+    if (ib) {
+      if (p.ib) p.ib.PortXmitWait += Math.round((19_400_000 + r * 3_331) * x * x);
+      continue;
+    }
+    p.counters.ecn_marked += Math.round((leaf ? 286_000 + r * 1_171 : 151_000 + r * 733) * x ** 3);
+    // The receiving side pauses the sender of a hot link now and then (PFC still backs up ECN).
+    const q = p.peer.kind === 'switch' ? s.switches[p.peer.sw].ports[p.peer.port] : null;
+    const pause = Math.round((3_100 + r) * x * x);
+    p.counters.rx_pfc_pause += pause;
+    if (q) q.counters.tx_pfc_pause += pause;
+  }
 }
 
 // ---------------------------------------------------------------- checks used by lab grading
@@ -705,8 +985,16 @@ export const CHECKS: Record<string, CheckFn> = {
   switch_ecn_on: (s, a) => !(s.switches[String(a.switch)].cfg.ecnOff ?? []).includes(num(a.tc ?? ROCE_PRIO)),
   pfcwd_on: (s, a) => s.switches[String(a.switch)].ports[String(a.port)].pfcwd !== false,
   nic_not_stalled: (s, a) => nodesFrom(a).every((n) => !s.hosts[n].nics[num(a.rail)].stalled),
-  sm_running: (s) => s.sm?.running === true,
-  sm_enabled: (s) => s.sm?.enabled === true,
+  sm_running: (s) => smList(s).some((x) => x.running),
+  sm_enabled: (s, a) => {
+    const l = smList(s).filter((x) => a.node === undefined || x.node === String(a.node));
+    return l.length > 0 && l.every((x) => x.enabled);
+  },
+  sm_count: (s, a) => smList(s).filter((x) => x.running).length >= num(a.value ?? 2),
+  sm_master: (s, a) => masterSm(s)?.node === String(a.node),
+  ib_switch_reachable: (s, a) => smSweep(s).has(String(a.switch)),
+  nccl_conf_min: (s, a) => nodesFrom(a).every((n) => Number(parseConf(s.hosts[n].files['/etc/nccl.conf'] ?? '')[String(a.key)] ?? a.default ?? NaN) >= num(a.value)),
+  ecmp_balanced: (s, a) => (evaluateAllReduce(s).ecmp?.efficiency ?? 1) >= num(a.value),
   ib_ports_active: (s, a) => {
     const act = ibActive(s);
     const rails = a.rail === undefined ? Array.from({ length: RAILS }, (_, r) => r) : [num(a.rail)];

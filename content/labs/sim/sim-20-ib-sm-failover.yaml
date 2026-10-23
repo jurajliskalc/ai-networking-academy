@@ -1,0 +1,78 @@
+id: sim-20-ib-sm-failover
+title: "InfiniBand: a rail stuck in INIT, and nobody home at the SM"
+level: 3
+estimated_minutes: 35
+lessons: [subnet-manager-routing, ib-tools-diagnostics, ib-architecture, nccl-debugging]
+summary: InfiniBand variant. After a leaf reboot one rail never comes back, because the master SM crashed overnight and the standby was never running.
+start: node01
+ticket: |
+  **INC-5013 · Sev2 · InfiniBand cluster lost one rail after the leaf05 firmware upgrade**
+
+  > leaf05 (rail 4, every node's `mlx5_4`) got new firmware at 07:10 and rebooted. Its links came back
+  > green, but `ib_write_bw` on `mlx5_4` fails on every node and `all_reduce_perf` peaks at about 325 GB/s
+  > instead of ~370. The other seven rails work. Our design runs two subnet managers, OpenSM on node01
+  > (priority 14) and a standby on node02 (priority 13), "so the SM cannot be the problem". The switch
+  > vendor suspects the new firmware and suggests rolling it back. - HPC operations
+
+  Restore the rail and the redundancy the design promises. Explain why only rail 4 broke.
+faults:
+  - { type: ib_fabric }
+  - { type: ib_sm, node: node01, priority: 14, state: failed, enabled: true }
+  - { type: ib_sm, node: node02, priority: 13, state: stopped, enabled: false }
+  - { type: ib_port_reset, switch: leaf05 }
+hints:
+  - "Compare `ibstat mlx5_4 1` with `ibstat mlx5_3 1` on any node. Both links are `LinkUp`; what differs in State, Base lid and SM lid? Which component moves a port from INIT to ACTIVE?"
+  - "Ask the subnet manager: `sminfo`, then `sminfo 19` (node02 mlx5_0 has LID 19). Why do the seven healthy rails still work if neither answers?"
+  - "`systemctl status opensm` on node01 and on node02. A standby only takes over if it is running."
+diagnosis:
+  prompt: What is the root cause?
+  options:
+    - id: a
+      text: No SM is running. opensm on node01 crashed overnight and the standby on node02 is disabled and stopped, so the rebooted leaf05 ports wait in INIT.
+      correct: true
+      explanation: Ports that an SM configured stay ACTIVE when the SM disappears, which is why the other seven rails kept working and nobody noticed the crash. A port whose link resets comes back in INIT with no LID and needs an SM to activate it. leaf05's reboot reset every rail-4 link, and there was no master SM, because node01's opensm died with a segfault and node02's standby was never enabled. NCCL skips the non-ACTIVE mlx5_4 ports and runs on seven rails (7 x 46.5 = 325 GB/s).
+    - id: b
+      text: The new leaf05 firmware is incompatible with the NDR HCAs. The rail-4 links train, but the ports cannot finish link negotiation, so they never reach ACTIVE.
+      explanation: The rail-4 links are LinkUp at 4X NDR. INIT is a logical state that only a subnet manager changes, and sminfo shows there is no SM answering at all. Rolling the firmware back would reboot leaf05 again and leave its ports in INIT just the same.
+    - id: c
+      text: The node02 standby took over during the upgrade with its lower priority and a different routing engine that left rail 4 without forwarding entries.
+      explanation: systemctl on node02 shows opensm inactive and disabled, and `sminfo 19` gets no answer. A standby that had taken over would answer as SMINFO_MASTER, and any master activates every port it discovers.
+    - id: d
+      text: The reboot gave the rail-4 HCAs new LIDs, and NCCL and perftest still use the old LIDs they cached, so their connections time out.
+      explanation: The rail-4 ports have no LID at all (Base lid 65535) and are not ACTIVE. ib_write_bw fails on the local port state before it contacts any peer, and NCCL does not even list mlx5_4.
+checks:
+  - { description: "two subnet managers are running (a master and a standby)", check: sm_count, args: { value: 2 } }
+  - { description: "opensm is enabled on node01 and node02", check: sm_enabled }
+  - { description: "node01 (priority 14) is the master again", check: sm_master, args: { node: node01 } }
+  - { description: "every HCA port is ACTIVE", check: ib_ports_active, args: { node: all } }
+  - { description: "all_reduce bus bandwidth is above 360 GB/s", check: allreduce_min_busbw, args: { value: 360 } }
+solution: |
+  `ibstat mlx5_4 1` on any node shows `State: Initializing`, `Physical state: LinkUp`, `Base lid: 65535` and
+  `SM lid: 0`; `ibstat mlx5_3 1` shows `Active`, a LID and `SM lid: 11`. `ib_write_bw -d mlx5_4` stops at
+  `Port number 1 state is Init`. `iblinkinfo` shows every link of leaf05 (its host ports, its uplinks and
+  the spine ports facing it) as `Initialize/  LinkUp`, and every other link as `Active`. With `NCCL_DEBUG=INFO`, NET/IB lists seven HCAs, without `mlx5_4`.
+
+  `sminfo` fails: the ports still point at SM LID 11 (node01 `mlx5_0`), but nothing answers there
+  (`dport (Lid 11)`), and `sminfo 19` gets no answer from node02 either. `systemctl status opensm` on node01 shows
+  `failed (Result: core-dump)` with `signal=SEGV`, still enabled. On node02 it is `inactive (dead)` and
+  `disabled`: the standby was installed but never started. The healthy rails kept working because ports
+  that an SM configured stay ACTIVE without one; only change handling stops. leaf05's reboot was the
+  first change since the crash.
+
+  Fix: start the standby and make it persistent (`systemctl enable --now opensm` on node02). It becomes
+  master at once (no other SM is running), sweeps the subnet and activates rail 4. Then restart node01's SM
+  (`systemctl restart opensm`). With priority 14 it wins the election and node02 drops to standby: `sminfo`
+  answers `priority 14 state 3 SMINFO_MASTER` and `sminfo 19` answers `priority 13 state 2 SMINFO_STANDBY`.
+
+  Try the failover now that both run: `systemctl stop opensm` on node01, then `sminfo`. For a while nothing
+  answers as master, because the standby polls the master and declares it dead only after several missed polls
+  (OpenSM's defaults are polling_timeout 10000 ms and polling_retry_number 4; check opensm.conf on your version).
+  `sleep 60` and `sminfo` again: node02 is master and every port's SM lid is 19. Start node01 again
+  afterwards so that the checks pass. (In this model a returning higher-priority SM takes over at once;
+  OpenSM has options that control this.)
+
+  Lesson: a standby is only redundancy if it runs. Monitor that `sminfo` answers and that every intended SM
+  answers in the expected state, not only link LEDs; an SM crash is silent until the next change.
+fix:
+  - "node02: systemctl enable --now opensm"
+  - "node01: systemctl restart opensm"

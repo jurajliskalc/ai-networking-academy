@@ -381,6 +381,15 @@ differs). `opensm -B -g <port GUID>` binds it to one port; port GUID = low 64 bi
 SMINFO_MASTER`. Capability mask gains IsSM on the SM's port (`0x2651e84a`). Stopping the SM leaves ports ACTIVE
 and running traffic unaffected (a 60 s ib_write_bw finished at 97.44 Gb/s), `sminfo` fails with `iberror: failed: query`.
 
+**Two SMs (failover):** OpenSM on A with `-p 14`, on B with `-p 13`. `sminfo -C mlx5_1 -P 1` (from either host) ->
+`sminfo: sm lid 1 sm guid 0x248a0703000011ef, activity count 57 priority 14 state 3 SMINFO_MASTER`; `sminfo` takes the
+SM's LID as a positional argument: `sminfo -C mlx5_1 -P 1 2` -> `sminfo: sm lid 2 sm guid 0x1c34da0300002229, activity
+count 24 priority 13 state 2 SMINFO_STANDBY`. After `pkill opensm` on A the standby became master 53 s later
+(`sm lid 2 ... state 3 SMINFO_MASTER`; it then reported `priority 14`, not the 13 it was started with) and the ports
+stayed ACTIVE throughout, their `SM lid` changing to 2. `iblinkinfo -C mlx5_9` (no such CA) -> `ibwarn: [pid]
+get_smi_gsi_pair: Can't open UMAD port (No such device) (mlx5_9:0)` / `ibwarn: [pid] mad_rpc_open_port2: can't open
+UMAD port (mlx5_9:0)` / `Failed to open mlx5_9 port 0`.
+
 **With the SM running** (formats):
 - `ibstat mlx5_1 1` (device AND port) prints a flat block with no indentation and no CA header fields:
   `CA: 'mlx5_1'` / `Port 1:` / `State: Active` / `Physical state: LinkUp` / `Rate: 100` / `Base lid: 1` / `LMC: 0` /

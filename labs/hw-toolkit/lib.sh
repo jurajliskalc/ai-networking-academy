@@ -55,7 +55,7 @@ rdma_of() { local v="$1_RDMA_DEV"; echo "${!v}"; }
 # (DOCA's rdma-core prints "libibverbs: Warning: couldn't load driver ..." for absent providers).
 excerpt() { grep -v '^libibverbs: Warning' "$1" 2>/dev/null | tr '\n' ' ' | cut -c1-"${2:-160}"; }
 
-need_root() { [[ $EUID -eq 0 ]] || die "run as root: sudo $0 $*"; }
+need_root() { [[ $EUID -eq 0 ]] || die "run as root: sudo $0"; }
 
 # need_cmd tool... : PASS/FAIL per tool; returns non-zero if any is missing.
 need_cmd() {
@@ -113,6 +113,18 @@ check_ssh() {
   return $rc
 }
 
+# need_cmd_on ROLE tool... : like need_cmd, but on host ROLE (over SSH for B/C). Checks that start a server
+# on another host call it so a missing tool there is a clear FAIL instead of a failed test later.
+need_cmd_on() {
+  local role=$1 t rc=0; shift
+  [[ "$role" == "A" ]] && { need_cmd "$@"; return; }
+  for t in "$@"; do
+    if on_host "$role" command -v "$t" >/dev/null 2>&1; then pass "$t is installed on host $role"
+    else fail "$t is missing on host $role (run labs/hw-toolkit/setup-rdma-host.sh there)"; rc=1; fi
+  done
+  return $rc
+}
+
 # port_attr ROLE ATTR : read /sys/class/infiniband/<dev>/ports/<port>/<ATTR> on that host.
 port_attr() {
   on_host_sh "$1" "cat /sys/class/infiniband/$(rdma_of "$1")/ports/$RDMA_PORT/$2 2>/dev/null"
@@ -122,6 +134,7 @@ port_attr() {
 roce_gid() {
   local role=$1 dev ip hex idx
   dev=$(rdma_of "$role"); ip=$(ip_of "$role")
+  # shellcheck disable=SC2086  # split the dotted quad into four printf arguments
   hex=$(printf '%02x%02x:%02x%02x' ${ip//./ })
   idx=$(on_host_sh "$role" "d=/sys/class/infiniband/$dev/ports/$RDMA_PORT
     for g in \$(ls \$d/gids 2>/dev/null | sort -n); do

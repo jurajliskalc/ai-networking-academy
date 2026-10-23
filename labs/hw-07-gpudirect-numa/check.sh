@@ -10,6 +10,7 @@ aina_load_env
 
 need_cmd nvidia-smi ib_write_bw || aina_finish
 check_ssh B || aina_finish
+need_cmd_on B ib_write_bw || aina_finish
 
 # GPU and NUMA layout on each host.
 for r in A B; do

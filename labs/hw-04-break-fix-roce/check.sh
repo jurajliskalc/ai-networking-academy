@@ -11,6 +11,7 @@ STATE=${AINA_STATE:-/var/lib/aina/state}/hw-04-break-fix-roce
 
 need_cmd ibv_rc_pingpong rdma || aina_finish
 check_ssh B || aina_finish
+need_cmd_on B ibv_rc_pingpong || aina_finish
 
 status=$(on_host_sh B "cat $STATE/status 2>/dev/null")
 diag=$(on_host_sh B "cut -d' ' -f1,4 $STATE/diagnosed 2>/dev/null")

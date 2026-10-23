@@ -11,7 +11,7 @@ MIN_PCT=${AINA_MIN_BW_PCT:-60}
 
 need_cmd rdma ibv_devinfo ibv_rc_pingpong ib_write_bw ping || aina_finish
 check_ssh B || aina_finish
-on_host B command -v ib_write_bw >/dev/null 2>&1 && pass "perftest installed on host B" || fail "perftest missing on host B"
+need_cmd_on B ib_write_bw ibv_rc_pingpong || aina_finish
 
 for r in A B; do
   dev=$(rdma_of $r)
@@ -26,7 +26,7 @@ mtu_b=$(on_host_sh B "cat /sys/class/net/$B_NETDEV/mtu 2>/dev/null" || echo "?")
 if [[ "$mtu_a" == "$mtu_b" && "$mtu_a" != "?" ]]; then pass "netdev MTU matches on both hosts ($mtu_a)"; else fail "netdev MTU differs: A $A_NETDEV=$mtu_a, B $B_NETDEV=$mtu_b"; fi
 [[ "$mtu_a" == "$MTU" ]] || warn "netdev MTU $mtu_a differs from the profile's MTU=$MTU"
 
-if [[ "$mtu_a" =~ ^[0-9]+$ ]] && ping -M do -s $((mtu_a - 28)) -c 3 -W 2 "$B_IP" >/dev/null 2>&1; then
+if [[ "$mtu_a" =~ ^[0-9]+$ ]] && ping -M "do" -s $((mtu_a - 28)) -c 3 -W 2 "$B_IP" >/dev/null 2>&1; then
   pass "don't-fragment ping of $((mtu_a - 28)) bytes reaches $B_IP"
 else
   fail "full-size don't-fragment ping to $B_IP failed (IP path or MTU problem: see Task 1)"

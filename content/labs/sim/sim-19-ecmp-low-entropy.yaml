@@ -1,0 +1,77 @@
+id: sim-19-ecmp-low-entropy
+title: "Spine burn-in: one uplink hot, the other idle"
+level: 4
+estimated_minutes: 40
+lessons: [flow-collisions-entropy, ecmp-hashing, nccl-configuration, fabric-validation-burn-in]
+summary: A spine burn-in that forces traffic over the spines fails because each NCCL connection now uses a single QP, too few flows for static ECMP to spread.
+start: node01
+ticket: |
+  **INC-5122 · Sev3 · Spine burn-in fails after the nccl-tuning v2.6 rollout**
+
+  > After the optics swap on spine01 and spine02, the four nodes run our spine burn-in before they go back
+  > into production. The runbook appends `NCCL_CROSS_NIC=1` to `/etc/nccl.conf` so that NCCL may change
+  > rails inside a node and every inter-node hop goes leaf, spine, leaf (this is already done on all
+  > nodes). Pass mark: `all_reduce_perf` at 145 GB/s or more; last quarter's run gave 152. Today: about 90.
+  > No errors, no drops, every link up and clean. On some leaves one uplink carries far more than the other,
+  > and leaf04 sends nothing at all on swp31. The network team suspects the new optics. The only other change
+  > this week: nccl-tuning role v2.6 ("removed RoCE ECMP tuning, not needed on a rail-optimized fabric").
+  > - Infrastructure team
+
+  Find out why the spine stage cannot reach its pass mark and fix it without giving up the burn-in.
+faults:
+  - { type: nccl_conf, node: all, set: { NCCL_CROSS_NIC: 1, NCCL_IB_QPS_PER_CONNECTION: null } }
+hints:
+  - "Run the test once, then compare `nv show interface swp31 counters` and `nv show interface swp32 counters` on several leaves. Which uplink is busy differs from leaf to leaf. What decides which uplink a flow takes?"
+  - "A leaf hashes each flow's 5-tuple onto one uplink. Between two NICs every RoCEv2 packet has the same IP addresses, protocol and destination port 4791; only the UDP source port varies, and the NIC chooses one per QP. How many flows does each NCCL connection create here?"
+  - "`cat /etc/nccl.conf` and look up the NCCL variable that sets the number of QPs per connection. What is its default, and what did the v2.6 changelog remove?"
+diagnosis:
+  prompt: What is the root cause?
+  options:
+    - id: a
+      text: The v2.6 role removed NCCL_IB_QPS_PER_CONNECTION=4, so every connection is one QP with one UDP source port, and so few flows hash unevenly onto the uplinks.
+      correct: true
+      explanation: Static ECMP places each flow on one uplink by hashing its 5-tuple, and for RoCEv2 the UDP source port, chosen per QP, is the part that varies. With the default of one QP per connection each leaf sends only 8 flows over its 2 uplinks, and a hash of 8 flows is often lopsided (6/2, even 8/0 on leaf04). The slowest flow paces each ring, so the most crowded uplink sets the bus bandwidth. Four QPs per connection give 32 flows per leaf, which spread far more evenly.
+    - id: b
+      text: One of the new spine optics is marginal, so the spine behind the busy uplinks forwards more slowly and its ports back up toward the leaves.
+      explanation: The error counters are clean on every port, and the busy uplink is swp31 (spine01) on some leaves and swp32 (spine02) on others. A bad optic on one spine would show errors on that link and would not move from spine to spine. The busy uplinks also carry more packets, not fewer.
+    - id: c
+      text: The burn-in itself is the problem. With NCCL_CROSS_NIC=1 the 2:1 leaf uplinks cap the job, so about 90 GB/s is simply what this spine stage can deliver.
+      explanation: The 2:1 bound allows about half of the ~372 GB/s rail-local result, and the same burn-in reached 152 GB/s last quarter on the same hardware. The deficit is not the total uplink capacity but how unevenly the flows sit on it. One uplink of leaf04 carries no transmit traffic at all.
+    - id: d
+      text: The spines pause the busiest leaf uplinks with PFC, and the PFC watchdog on those leaf ports keeps tripping and dropping RoCE traffic.
+      explanation: Pause counts on the uplinks are small, the PFC watchdog shows OK with no deadlocks, and there are no TX drops. The busy uplinks are congested because too many flows hashed onto them; ECN marking (not drops) is what rises there.
+checks:
+  - { description: "every NCCL connection uses at least 2 QPs on every node", check: nccl_conf_min, args: { node: all, key: NCCL_IB_QPS_PER_CONNECTION, value: 2 } }
+  - { description: "the burn-in still sends inter-node hops over the spines (NCCL_CROSS_NIC=1)", check: nccl_conf, args: { node: all, key: NCCL_CROSS_NIC, value: 1 } }
+  - { description: "the busiest uplink carries at most about 1.25x its fair share of flows", check: ecmp_balanced, args: { value: 0.8 } }
+  - { description: "all_reduce bus bandwidth meets the 145 GB/s pass mark", check: allreduce_min_busbw, args: { value: 145 } }
+solution: |
+  After one run, the leaf uplink counters are lopsided: `nv show interface swp31 counters` on leaf04 shows
+  `TX packets 0` while swp32 carries everything that leaf sends to the spines, and leaf01 and leaf02 send
+  three times as much on swp31 as on swp32. The hot uplinks show heavy `TX ECN marked` counts, the cold ones
+  a small fraction of that. There are no errors or drops anywhere. The busy uplink points at spine01 on some leaves and
+  at spine02 on others, so neither spine is to blame. Both spines together carry about the same traffic.
+
+  `cat /etc/nccl.conf` shows `NCCL_CROSS_NIC=1` (the burn-in) but no `NCCL_IB_QPS_PER_CONNECTION`: the v2.6 role
+  dropped the line, so NCCL uses its default of one QP per connection. With `NCCL_CROSS_NIC=1` each leaf
+  sends 8 connections (2 channels x 4 inter-node hops) to the next rail's leaf, so only 8 flows, each with
+  its own UDP source port, are hashed onto 2 uplinks. Several leaves end up 6/2, and leaf04 8/0. Every
+  NIC's flows are paced by the most crowded link they cross, so the job runs at about a quarter of line rate
+  instead of about half.
+
+  Fix: restore the setting on all four nodes, for example
+  `echo "NCCL_IB_QPS_PER_CONNECTION=4" >> /etc/nccl.conf`, and run the burn-in again. With 32 flows per leaf
+  the worst uplink carries 19 flows against a fair share of 16, and the test reaches about 152 GB/s. More
+  QPs help a little more (8 gives about 160 here) at the cost of NIC resources, and perfect balance never
+  comes from static hashing alone: adaptive routing or packet spraying would remove the residual imbalance.
+
+  Lesson: a rail-optimized fabric keeps collectives off the spines, but anything that does cross them
+  (burn-in, storage, traffic between scalable units) lives on ECMP, and ECMP needs many flows. Entropy
+  tuning is not dead weight because the main job does not need it. In this model the NIC derives the UDP
+  source port from the two QP numbers, like the Linux `rdma_flow_label_to_udp_sport()` helper; real NICs and
+  firmware differ in the details but keep one source port per QP.
+fix:
+  - "node01: echo \"NCCL_IB_QPS_PER_CONNECTION=4\" >> /etc/nccl.conf"
+  - "node02: echo \"NCCL_IB_QPS_PER_CONNECTION=4\" >> /etc/nccl.conf"
+  - "node03: echo \"NCCL_IB_QPS_PER_CONNECTION=4\" >> /etc/nccl.conf"
+  - "node04: echo \"NCCL_IB_QPS_PER_CONNECTION=4\" >> /etc/nccl.conf"

@@ -2,7 +2,8 @@
 // practise reading them, but every output is generated from the model in fabric.ts (see docs/SIMULATOR.md).
 import {
   CHECKS, LEAVES, NETDEVS, NODES, RAILS, ROCE_PRIO, SPINES, accrueTraffic, evaluateAllReduce, evaluatePair,
-  hostIp, ibActive, ibHcaLid, ibSmLid, leafIp, leafPortFor, nicIssues, parseConf, roceMtu, type FabricState, type Host, type Nic, type Port, type Switch,
+  hostIp, ibActive, ibHcaLid, ibSettle, ibSmLid, leafIp, leafPortFor, linkKeys, nicIssues, parseConf, roceMtu, unconfigure,
+  type FabricState, type Host, type Nic, type Port, type Switch,
 } from './fabric';
 import { IB_SWITCH_NOTE, hcaGuid, hcaView, ibqueryerrors, iblinkinfo, ibstat, ibstatus, perfquery, sminfo, systemctl } from './ib';
 
@@ -100,6 +101,9 @@ export function exec(ctx: ShellCtx, rawLine: string): ExecResult {
   const stages = splitPipes(line);
   let res = execOne(ctx, stages[0]);
   for (const st of stages.slice(1)) res = { ...res, out: filter(res.out, st) };
+  // Simulated time moves on (1 s per command; sleep and long tests add more) and the IB port state is recorded.
+  ctx.state.clock = (ctx.state.clock ?? 0) + 1;
+  ibSettle(ctx.state);
   return res;
 }
 
@@ -123,9 +127,10 @@ const HELP_IB = `Fabric Simulator - GPU node commands, InfiniBand variant (simul
   ssh <host>                     node01-node04 (switches are queried in-band, not over SSH)
   hostname | exit | clear | history
   ibstat [-l] [<ca> [<port>]] | ibstatus [<ca>[:port]] | ibv_devinfo [-d <dev>] | ibdev2netdev | rdma link
-  iblinkinfo [--switches-only|--cas-only|-d] | sminfo | perfquery [-x] [-r] [-C <ca>] [<lid> [<port>]]
+  iblinkinfo [-C <ca>] [--switches-only|--cas-only|-d] | perfquery [-x] [-r] [-C <ca>] [<lid> [<port>]]
   ibqueryerrors [-s <Counter,...>] [-c]
-  systemctl status|start|stop|restart|enable [--now]|disable|is-active|is-enabled opensm   (SM host: node01)
+  sminfo [-C <ca>] [<sm_lid>] | systemctl status|start|stop|restart|enable [--now]|disable|is-active|is-enabled opensm
+  sleep <seconds>                (simulated time: a standby SM takes over about 50 s after the master dies)
   rdma statistic show link <dev>/1 | lspci [-vv -s <bdf>] | nvidia-smi topo -m | dmesg
   cat <file> | echo "K=V" >> /etc/nccl.conf | sed -i 's/old/new/' /etc/nccl.conf
   ib_write_bw -d <dev> [--report_gbits] <peer-host>[:<dev>]
@@ -160,6 +165,12 @@ function execOne(ctx: ShellCtx, stage: string): ExecResult {
       return { out: (isSwitch(host) ? HELP_SWITCH : s.mode === 'ib' ? HELP_IB : HELP_HOST) + '\n' };
     case 'clear':
       return { out: '', clear: true };
+    case 'sleep': {
+      const sec = Number(args[0]);
+      if (!(sec >= 0)) return { out: 'usage: sleep <seconds>\n' };
+      s.clock = (s.clock ?? 0) + Math.min(sec, 86400);
+      return { out: '', changed: true };
+    }
     case 'hostname':
       return { out: `${host}\n` };
     case 'whoami':
@@ -171,6 +182,7 @@ function execOne(ctx: ShellCtx, stage: string): ExecResult {
       const target = args.find((a) => !a.startsWith('-'))?.replace(/^.*@/, '');
       if (!target) return { out: 'usage: ssh <host>\n' };
       if (!NODES.includes(target as never) && !isSwitch(target)) return { out: `ssh: Could not resolve hostname ${target}: Name or service not known\n` };
+      if (isSwitch(target) && s.switches[target].off) return { out: `ssh: connect to host ${target} port 22: No route to host\n(simulator: ${target} is powered off)\n` };
       if (isSwitch(target) && s.mode === 'ib') return { out: IB_SWITCH_NOTE(target) };
       return { out: isSwitch(target) ? `Welcome to NVIDIA Cumulus Linux (simulated)\n` : '', host: target };
     }
@@ -179,9 +191,15 @@ function execOne(ctx: ShellCtx, stage: string): ExecResult {
       // IB switch ports are numbered: "replace-cable leaf03 3" is the same port as swp3.
       const p = s.switches[sw]?.ports[/^\d+$/.test(port ?? '') ? `swp${port}` : port];
       if (!p) return { out: 'usage: replace-cable <switch> <port>   e.g. replace-cable leaf05 swp3\n' };
-      p.ber = 1e-15;
-      p.cable = 'ok';
-      p.lanes = 4;
+      // One cable, two ends: a switch-to-switch link is repaired on both ports. The link retrains (IB: back to INIT
+      // until an SM configures it).
+      const q = p.peer.kind === 'switch' ? s.switches[p.peer.sw].ports[p.peer.port] : null;
+      for (const x of q ? [p, q] : [p]) {
+        x.ber = 1e-15;
+        x.cable = 'ok';
+        x.lanes = 4;
+      }
+      unconfigure(s, linkKeys(sw, p));
       s.actions.push(`replace-cable ${sw} ${port}`);
       return { out: `[lab action] Field technician replaced the cable/transceiver on ${sw} ${port}. Link retrained.\n`, changed: true };
     }
@@ -198,6 +216,8 @@ function execOne(ctx: ShellCtx, stage: string): ExecResult {
         if (lp.wd) lp.wd.status = lp.wd.status.map(() => 'OK');
       }
       s.actions.push(`reseat-nic ${node} ${dev}`);
+      // The node rebooted: its HCA ports retrain and need an SM again.
+      unconfigure(s, s.hosts[node].nics.map((n) => `${node}:${n.rail}`));
       s.hosts[node].dmesg = s.hosts[node].dmesg.filter((l) => !l.includes(nic.bdf));
       return { out: `[lab action] ${node} drained, powered off, ${dev} reseated, node rebooted and returned to service.\n`, changed: true };
     }
@@ -253,7 +273,7 @@ function hostCmd(ctx: ShellCtx, h: Host, t: string[]): ExecResult {
       return { out, changed: a.includes('-r') };
     }
     case 'sminfo':
-      return { out: sminfo(s, h) };
+      return { out: sminfo(s, h, a) };
     case 'ibqueryerrors':
       return { out: ibqueryerrors(s, h, a) };
     case 'ibnetdiscover':
@@ -792,6 +812,7 @@ function allReducePerf(s: FabricState, a: string[]): ExecResult {
   const maxB = Math.min(parseSize(get('-e'), 8 * 2 ** 20), 16 * 2 ** 30);
   const factor = Math.max(2, Number(get('-f') ?? 2));
   const res = evaluateAllReduce(s);
+  s.clock = (s.clock ?? 0) + 20;
   const debug = res.conf.NCCL_DEBUG === 'INFO';
   const ranks = 32;
   let out = `# nThread 1 nGpus 1 minBytes ${minB} maxBytes ${maxB} step: ${factor}(factor) warmup iters: 5 iters: 20 agg iters: 1 validation: 1 graph: 0\n#\n# Using devices\n`;

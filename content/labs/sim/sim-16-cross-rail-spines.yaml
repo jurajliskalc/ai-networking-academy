@@ -8,7 +8,7 @@ start: node01
 ticket: |
   **INC-4870 · Sev3 · All-reduce bandwidth halved, spines running hot**
 
-  > Since Monday's rollout of nccl-tuning role v2.4, `all_reduce_perf` peaks at about 170 GB/s instead
+  > Since Monday's rollout of nccl-tuning role v2.4, `all_reduce_perf` peaks at about 150 GB/s instead
   > of ~370. Nothing failed: all links are up, no drops, no CRC errors. Both spines, which normally sit
   > idle, now show heavy traffic and ECN marking on every port. The network team asks for budget for a
   > third spine "because the 2:1 leaf uplinks cannot keep up". - ML platform team
@@ -32,7 +32,7 @@ diagnosis:
       explanation: A rail-aligned all-reduce never uses the spines; it ran at ~370 GB/s on the same hardware last week. A third spine would only soften a problem that should not exist. Nothing in the hardware changed, only the NCCL configuration.
     - id: c
       text: ECMP hash polarization on the leaf uplinks sends every RoCE flow to one spine, which halves the uplink capacity that is available to the job.
-      explanation: Both spines carry the same load (compare nv show interface swpN counters on spine01 and spine02), so the hashing is spreading flows. The question is why the traffic is on the uplinks at all.
+      explanation: Both spines carry about the same load (compare nv show interface swpN counters on spine01 and spine02), so the hashing is spreading flows. The question is why the traffic is on the uplinks at all.
     - id: d
       text: The v2.4 role dropped NCCL_IB_HCA, so NCCL now picks NICs in PCI order and pairs each GPU with a NIC that sits on the other NUMA node.
       explanation: NCCL_IB_HCA=mlx5 is still in /etc/nccl.conf, NCCL lists all eight HCAs, and every GPU still has a PIX-attached NIC. A NUMA mismatch would also not send traffic to the spines.

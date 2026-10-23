@@ -14,6 +14,8 @@ aina_load_env
 [[ "$SWITCH_OS" != none ]] && pass "profile has a switch ($SWITCH, $SWITCH_OS)" || warn "SWITCH_OS is 'none' in the profile; this lab needs a switch between the hosts"
 need_cmd ib_write_bw ethtool || aina_finish
 check_ssh B C || aina_finish
+need_cmd_on B ib_write_bw ethtool || aina_finish
+need_cmd_on C ib_write_bw || aina_finish
 
 for r in A B C; do
   s=$(port_attr $r state)

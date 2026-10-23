@@ -12,6 +12,7 @@ aina_load_env
 
 need_cmd ibstat sminfo ib_write_bw || aina_finish
 check_ssh B || aina_finish
+need_cmd_on B ib_write_bw ibstat || aina_finish
 
 declare -A SMLID
 for r in A B; do
@@ -28,7 +29,7 @@ for r in A B; do
   else fail "host $r: no valid LID (${lid:-none})"; fi
 done
 
-if [[ -n "${SMLID[A]:-}" ]] && (( ${SMLID[A]} > 0 )) && [[ "${SMLID[A]}" == "${SMLID[B]:-}" ]]; then
+if [[ -n "${SMLID[A]:-}" ]] && (( SMLID[A] > 0 )) && [[ "${SMLID[A]}" == "${SMLID[B]:-}" ]]; then
   pass "both hosts see the same subnet manager (SM LID $((SMLID[A])))"
 else
   fail "SM LID A='${SMLID[A]:-}' B='${SMLID[B]:-}': hosts must see the same non-zero SM LID"

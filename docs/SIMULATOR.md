@@ -19,7 +19,7 @@ owning a GPU cluster. Code: `frontend/src/sim/` (`fabric.ts` model, `shell.ts` c
 | Spines | `spine01`, `spine02`; every leaf has `swp31` → spine01 and `swp32` → spine02 |
 | Addressing | routed /31 per host link: host `10.<rail>.<node>.1`, leaf `10.<rail>.<node>.0` |
 | QoS | RoCE on DSCP 26 → priority 3 (lossless, PFC + ECN), CNP on DSCP 48 → priority 6. `NCCL_IB_TC=106` |
-| NCCL | `/etc/nccl.conf` on every node: `NCCL_SOCKET_IFNAME=eno1`, `NCCL_IB_HCA=mlx5`, `NCCL_IB_GID_INDEX=3`, `NCCL_IB_TC=106` |
+| NCCL | `/etc/nccl.conf` on every node: `NCCL_SOCKET_IFNAME=eno1`, `NCCL_IB_HCA=mlx5`, `NCCL_IB_GID_INDEX=3`, `NCCL_IB_TC=106`, `NCCL_IB_QPS_PER_CONNECTION=4` |
 
 The DSCP/priority choices follow a common NVIDIA convention; they are not a standard. Leaf ECN marking
 for traffic classes 0 and 3 uses the NVUE `default-global` congestion-control thresholds (150000 B /
@@ -33,14 +33,33 @@ InfiniBand: the HCAs run IB link layer at 4X NDR (400 Gb/s), the netdevs are IPo
 `ibp220s0`), the leaves and spines are Quantum-2 switches (node description `MF0;<name>:MQM9700/U1`,
 ports numbered 1-32: `swpN` in the model is port N) and the whole fabric is one subnet. OpenSM runs as
 the `opensm` service on node01 and uses node01 `mlx5_0` as its port.
+The free-play page (`#/simulator`) has a Fabric switch for RoCE or InfiniBand (`?fabric=ib` in a shared
+link). Its InfiniBand fabric runs a second OpenSM on node02 (priority 13, standby to node01's priority 14)
+so that failover can be explored: `systemctl stop opensm` on node01, `sminfo`, `sleep 60`, `sminfo`.
 
-* **Port state** is computed, not stored. The SM sweeps the subnet from its own port over links that are
-  physically up; every port it reaches is `Active` with a LID (switches 1-10 in the order leaf01-leaf08,
-  spine01, spine02; HCA `mlx5_r` of node *n* gets `11 + 8(n-1) + r`, so the SM's own port is LID 11).
-  Without a running SM every trained port stays `Initialize`/`INIT` with LID 65535 (0xFFFF, unassigned; as on real ConnectX hardware) and SM LID 0.
+* **Port state.** The master SM sweeps the subnet from its own port over links that are physically up;
+  every port it reaches is `Active` with a LID (switches 1-10 in the order leaf01-leaf08, spine01, spine02;
+  HCA `mlx5_r` of node *n* gets `11 + 8(n-1) + r`, so node01 `mlx5_0` is LID 11 and node02 `mlx5_0` LID 19).
+  In a rail-optimized fabric a leaf is reachable only through the spines (HCAs do not forward subnet
+  management packets), so a leaf whose uplinks are all down cannot be configured. A configured port stays
+  `Active`, with its LID and the SM LID of the last master, when the SM goes away (running traffic is
+  unaffected, as verified on hardware); only a port whose link retrains (a reboot, `replace-cable`,
+  `reseat-nic`, the `ib_port_reset` fault) drops back to `Initialize`/`INIT` with LID 65535 (0xFFFF,
+  unassigned; as on real ConnectX hardware) and SM LID 0 until a master SM sweeps it again. `sm_down`
+  stands for an SM that is down *and* a fabric that has been power-cycled since, so nothing is configured.
+* **Several SMs.** `ib_sm` adds or changes OpenSM instances (node, priority, running/stopped/failed,
+  enabled). The master is the running SM with the highest priority, then the lowest port GUID (IBA
+  election rules); every other running SM is a standby, and `sminfo <lid>` reports it as
+  `state 2 SMINFO_STANDBY` (infiniband-diags numbers the states 0 NOTACT, 1 DISCOVER, 2 STANDBY, 3 MASTER).
+  When the master stops while a standby runs, no master answers for `SM_TAKEOVER_S` = 50 simulated seconds
+  (measured: 53 s on two ConnectX-5 ports with DOCA OpenSM defaults; OpenSM's polling_timeout and
+  polling_retry_number set it, check opensm.conf for your version), then the standby becomes master and the ports' SM LID changes to its LID. Simulated time: every
+  command adds 1 s, `all_reduce_perf` 20 s, `sleep N` N seconds. Simplifications: a starting SM, and a
+  returning higher-priority SM, take the master role at once (OpenSM has options that control handover);
+  LIDs never change between masters (OpenSM normally keeps existing LIDs).
 * **NCCL**: the IB plugin skips ports that are not ACTIVE (as NCCL's `net_ib` does); when no port is
-  usable it logs `NET/IB : No device found.` and falls back to sockets. `NCCL_IB_GID_INDEX` and
-  `NCCL_IB_TC` are removed from `/etc/nccl.conf` in this variant.
+  usable it logs `NET/IB : No device found.` and falls back to sockets. `NCCL_IB_GID_INDEX`,
+  `NCCL_IB_TC` and `NCCL_IB_QPS_PER_CONNECTION` are removed from `/etc/nccl.conf` in this variant.
 * **No PFC/ECN/trust** checks apply: InfiniBand is lossless through credit-based link-level flow control.
 * **Counters**: every HCA port and switch port has PMA PortCounters (`IB_PC_FIELDS` in `fabric.ts`).
   Traffic adds data/packet counts (data in 4-byte words) and PortXmitWait under load; a link with a high
@@ -63,11 +82,24 @@ the `opensm` service on node01 and uses node01 `mlx5_0` as its port.
   `NCCL_IB_TC` (×0.35), ECN disabled on the leaf's RoCE traffic class (×0.55: PFC is the only brake),
   a stuck receiver on the rail (×0.15 with the leaf's PFC watchdog containing it, ×0.04 without), a link
   trained at fewer lanes (lanes / 4, also point-to-point). `NCCL_CROSS_NIC=1` makes inter-node hops
-  change rail through the spines (×0.46, ×0.24 if any leaf uplink is down). The slowest rail paces the
+  change rail through the spines (see ECMP below; about ×0.41 with the default 4 QPs per connection,
+  ×0.24 with one QP, at most ×0.485). The slowest rail paces the
   ring, as in reality.
 * **Fatal conditions** fail the job with a realistic NCCL WARN: a dead link or a path MTU smaller than the
   RoCE packet (retry exceeded, `status=12`), a non-routable GID index (`ibv_modify_qp` timeout), a bad
   `NCCL_SOCKET_IFNAME` (bootstrap failure). `NCCL_IB_DISABLE=1`, or an `NCCL_IB_HCA` that matches no device, falls back to sockets over the 25GbE management NIC (~2.6 GB/s), as real NCCL does.
+* **ECMP on the leaf uplinks** (cross-rail traffic only; rail-aligned traffic never leaves its leaf). With
+  `NCCL_CROSS_NIC=1` each of the 2 channels per rail makes 4 inter-node hops from NIC *m* of one node to NIC
+  *m+1* of the next, so each leaf sends 8 connections to one other leaf. Every connection opens
+  `NCCL_IB_QPS_PER_CONNECTION` QPs (NCCL's default is 1), and every QP is one flow with a fixed UDP source
+  port, derived from the two QP numbers like the Linux `rdma_flow_label_to_udp_sport()` helper (real NICs and
+  firmware differ in the details). The source leaf hashes each flow's 5-tuple onto one usable uplink (static
+  ECMP; one seed on every leaf). Each NIC sends 2 x QPs flows at line rate, and a link shared by *m* flows
+  gives each 1/*m* of it, so the factor is 0.97 × min(2 x QPs / *m*) over every flow's leaf uplink and spine
+  egress port. With one QP per connection some leaves end up 6/2 or 8/0; with 4 the worst link carries 19 of
+  32 flows. `ecmp_balanced` grades the worst link's fair share / actual flows. The InfiniBand variant spreads
+  flows evenly (the SM's routing balances destinations), so no hashing losses there. If no uplink path is left
+  the collective fails with the retry-exceeded WARN.
 * **Counters** advance deterministically every time a test runs, according to the active faults: drops,
   `out_of_sequence`, `packet_seq_err`, pause frames, ECN marks and CNPs, symbol and CRC errors, PFC
   watchdog deadlocks, spine traffic for cross-rail rings, and the InfiniBand PMA counters.
@@ -87,9 +119,10 @@ goes through PXN and is logged `NET/IB/<n>(<proxy rank>)`, as in NCCL's `net.cc`
 show up. The line format follows NCCL 2.1x; newer releases append `(PCI)`/`/flush=` details.
 
 InfiniBand variant (GPU nodes): `ibstat [-l|-p] [<ca> [<port>]]`, `ibstatus [<ca>[:<port>]]`,
-`iblinkinfo [--switches-only|--cas-only|-d]`, `perfquery [-x] [-r] [-C <ca>] [<lid> [<port>]]`, `sminfo`,
+`iblinkinfo [-C <ca>] [--switches-only|--cas-only|-d]` (`-C` starts the directed-route walk from that HCA),
+`perfquery [-x] [-r] [-C <ca>] [<lid> [<port>]]`, `sminfo [-C <ca>] [<sm_lid>]`, `sleep <seconds>`,
 `ibqueryerrors [-s <Counter,...>] [-c]`, `systemctl status|start|stop|restart|enable [--now]|disable|
-is-active|is-enabled opensm`, plus `ibv_devinfo`, `ibdev2netdev`, `rdma link|statistic`, `ib_write_bw`,
+is-active|is-enabled opensm` (on every node that has an SM instance), plus `ibv_devinfo`, `ibdev2netdev`, `rdma link|statistic`, `ib_write_bw`,
 `all_reduce_perf`, `lspci`, `nvidia-smi topo -m`. `ibdiagnet` (NVIDIA proprietary) and `ibnetdiscover` are
 not modelled.
 
@@ -98,7 +131,8 @@ Output formats follow the rdma-core sources: `ibstat` (`infiniband-diags/ibstat.
 script: `2: INIT`, `4: ACTIVE`, `400 Gb/sec (4X NDR)`), `iblinkinfo` (`iblinkinfo.c` `print_port`: the
 `( 4X        106.25 Gbps Active/  LinkUp)` link string and the `Could be 4X` width message from
 `get_max_msg`), `perfquery` (libibmad `mad_dump_perfcounters` field order and dot padding, saturating
-widths), `sminfo` (`sm lid … state 3 SMINFO_MASTER`, and `sminfo: iberror: failed: query`), and
+widths), `sminfo` (`sm lid … priority P state 3 SMINFO_MASTER` or `state 2 SMINFO_STANDBY`, and
+`sminfo: iberror: failed: query`; an SM LID that no running SM answers fails with `dport (Lid N)`), and
 `ibqueryerrors` (`Errors for …`, `[Counter == n]`, `## Summary` lines, and `## Thresholds: ` with nothing
 after it, as with the packaged `error_thresholds` file whose entries are all commented out, so any non-zero
 counter, PortXmitWait included, is reported). perftest's
@@ -107,7 +141,8 @@ Simplifications: unused switch ports are not listed by `iblinkinfo`; `ibqueryerr
 `--threshold-file` (thresholds are always 0) and does not check unused switch ports, and it summarises PMA query failures instead of printing each
 `ibwarn` line; when no SM runs, `sminfo` and `perfquery` fail with a single `iberror` line (the exact
 `ibwarn` lines before it vary by version); `systemctl` unit text, capability masks and CapMask values
-are illustrative.
+are illustrative. `sminfo` to a LID where no SM runs is modelled as a timeout (the reply of a real port
+may differ by firmware), and an unconfigured switch shows LID 0 in `iblinkinfo`.
 
 Switches (Cumulus Linux NVUE subset): `nv show interface [<swp> [counters]]`, `nv show qos roce`,
 `nv show interface <swp> qos roce counters` (a subset of the rows: pause packets, ECN-marked packets,
@@ -124,7 +159,7 @@ release. How `nv set qos roce` and the `default-global` congestion-control profi
 switch is simplified here: the model keeps one ECN switch per traffic class.
 
 Lab actions for physical work: `replace-cable <switch> <port>` (a new cable/transceiver: clears BER and
-restores full width; IB port numbers work too, e.g. `replace-cable leaf03 3`), `reseat-nic <node> <dev>`
+restores full width on both ends of the link, which retrains; IB port numbers work too, e.g. `replace-cable leaf03 3`), `reseat-nic <node> <dev>`
 (drain, power-cycle and reseat: restores PCIe width/speed and clears a stuck receive path).
 
 ## Writing a simulator lab
@@ -163,19 +198,28 @@ Fault types: `switch_port_mtu`, `switch_port_admin_down`, `cable_unplugged`, `ba
 `nic_rx_stall` (`node`, `rail`: the NIC stops draining and pauses its leaf port non-stop; the state
 starts with the watchdog already tripped), `pfcwd` (`switch`, `port`, `enabled`),
 `link_degraded` (`switch`, `port`, `lanes`, optional `ber`: the link trained at fewer lanes),
+`switch_down` (`switch`: powered off; every link on it is down and SSH gets `No route to host`),
 and for the InfiniBand variant `ib_fabric` (must be the first entry), `sm_down` (`enabled`: whether the
-opensm unit stays enabled) and `ib_counters` (`switch`+`port` or `node`+`rail`, `counters: {Name: n}`:
+opensm units stay enabled; also clears every port's configuration, as after a power cycle), `ib_sm`
+(`node`, optional `rail` (0), `priority`, `state: running|stopped|failed`, `enabled`: adds or changes an
+OpenSM instance), `ib_port_reset` (`switch`, or `node`+`rail`: those links retrained, e.g. a reboot; their
+ports wait in INIT for an SM) and `ib_counters` (`switch`+`port` or `node`+`rail`, `counters: {Name: n}`:
 pre-existing counter history, useful for red herrings).
 `node: all` applies a host fault to every node.
 
 Checks: `allreduce_min_busbw`, `ib_write_bw_min`, `port_mtu_min`, `port_up`, `link_clean`, `host_mtu`,
 `host_pfc_only`, `host_trust`, `nic_up`, `pcie_ok`, `switch_roce`, `no_pending`, `nccl_conf`,
 `nccl_conf_absent`, `nccl_conf_not` (`key`, `value`: the key is absent or has another value),
+`nccl_conf_min` (`key`, `value`, optional `default`: numeric value at least `value`), `ecmp_balanced`
+(`value`: cross-rail flows spread so that the worst link's fair share / flows is at least `value`; 1 when
+nothing crosses the spines),
 `nccl_hca_all`, `switch_ecn_on` (`switch`, `tc`), `pfcwd_on` (`switch`, `port`), `nic_not_stalled`
-(`node`, `rail`), `link_width` (`switch`, `port`, `value`), `sm_running`, `sm_enabled`, `ib_ports_active`
+(`node`, `rail`), `link_width` (`switch`, `port`, `value`), `sm_running` (any SM runs),
+`sm_enabled` (optional `node`; without it every SM instance), `sm_count` (`value`: running SMs),
+`sm_master` (`node`), `ib_switch_reachable` (`switch`: the master SM's sweep reaches it), `ib_ports_active`
 (`node`, optional `rail`).
 
 `frontend/tests/sim-labs.test.ts` requires every lab to fail its checks before the fix and pass all of
 them after replaying `fix`. A lab that does not pass this test cannot be merged.
-`frontend/tests/sim-scenarios.test.ts` pins down the evidence the newer tickets rely on (sim-14 onward)
-and the healthy InfiniBand baseline; add a block there when a new lab depends on a specific symptom.
+`frontend/tests/sim-scenarios.test.ts` pins down the evidence the newer tickets rely on (sim-14 onward),
+the healthy InfiniBand baseline, the ECMP model and the SM election and failover model; add a block there when a new lab depends on a specific symptom.

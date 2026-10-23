@@ -2,15 +2,13 @@
 // perfquery, sminfo, ibqueryerrors) and the opensm service. Output layouts follow the rdma-core sources
 // (infiniband-diags, libibmad dump functions); values come from the model in fabric.ts. See docs/SIMULATOR.md.
 import {
-  IB_PC_FIELDS, LEAVES, NODES, SWITCH_ORDER, emptyIb, ibActive, ibHcaLid, ibSmLid, ibSwitchLid, leafPortFor, linkUp,
-  type FabricState, type Host, type Nic, type Port, type Switch,
+  IB_PC_FIELDS, LEAVES, NODES, SWITCH_ORDER, emptyIb, hcaGuid, ibActive, ibHcaLid, ibSmLid, ibSwitchLid, leafPortFor, linkUp,
+  masterSm, smList, smStopped, type FabricState, type Host, type Nic, type Port, type Switch,
 } from './fabric';
 
-const lpad = (s: string | number, n: number) => String(s).padStart(n);
+export { hcaGuid };
 
-/** Node/port GUID of an HCA (shared with the RoCE commands so GIDs and GUIDs stay consistent). */
-export const hcaGuid = (node: string, rail: number) =>
-  `b83f${(0xd2 + rail).toString(16)}0300${(0x4a + NODES.indexOf(node as never)).toString(16)}c1${rail}${rail}`.slice(0, 16);
+const lpad = (s: string | number, n: number) => String(s).padStart(n);
 export const swGuid = (sw: string) => `900a8403006${SWITCH_ORDER.indexOf(sw).toString(16)}b1c0`;
 // Quantum-2 switches report a node description like this by default; hosts use "<hostname> <device>" (rdma-ndd).
 export const swDesc = (sw: string) => `MF0;${sw}:MQM9700/U1`;
@@ -45,8 +43,24 @@ const SYSFS_PHYS = { LinkUp: '5: LinkUp', Polling: '2: Polling', Disabled: '3: D
 const IBSTAT_STATE = { Down: 'Down', Initialize: 'Initializing', Active: 'Active' } as const;
 
 function capMask(s: FabricState, node: string, rail: number) {
-  // Bit 1 (IsSM) is set on the port that runs the SM.
-  return s.sm && s.sm.running && s.sm.node === node && s.sm.rail === rail ? '0xa751e84a' : '0xa751e848';
+  // Bit 1 (IsSM) is set on a port that runs an SM (master or standby).
+  return smList(s).some((x) => x.running && x.node === node && x.rail === rail) ? '0xa751e84a' : '0xa751e848';
+}
+
+/** -C <ca> picks the local HCA, as in the infiniband-diags tools; -P <port> is accepted (every HCA has port 1). */
+function caArg(h: Host, a: string[]): { nic?: Nic; bad?: string; rest: string[] } {
+  const rest: string[] = [];
+  let nic: Nic | undefined;
+  let bad: string | undefined;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] === '-C' || a[i] === '--Ca') {
+      const name = a[++i];
+      nic = h.nics.find((n) => n.dev === name);
+      if (!nic) bad = name ?? '';
+    } else if (a[i] === '-P' || a[i] === '--Port') i++;
+    else rest.push(a[i]);
+  }
+  return { nic, bad, rest };
 }
 
 function pickNics(h: Host, name?: string): Nic[] | null {
@@ -113,9 +127,10 @@ export function ibstatus(s: FabricState, h: Host, a: string[]): string {
   }).join('');
 }
 
-/** Nodes reachable by directed-route discovery from this host's first HCA (no LIDs needed). */
-function discover(s: FabricState, h: Host): { switches: string[]; cas: [string, Nic][] } | null {
-  const start = h.nics.find((n) => linkUp(s, leafPort(s, h.name, n.rail)));
+/** Nodes reachable by directed-route discovery from this host's first HCA, or from `from` (no LIDs needed). */
+function discover(s: FabricState, h: Host, from?: Nic): { switches: string[]; cas: [string, Nic][] } | null {
+  const up = (n: Nic) => linkUp(s, leafPort(s, h.name, n.rail));
+  const start = from ? (up(from) ? from : undefined) : h.nics.find(up);
   if (!start) return null;
   const seen = new Set<string>([LEAVES[start.rail]]);
   const queue = [LEAVES[start.rail]];
@@ -139,9 +154,13 @@ function linkStr(v: PortView) {
 }
 const widthMsg = (v: PortView) => (v.state !== 'Down' && v.lanes < 4 ? 'Could be 4X' : '');
 
-export function iblinkinfo(s: FabricState, h: Host, a: string[]): string {
-  const d = discover(s, h);
-  if (!d) return 'ibwarn: [41007] mad_rpc_open_port: can\'t open UMAD port ((null):0)\n(simulator: every IB port on this host is down)\n';
+export function iblinkinfo(s: FabricState, h: Host, args: string[]): string {
+  const { nic, bad, rest: a } = caArg(h, args);
+  if (bad !== undefined) return `ibwarn: [41007] get_smi_gsi_pair: Can't open UMAD port (No such device) (${bad}:0)\nibwarn: [41007] mad_rpc_open_port2: can't open UMAD port (${bad}:0)\nFailed to open ${bad} port 0\n`;
+  const d = discover(s, h, nic);
+  if (!d) return nic
+    ? `(simulator: ${nic.dev} has no link; directed-route discovery needs a port that is physically up)\n`
+    : 'ibwarn: [41007] mad_rpc_open_port: can\'t open UMAD port ((null):0)\n(simulator: every IB port on this host is down)\n';
   const act = ibActive(s);
   const downOnly = a.includes('-d') || a.includes('--down');
   const swOnly = a.includes('--switches-only');
@@ -252,12 +271,26 @@ export function perfquery(s: FabricState, h: Host, a: string[]): string {
   return out;
 }
 
-export function sminfo(s: FabricState, h: Host): string {
+const SM_STATES = ['SMINFO_NOTACT', 'SMINFO_DISCOVER', 'SMINFO_STANDBY', 'SMINFO_MASTER'];
+
+/** sminfo [-C <ca> -P <port>] [<sm_lid>]: asks an SM for its SMInfo (by default the SM LID the local port reports). */
+export function sminfo(s: FabricState, h: Host, args: string[] = []): string {
+  const { nic, bad, rest } = caArg(h, args);
+  if (bad !== undefined) return `ibwarn: [41011] mad_rpc_open_port2: can't open UMAD port (${bad}:0)\nsminfo: iberror: failed: Failed to open '${bad}' port '0'\n`;
   const act = ibActive(s);
-  const local = h.nics.find((n) => hcaView(s, h.name, n, act).state !== 'Down');
-  if (!local || hcaView(s, h.name, local, act).state !== 'Active' || !s.sm)
+  const local = nic ?? h.nics.find((n) => hcaView(s, h.name, n, act).state !== 'Down');
+  const lidArg = rest.find((x) => /^\d+$/.test(x));
+  const active = !!local && hcaView(s, h.name, local, act).state === 'Active';
+  const lid = lidArg ? Number(lidArg) : active ? ibSmLid(s) : 0;
+  if (!active || !lid)
     return 'ibwarn: [41011] _do_madrpc: recv failed: Connection timed out\nibwarn: [41011] mad_rpc: _do_madrpc failed; dport (DR path slid 0; dlid 0; 0)\nsminfo: iberror: failed: query\n';
-  return `sminfo: sm lid ${ibSmLid(s)} sm guid 0x${hcaGuid(s.sm.node, s.sm.rail)}, activity count ${48213 + s.actions.length * 17} priority 0 state 3 SMINFO_MASTER\n`;
+  // Only a running SM answers SMInfo; a port without one (or whose SM died) leaves the query to time out.
+  const sm = smList(s).find((x) => x.running && ibHcaLid(s, x.node, x.rail, act) === lid);
+  if (!sm) return `ibwarn: [41011] _do_madrpc: recv failed: Connection timed out\nibwarn: [41011] mad_rpc: _do_madrpc failed; dport (Lid ${lid})\nsminfo: iberror: failed: query\n`;
+  // infiniband-diags numbers the states 0 NOTACT, 1 DISCOVER, 2 STANDBY, 3 MASTER.
+  const st = masterSm(s) === sm ? 3 : 2;
+  const count = st === 3 ? 48213 + s.actions.length * 17 + (s.clock ?? 0) * 3 : 1207 + smList(s).indexOf(sm) * 31;
+  return `sminfo: sm lid ${lid} sm guid 0x${hcaGuid(sm.node, sm.rail)}, activity count ${count} priority ${sm.priority ?? 0} state ${st} ${SM_STATES[st]}\n`;
 }
 
 const ERR_FIELDS = IB_PC_FIELDS.map(([k]) => k).filter((k) => !/^Port(Xmit|Rcv)(Data|Pkts)$/.test(k) && k !== 'QP1Dropped');
@@ -311,38 +344,53 @@ export function ibqueryerrors(s: FabricState, h: Host, a: string[]): string {
   return out;
 }
 
-/** systemctl for the opensm unit on the SM host. Unit text is illustrative: names and paths vary by distribution. */
+/** systemctl for the opensm unit on an SM host. Unit text is illustrative: names and paths vary by distribution. */
 export function systemctl(s: FabricState, h: Host, a: string[]): { out: string; changed?: boolean } {
   const verb = a.find((x) => !x.startsWith('-'));
   const unit = a.filter((x) => !x.startsWith('-'))[1]?.replace(/\.service$/, '');
   if (!verb) return { out: 'usage: systemctl status|start|stop|restart|enable|disable|is-active|is-enabled opensm\n' };
   if (unit !== 'opensm') return { out: unit ? `Unit ${unit}.service could not be found.\n` : `Too few arguments.\n` };
-  if (s.mode !== 'ib' || !s.sm || s.sm.node !== h.name) return { out: 'Unit opensm.service could not be found.\n' };
-  const sm = s.sm;
+  const sm = s.mode === 'ib' ? smList(s).find((x) => x.node === h.name) : undefined;
+  if (!sm) return { out: 'Unit opensm.service could not be found.\n' };
   const now = a.includes('--now');
+  const before = masterSm(s);
+  const start = () => {
+    sm.running = true;
+    sm.failed = false;
+    // A starting SM sweeps at once and the election settles (simplification: no handover delay).
+    delete s.smLostAt;
+  };
+  const stop = () => {
+    sm.running = false;
+    sm.failed = false;
+    smStopped(s, sm, before);
+  };
+  const cmdline = `/usr/sbin/opensm -g 0x${hcaGuid(sm.node, sm.rail)}${sm.priority ? ` -p ${sm.priority}` : ''}`;
   switch (verb) {
     case 'status': {
-      const dot = sm.running ? '●' : '○';
+      const dot = sm.running ? '●' : sm.failed ? '×' : '○';
+      const active = sm.running ? 'active (running) since Thu 2026-10-22 06:02:11 UTC; 3min ago'
+        : sm.failed ? 'failed (Result: core-dump) since Thu 2026-10-22 02:13:48 UTC; 4h 51min ago' : 'inactive (dead)';
+      const tail = sm.running
+        ? `   Main PID: 2214 (opensm)\n     CGroup: /system.slice/opensm.service\n             └─2214 ${cmdline}\n`
+        : sm.failed ? `    Process: 2214 ExecStart=${cmdline} (code=dumped, signal=SEGV)\n   Main PID: 2214 (code=dumped, signal=SEGV)\n` : '';
       return { out: `${dot} opensm.service - InfiniBand subnet manager (OpenSM)
      Loaded: loaded (/lib/systemd/system/opensm.service; ${sm.enabled ? 'enabled' : 'disabled'}; vendor preset: enabled)
-     Active: ${sm.running ? 'active (running) since Thu 2026-10-22 06:02:11 UTC; 3min ago' : 'inactive (dead)'}
-${sm.running ? `   Main PID: 2214 (opensm)
-     CGroup: /system.slice/opensm.service
-             └─2214 /usr/sbin/opensm -g 0x${hcaGuid(sm.node, sm.rail)}
-` : ''}(simulated unit: description, paths and options vary by distribution)
+     Active: ${active}
+${tail}(simulated unit: description, paths and options vary by distribution)
 ` };
     }
-    case 'is-active': return { out: sm.running ? 'active\n' : 'inactive\n' };
+    case 'is-active': return { out: sm.running ? 'active\n' : sm.failed ? 'failed\n' : 'inactive\n' };
     case 'is-enabled': return { out: sm.enabled ? 'enabled\n' : 'disabled\n' };
-    case 'start': case 'restart': sm.running = true; return { out: '', changed: true };
-    case 'stop': sm.running = false; return { out: '', changed: true };
+    case 'start': case 'restart': start(); return { out: '', changed: true };
+    case 'stop': stop(); return { out: '', changed: true };
     case 'enable':
       sm.enabled = true;
-      if (now) sm.running = true;
+      if (now) start();
       return { out: 'Created symlink /etc/systemd/system/multi-user.target.wants/opensm.service → /lib/systemd/system/opensm.service.\n', changed: true };
     case 'disable':
       sm.enabled = false;
-      if (now) sm.running = false;
+      if (now) stop();
       return { out: 'Removed /etc/systemd/system/multi-user.target.wants/opensm.service.\n', changed: true };
     default: return { out: `Unknown command verb ${verb}.\n` };
   }
