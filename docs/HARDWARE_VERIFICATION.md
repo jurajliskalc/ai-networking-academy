@@ -224,6 +224,27 @@ mlnx-ofed-kernel-utils). Not in Ubuntu's archive. INBOX equivalents:
   `libibverbs: Warning: couldn't open config directory '/etc/libibverbs.d'.` (confined tcpdump) and, on DOCA,
   `libibverbs: Warning: couldn't load driver 'libionic-rdmav59.so': ...`.
 
+### Soft-RoCE (rdma_rxe) and NVIDIA's stack
+- With DOCA-OFED installed, Soft-RoCE is unusable on that host: DOCA replaces `ib_core`, `ib_uverbs` and friends
+  (`/lib/modules/<kver>/ubuntu/dkms/doca-ofed-3.4/`) but ships no `rdma_rxe`, and the kernel's own module no longer
+  loads: `modprobe rdma_rxe` -> `modprobe: ERROR: could not insert 'rdma_rxe': Invalid argument`, dmesg
+  `rdma_rxe: disagrees about version of symbol ib_get_eth_speed` / `rdma_rxe: Unknown symbol ib_get_eth_speed (err -22)`.
+  DOCA's `ibverbs-providers` (2604.0.7) also contains no rxe provider (`/etc/libibverbs.d/` lists `ionic.driver`
+  and `mlx5.driver` only). Use a host or VM with the distribution's stack for the Soft-RoCE labs.
+- With the distribution's stack, Soft-RoCE on a VMXNET3 interface (MTU 1500) works: `rxe0` exposes only RoCE v2 GIDs
+  (index 0 link-local, index 1 IPv4-mapped), `fw_ver 0.0.0`, `vendor_id 0xffffff`, `active_mtu 1024 (3)`; 4.6-5.3 Gb/s
+  `ib_write_bw` and about 5.8 us typical `ib_send_lat` on host A; a 4 KiB SEND is split into First/Middle/Middle/Last
+  (opcodes 0,1,1,2) with AckReq on the last; a 3000-byte WRITE is 6/7/8 with the RETH on 6, ACKed by 17; a 2048-byte
+  READ is request 12 answered by 13 and 15 (no opcode 17: the responses carry the AETH); rdma_cm shows
+  `CM: ConnectRequest` / `ConnectReply` / `ReadyToUse` on QP 1 (`LID: 65535` as the first packet's source in tshark).
+- Ubuntu 26.04's AppArmor profile for `tshark` (`/etc/apparmor.d/tshark`, via `abstractions/user-tmp`) only reads
+  files in `/tmp` that the user OWNS. `sudo tcpdump -w /tmp/x.pcap` writes the file as user `tcpdump` (privilege drop),
+  so `tshark -r /tmp/x.pcap` fails with `tshark: You don't have permission to read the file "/tmp/x.pcap".` (dmesg:
+  `apparmor="DENIED" operation="open" ... profile="tshark"`), for root too. Verified fixes: `sudo tcpdump -Z $USER -w ...`
+  (file owned by the reader) or `tshark -r - < /tmp/x.pcap`. The host profile also applied inside a privileged container.
+- On Ubuntu 26.04 (kernel 7.0) `rdma_rxe` is in the main modules package; `linux-modules-extra-<kver>` does not
+  exist for that kernel in the 24.04 archive.
+
 ### Secure Boot / kernel lockdown (Ubuntu with Secure Boot on)
 - debugfs blocked (see cc_params above).
 - MFT `mst start` prints `Loading MST PCI module - Success`, `Loading MST PCI configuration module -
@@ -344,6 +365,9 @@ Port 1 stayed Ethernet, so `mlx5_0` is RoCE and `mlx5_1` is InfiniBand on the sa
 - perftest on an INIT port: ` Port number 1 state is Init` / ` Couldn't set the link layer` /
   ` Couldn't get context for the device`. `ibv_rc_pingpong`: `Failed status transport retry counter exceeded
   (12) for wr_id 2` / `parse WC failed 1`, addresses `LID 0xffff ... GID ::`.
+
+**Peer absent:** with the far host rebooting, the IB port showed `link mlx5_1/1 subnet_prefix fe80:0000:0000:0000 lid 65535
+sm_lid 0 lmc 0 state DOWN physical_state POLLING` (the port keeps trying to train: POLLING means no link partner yet).
 
 **Mixed RoCE + IB host:** umad tools open the FIRST RDMA device unless told otherwise. With `mlx5_0` RoCE,
 `sudo sminfo` / `sudo perfquery` fail: `ibwarn: [pid] mad_rpc_open_port2: client_register for mgmt 1 failed` /

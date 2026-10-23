@@ -49,10 +49,14 @@ for f in "$@"; do
     fail "$f: no packet decoded as InfiniBand BTH (try: tshark -r $f -d udp.port==4791,infiniband)"
   fi
 
+  # The responder acknowledges with RC ACKNOWLEDGE (17), or for RDMA READ with the READ RESPONSE
+  # First/Last/Only packets (13/15/16), which carry the AETH themselves: a READ capture has no opcode 17.
   if printf '%s\n' "$opcodes" | awk '$2 == 17 {found=1} END {exit !found}'; then
     pass "$f contains at least one RC ACKNOWLEDGE (opcode 17)"
+  elif printf '%s\n' "$opcodes" | awk '$2 == 13 || $2 == 15 || $2 == 16 {found=1} END {exit !found}'; then
+    pass "$f contains RDMA READ responses (opcodes 13/15/16), which carry the acknowledgement (AETH)"
   else
-    fail "$f contains no RC ACKNOWLEDGE (opcode 17)"
+    fail "$f contains no acknowledgement (no RC ACKNOWLEDGE 17 and no READ response 13/15/16)"
   fi
 done
 

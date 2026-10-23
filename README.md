@@ -163,9 +163,10 @@ Content is written for engineers who will act on it, so accuracy comes first:
   and a recomputation of every number in the newer material. Details in
   [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md). The hands-on and hardware labs are
   syntax-checked (`bash -n`; the original Tier 0 labs also with ShellCheck) and are marked `verified: false`
-  until they have been run end to end on a reference VM or reference hardware. Eleven labs have been run end to end
-  and are marked verified: five Tier 0 labs on a VM and six real-hardware labs (`hw-01` to `hw-05` and the
-  InfiniBand bring-up `hw-09`) on ConnectX-5 hosts (see `labs/README.md`).
+  until they have been run end to end on a reference VM or reference hardware. 13 of the 16 labs have been run end
+  to end and are marked verified: all seven Tier 0 labs and six real-hardware labs (`hw-01` to `hw-05` and
+  the InfiniBand bring-up `hw-09`) on ConnectX-5 hosts (see `labs/README.md`); the remaining three need a
+  lossless switch or GPU nodes.
 * **Checked on real hardware.** Every host command and sample output in the lessons, labs, guides,
   command reference, quizzes, exams and the Fabric Simulator was compared with what the tools print on
   two ConnectX-5 hosts (100GbE and EDR InfiniBand back to back, Ubuntu 26.04, kernel 7.0), on both the inbox stack

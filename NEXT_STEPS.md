@@ -6,10 +6,9 @@ Ordered by value. See IMPLEMENTATION_STATUS.md for what is done and how it was v
    is green. To publish the site: `gh workflow enable pages.yml`, enable Pages (Settings → Pages → Source:
    GitHub Actions), run the workflow, then restore the Pages badge and the "Open the academy" link in
    README.md. A Pages site is public even while the repository stays private.
-2. **Finish the Tier 0 lab runs.** Five labs were run end to end and verified on Ubuntu 24.04 under WSL2
-   (see `labs/README.md`, Verification record). Still open: `hol-soft-roce-perftest` and the real two-VM
-   capture of `hol-rocev2-wireshark` need a VM with Ubuntu's generic kernel (`rdma_rxe`); WSL2 lacks it, the R640 lab hosts (item 3) have it.
-   Ideally also repeat the five verified labs once on a clean Ubuntu 24.04 VM (generic kernel).
+2. **Tier 0 labs: done.** All seven are verified (five on WSL2, the two RDMA labs on the hardware lab hosts in
+   Ubuntu 24.04 containers). Still worthwhile: one run of all seven on a clean Ubuntu 24.04 VM with the
+   generic kernel, outside containers.
 3. **Run the Real HW labs on hardware.** Lab hosts exist: two ConnectX-5 VPI hosts back to back (ESXi VMs
    on Dell R640, PCI passthrough, Ubuntu 26.04, DOCA-OFED 3.4; `ssh r640-a` / `r640-b`). Done: every command
    form and sample output in the content checked against these hosts on the inbox and DOCA stacks

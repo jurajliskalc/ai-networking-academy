@@ -7,12 +7,18 @@ estimated_minutes: 75
 environment: linux-vm
 lessons: [rocev2-encapsulation]
 files: labs/hol-rocev2-wireshark
-verified: false
+verified: true
 tier: 0
 fabric: any
 requires: [linux-vm]
 summary: "Capture Soft-RoCE packets and decode the BTH: opcodes, PSNs, QPNs and ACKs, exactly as a packet analyzer sees RoCEv2."
 ---
+
+> [!NOTE]
+> Option A (two machines) verified end to end (every task, `check.sh` on the real captures and on the
+> synthetic file, and the clean-up) on 2026-10-23 with Ubuntu 24.04 user space (privileged `ubuntu:24.04` containers on the host network) on two
+> ESXi VMs running Ubuntu 26.04.1 with the generic kernel 7.0.0-38 and the distribution's RDMA stack;
+> Soft-RoCE on a 1500-byte VMXNET3 interface. See `labs/README.md` for versions.
 
 > [!NOTE]
 > Only the single-VM path (Option B: the synthetic capture with Tasks 2, 5 and 7, and `check.sh` on
@@ -73,7 +79,7 @@ Note each VM's IP address on `$IF`. Below, **VM A** (IP `$A_IP`) is the server a
 client. On VM B, set it in the shell you use for the tasks (`A_IP=<VM A's address>`), and check
 plain connectivity first: `ping -c 3 $A_IP` from VM B. If `tshark` asks whether
 non-root users may capture packets, either answer is fine; this lab captures with `sudo tcpdump`
-and reads files as a normal user.
+(writing the file as your user, see Task 1) and reads files as a normal user.
 
 Option B instead:
 
@@ -90,8 +96,14 @@ On **VM B**, start a capture (it filters RoCEv2 data plus the TCP port that `ibv
 for its out-of-band QP exchange):
 
 ```bash
-sudo tcpdump -ni $IF -w /tmp/roce-send.pcap 'udp port 4791 or tcp port 18515'
+sudo tcpdump -Z $USER -ni $IF -w /tmp/roce-send.pcap 'udp port 4791 or tcp port 18515'
 ```
+
+`-Z $USER` makes the capture file yours. Without it tcpdump writes the file as its own `tcpdump`
+user, and on Ubuntu 26.04 the AppArmor profile for `tshark` only lets you read files in `/tmp` that
+you own: `tshark -r` then fails with `You don't have permission to read the file` (the kernel log shows
+`apparmor="DENIED" ... profile="tshark"`). Use the same `-Z $USER` for every capture below; for a file
+you do not own, `tshark -r - < file.pcap` also works.
 
 On **VM A** (server):
 
@@ -188,7 +200,7 @@ be larger than the RDMA MTU.
 
 ### Task 4: RDMA WRITE and RDMA READ
 
-Capture again (`-w /tmp/roce-write.pcap`), then run a tiny WRITE test:
+Capture again (same command as in Task 1, with `-w /tmp/roce-write.pcap`), then run a tiny WRITE test:
 
 ```bash
 ib_write_bw -d rxe0 -x $GID -F -s 3000 -n 5            # VM A

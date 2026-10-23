@@ -7,12 +7,17 @@ estimated_minutes: 60
 environment: linux-vm
 lessons: [rdma-on-linux, perftest-benchmarking]
 files: labs/hol-soft-roce-perftest
-verified: false
+verified: true
 tier: 0
 fabric: any
 requires: [linux-vm]
 summary: "Soft-RoCE turns any NIC into an RDMA device: GID tables, RC ping-pong and perftest bandwidth and latency."
 ---
+
+> [!NOTE]
+> Verified end to end (every task, `check.sh` and `cleanup.sh`) on 2026-10-23 with Ubuntu 24.04 user space (privileged `ubuntu:24.04` containers on the host network) on two
+> ESXi VMs running Ubuntu 26.04.1 with the generic kernel 7.0.0-38 and the distribution's RDMA stack;
+> Soft-RoCE on a 1500-byte VMXNET3 interface. See `labs/README.md` for versions.
 
 > [!NOTE]
 > This lab has been syntax-checked (`bash -n` on every script) but has not yet been executed end
@@ -68,7 +73,13 @@ network, each with its own rxe device (see "Going further").
 
   `labs/setup-ubuntu.sh` installs all of this. Cloud-provider kernels (`-aws`, `-azure`, `-gcp`
   ...) may package modules differently or omit `rdma_rxe`; if `modprobe rdma_rxe` fails, switch to
-  the generic kernel or use a local VM.
+  the generic kernel or use a local VM. On newer Ubuntu kernels `rdma_rxe` is part of the main
+  modules package and the `linux-modules-extra` line just reports that no such package exists
+  (Ubuntu 26.04, kernel 7.0); `modprobe rdma_rxe` is what counts.
+- **Not on a host with NVIDIA's OFED/DOCA stack:** it replaces the kernel's RDMA core modules but ships
+  no Soft-RoCE, so `modprobe rdma_rxe` fails with `Invalid argument` (`dmesg`: `rdma_rxe: disagrees
+  about version of symbol ...`), and its user space has no rxe provider either. Use a VM with the
+  distribution's stack.
 - Lab files: `labs/hol-soft-roce-perftest/` (`setup.sh`, `find_gid.sh`, `cleanup.sh`, `check.sh`).
 
 You will need **two terminals** on the VM for the client/server tests. Run all commands from the
