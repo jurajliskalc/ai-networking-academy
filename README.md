@@ -9,6 +9,7 @@ RDMA · InfiniBand · RoCEv2 · lossless Ethernet · NCCL · rail-optimized fabr
 ![Lessons](https://img.shields.io/badge/lessons-76-4ade80)
 ![Questions](https://img.shields.io/badge/questions-723-22d3ee)
 ![Labs](https://img.shields.io/badge/labs-35-fbbf24)
+![Verified](https://img.shields.io/badge/verified%20on-real%20ConnectX%20hardware-76b900)
 ![License](https://img.shields.io/badge/code-PolyForm%20Noncommercial-blue) ![License](https://img.shields.io/badge/content-CC%20BY--NC--SA%204.0-lightgrey)
 
 **[▶ Run it locally](#run-it-locally)** · runs entirely in your browser, no account, no backend
@@ -39,7 +40,7 @@ hands-on curriculum. It starts at "what is an Ethernet frame" and ends at design
 | **Real HW toolkit** | A Connect page that builds your lab profile and generates `lab.env`, netplan/nmcli, `/etc/hosts` and switch snippets; `aina-hw`, a dependency-free Python tool that inventories hosts over SSH, runs lab checks and serves results through a read-only local agent; and a fabric health review (MTU, PCIe, GIDs, QoS, firmware, counters) in the browser. Guides for requirements, host and network setup, safety and troubleshooting. |
 | **45 interactive visualizations** | Grouped by topic, embedded 131 times in 74 lessons and runnable on their own. Examples: a parallelism-to-network map with a per-step traffic estimator, pipeline schedules and their bubble, a rail-optimized path explorer with NCCL PXN, the GPU bandwidth ladder (HBM, NVLink, PCIe, NIC), KV cache transfer for disaggregated inference, straggler tail amplification, the life of an RDMA WRITE, kernel TCP/IP vs RDMA data path, a perftest message-size explorer, InfiniBand diagnostic tools and P_Key partitions, PFC headroom, DSCP mapping and deadlocks, ECMP collisions, packet spraying and reordering, ring vs in-network (SHARP) all-reduce, an nccl-tests reader, a cabling validator, BER/FEC, a counter decoder and a slow-job triage tree. Every widget's math is unit-tested and each was reviewed against primary sources by someone other than its author. |
 | **3 timed mock exams** (156 questions) | Fundamentals, engineer and master level, scored by domain. Original practice material, not real certification questions. |
-| **Reference** | 158 annotated commands (Linux, rdma-core, perftest, InfiniBand, NVIDIA tools, NCCL, Cumulus NVUE, SONiC) and a 241-term glossary that also drives **SM-2 spaced-repetition flashcards**. |
+| **Reference** | 164 annotated commands (Linux, rdma-core, perftest, InfiniBand, NVIDIA tools, NCCL, Cumulus NVUE, SONiC) and a 241-term glossary that also drives **SM-2 spaced-repetition flashcards**. |
 | **Search and accessibility** | Site-wide search (`/` or Ctrl+K) across lesson sections, labs, guides, commands and the glossary, with deep links to the matching section. Built to WCAG 2.2 AA: keyboard-operable everywhere, including quizzes, the simulator shell and all widgets; axe-clean in light and dark themes. |
 | **Progress tracking** | A lesson counts as mastered only when it is read *and* its quiz is passed. Streaks, an activity heatmap, weak-spot review, and exam domain profiles. Everything stays in your browser, with export and import. |
 
@@ -95,7 +96,9 @@ troubleshooting, plus a **Connect** page:
    browser.
 
 Labs that change NIC or kernel settings save the original state and ship restore scripts. The labs are
-written for NVIDIA ConnectX NICs, with notes on the generic Linux equivalents.
+written for NVIDIA ConnectX NICs, with notes on the generic Linux equivalents. Their commands, sample
+output, `setup-rdma-host.sh` and `aina-hw collect-all` have been checked on real ConnectX-5 hosts, on both
+the distribution's inbox driver stack and NVIDIA DOCA-OFED (see the accuracy policy below).
 
 <img src="docs/screenshots/parallelism.png" alt="Parallelism to network map with traffic estimator" width="900" />
 
@@ -144,7 +147,7 @@ included but disabled until the site is published. See
 content/      lessons, quizzes, labs, exams, commands, glossary (Markdown + YAML)
 frontend/     React app, content compiler, Fabric Simulator, tests
 labs/         lab files (topologies, scripts, check.sh) and hw-toolkit/ (aina-hw, lib.sh, setup-rdma-host.sh)
-docs/         architecture, authoring guide, simulator, curriculum plan
+docs/         architecture, authoring guide, simulator, curriculum plan, hardware verification reference
 ```
 
 ## Accuracy policy
@@ -162,6 +165,16 @@ Content is written for engineers who will act on it, so accuracy comes first:
   syntax-checked (`bash -n`; the original Tier 0 labs also with ShellCheck) and are marked `verified: false`
   until they have been run end to end on a reference VM or reference hardware. Five Tier 0 labs have been
   run end to end and are marked verified (see `labs/README.md`).
+* **Checked on real hardware.** Every host command and sample output in the lessons, labs, guides,
+  command reference, quizzes, exams and the Fabric Simulator was compared with what the tools print on
+  two ConnectX-5 hosts (100GbE back to back, Ubuntu 26.04, kernel 7.0), on both the inbox stack
+  (kernel mlx5 + distribution rdma-core) and NVIDIA DOCA-OFED 3.4. Real-world behaviour that the docs
+  rarely mention is taught where it matters: device names differ per driver stack, enabling PFC turns
+  802.3x pause off and re-enabling pause silently clears PFC, which tools exist only with NVIDIA's stack,
+  what Secure Boot lockdown blocks, and how to capture offloaded RoCE. The verified formats and behaviours
+  are recorded in [docs/HARDWARE_VERIFICATION.md](docs/HARDWARE_VERIFICATION.md) and pinned by tests.
+  Not yet verified on hardware: InfiniBand-mode output, 400G-specific strings, optical-module readouts,
+  switch CLIs (NVUE, SONiC) and GPU/NCCL output.
 
 Found an error? Please [open an issue](https://github.com/jurajliskalc/ai-networking-academy/issues/new?template=content-error.md)
 with a source. See [CONTRIBUTING.md](CONTRIBUTING.md).
