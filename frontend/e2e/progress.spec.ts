@@ -1,5 +1,5 @@
 import fs from 'node:fs';
-import { choose, content, expect, progressOf, test, watchErrors } from './fixtures';
+import { choose, chooseMode, chooseScheme, content, expect, progressOf, test, watchErrors } from './fixtures';
 
 interface SimLab { id: string; kind: string; title: string; diagnosis: { options: { text: string; correct?: boolean }[] } }
 const ix = content<{ labs: SimLab[]; glossary: unknown[] }>('index.json');
@@ -49,15 +49,17 @@ test('progress: export, import into a fresh browser restores it, reset clears it
   await p2.goto('#/labs');
   await expect(p2.getByRole('link').filter({ hasText: orientation.title })).toContainText('Solved');
 
-  // Reset needs a confirmation, keeps the theme and clears everything else.
+  // Reset needs a confirmation, keeps the colour settings and clears everything else.
   await p2.goto('#/settings');
-  await p2.getByRole('button', { name: 'dark', exact: true }).click();
+  await chooseMode(p2, 'Dark');
+  await chooseScheme(p2, 'Violet');
+  await p2.keyboard.press('Escape');
   await p2.getByRole('button', { name: 'Reset all progress' }).click();
   expect((await progressOf(p2)).labs[orientation.id].solved).toBe(true);
   await p2.getByRole('button', { name: 'Really reset everything?' }).click();
   await expect(p2.getByText('Progress reset.')).toBeVisible();
   const after = await progressOf(p2);
-  expect(after).toMatchObject({ lessons: {}, quizzes: {}, labs: {}, exams: [], cards: {}, activity: {}, settings: { theme: 'dark' } });
+  expect(after).toMatchObject({ lessons: {}, quizzes: {}, labs: {}, exams: [], cards: {}, activity: {}, settings: { theme: 'dark', scheme: 'violet' } });
   await p2.goto('#/progress');
   await expect(p2.getByText('Labs', { exact: true }).locator('..')).toContainText(/Labs\s*0\//);
   await fresh.close();

@@ -1,4 +1,4 @@
-import { content, expect, progressOf, test } from './fixtures';
+import { appearanceMenu, chooseMode, chooseScheme, content, expect, progressOf, test } from './fixtures';
 
 interface Index {
   glossary: { term: string; definition: string }[];
@@ -58,31 +58,25 @@ test('reference: the search box filters commands and glossary terms', async ({ p
   await expect(page.locator('main dt')).toHaveCount(matches.length);
 });
 
-test('theme toggle switches both ways and persists across reloads', async ({ page }) => {
+test('appearance menu: light and dark mode switch and persist', async ({ page }) => {
   await page.emulateMedia({ colorScheme: 'light' });
   await page.goto('#/');
   const html = page.locator('html');
-  // Named "Toggle theme" or "Switch to light/dark theme" depending on the build.
-  const toggle = page.getByRole('button', { name: /^(toggle theme|switch to (light|dark) theme)$/i });
   await expect(html).not.toHaveClass(/\bdark\b/);
-  await toggle.click();
+  await chooseMode(page, 'Dark');
   await expect(html).toHaveClass(/\bdark\b/);
   expect((await progressOf(page)).settings.theme).toBe('dark');
   await page.reload();
   await expect(html).toHaveClass(/\bdark\b/);
-  await toggle.click();
+  await chooseMode(page, 'Light');
   await expect(html).not.toHaveClass(/\bdark\b/);
   expect((await progressOf(page)).settings.theme).toBe('light');
-  await toggle.click();
-  await expect(html).toHaveClass(/\bdark\b/);
-  await page.reload();
-  await expect(html).toHaveClass(/\bdark\b/);
-  // The settings page shows the same choice.
-  await page.goto('#/settings');
-  await page.getByRole('button', { name: 'light', exact: true }).click();
+  // System follows the operating system preference.
+  await chooseMode(page, 'System');
   await expect(html).not.toHaveClass(/\bdark\b/);
-  await toggle.click();
+  await page.emulateMedia({ colorScheme: 'dark' });
   await expect(html).toHaveClass(/\bdark\b/);
+  expect((await progressOf(page)).settings.theme).toBe('system');
 });
 
 test('lesson with widgets and a mermaid diagram renders and the widget responds', async ({ page }) => {
@@ -110,7 +104,7 @@ test('lesson with widgets and a mermaid diagram renders and the widget responds'
   // Diagrams follow the theme.
   const diagram = page.locator('main svg[id^="m"]').first();
   const before = await diagram.innerHTML();
-  await page.getByRole('button', { name: /^(toggle theme|switch to (light|dark) theme)$/i }).click();
+  await chooseMode(page, 'Dark');
   await expect.poll(() => diagram.innerHTML()).not.toBe(before);
   await expect(netdev).toHaveValue('9000');
   // Mark as read is stored.
@@ -129,29 +123,59 @@ test('an unknown route shows the not-found page with a way back', async ({ page 
   await expect(page.getByText(/(^|\s)404$/).first()).toBeVisible();
 });
 
-test('colour scheme picker applies the scheme, persists it and keeps the light/dark choice', async ({ page }) => {
+test('appearance menu: every colour scheme visibly recolours the app, persists and keeps the mode', async ({ page }) => {
   await page.emulateMedia({ colorScheme: 'dark' });
-  await page.goto('#/settings');
+  await page.goto('#/');
   const html = page.locator('html');
-  await expect(html).not.toHaveAttribute('data-scheme');
-  const group = page.getByRole('group', { name: 'Colour scheme' });
-  await expect(group.getByRole('button')).toHaveCount(5);
-  await expect(group.getByRole('button', { name: /^NOC/ })).toHaveAttribute('aria-pressed', 'true');
   const bg = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
-  const before = await bg();
-  await group.getByRole('button', { name: /^Sepia/ }).click();
-  await expect(html).toHaveAttribute('data-scheme', 'sepia');
-  await expect(html).toHaveClass(/\bdark\b/);
-  await expect(group.getByRole('button', { name: /^Sepia/ })).toHaveAttribute('aria-pressed', 'true');
-  expect(await bg()).not.toBe(before);
-  expect((await progressOf(page)).settings).toMatchObject({ theme: 'system', scheme: 'sepia' });
-  // Applied before first paint on reload, and the theme toggle still switches the variant.
+  await expect(html).not.toHaveAttribute('data-scheme');
+  const menu = await appearanceMenu(page);
+  await expect(menu.getByRole('menuitemradio')).toHaveCount(8); // 3 modes + 5 schemes
+  await expect(menu.getByRole('menuitemradio', { name: 'NOC', exact: true })).toHaveAttribute('aria-checked', 'true');
+  // Each scheme gives the page a different background in both modes: switching is visible, not just the accent.
+  for (const mode of ['Dark', 'Light'] as const) {
+    await chooseMode(page, mode);
+    const seen = new Set<string>();
+    for (const [name, id] of [['NOC', ''], ['Ocean', 'ocean'], ['Violet', 'violet'], ['Sepia', 'sepia'], ['High contrast', 'contrast']]) {
+      await chooseScheme(page, name);
+      if (id) await expect(html).toHaveAttribute('data-scheme', id); else await expect(html).not.toHaveAttribute('data-scheme');
+      await expect(menu.getByRole('menuitemradio', { name, exact: true })).toHaveAttribute('aria-checked', 'true');
+      seen.add(await bg());
+    }
+    expect(seen.size, `distinct ${mode.toLowerCase()} backgrounds`).toBe(5);
+  }
+  // The choice persists and is applied before first paint; changing the mode keeps the scheme.
+  await chooseScheme(page, 'Sepia');
+  expect((await progressOf(page)).settings).toMatchObject({ theme: 'light', scheme: 'sepia' });
   await page.reload();
   await expect(html).toHaveAttribute('data-scheme', 'sepia');
-  await page.getByRole('button', { name: /^(toggle theme|switch to (light|dark) theme)$/i }).click();
   await expect(html).not.toHaveClass(/\bdark\b/);
+  await chooseMode(page, 'Dark');
+  await expect(html).toHaveClass(/\bdark\b/);
   await expect(html).toHaveAttribute('data-scheme', 'sepia');
-  // Back to the default removes the attribute.
-  await group.getByRole('button', { name: /^NOC/ }).click();
-  await expect(html).not.toHaveAttribute('data-scheme');
+  // Escape closes the menu and returns focus to its button; the colour settings live only in this menu.
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('menu', { name: 'Appearance' })).toBeHidden();
+  await expect(page.getByRole('button', { name: /^Appearance:/ })).toBeFocused();
+  await page.goto('#/settings');
+  await expect(page.getByRole('group', { name: /theme|colour scheme/i })).toHaveCount(0);
+});
+
+test('appearance menu works with the keyboard alone', async ({ page }) => {
+  await page.goto('#/');
+  const button = page.getByRole('button', { name: /^Appearance:/ });
+  await button.focus();
+  await page.keyboard.press('Enter');
+  const menu = page.getByRole('menu', { name: 'Appearance' });
+  await expect(menu).toBeVisible();
+  // Focus starts on the checked scheme (NOC); ArrowDown moves to Ocean, Enter picks it.
+  await expect(menu.getByRole('menuitemradio', { name: 'NOC', exact: true })).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(menu.getByRole('menuitemradio', { name: 'Ocean', exact: true })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('html')).toHaveAttribute('data-scheme', 'ocean');
+  await page.keyboard.press('Escape');
+  await expect(menu).toBeHidden();
+  await expect(button).toBeFocused();
+  await expect(button).toHaveAccessibleName(/^Appearance: Ocean, (light|dark)$/);
 });

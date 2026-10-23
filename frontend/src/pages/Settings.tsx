@@ -1,34 +1,12 @@
 import { useRef, useState } from 'react';
 import { Download, Trash2, Upload } from 'lucide-react';
 import { useProgress } from '../store';
-import { emptyProgress, sanitize, SCHEMES, type Scheme, type Theme } from '../progress';
+import { emptyProgress, sanitize } from '../progress';
 import { REPO_URL } from '../components/Layout';
 import { Button, Card, PageHeader } from '../components/ui';
 
-const SCHEME_INFO: Record<Scheme, { name: string; hint: string }> = {
-  noc: { name: 'NOC', hint: 'Graphite with signal green (default)' },
-  ocean: { name: 'Ocean', hint: 'Cool slate and blue' },
-  violet: { name: 'Violet', hint: 'Soft violet accents' },
-  sepia: { name: 'Sepia', hint: 'Warm paper tones for long reading' },
-  contrast: { name: 'High contrast', hint: 'Black and white, text at 7:1 or more' },
-};
-
-/** A small mock of the app drawn with the scheme's own tokens (index.css matches data-scheme on any element). */
-function SchemePreview({ scheme }: { scheme: Scheme }) {
-  return (
-    <div data-scheme={scheme} aria-hidden className="w-full overflow-hidden rounded-md border border-line bg-bg p-2">
-      <div className="rounded border border-line bg-panel p-2">
-        <div className="text-xs font-semibold text-fg">Aa <span className="font-normal text-muted">muted</span></div>
-        <div className="mt-1.5 flex gap-1">
-          {['bg-accent', 'bg-data', 'bg-warn', 'bg-danger'].map((c) => <span key={c} className={`h-2.5 w-5 rounded-sm ${c}`} />)}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function Settings() {
-  const { progress, update, replace } = useProgress();
+  const { progress, replace } = useProgress();
   const file = useRef<HTMLInputElement>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [confirmReset, setConfirmReset] = useState(false);
@@ -49,35 +27,10 @@ export default function Settings() {
       setMsg('That file is not a valid progress export.');
     }
   };
-  const setTheme = (theme: Theme) => update((p) => ({ ...p, settings: { ...p.settings, theme } }));
-  const setScheme = (scheme: Scheme) => update((p) => ({ ...p, settings: { ...p.settings, scheme } }));
 
   return (
     <div className="max-w-2xl space-y-6">
       <PageHeader eyebrow="Settings" title="Settings" />
-      <Card className="p-5">
-        <h2 id="theme-label" className="mb-3 font-semibold">Theme</h2>
-        <div className="flex gap-2" role="group" aria-labelledby="theme-label">{(['system', 'light', 'dark'] as const).map((t) => <Button key={t} variant={progress.settings.theme === t ? 'primary' : 'ghost'} pressed={progress.settings.theme === t} onClick={() => setTheme(t)}>{t}</Button>)}</div>
-      </Card>
-      <Card className="p-5">
-        <h2 id="scheme-label" className="font-semibold">Colour scheme</h2>
-        <p className="mt-1 text-sm text-muted">Each scheme has a light and a dark variant; the theme above chooses which one you see.</p>
-        <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3" role="group" aria-labelledby="scheme-label">
-          {SCHEMES.map((s) => {
-            const on = progress.settings.scheme === s;
-            return (
-              <button key={s} type="button" aria-pressed={on} onClick={() => setScheme(s)}
-                className={`flex flex-col gap-2 rounded-lg border p-2 text-left transition ${on ? 'border-accent bg-accent-soft' : 'border-line bg-panel hover:bg-panel-2'}`}>
-                <SchemePreview scheme={s} />
-                <span className="px-0.5">
-                  <span className="block text-sm font-semibold">{SCHEME_INFO[s].name}</span>
-                  <span className="block text-xs text-muted">{SCHEME_INFO[s].hint}</span>
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </Card>
       <Card className="p-5">
         <h2 className="font-semibold">Your data</h2>
         <p className="mt-1 text-sm text-muted">Progress is stored only in this browser (localStorage). Nothing is sent anywhere. Export it to move between machines or keep a backup.</p>

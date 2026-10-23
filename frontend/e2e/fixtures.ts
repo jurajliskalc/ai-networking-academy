@@ -53,3 +53,19 @@ export { expect };
 
 /** The big score on a results page ("86%"), whether or not it carries a screen-reader prefix. */
 export const scoreLocator = (page: Page, pct: number) => page.getByText(new RegExp(`(^|[\s:])${pct}%$`)).first();
+
+/** Open the header's Appearance menu (colour mode and scheme) and return it. */
+export async function appearanceMenu(page: Page) {
+  const menu = page.getByRole('menu', { name: 'Appearance' });
+  if (!(await menu.isVisible())) await page.getByRole('button', { name: /^Appearance:/ }).click();
+  await expect(menu).toBeVisible();
+  return menu;
+}
+/** Pick a colour mode ('Light' | 'Dark' | 'System') in the Appearance menu. */
+export async function chooseMode(page: Page, mode: 'Light' | 'Dark' | 'System') {
+  await (await appearanceMenu(page)).getByRole('menuitemradio', { name: mode, exact: true }).click();
+}
+/** Pick a colour scheme by its visible name in the Appearance menu. */
+export async function chooseScheme(page: Page, name: string) {
+  await (await appearanceMenu(page)).getByRole('menuitemradio', { name, exact: true }).click();
+}

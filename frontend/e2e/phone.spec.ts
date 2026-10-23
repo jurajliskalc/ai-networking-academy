@@ -49,8 +49,11 @@ test('phone: dashboard fits and the menu drawer navigates', async ({ page }) => 
   await expect(drawer).toBeVisible();
   await drawer.getByRole('button', { name: 'Close menu' }).tap();
   await expect(drawer).toBeHidden();
-  // The theme toggle stays reachable in the header.
-  await expect(page.getByRole('button', { name: /^switch to (light|dark) theme$/i })).toBeVisible();
+  // The appearance menu stays reachable in the header and fits on the screen.
+  await page.getByRole('button', { name: /^Appearance:/ }).click();
+  const appearance = page.getByRole('menu', { name: 'Appearance' });
+  await expect(appearance).toBeInViewport({ ratio: 1 });
+  await page.keyboard.press('Escape');
 });
 
 test('phone: a lesson with widgets and a diagram fits', async ({ page }) => {

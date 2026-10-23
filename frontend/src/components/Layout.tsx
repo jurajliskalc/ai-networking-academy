@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import {
-  BarChart3, BookMarked, Boxes, FlaskConical, GraduationCap, Github, Layers, LayoutDashboard, Menu, Moon, Network, Server, Settings, Sun, Terminal, Timer, X,
+  BarChart3, BookMarked, Boxes, FlaskConical, GraduationCap, Github, Layers, LayoutDashboard, Menu, Network, Server, Settings, Terminal, Timer, X,
 } from 'lucide-react';
-import { useProgress } from '../store';
 import Search from './Search';
+import AppearanceMenu from './AppearanceMenu';
 
 const NAV = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
@@ -54,7 +54,6 @@ function useTitleFromHeading(main: RefObject<HTMLElement | null>, pathname: stri
 export default function Layout({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const loc = useLocation();
-  const { progress, update } = useProgress();
   const main = useRef<HTMLElement>(null);
   const drawer = useRef<HTMLDivElement>(null);
   const menuButton = useRef<HTMLButtonElement>(null);
@@ -92,11 +91,6 @@ export default function Layout({ children }: { children: ReactNode }) {
       if (document.activeElement === document.body || d?.contains(document.activeElement)) btn?.focus();
     };
   }, [open]);
-  // Derive from the stored theme, not the <html> class: the class is applied in an effect after this render,
-  // so reading it here was one toggle behind and the second click did nothing.
-  const { theme } = progress.settings;
-  const dark = theme === 'dark' || (theme === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
-  const toggleTheme = () => update((p) => ({ ...p, settings: { ...p.settings, theme: dark ? 'light' : 'dark' } }));
 
   const nav = (
     <nav aria-label="Main" className="flex flex-col gap-0.5">
@@ -132,7 +126,7 @@ export default function Layout({ children }: { children: ReactNode }) {
         <div className="font-mono text-xs text-muted max-xl:hidden">RDMA · InfiniBand · RoCEv2 · NCCL · rail-optimized fabrics</div>
         <div className="flex min-w-0 items-center gap-2">
           <Search />
-          <button className="rounded-lg p-2 text-muted hover:bg-panel-2 hover:text-fg" onClick={toggleTheme} aria-label={dark ? 'Switch to light theme' : 'Switch to dark theme'}>{dark ? <Sun size={17} aria-hidden /> : <Moon size={17} aria-hidden />}</button>
+          <AppearanceMenu />
         </div>
       </header>
 
