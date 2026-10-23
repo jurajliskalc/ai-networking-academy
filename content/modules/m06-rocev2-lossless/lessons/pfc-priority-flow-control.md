@@ -140,6 +140,14 @@ head-of-line blocking and congestion spreading. Neither is "free losslessness".
 - The frame is consumed by the MAC of the directly attached device. It is link-local and is never
   forwarded.
 
+> [!VERIFIED]
+> **PFC frames are consumed by the NIC: `tcpdump` captured 0 while `rx_prio3_pause` rose by 2178.**
+> On ConnectX-5 (fw 16.29, DOCA-OFED 3.4, PFC on priority 3, back to back), `tcpdump -i ens64f0np0 -nn -e ether proto 0x8808`
+> ran during a 5-second `ib_write_bw` and reported `0 packets captured`, while `ethtool -S` showed
+> `rx_prio3_pause` +2178 over the same run. The libpcap RDMA sniffer captured no 0x8808 frames either. On a host,
+> count pause frames with the `prioN_pause` counters (and the switch's PFC counters); seeing the frames
+> themselves needs a passive tap or a capture appliance.
+
 Quantum durations scale with speed, so the same timer value means less wall-clock time on faster links:
 
 | Link speed | 1 quantum (512 bit times) | Maximum timer (65 535 quanta) |
@@ -225,14 +233,26 @@ still retransmit correctly. PFC only makes loss rare enough that a simple retran
 
 ### Host side: is PFC on, and is it being used?
 
-On NVIDIA ConnectX with NVIDIA's stack (MLNX_OFED / DOCA-OFED), `mlnx_qos` shows PFC per priority:
+With the distribution's (inbox) driver stack, iproute2's `dcb` sets and shows PFC per priority. With
+NVIDIA's stack (MLNX_OFED / DOCA-OFED) the usual tool is `mlnx_qos`, which is not part of a distro
+install (`dcb` keeps working under DOCA too). Enable PFC on priority 3 and read it back:
 
-```bash
-mlnx_qos -i ens1f0np0
+```bash stack=inbox
+sudo dcb pfc set dev ens64f0np0 prio-pfc all:off 3:on
+dcb pfc show dev ens64f0np0
 ```
 
-```text
-# illustrative, trimmed (trust dscp, PFC on priority 3)
+```text stack=inbox real
+pfc-cap 8 macsec-bypass off delay 7
+prio-pfc 0:off 1:off 2:off 3:on 4:off 5:off 6:off 7:off
+```
+
+```bash stack=doca
+sudo mlnx_qos -i ens64f0np0 --pfc 0,0,0,1,0,0,0,0   # prints the full status afterwards
+mlnx_qos -i ens64f0np0
+```
+
+```text stack=doca real
 DCBX mode: OS controlled
 Priority trust state: dscp
 dscp2prio mapping:
@@ -247,28 +267,18 @@ PFC configuration:
 ...
 ```
 
-`mlnx_qos` is not part of a distro (inbox) driver install. There, iproute2's `dcb` does the same job:
-
-```bash
-dcb pfc show dev ens1f0np0
-```
-
-```text
-# illustrative
-pfc-cap 8 macsec-bypass off delay 7
-prio-pfc 0:off 1:off 2:off 3:on 4:off 5:off 6:off 7:off
-```
+(The `mlnx_qos` capture was taken with trust set to DSCP, hence the `dscp2prio` block. `mlnx_qos` wants
+all eight values: `--pfc 0,0,0,1` fails with `pfc list must have 8 items`.)
 
 Make sure global 802.3x pause is off, so that it cannot pause the whole link:
 
 ```bash
-ethtool -a ens1f0np0            # show global pause settings
-ethtool -A ens1f0np0 rx off tx off
+ethtool -a ens64f0np0            # show global pause settings
+ethtool -A ens64f0np0 rx off tx off
 ```
 
-```text
-# illustrative
-Pause parameters for ens1f0np0:
+```text real=inbox
+Pause parameters for ens64f0np0:
 Autonegotiate:	off
 RX:		off
 TX:		off
@@ -277,27 +287,63 @@ TX:		off
 On ConnectX (mlx5) the two settings interact. Global pause is on by default (`RX: on`, `TX: on`),
 and enabling PFC on any priority turns it off automatically. The reverse is a trap: running
 `ethtool -A <if> rx on tx on` while PFC is enabled silently clears PFC on **all** priorities, with
-no warning and exit code 0. Re-check the PFC vector after any `ethtool -A`.
+no warning and exit code 0. Re-check the PFC vector after any `ethtool -A`:
+
+```bash stack=inbox
+sudo ethtool -A ens64f0np0 rx on tx on; echo rc=$?
+dcb pfc show dev ens64f0np0 prio-pfc
+```
+
+```text stack=inbox real
+rc=0
+prio-pfc 0:off 1:off 2:off 3:off 4:off 5:off 6:off 7:off
+```
+
+```bash stack=doca
+sudo ethtool -A ens64f0np0 rx on tx on; echo rc=$?
+mlnx_qos -i ens64f0np0 | sed -n '/PFC configuration/,/buffer/p'
+```
+
+```text stack=doca real
+rc=0
+PFC configuration:
+	priority    0   1   2   3   4   5   6   7
+	enabled     0   0   0   0   0   0   0   0
+	buffer      0   0   0   0   0   0   0   0
+```
+
+> [!VERIFIED]
+> **Enabling PFC turned 802.3x global pause off, and `ethtool -A <if> rx on tx on` silently cleared PFC again.**
+> On ConnectX-5 (fw 16.29) with both the inbox stack (`dcb pfc`) and DOCA-OFED 3.4 (`mlnx_qos`), `ethtool -a`
+> read `RX: off` / `TX: off` right after PFC was enabled on priority 3. Turning global pause back on returned
+> rc 0 with no warning, and PFC was then off on every priority. Treat `ethtool -A` and PFC as one setting:
+> after any pause change, re-read `dcb pfc show` or `mlnx_qos` and the `ethtool -S` pause counters.
 
 The mlx5 driver exposes per-priority pause counters through `ethtool -S`. The names below are
 documented in the kernel's mlx5 counters page. Availability depends on driver version, and the
 per-priority pause counters appear only for priorities that have PFC enabled on the NIC: no
-`rx_prio3_pause` line means PFC is not enabled on priority 3 there.
+`rx_prio3_pause` line means PFC is not enabled on priority 3 there. The capture below is host A after a
+10-second, 4-QP `ib_write_bw` in priority 3, back to back at 100G:
 
 ```bash
-ethtool -S ens1f0np0 | grep -E 'prio3_pause|pause_storm'
+ethtool -S ens64f0np0 | grep -E 'prio3_pause|pause_storm|global_pause'
 ```
 
-```text
-# illustrative
-     rx_prio3_pause: 18234              # PFC frames received for prio 3 (switch paused us)
-     rx_prio3_pause_duration: 912345    # time spent paused by the switch
-     tx_prio3_pause: 0                  # PFC frames this NIC sent (host could not keep up)
-     tx_prio3_pause_duration: 0
-     rx_prio3_pause_transition: 9117    # XOFF->XON transitions seen
+```text real=inbox
+     rx_prio3_pause: 696
+     rx_prio3_pause_duration: 608
+     tx_prio3_pause: 26
+     tx_prio3_pause_duration: 114
+     rx_prio3_pause_transition: 348
      tx_pause_storm_warning_events: 0
      tx_pause_storm_error_events: 0
 ```
+
+The fields: `rx_prio3_pause` counts PFC frames received for priority 3 (the peer, here the receiving
+NIC, paused us) and `rx_prio3_pause_duration` the time spent paused; `tx_prio3_pause` counts PFC frames
+this NIC sent (its own receive path could not keep up); `rx_prio3_pause_transition` counts XOFF-to-XON
+transitions. Note that the grep also asked for `global_pause` and got nothing: with PFC on, those
+counters are gone.
 
 How to read it:
 

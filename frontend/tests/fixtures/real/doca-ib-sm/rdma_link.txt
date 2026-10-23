@@ -1,0 +1,4 @@
+### cmd: rdma link show mlx5_1/1
+### ----
+link mlx5_1/1 subnet_prefix fe80:0000:0000:0000 lid 1 sm_lid 1 lmc 0 state ACTIVE physical_state LINK_UP 
+### rc=0

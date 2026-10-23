@@ -1,11 +1,14 @@
 import { Children, isValidElement, lazy, memo, Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import ReactMarkdown, { type Components, type Options } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
-import { BookOpen, Briefcase, Info, Lightbulb, TriangleAlert, type LucideIcon } from 'lucide-react';
+import { BadgeCheck, BookOpen, Briefcase, Info, Lightbulb, TriangleAlert, type LucideIcon } from 'lucide-react';
 import { slug } from '../content';
 import { WidgetFrame } from '../widgets/registry';
+import { captureLabel, type Stack } from '../../scripts/stack-variants.mjs';
+import { remarkStackVariants, STACK_GROUP_CLASS } from '../stackMarkdown';
+import StackToggle, { useStack } from './StackToggle';
 
 const Mermaid = lazy(() => import('./Mermaid'));
 
@@ -15,7 +18,30 @@ const CALLOUTS: Record<string, { cls: string; title: string; icon: LucideIcon }>
   WARNING: { cls: 'callout-warning', title: 'Warning', icon: TriangleAlert },
   ANALOGY: { cls: 'callout-analogy', title: 'For network engineers', icon: BookOpen },
   INTERVIEW: { cls: 'callout-interview', title: 'Interview angle', icon: Briefcase },
+  VERIFIED: { cls: 'callout-verified', title: 'Verified on real hardware', icon: BadgeCheck },
 };
+
+interface HastNode { tagName?: string; properties?: Record<string, unknown>; children?: HastNode[] }
+/** The data-stack / data-real tags remarkStackVariants put on the <code> inside a rendered <pre>. */
+const codeTags = (pre: unknown) => {
+  const code = (pre as HastNode | undefined)?.children?.find((c) => c.tagName === 'code');
+  return { stack: (code?.properties?.dataStack as Stack | undefined) ?? null, real: (code?.properties?.dataReal as Stack | undefined) ?? null };
+};
+
+/** A run of stack-tagged fences: a toggle, then only the blocks of the chosen stack. */
+function StackGroup({ children }: { children?: ReactNode }) {
+  const [stack] = useStack();
+  const items = Children.toArray(children).filter(isValidElement);
+  return (
+    <div className="stack-group" data-stack-group="">
+      <div className="stack-group-bar"><StackToggle /></div>
+      {items.map((el, i) => {
+        const s = codeTags((el.props as { node?: unknown }).node).stack;
+        return <div key={i} data-stack={s ?? undefined} hidden={s !== stack}>{el}</div>;
+      })}
+    </div>
+  );
+}
 
 function text(node: ReactNode): string {
   if (typeof node === 'string' || typeof node === 'number') return String(node);
@@ -139,6 +165,15 @@ const COMPONENTS: Components = {
     const c = m && CALLOUTS[m[1].toUpperCase()];
     if (!c) return <blockquote>{children}</blockquote>;
     const Icon = c.icon;
+    if (c.cls === 'callout-verified') return (
+      <div className={`callout ${c.cls}`} role="note" aria-label={c.title}>
+        <div className="callout-title">
+          <span className="verified-badge" aria-hidden><Icon size={13} />{c.title}</span>
+          <Link to="/verified" className="verified-all">All hardware notes<span className="sr-only"> verified on real hardware</span></Link>
+        </div>
+        {stripMarker(children, m![0])}
+      </div>
+    );
     return (
       <div className={`callout ${c.cls}`} role="note" aria-label={c.title}>
         <div className="callout-title" aria-hidden><Icon size={14} />{c.title}</div>
@@ -146,7 +181,9 @@ const COMPONENTS: Components = {
       </div>
     );
   },
-  pre: ({ children }) => {
+  div: ({ className, children }) => (String(className ?? '').split(' ').includes(STACK_GROUP_CLASS)
+    ? <StackGroup>{children}</StackGroup> : <div className={className}>{children}</div>),
+  pre: ({ node, children }) => {
     const child = Children.toArray(children)[0];
     if (isValidElement(child)) {
       const props = child.props as { className?: string; children?: ReactNode };
@@ -155,10 +192,17 @@ const COMPONENTS: Components = {
       if (lang === 'mermaid') return <Suspense fallback={<pre>{code}</pre>}><Mermaid chart={code} /></Suspense>;
       if (lang === 'widget') return <div className="not-prose my-6"><WidgetFrame id={code.trim()} /></div>;
     }
+    const { real } = codeTags(node);
+    if (real) return (
+      <figure className="capture">
+        <figcaption className="capture-label"><BadgeCheck size={12} aria-hidden />{captureLabel(real)}</figcaption>
+        <ScrollPre>{children}</ScrollPre>
+      </figure>
+    );
     return <ScrollPre>{children}</ScrollPre>;
   },
 };
-const REMARK: Options['remarkPlugins'] = [remarkGfm];
+const REMARK: Options['remarkPlugins'] = [remarkGfm, remarkStackVariants];
 const REHYPE: Options['rehypePlugins'] = [[rehypeHighlight, { detect: false, ignoreMissing: true }]];
 
 function Markdown({ source }: { source: string }) {

@@ -89,19 +89,24 @@ So the "GID index" in NCCL (`NCCL_IB_GID_INDEX`), perftest (`-x`) and the rdma-c
 
 ### Discovering devices and ports
 
-`ibv_devices` lists RDMA devices; `ibv_devinfo` shows ports and their state:
+`ibv_devices` lists RDMA devices; `ibv_devinfo` shows ports and their state. Here is the same dual-port ConnectX-5 (RoCE, 100GbE) under both driver stacks; only the device names differ:
 
-```text
-$ ibv_devinfo -d mlx5_0
-hca_id:	mlx5_0
+```text stack=inbox real
+$ ibv_devices
+    device          	   node GUID
+    ------          	----------------
+    rocep3s0f0      	248a0703000011ee
+    rocep3s0f1      	248a0703000011ef
+$ ibv_devinfo -d rocep3s0f0
+hca_id:	rocep3s0f0
 	transport:			InfiniBand (0)
-	fw_ver:				28.39.1002
-	node_guid:			b83f:d203:00a1:b2c4
-	sys_image_guid:			b83f:d203:00a1:b2c4
+	fw_ver:				16.29.1016
+	node_guid:			248a:0703:0000:11ee
+	sys_image_guid:			248a:0703:0000:11ee
 	vendor_id:			0x02c9
-	vendor_part_id:			4129
+	vendor_part_id:			4119
 	hw_ver:				0x0
-	board_id:			MT_xxxxxxxxxx
+	board_id:			MT_0000000008
 	phys_port_cnt:			1
 		port:	1
 			state:			PORT_ACTIVE (4)
@@ -113,7 +118,36 @@ hca_id:	mlx5_0
 			link_layer:		Ethernet
 ```
 
-*(Illustrative; values depend on adapter and firmware.)* Line by line:
+```text stack=doca real
+$ ibv_devices
+libibverbs: Warning: couldn't load driver 'libionic-rdmav59.so': libionic-rdmav59.so: cannot open shared object file: No such file or directory
+    device          	   node GUID
+    ------          	----------------
+    mlx5_0          	248a0703000011ee
+    mlx5_1          	248a0703000011ef
+$ ibv_devinfo -d mlx5_0
+libibverbs: Warning: couldn't load driver 'libionic-rdmav59.so': libionic-rdmav59.so: cannot open shared object file: No such file or directory
+hca_id:	mlx5_0
+	transport:			InfiniBand (0)
+	fw_ver:				16.29.1016
+	node_guid:			248a:0703:0000:11ee
+	sys_image_guid:			248a:0703:0000:11ee
+	vendor_id:			0x02c9
+	vendor_part_id:			4119
+	hw_ver:				0x0
+	board_id:			MT_0000000008
+	phys_port_cnt:			1
+		port:	1
+			state:			PORT_ACTIVE (4)
+			max_mtu:		4096 (5)
+			active_mtu:		4096 (5)
+			sm_lid:			0
+			port_lid:		0
+			port_lmc:		0x00
+			link_layer:		Ethernet
+```
+
+With DOCA-OFED every libibverbs program prints a `libibverbs: Warning: couldn't load driver 'libionic-rdmav59.so'` line first: DOCA's provider configuration in `/etc/libibverbs.d/` lists `ionic.driver` (another vendor's NIC) whose library is not installed. It is harmless noise. Line by line:
 
 - `transport: InfiniBand (0)` refers to the *verbs transport* (the IB transport), and it appears for RoCE too. The **`link_layer`** line is what tells you InfiniBand versus Ethernet.
 - `vendor_id 0x02c9` is Mellanox/NVIDIA; `vendor_part_id` identifies the adapter model (look it up in vendor docs rather than memorising; 4119 is a ConnectX-5, for example). `board_id` is the board's PSID, which firmware tools also report.
@@ -123,24 +157,70 @@ hca_id:	mlx5_0
 
 `ibv_devinfo -v` adds the full capability list (limits such as `max_qp`, `max_mr`, atomics support) and, in recent rdma-core versions, the GID table with types. Asking for a device that does not exist prints `IB device 'mlx5_0' wasn't found`: the usual cause is a name copied from a guide written for the other stack.
 
+The infiniband-diags tools `ibstat` and `ibstatus` report the same port attributes and work on RoCE ports too (`CA type: MT4119`, `Rate: 100`, `Base lid: 0`, `Link layer: Ethernet` in `ibstat`). Read their rate line with care:
+
+```text stack=inbox real
+$ ibstatus
+Infiniband device 'rocep3s0f0' port 1 status:
+	default gid:	 fe80:0000:0000:0000:268a:07ff:fe00:11ee
+	base lid:	 0x0
+	sm lid:		 0x0
+	state:		 4: ACTIVE
+	phys state:	 5: LinkUp
+	rate:		 100 Gb/sec (4X EDR)
+	link_layer:	 Ethernet
+...
+```
+
+```text stack=doca real
+$ ibstatus
+Infiniband device 'mlx5_0' port 1 status:
+	default gid:	 fe80:0000:0000:0000:268a:07ff:fe00:11ee
+	base lid:	 0x0
+	sm lid:		 0x0
+	state:		 4: ACTIVE
+	phys state:	 5: LinkUp
+	rate:		 100 Gb/sec (4X EDR)
+	link_layer:	 Ethernet
+...
+```
+
+> [!VERIFIED]
+> **`ibstatus` prints `4X EDR` in the rate line even on an Ethernet (RoCE) port.** On ConnectX-5 with firmware 16.29, both stacks showed `rate: 100 Gb/sec (4X EDR)` next to `link_layer: Ethernet`; the sysfs file `/sys/class/infiniband/<dev>/ports/1/rate` holds the same string. The InfiniBand speed name is only a label for the lane rate; the `link_layer` line decides whether the port is RoCE or InfiniBand, and `ethtool` shows the Ethernet speed.
+
 ### The rdma tool (iproute2)
 
 The `rdma` command is the modern, vendor-neutral inspection tool:
 
-```text
+```text stack=inbox real
 $ rdma link show
-link mlx5_0/1 state ACTIVE physical_state LINK_UP netdev ens1f0np0
-link mlx5_1/1 state ACTIVE physical_state LINK_UP netdev ens1f1np1
+link rocep3s0f0/1 state ACTIVE physical_state LINK_UP netdev ens64f0np0 
+link rocep3s0f1/1 state ACTIVE physical_state LINK_UP netdev ens64f1np1 
 
 $ rdma dev show
-0: mlx5_0: node_type ca protocol roce fw 28.39.1002 node_guid b83f:d203:00a1:b2c4 sys_image_guid b83f:d203:00a1:b2c4
-1: mlx5_1: node_type ca protocol roce fw 28.39.1002 node_guid b83f:d203:00a1:b2c5 sys_image_guid b83f:d203:00a1:b2c4
+0: rocep3s0f0: node_type ca protocol roce fw 16.29.1016 node_guid 248a:0703:0000:11ee sys_image_guid 248a:0703:0000:11ee 
+1: rocep3s0f1: node_type ca protocol roce fw 16.29.1016 node_guid 248a:0703:0000:11ef sys_image_guid 248a:0703:0000:11ee 
 
 $ rdma resource show
-0: mlx5_0: pd 4 cq 12 qp 9 cm_id 0 mr 6 ctx 2 srq 0
+0: rocep3s0f0: pd 3 cq 4 qp 1 cm_id 0 mr 0 ctx 0 srq 2 
+1: rocep3s0f1: pd 3 cq 3 qp 1 cm_id 0 mr 0 ctx 0 srq 2 
 ```
 
-*(Illustrative.)* Both ports of one dual-port adapter share the `sys_image_guid`. A port whose netdev is administratively down (`ip link set <if> down`) shows `state DOWN physical_state DISABLED`; on mlx5 the far end of a back-to-back cable can stay `ACTIVE`/`LINK_UP` meanwhile, because the downed side keeps its PHY up. Useful sub-commands:
+```text stack=doca real
+$ rdma link show
+link mlx5_0/1 state ACTIVE physical_state LINK_UP netdev ens64f0np0 
+link mlx5_1/1 state ACTIVE physical_state LINK_UP netdev ens64f1np1 
+
+$ rdma dev show
+0: mlx5_0: node_type ca protocol roce fw 16.29.1016 node_guid 248a:0703:0000:11ee sys_image_guid 248a:0703:0000:11ee 
+1: mlx5_1: node_type ca protocol roce fw 16.29.1016 node_guid 248a:0703:0000:11ef sys_image_guid 248a:0703:0000:11ee 
+
+$ rdma resource show
+0: mlx5_0: pd 3 cq 3 qp 1 cm_id 0 mr 0 ctx 0 srq 2 
+1: mlx5_1: pd 3 cq 3 qp 1 cm_id 0 mr 0 ctx 0 srq 2 
+```
+
+Both ports of one dual-port adapter share the `sys_image_guid` (here `248a:0703:0000:11ee`, which is also the node GUID of the first port). On an idle host the resource counts are the kernel's own objects, such as the GSI QP each port keeps for management traffic (`rdma resource show qp` lists it as `type GSI state RTS ... comm [ib_core]`). A port whose netdev is administratively down (`ip link set <if> down`) shows `state DOWN physical_state DISABLED`; on mlx5 the far end of a back-to-back cable can stay `ACTIVE`/`LINK_UP` meanwhile, because the downed side keeps its PHY up. Useful sub-commands:
 
 | Command | Shows |
 |---|---|
@@ -155,31 +235,41 @@ The `rdma system` network-namespace mode matters for containers: in **shared** m
 
 ### The GID table in practice
 
-The NVIDIA script `show_gids` (MLNX_OFED / DOCA) prints the table:
+The NVIDIA script `show_gids` (MLNX_OFED / DOCA) prints the table. The distribution stack has no such script: there, `ibv_devinfo -v` lists the GID entries with their types, and sysfs holds each entry's GID, type and netdev (this works on any install; the type strings are `IB/RoCE v1` and `RoCE v2`):
 
-```text
-$ show_gids
+```text stack=inbox real
+$ ibv_devinfo -d rocep3s0f0 -v | grep -E 'state|active_mtu|link_layer|GID'
+			state:			PORT_ACTIVE (4)
+			active_mtu:		4096 (5)
+			link_layer:		Ethernet
+			phys_state:		LINK_UP (5)
+			GID[  0]:		fe80:0000:0000:0000:268a:07ff:fe00:11ee, RoCE v1
+			GID[  1]:		fe80::268a:7ff:fe00:11ee, RoCE v2
+			GID[  2]:		0000:0000:0000:0000:0000:ffff:0a0a:0a01, RoCE v1
+			GID[  3]:		::ffff:10.10.10.1, RoCE v2
+$ cat /sys/class/infiniband/rocep3s0f0/ports/1/gids/3 \
+      /sys/class/infiniband/rocep3s0f0/ports/1/gid_attrs/types/3 \
+      /sys/class/infiniband/rocep3s0f0/ports/1/gid_attrs/ndevs/3
+0000:0000:0000:0000:0000:ffff:0a0a:0a01
+RoCE v2
+ens64f0np0
+```
+
+```text stack=doca real
+$ show_gids mlx5_0
 DEV	PORT	INDEX	GID					IPv4  		VER	DEV
 ---	----	-----	---					------------  	---	---
-mlx5_0	1	0	fe80:0000:0000:0000:ba3f:d2ff:fea1:b2c4			v1	ens1f0np0
-mlx5_0	1	1	fe80:0000:0000:0000:ba3f:d2ff:fea1:b2c4			v2	ens1f0np0
-mlx5_0	1	2	0000:0000:0000:0000:0000:ffff:0a00:000b	10.0.0.11  	v1	ens1f0np0
-mlx5_0	1	3	0000:0000:0000:0000:0000:ffff:0a00:000b	10.0.0.11  	v2	ens1f0np0
+mlx5_0	1	0	fe80:0000:0000:0000:268a:07ff:fe00:11ee			v1	ens64f0np0
+mlx5_0	1	1	fe80:0000:0000:0000:268a:07ff:fe00:11ee			v2	ens64f0np0
+mlx5_0	1	2	0000:0000:0000:0000:0000:ffff:0a0a:0a01	10.10.10.1  	v1	ens64f0np0
+mlx5_0	1	3	0000:0000:0000:0000:0000:ffff:0a0a:0a01	10.10.10.1  	v2	ens64f0np0
 n_gids_found=4
 ```
 
-*(Illustrative; the output is tab-separated, and without arguments it lists every device.)* Indexes 0 and 1 come from the IPv6 link-local address; 2 and 3 from the IPv4 address, encoded as an IPv4-mapped IPv6 address (`::ffff:10.0.0.11`). On an IPv4 RoCEv2 fabric, the entry you want is the **v2** entry with your fabric IPv4 address — index 3 in this example, which is common but **not guaranteed**: indexes shift when addresses or VLAN interfaces are added or removed.
+The `show_gids` output is tab-separated, and without arguments it lists every device. `ibv_devinfo -v` prints RoCE v1 entries in full hexadecimal and RoCE v2 entries in compressed IPv6 notation, so the same address appears as `0000:...:ffff:0a0a:0a01` and as `::ffff:10.10.10.1`. Indexes 0 and 1 are the link-local entries (derived from the port's MAC address); 2 and 3 come from the IPv4 address 10.10.10.1, encoded as an IPv4-mapped IPv6 address (`::ffff:10.10.10.1`). On an IPv4 RoCEv2 fabric, the entry you want is the **v2** entry with your fabric IPv4 address — index 3 here, which is common but **not guaranteed**: indexes shift when addresses or VLAN interfaces are added or removed.
 
-Without the script, read sysfs directly (this works on any distribution, including inbox installs where `show_gids` does not exist; the type strings are `IB/RoCE v1` and `RoCE v2`):
-
-```text
-$ cat /sys/class/infiniband/mlx5_0/ports/1/gids/3
-0000:0000:0000:0000:0000:ffff:0a00:000b
-$ cat /sys/class/infiniband/mlx5_0/ports/1/gid_attrs/types/3
-RoCE v2
-$ cat /sys/class/infiniband/mlx5_0/ports/1/gid_attrs/ndevs/3
-ens1f0np0
-```
+> [!VERIFIED]
+> **With one IPv4 address on the netdev, GID index 3 was the IPv4-mapped RoCE v2 entry on both stacks.** On ConnectX-5 (fw 16.29) with the inbox stack and with DOCA-OFED the table was 0 = link-local RoCE v1, 1 = link-local RoCE v2, 2 = IPv4-mapped RoCE v1, 3 = IPv4-mapped RoCE v2 (`n_gids_found=4` per port), so `-x 3` / `-g 3` / `NCCL_IB_GID_INDEX=3` was right there. That held for one IPv4 address and no extra IPv6 or VLAN interfaces; Soft-RoCE (`rxe0`) on the same OS exposed only RoCE v2 entries, putting the IPv4 GID at index 1. Look the index up per host.
 
 The RDMA connection manager (librdmacm) chooses the GID itself from the IP address you connect to, using a default RoCE mode that can be inspected and changed through configfs (`/sys/kernel/config/rdma_cm/<device>/ports/<n>/default_roce_mode`, after mounting configfs and creating the device directory with `mkdir`; it reads `RoCE v2` by default, and `default_roce_tos` next to it reads `0`). Applications that use raw verbs, including NCCL, need the index explicitly or detect it themselves; recent NCCL versions try to select a RoCEv2 GID automatically, but check your version's documentation.
 
@@ -200,7 +290,51 @@ Two families of counters are exposed under `/sys/class/infiniband/<dev>/ports/<n
 | `out_of_buffer` | Packets dropped because no receive WQE was available |
 | `np_cnp_sent`, `rp_cnp_handled` | RoCE congestion notifications sent and handled (see `ecn-and-dcqcn`) |
 
-`rdma statistic show link mlx5_0/1` prints the same hardware counters. Recent iproute2 prints a `link mlx5_0/1` line followed by one indented `name value` pair per line; older versions put everything on one line, so check before you parse it. Watch them as *rates* during a test, not as absolute numbers since boot.
+`rdma statistic show link mlx5_0/1` prints the same hardware counters. Recent iproute2 prints a `link mlx5_0/1` line followed by one indented `name value` pair per line; older versions put everything on one line, so check before you parse it. Watch them as *rates* during a test, not as absolute numbers since boot. With iproute2 6.19 on the reference host, after a few perftest runs:
+
+```text stack=inbox real
+$ rdma statistic show link rocep3s0f0/1
+link rocep3s0f0/1 
+    rx_write_requests 106000 
+    rx_read_requests 0 
+    rx_atomic_requests 0 
+    rx_dct_connect 0 
+    out_of_buffer 0 
+    out_of_sequence 0 
+...
+    local_ack_timeout_err 0 
+...
+    req_transport_retries_exceeded 0 
+...
+    rp_cnp_ignored 0 
+    rp_cnp_handled 0 
+    np_ecn_marked_roce_packets 0 
+    np_cnp_sent 0 
+    rx_icrc_encapsulated 0 
+```
+
+```text stack=doca real
+$ rdma statistic show link mlx5_0/1
+link mlx5_0/1 
+    rx_write_requests 129005 
+    rx_read_requests 5 
+    rx_atomic_requests 0 
+    rx_dct_connect 0 
+    out_of_buffer 0 
+    out_of_sequence 0 
+...
+    local_ack_timeout_err 0 
+...
+    req_transport_retries_exceeded 0 
+...
+    rp_cnp_ignored 0 
+    rp_cnp_handled 0 
+    np_ecn_marked_roce_packets 0 
+    np_cnp_sent 0 
+    rx_icrc_encapsulated 0 
+```
+
+`rx_write_requests` counts RDMA Writes this port has received as a responder; the error and congestion counters stayed at 0 on this clean back-to-back link. Back to back with no switch, nothing marks ECN, so `np_ecn_marked_roce_packets` stays at 0 even under load.
 
 ## In practice
 
@@ -218,25 +352,39 @@ Expect the RDMA modules to be loaded, `uverbs*` and `rdma_cm` device files prese
 
 ### Mapping RDMA devices to interfaces and GPUs
 
-```text
+```text stack=inbox real
 $ rdma link show | awk '{print $2, $NF}'
-mlx5_0/1 ens1f0np0
-mlx5_1/1 ens1f1np1
+rocep3s0f0/1 ens64f0np0
+rocep3s0f1/1 ens64f1np1
 ```
 
-On NVIDIA stacks `ibdev2netdev` gives the same mapping with port state (`mlx5_0 port 1 ==> ens1f0np0 (Up)`); it is not part of distribution rdma-core, where `rdma link` is the tool. Combine it with `nvidia-smi topo -m` (see `reading-server-topology`) to confirm that each GPU has a nearby NIC — that mapping is what NCCL uses to build rails.
+```text stack=doca real
+$ rdma link show | awk '{print $2, $NF}'
+mlx5_0/1 ens64f0np0
+mlx5_1/1 ens64f1np1
+$ ibdev2netdev
+mlx5_0 port 1 ==> ens64f0np0 (Up)
+mlx5_1 port 1 ==> ens64f1np1 (Up)
+```
+
+On NVIDIA stacks `ibdev2netdev` gives the same mapping with port state; it is not part of distribution rdma-core, where `rdma link` is the tool. (The awk one-liner relies on `netdev` being the last field of a RoCE port's line; `rdma link` prints a trailing space after it, which awk ignores.) Combine it with `nvidia-smi topo -m` (see `reading-server-topology`) to confirm that each GPU has a nearby NIC — that mapping is what NCCL uses to build rails.
 
 ### A first connection test with librdmacm
 
 `rping` (from librdmacm-utils) uses the connection manager, so it tests IP-to-GID resolution as well as RDMA:
 
-```text
-server$ rping -s -a 10.0.0.12 -v
-client$ rping -c -a 10.0.0.12 -v -C 5
-ping data: rdma-ping-0: ABCDEFGHIJKLMNOPQRSTUVWXYZ...
+```text real=inbox
+server$ rping -s -a 10.10.10.2 -v -C 5
+client$ rping -c -a 10.10.10.2 -v -C 5
+client DISCONNECT EVENT...
+ping data: rdma-ping-0: ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqr
+ping data: rdma-ping-1: BCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqrs
+ping data: rdma-ping-2: CDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqrst
+ping data: rdma-ping-3: DEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqrstu
+ping data: rdma-ping-4: EFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqrstuv
 ```
 
-*(Illustrative.)* If `rping` works but your verbs application fails, the application's GID index or address handling is the prime suspect.
+The server binds to its own address (10.10.10.2); the client connects to it. The output is the same with DOCA-OFED (plus the harmless `libionic` warning line). If `rping` works but your verbs application fails, the application's GID index or address handling is the prime suspect.
 
 ### Soft-RoCE for learning
 
@@ -250,7 +398,10 @@ link rxe0/1 state ACTIVE physical_state LINK_UP netdev eth0
 $ ibv_devinfo -d rxe0 | grep -E "state|link_layer|active_mtu"
 ```
 
-Soft-RoCE implements RoCEv2 in the kernel. It is perfect for learning verbs, GIDs and perftest, and it interoperates with real RoCE NICs in principle, but it consumes CPU for everything a hardware NIC offloads, so its performance numbers mean nothing for capacity planning.
+Soft-RoCE implements RoCEv2 in the kernel. It is perfect for learning verbs, GIDs and perftest, and it interoperates with real RoCE NICs in principle, but it consumes CPU for everything a hardware NIC offloads, so its performance numbers mean nothing for capacity planning. On the reference hosts (Ubuntu 26.04, a VMXNET3 interface with MTU 1500) `rxe0` reported `fw_ver 0.0.0`, `vendor_id 0xffffff` and `active_mtu 1024 (3)`, exposed only RoCE v2 GIDs (index 0 link-local, index 1 IPv4-mapped, so `-x 1`, not 3), and `ib_write_bw` reached 4.6-5.3 Gb/s. On Ubuntu 26.04 `rdma_rxe` ships in the main kernel modules package.
+
+> [!VERIFIED]
+> **Soft-RoCE (`rdma_rxe`) cannot be loaded on a host running NVIDIA DOCA-OFED.** DOCA-OFED 3.4 replaces `ib_core`, `ib_uverbs` and the other RDMA core modules but ships no `rdma_rxe`, and the kernel's own module no longer matches them: `modprobe rdma_rxe` failed with `modprobe: ERROR: could not insert 'rdma_rxe': Invalid argument`, and dmesg showed `rdma_rxe: disagrees about version of symbol ib_get_eth_speed` / `rdma_rxe: Unknown symbol ib_get_eth_speed (err -22)`. DOCA's user-space providers contain no rxe provider either (`/etc/libibverbs.d/` listed only `ionic.driver` and `mlx5.driver`). Seen on Ubuntu 26.04 with kernel 7.0; run the Soft-RoCE labs on a host or VM with the distribution's stack.
 
 ### Containers
 

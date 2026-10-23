@@ -43,6 +43,10 @@ export interface Nic {
   stalled?: boolean;
   /** InfiniBand PMA PortCounters of the HCA port (IB variant only). */
   ib?: Record<string, number>;
+  /** Global 802.3x pause requested with `ethtool -A` (mlx5: only in effect while no priority has PFC; default on). */
+  pause?: boolean;
+  /** ETS per traffic class as `mlnx_qos --tsa/--tcbw` set it (absent: every TC `vendor`). */
+  ets?: { tsa: ('vendor' | 'ets' | 'strict')[]; bw: number[] };
 }
 export interface Host { name: string; nics: Nic[]; files: Record<string, string>; dmesg: string[] }
 export type Peer = { kind: 'host'; node: string; rail: number } | { kind: 'switch'; sw: string; port: string };
@@ -156,7 +160,7 @@ export function createFabric(): FabricState {
       dmesg: [],
       nics: Array.from({ length: RAILS }, (_, r) => ({
         rail: r, dev: `mlx5_${r}`, netdev: NETDEVS[r], bdf: BDFS[r], mtu: 9000, admin: true, trust: 'dscp' as Trust,
-        pfc: zeroPfc(), pcieWidth: 16, pcieSpeed: 32, counters: emptyNicCounters(r), hw: emptyHw(),
+        pfc: zeroPfc(), pause: false, pcieWidth: 16, pcieSpeed: 32, counters: emptyNicCounters(r), hw: emptyHw(),
       })),
     };
   }

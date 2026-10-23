@@ -11,6 +11,10 @@
 #     its location; the default is labs/hw-toolkit/lab.env.
 #   - Output lines start with PASS:, FAIL:, WARN:, SKIP: or INFO:. "aina-hw check" turns them into a
 #     result file the academy can import. `aina_finish` exits non-zero if anything failed.
+#   - `task N "title"` starts the checks for the lab's Task N (prints "TASK: N title"); results after it
+#     count for that task, results before the first one are the "Before you start" prerequisites.
+#     Guard each task block with `if task N "title"; then ... fi`: with AINA_TASK=N in the environment
+#     (`aina-hw check LAB --task N`) only that task's block runs, so a learner can resume a lab.
 
 AINA_TOOLKIT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 AINA_FAILS=0
@@ -22,6 +26,26 @@ warn() { echo "WARN: $*"; AINA_WARNS=$((AINA_WARNS + 1)); }
 skip() { echo "SKIP: $*"; }
 info() { echo "INFO: $*"; }
 die() { echo "FAIL: $*"; exit 1; }
+
+# aina_tasks N... : declare which of the lab's tasks this check covers (prints "TASKS: N ..."), so a run that
+# stops early (failed prerequisites) reports the others as not run rather than not covered.
+aina_tasks() { echo "TASKS: $*"; }
+
+# task N TITLE : start the checks of the lab's Task N. Returns 1 (prints nothing) when AINA_TASK picks
+# another task, so `if task N "..."; then ... fi` skips the block.
+task() {
+  if [[ -n "${AINA_TASK:-}" && "$AINA_TASK" != "$1" ]]; then return 1; fi
+  echo "TASK: $1 $2"
+}
+
+# task_selected N... : true when no AINA_TASK filter is set or it names one of these tasks. For work that
+# several tasks share (one perftest run measured by two tasks), run it if any of them is selected.
+task_selected() {
+  local n
+  [[ -z "${AINA_TASK:-}" ]] && return 0
+  for n in "$@"; do [[ "$AINA_TASK" == "$n" ]] && return 0; done
+  return 1
+}
 
 # Load lab.env and fill defaults for anything it does not set. Defaults match content/hardware/hardware.yaml.
 aina_load_env() {

@@ -1,0 +1,23 @@
+### cmd: ibv_devinfo -d mlx5_1
+### ----
+libibverbs: Warning: couldn't load driver 'libionic-rdmav59.so': libionic-rdmav59.so: cannot open shared object file: No such file or directory
+hca_id:	mlx5_1
+	transport:			InfiniBand (0)
+	fw_ver:				16.29.1016
+	node_guid:			248a:0703:0000:11ef
+	sys_image_guid:			248a:0703:0000:11ee
+	vendor_id:			0x02c9
+	vendor_part_id:			4119
+	hw_ver:				0x0
+	board_id:			MT_0000000008
+	phys_port_cnt:			1
+		port:	1
+			state:			PORT_ACTIVE (4)
+			max_mtu:		4096 (5)
+			active_mtu:		4096 (5)
+			sm_lid:			1
+			port_lid:		1
+			port_lmc:		0x00
+			link_layer:		InfiniBand
+
+### rc=0

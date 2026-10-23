@@ -167,34 +167,88 @@ port. Distro rdma-core names devices after their PCI address instead (for exampl
 take the name from `rdma link show` or `ibv_devices` on your host. A wrong name fails immediately:
 `IB device 'mlx5_0' wasn't found` from `ibv_devinfo`, `IB device mlx5_0 not found` from perftest.
 
-```bash
+The output below is from the reference hosts (host A `10.10.10.1`, host B `10.10.10.2`, netdev MTU 9000):
+
+```bash stack=inbox
+ibv_devinfo -d rocep3s0f0 -v | grep -E 'state|active_mtu|link_layer|GID'
+```
+
+```text stack=inbox real
+			state:			PORT_ACTIVE (4)
+			active_mtu:		4096 (5)
+			link_layer:		Ethernet
+			phys_state:		LINK_UP (5)
+			GID[  0]:		fe80:0000:0000:0000:268a:07ff:fe00:11ee, RoCE v1
+			GID[  1]:		fe80::268a:7ff:fe00:11ee, RoCE v2
+			GID[  2]:		0000:0000:0000:0000:0000:ffff:0a0a:0a01, RoCE v1
+			GID[  3]:		::ffff:10.10.10.1, RoCE v2
+```
+
+```bash stack=doca
 ibv_devinfo -d mlx5_0 -v | grep -E 'state|active_mtu|link_layer|GID'
 ```
 
-Illustrative output (trimmed):
-
-```text
+```text stack=doca real
+libibverbs: Warning: couldn't load driver 'libionic-rdmav59.so': libionic-rdmav59.so: cannot open shared object file: No such file or directory
 			state:			PORT_ACTIVE (4)
-			active_mtu:		4096 (5)        <- RoCE MTU derived from netdev MTU 9000
-			link_layer:		Ethernet         <- RoCE (InfiniBand would say InfiniBand)
-			GID[  0]:		fe80:0000:0000:0000:a288:c2ff:fe1a:2b3c, RoCE v1
-			GID[  1]:		fe80::a288:c2ff:fe1a:2b3c, RoCE v2
-			GID[  2]:		0000:0000:0000:0000:0000:ffff:0a14:030b, RoCE v1
-			GID[  3]:		::ffff:10.20.3.11, RoCE v2   <- IPv4 RoCE v2: the one you want here
+			active_mtu:		4096 (5)
+			link_layer:		Ethernet
+			phys_state:		LINK_UP (5)
+			GID[  0]:		fe80:0000:0000:0000:268a:07ff:fe00:11ee, RoCE v1
+			GID[  1]:		fe80::268a:7ff:fe00:11ee, RoCE v2
+			GID[  2]:		0000:0000:0000:0000:0000:ffff:0a0a:0a01, RoCE v1
+			GID[  3]:		::ffff:10.10.10.1, RoCE v2
 ```
 
-(`ibv_devinfo` prints RoCE v1 entries in full hexadecimal and RoCE v2 entries in compressed form; both
-lines of a pair hold the same address.)
+Reading it: `active_mtu 4096` is the RoCE MTU derived from the netdev MTU of 9000; `link_layer:
+Ethernet` means RoCE (an InfiniBand port says `InfiniBand`); index 3, the IPv4-mapped RoCE v2 entry, is
+the one you want here. `ibv_devinfo` prints RoCE v1 entries in full hexadecimal and RoCE v2 entries in
+compressed form; both lines of a pair hold the same address. (The `libionic` warning on the DOCA host
+is harmless noise.)
 
-The same information is in sysfs, which is handy for scripts:
+The same information is in sysfs, which works with every stack and is handy for scripts. The NVIDIA
+stack also ships a `show_gids` script (mlnx-tools; not part of rdma-core or distro packages) that
+prints the whole table: device, port, index, GID, IPv4 address, RoCE version (`v1`/`v2`) and netdev,
+ending with `n_gids_found=N`. Use it when present, but do not assume it exists on every host.
 
-```bash
-cat /sys/class/infiniband/mlx5_0/ports/1/gids/3                 # the GID itself
-cat /sys/class/infiniband/mlx5_0/ports/1/gid_attrs/types/3      # "RoCE v2" (v1 entries read "IB/RoCE v1")
-cat /sys/class/infiniband/mlx5_0/ports/1/gid_attrs/ndevs/3      # netdev the GID belongs to
+```bash stack=inbox
+cat /sys/class/infiniband/rocep3s0f0/ports/1/gids/3                 # the GID itself
+cat /sys/class/infiniband/rocep3s0f0/ports/1/gid_attrs/types/3      # "RoCE v2" (v1 entries read "IB/RoCE v1")
+cat /sys/class/infiniband/rocep3s0f0/ports/1/gid_attrs/ndevs/3      # netdev the GID belongs to
 ```
 
-The NVIDIA stack also ships a `show_gids` script (mlnx-tools; not part of rdma-core or distro packages) that prints a table of device, port, index, GID, IPv4 address, RoCE version (`v1`/`v2`) and netdev, ending with `n_gids_found=N`. Use it when present, but do not assume it exists on every host; the sysfs files above work everywhere.
+```text stack=inbox real
+0000:0000:0000:0000:0000:ffff:0a0a:0a01
+RoCE v2
+ens64f0np0
+```
+
+```bash stack=doca
+show_gids
+```
+
+```text stack=doca real
+DEV	PORT	INDEX	GID					IPv4  		VER	DEV
+---	----	-----	---					------------  	---	---
+mlx5_0	1	0	fe80:0000:0000:0000:268a:07ff:fe00:11ee			v1	ens64f0np0
+mlx5_0	1	1	fe80:0000:0000:0000:268a:07ff:fe00:11ee			v2	ens64f0np0
+mlx5_0	1	2	0000:0000:0000:0000:0000:ffff:0a0a:0a01	10.10.10.1  	v1	ens64f0np0
+mlx5_0	1	3	0000:0000:0000:0000:0000:ffff:0a0a:0a01	10.10.10.1  	v2	ens64f0np0
+...
+n_gids_found=8
+```
+
+The port state needs care too. `rdma link show` prints `state ACTIVE physical_state LINK_UP` for a
+healthy port and `state DOWN physical_state DISABLED` when the local netdev is administratively down.
+
+> [!VERIFIED]
+> **Taking the peer's netdev down left the local mlx5 port ACTIVE / LINK_UP.**
+> On ConnectX-5 (fw 16.29) back to back with DOCA-OFED 3.4, after `sudo ip link set ens64f1np1 down`
+> on host B, host A still showed `link mlx5_1/1 state ACTIVE physical_state LINK_UP netdev ens64f1np1`,
+> sysfs `4: ACTIVE` / `5: LinkUp`, and `ethtool` `Speed: 100000Mb/s`, `Link detected: yes`: mlx5 keeps the
+> PHY of an admin-down port up. Only `ip link set down` on the LOCAL host changed it, to
+> `state DOWN physical_state DISABLED` (sysfs phys_state `3: Disabled`). So a healthy-looking local port
+> does not prove the peer's interface is up: check both ends, and test with traffic.
 
 > [!TIP]
 > Make GID selection a property of the address, not the index. In admission checks, assert that the GID index your jobs use resolves to `RoCE v2` and to the expected subnet on every NIC. A one-line sysfs check in a node health script catches the most common RoCE connection failure before any job runs.
@@ -202,38 +256,107 @@ The NVIDIA stack also ships a `show_gids` script (mlnx-tools; not part of rdma-c
 ### Step 2: prove the data path with known-good tools
 
 ```bash
-# Server (node A)
+# Server (node B, 10.10.10.2)
 ib_write_bw -d mlx5_0 -x 3 --report_gbits
-# Client (node B)
-ib_write_bw -d mlx5_0 -x 3 --report_gbits 10.20.3.11
+# Client (node A)
+ib_write_bw -d mlx5_0 -x 3 --report_gbits 10.10.10.2
 ```
 
-`-x` selects the GID index (RoCE). If the client prints `Couldn't connect to 10.20.3.11:18515` followed by `Unable to open file descriptor for socket connection`, the TCP side channel failed (no server running, wrong address or a firewall), not RDMA. If perftest fails while TCP ping works, try a minimal test that removes even more variables:
+`-x` selects the GID index (RoCE). If the client prints the following, the TCP side channel failed (no server running, wrong address or a firewall), not RDMA:
 
-```bash
-ibv_rc_pingpong -d mlx5_0 -g 3            # server
-ibv_rc_pingpong -d mlx5_0 -g 3 10.20.3.11 # client
+```text real=inbox
+Couldn't connect to 10.10.10.2:18515
+Unable to open file descriptor for socket connection
+ Unable to init the socket connection
 ```
 
-```text
-# Illustrative client output when it works
-  local address:  LID 0x0000, QPN 0x000048, PSN 0x7bb49d, GID ::ffff:10.20.3.12
-  remote address: LID 0x0000, QPN 0x000183, PSN 0xa6939e, GID ::ffff:10.20.3.11
+If perftest fails while TCP ping works, try a minimal test that removes even more variables:
+
+```bash stack=inbox
+ibv_rc_pingpong -d rocep3s0f0 -g 3            # server (node B)
+ibv_rc_pingpong -d rocep3s0f0 -g 3 10.10.10.2 # client (node A)
+```
+
+```text stack=inbox real
+  local address:  LID 0x0000, QPN 0x000048, PSN 0x7bb49d, GID ::ffff:10.10.10.1
+  remote address: LID 0x0000, QPN 0x000183, PSN 0xa6939e, GID ::ffff:10.10.10.2
 8192000 bytes in 0.01 seconds = 11330.57 Mbit/sec
 1000 iters in 0.01 seconds = 5.78 usec/iter
 ```
 
-On RoCE the LID is always 0 and the GID carries the address. When the two sides use GID indices of different types (for example the client on `-g 0`, the fe80 link-local entry, and the server on `-g 3`), the exchange fails with `client read/write: No space left on device` and `Couldn't read/write remote address`, which says nothing about GIDs: compare the `GID` both sides print.
+```bash stack=doca
+ibv_rc_pingpong -d mlx5_0 -g 3            # server (node B)
+ibv_rc_pingpong -d mlx5_0 -g 3 10.10.10.2 # client (node A)
+```
 
-To test rdma_cm-based address resolution (what many storage and MPI stacks use), run `rping -s -v` on the server and `rping -c -a 10.20.3.11 -v -C 5` on the client (`rping` is in the `rdmacm-utils` package, often not installed by default), or add `-R` to perftest commands.
+```text stack=doca real
+libibverbs: Warning: couldn't load driver 'libionic-rdmav59.so': libionic-rdmav59.so: cannot open shared object file: No such file or directory
+  local address:  LID 0x0000, QPN 0x000047, PSN 0xb3948c, GID ::ffff:10.10.10.1
+  remote address: LID 0x0000, QPN 0x000086, PSN 0x519117, GID ::ffff:10.10.10.2
+8192000 bytes in 0.01 seconds = 11663.29 Mbit/sec
+1000 iters in 0.01 seconds = 5.62 usec/iter
+```
+
+On RoCE the LID is always 0 and the GID carries the address. When the two sides use GID indices of different types, the exchange fails with a message that says nothing about GIDs. Here the server on node B runs with `-g 3` and the client uses `-g 0`:
+
+```text real=inbox
+$ ibv_rc_pingpong -d rocep3s0f0 -g 0 10.10.10.2
+client read/write: No space left on device
+Couldn't read/write remote address
+  local address:  LID 0x0000, QPN 0x00004a, PSN 0x308e57, GID fe80::268a:7ff:fe00:11ee
+```
+
+> [!VERIFIED]
+> **A mismatched GID index in `ibv_rc_pingpong` failed with `client read/write: No space left on device`.**
+> On ConnectX-5 (fw 16.29) back to back, with both the inbox stack (rdma-core 61) and DOCA-OFED 3.4, a
+> client on `-g 0` (the fe80 link-local RoCE v1 entry) against a server on `-g 3` (IPv4 RoCE v2) printed
+> `client read/write: No space left on device` and `Couldn't read/write remote address` (exit 1), and the
+> client's only address line showed `GID fe80::...`. The error reads like a disk or buffer problem; the
+> clue is the `GID` the client printed. Compare the `GID` both sides print, and use the same GID type
+> (in practice the RoCE v2 entry of the right subnet) on both ends.
+
+To test rdma_cm-based address resolution (what many storage and MPI stacks use), run `rping -s -v` on the server and `rping -c -a 10.10.10.2 -v -C 5` on the client (`rping` is in the `rdmacm-utils` package, often not installed by default), or add `-R` to perftest commands.
 
 Sweep sizes to find an MTU black hole:
 
 ```bash
-ib_write_bw -d mlx5_0 -x 3 -a --report_gbits 10.20.3.11   # -a: all sizes from 2 bytes up to 8 MiB
+ib_write_bw -d mlx5_0 -x 3 -a --report_gbits 10.10.10.2   # -a: all sizes from 2 bytes up to 8 MiB
 ```
 
-`-a` registers large buffers: with the common default locked-memory limit (`ulimit -l` of 8192 KiB) it fails with `Couldn't allocate MR` / `Couldn't create IB resources` before any traffic. Raise memlock to unlimited for the test user first.
+On a healthy path the sweep runs through every size (here 100G back to back, MTU 9000 on both hosts):
+
+```text real=inbox
+ #bytes     #iterations    BW peak[Gb/sec]    BW average[Gb/sec]   MsgRate[Mpps]
+ 2          5000           0.077181            0.067564            4.222733
+ ...
+ 2048       5000             73.24              72.83  		     4.445205
+ 4096       5000             94.88              94.81  		     2.893450
+ 8192       5000             96.15              94.06  		     1.435192
+ ...
+ 8388608    5000             91.96              91.96  		     0.001370
+---------------------------------------------------------------------------------------
+```
+
+`-a` registers large buffers, so it is also the test that trips over the locked-memory limit:
+
+```text real=doca
+$ ulimit -l 8192; ulimit -l
+8192
+$ ib_write_bw -d mlx5_0 -x 3 -a -F --report_gbits 10.10.10.2
+Couldn't allocate MR with error=12
+failed to create mr
+Failed to create MR
+ Couldn't create IB resources
+```
+
+> [!VERIFIED]
+> **With the default memlock limit of 8192 KiB, `ib_write_bw -a` failed with `Couldn't allocate MR` before any traffic.**
+> The Ubuntu 26.04 reference hosts came up with a locked-memory limit of 8192 KiB (the toolkit's
+> `setup-rdma-host.sh` flags it). With that limit, DOCA perftest printed `Couldn't allocate MR with
+> error=12` (errno 12, ENOMEM), then `failed to create mr`, `Failed to create MR` and
+> ` Couldn't create IB resources`; the distro perftest prints `Couldn't allocate MR` without the error
+> number. Raise memlock to unlimited for the test user (for example the toolkit's
+> `setup-rdma-host.sh --set-memlock`, effective after a new login) before a size sweep.
 
 Illustrative failing output:
 

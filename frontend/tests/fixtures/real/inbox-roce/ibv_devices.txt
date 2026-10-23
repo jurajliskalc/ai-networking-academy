@@ -1,0 +1,7 @@
+### cmd: ibv_devices
+### ----
+    device          	   node GUID
+    ------          	----------------
+    rocep3s0f0      	248a0703000011ee
+    rocep3s0f1      	248a0703000011ef
+### rc=0

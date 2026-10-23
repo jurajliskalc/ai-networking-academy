@@ -49,7 +49,7 @@ describe('colour schemes', () => {
   });
 
   it('progress keeps a known scheme and falls back to the default otherwise', () => {
-    expect(sanitize({ settings: { theme: 'dark', scheme: 'sepia' } }).settings).toEqual({ theme: 'dark', scheme: 'sepia' });
+    expect(sanitize({ settings: { theme: 'dark', scheme: 'sepia' } }).settings).toEqual({ theme: 'dark', scheme: 'sepia', stack: 'doca' });
     expect(sanitize({ settings: { theme: 'light', scheme: 'neon' } }).settings.scheme).toBe('noc');
     expect(sanitize({ settings: { theme: 'light' } }).settings.scheme).toBe('noc');
   });

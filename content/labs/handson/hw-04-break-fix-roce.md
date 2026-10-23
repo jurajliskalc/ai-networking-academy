@@ -38,9 +38,11 @@ By the end you can:
 - Close the incident with a verification, not with "it seems fine now".
 
 > [!NOTE]
-> Command output here is **illustrative**. Error texts of the RDMA tools vary between rdma-core and
-> perftest releases; the patterns are what matters. With NVIDIA's DOCA-Host stack, verbs tools may
-> also print a harmless `libibverbs: Warning: couldn't load driver 'libionic-rdmav59.so': ...` line.
+> Blocks labelled **Real capture** were copied from the reference hosts (ConnectX-5, firmware 16.29,
+> Ubuntu 26.04) with the stack named in the label; other output here is **illustrative**. Error texts
+> of the RDMA tools vary between rdma-core and perftest releases; the patterns are what matters. With
+> NVIDIA's DOCA-Host stack, verbs tools may also print a harmless `libibverbs: Warning: couldn't load
+> driver 'libionic-rdmav59.so': ...` line.
 
 ## Before you start
 
@@ -186,10 +188,8 @@ found` / ` Unable to find the Infiniband/RoCE device`.
 
 If everything so far is clean, the fault is in classification. Compare the hosts side by side:
 
-```bash
-mlnx_qos -i {{A_NETDEV}} | grep -iE 'trust|enabled'
-ssh {{HOST_B}} mlnx_qos -i {{B_NETDEV}} | grep -iE 'trust|enabled'
-# or, with iproute2 (the inbox stack has no mlnx_qos):
+```bash stack=inbox
+# iproute2 (the inbox stack has no mlnx_qos):
 dcb pfc show dev {{A_NETDEV}} prio-pfc
 ssh {{HOST_B}} dcb pfc show dev {{B_NETDEV}} prio-pfc
 dcb app show dev {{A_NETDEV}} dscp-prio
@@ -197,11 +197,36 @@ ssh {{HOST_B}} dcb app show dev {{B_NETDEV}} dscp-prio
 ethtool -a {{A_NETDEV}}; ssh {{HOST_B}} ethtool -a {{B_NETDEV}}
 ```
 
-Illustrative `mlnx_qos` lines on a correctly configured host:
-
+```bash stack=doca
+mlnx_qos -i {{A_NETDEV}} | grep -iE 'trust|enabled'
+ssh {{HOST_B}} mlnx_qos -i {{B_NETDEV}} | grep -iE 'trust|enabled'
+# dcb works with NVIDIA's stack too
+ethtool -a {{A_NETDEV}}; ssh {{HOST_B}} ethtool -a {{B_NETDEV}}
 ```
+
+On a correctly configured host (host A of the reference pair):
+
+```text stack=inbox real
+$ dcb pfc show dev ens64f0np0 prio-pfc
+prio-pfc 0:off 1:off 2:off 3:on 4:off 5:off 6:off 7:off
+$ dcb app show dev ens64f0np0 dscp-prio
+dscp-prio AF31:3
+$ ethtool -a ens64f0np0
+Pause parameters for ens64f0np0:
+Autonegotiate:	off
+RX:		off
+TX:		off
+```
+
+```text stack=doca real
+$ mlnx_qos -i ens64f0np0 | grep -iE 'trust|enabled'
 Priority trust state: dscp
 	enabled     0   0   0   1   0   0   0   0
+$ ethtool -a ens64f0np0
+Pause parameters for ens64f0np0:
+Autonegotiate:	off
+RX:		off
+TX:		off
 ```
 
 `dcb app show` prints DSCP 26 by its name (`dscp-prio AF31:3`). `ethtool -a` belongs in the

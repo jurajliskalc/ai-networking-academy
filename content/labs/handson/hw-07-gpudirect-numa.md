@@ -32,7 +32,8 @@ You will work on **host A** (`{{HOST_A}}`, NIC `{{A_RDMA_DEV}}`) and **host B** 
 - Measure RDMA WRITE bandwidth from host memory and from GPU memory, with a near and a far GPU.
 
 > [!NOTE]
-> All output in this lab is **illustrative**. GPU models, PCIe layouts, bus addresses and numbers
+> All output in this lab is **illustrative**, except the perftest CUDA check in Task 4, which is a
+> real capture from the RDMA reference hosts. GPU models, PCIe layouts, bus addresses and numbers
 > differ widely between server designs; reading *your* layout is the skill.
 
 ## Before you start
@@ -228,6 +229,25 @@ with CUDA support**. Distribution packages are usually built without it. Check:
 
 ```bash
 ib_write_bw --help 2>&1 | grep -i cuda
+```
+
+On the RDMA reference hosts (the check is about how perftest was built, not about the GPU):
+
+```text stack=inbox real
+$ ib_write_bw --help 2>&1 | grep -i cuda
+$ ib_write_bw -d rocep3s0f0 -x 3 --use_cuda=0 -F --report_gbits 10.10.10.2
+ Parser function exited with Error
+ Unsupported memory type
+```
+
+```text stack=doca real
+$ ib_write_bw --help 2>&1 | grep -i cuda
+      --use_cuda=<cuda device id> Use CUDA specific device for GPUDirect RDMA testing
+      --cuda_mem_type=<value> Set CUDA memory type <value>=0(device,default),1(managed),4(malloc)
+      --use_cuda_bus_id=<cuda full BUS id> Use CUDA specific device, based on its full PCIe address, for GPUDirect RDMA testing
+      --use_cuda_dmabuf Use CUDA DMA-BUF for GPUDirect RDMA testing
+      --use_cuda_pcie_mapping Use CUDA DMABUF handle mapping via PCIe BAR1
+      --use_data_direct Use Data-Direct CUDA DMA-BUF for GPUDirect RDMA testing
 ```
 
 If `--use_cuda` appears, you are ready. NVIDIA's DOCA-Host perftest, for example, lists

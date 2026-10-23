@@ -45,8 +45,10 @@ By the end you can:
 - Produce a JSON inventory of both hosts and interpret the health review's findings.
 
 > [!NOTE]
-> Command output in this lab is **illustrative**. Model names, firmware versions, PCI addresses and
-> GIDs on your hosts will differ.
+> Blocks labelled **Real capture** were copied from the reference hosts (ConnectX-5, firmware 16.29,
+> Ubuntu 26.04) with the stack named in the label; use the stack switch to see the inbox or DOCA
+> version. Other output is **illustrative**. Model names, firmware versions, PCI addresses and GIDs on
+> your hosts will differ.
 
 ## Before you start
 
@@ -77,16 +79,43 @@ rdma dev show
 rdma link show
 ```
 
-Illustrative output of `rdma link show` on a RoCE host with the distribution's rdma-core:
+Output of `ibv_devices` and `rdma link show` on the reference host A, both ports up (with DOCA, the
+NVIDIA helper `ibdev2netdev -v` is shown as well):
 
+```text stack=inbox real
+$ ibv_devices
+    device          	   node GUID
+    ------          	----------------
+    rocep3s0f0      	248a0703000011ee
+    rocep3s0f1      	248a0703000011ef
+$ rdma link show
+link rocep3s0f0/1 state ACTIVE physical_state LINK_UP netdev ens64f0np0
+link rocep3s0f1/1 state ACTIVE physical_state LINK_UP netdev ens64f1np1
 ```
-link rocep59s0f0/1 state ACTIVE physical_state LINK_UP netdev ens1f0np0
-link rocep59s0f1/1 state DOWN physical_state DISABLED netdev ens1f1np1
+
+```text stack=doca real
+$ ibv_devices
+libibverbs: Warning: couldn't load driver 'libionic-rdmav59.so': libionic-rdmav59.so: cannot open shared object file: No such file or directory
+    device          	   node GUID
+    ------          	----------------
+    mlx5_0          	248a0703000011ee
+    mlx5_1          	248a0703000011ef
+$ rdma link show
+link mlx5_0/1 state ACTIVE physical_state LINK_UP netdev ens64f0np0
+link mlx5_1/1 state ACTIVE physical_state LINK_UP netdev ens64f1np1
+$ ibdev2netdev -v
+cat: /sys/class/infiniband/mlx5_0/device/vpd: Permission denied
+0000:03:00.0 mlx5_0 (MT4119 -            )                 fw 16.29.1016 port 1 (ACTIVE) ==> ens64f0np0 (Up)
+cat: /sys/class/infiniband/mlx5_1/device/vpd: Permission denied
+0000:03:00.1 mlx5_1 (MT4119 -            )                 fw 16.29.1016 port 1 (ACTIVE) ==> ens64f1np1 (Up)
 ```
+
+A port whose netdev is down reads `state DOWN physical_state DISABLED`. (The `libionic` warning
+comes from DOCA's rdma-core and is harmless.)
 
 **Device names depend on the driver stack.** Distribution rdma-core (Ubuntu, RHEL inbox) renames
-RDMA devices after their PCI address (`rocep<bus>s<slot>f<function>`, so `rocep59s0f0` is PCI
-`0000:3b:00.0`); NVIDIA's OFED / DOCA-Host stack keeps the kernel names `mlx5_0`, `mlx5_1`. The
+RDMA devices after their PCI address (`rocep<bus>s<slot>f<function>`, so `rocep3s0f0` is PCI
+`0000:03:00.0` and `rocep59s0f0` would be `0000:3b:00.0`); NVIDIA's OFED / DOCA-Host stack keeps the kernel names `mlx5_0`, `mlx5_1`. The
 netdev names are the same on both. Always take the name from `rdma link` or `ibv_devices` on the
 host itself, never from a document (including this one).
 
@@ -113,13 +142,17 @@ D=/sys/class/infiniband/{{A_RDMA_DEV}}/ports/{{RDMA_PORT}}
 grep -H . $D/state $D/phys_state $D/link_layer $D/rate
 ```
 
-Illustrative output:
+The same files read one by one on the reference host A (inbox stack; with DOCA only the device
+name in the path changes):
 
-```
-/sys/class/infiniband/mlx5_0/ports/1/state:4: ACTIVE
-/sys/class/infiniband/mlx5_0/ports/1/phys_state:5: LinkUp
-/sys/class/infiniband/mlx5_0/ports/1/link_layer:Ethernet
-/sys/class/infiniband/mlx5_0/ports/1/rate:100 Gb/sec (4X EDR)
+```text real=inbox
+$ cat /sys/class/infiniband/rocep3s0f0/ports/1/state /sys/class/infiniband/rocep3s0f0/ports/1/phys_state
+4: ACTIVE
+5: LinkUp
+$ cat /sys/class/infiniband/rocep3s0f0/ports/1/link_layer
+Ethernet
+$ cat /sys/class/infiniband/rocep3s0f0/ports/1/rate
+100 Gb/sec (4X EDR)
 ```
 
 **Read it:**
@@ -132,6 +165,12 @@ Illustrative output:
   label (`4X EDR`) is just the closest InfiniBand equivalent, not a statement that you have an EDR
   link; the number is what matters.
 
+> [!NOTE]
+> **A 100GbE RoCE port reported its rate as `100 Gb/sec (4X EDR)`.**
+> On ConnectX-5 (fw 16.29) in Ethernet mode, with both the inbox stack and DOCA-OFED 3.4, sysfs `rate`
+> and `ibstatus` (`rate: 100 Gb/sec (4X EDR)`) used the InfiniBand label even though `link_layer` was
+> `Ethernet` and `ethtool` showed `Speed: 100000Mb/s`. Read the number and `link_layer`, not the label.
+
 Repeat on host B. Both ends of a link should report the same rate; if they do not, a cable, optic,
 or autonegotiation problem is likely (the Link health lab digs into it).
 
@@ -143,16 +182,30 @@ cat /sys/class/infiniband/{{A_RDMA_DEV}}/fw_ver
 cat /sys/class/infiniband/{{A_RDMA_DEV}}/hca_type /sys/class/infiniband/{{A_RDMA_DEV}}/board_id 2>/dev/null
 ```
 
-Illustrative output of `ethtool -i`:
+Output of `ethtool -i` on the reference host A (only `version` differs between the stacks):
 
-```
+```text stack=inbox real
 driver: mlx5_core
-version: 6.8.0-45-generic
-firmware-version: 28.39.1002 (MT_0000000834)
+version: 7.0.0-38-generic
+firmware-version: 16.29.1016 (MT_0000000008)
 expansion-rom-version:
-bus-info: 0000:3b:00.0
+bus-info: 0000:03:00.0
 supports-statistics: yes
+...
 ```
+
+```text stack=doca real
+driver: mlx5_core
+version: 26.04-0.8.5
+firmware-version: 16.29.1016 (MT_0000000008)
+expansion-rom-version:
+bus-info: 0000:03:00.0
+supports-statistics: yes
+...
+```
+
+The sysfs files on the same host read `16.29.1016` (`fw_ver`), `MT4119` (`hca_type`, ConnectX-5) and
+`MT_0000000008` (`board_id`).
 
 **Read it:** `driver` is the kernel driver; `version` is the kernel version for the inbox
 driver and the driver package version (for example `26.04-0.8.5`) with NVIDIA's DOCA-Host stack. `firmware-version` is the NIC firmware, and on NVIDIA NICs the text in parentheses is the
@@ -268,7 +321,8 @@ For InfiniBand, record the port LID and the SM LID instead:
 cat $D/lid $D/sm_lid
 ```
 
-A LID of `0x0` on an InfiniBand port means no subnet manager has configured it yet.
+On an InfiniBand port without a subnet manager the LID reads `0xffff` (65535, unassigned), not 0;
+see the InfiniBand lab. On RoCE ports both files read `0x0`, because RoCE does not use LIDs.
 
 ### Task 7: Software stack, limits and CPU policy
 

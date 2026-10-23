@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { CheckCircle2, ClipboardPaste, FileUp, FlaskConical, HardDrive, Link2, Loader2, RefreshCw, RotateCcw, Sparkles, Trash2, Unplug, Upload, Wand2, XCircle } from 'lucide-react';
+import { Activity, CheckCircle2, ClipboardPaste, FileUp, FlaskConical, HardDrive, Link2, Loader2, RefreshCw, RotateCcw, Sparkles, Trash2, Unplug, Upload, Wand2, XCircle } from 'lucide-react';
 import { useIndex } from '../../content';
 import { useProgress } from '../../store';
 import { recordHwCheck } from '../../progress';
@@ -8,7 +8,7 @@ import {
   defaults, derive, hostQos, hostsFile, netplan, nmcli, parseEnv, quickStart, rolesOf, sanitizeProfile, switchConfig, toEnv, validateProfile, type Profile,
 } from '../../hw/profile';
 import { dataPort, detectedProfile, hostLabel, isRoceV2Ipv4, parseReport, review, type HostFacts, type Report } from '../../hw/report';
-import { fromPastedText, mergeChecks, parseCheckJson, type CheckRecord } from '../../hw/checks';
+import { fromPastedText, mergeChecks, mergeTasks, parseCheckJson, type CheckRecord } from '../../hw/checks';
 import { Button, Card, Loading, Pill } from '../../components/ui';
 import type { ContentIndex, HandsOnLab, HwVariable } from '../../types';
 import demoReport from '../../hw/demo-report.json';
@@ -146,7 +146,7 @@ function Generated({ ix }: { ix: ContentIndex }) {
 
 // ------------------------------------------------------------------ 3. connect / import
 
-type AgentState = { phase: 'idle' | 'busy' | 'ok' | 'error'; msg?: string; host?: string; at?: string };
+type AgentState = { phase: 'idle' | 'busy' | 'ok' | 'error'; msg?: string; host?: string; at?: string; live?: boolean };
 
 function useImport(ix: ContentIndex) {
   const { setHw } = useProfile(ix);
@@ -154,8 +154,9 @@ function useImport(ix: ContentIndex) {
   const labIds = useMemo(() => new Set(ix.labs.map((l) => l.id)), [ix]);
   const applyChecks = useCallback((recs: CheckRecord[]) => {
     const known = recs.filter((r) => labIds.has(r.lab));
-    setHw((s) => ({ ...s, checks: mergeChecks(s.checks, known) }));
-    update((p) => known.reduce((acc, r) => recordHwCheck(acc, r.lab, r), p));
+    setHw((s) => ({ ...s, checks: mergeChecks(s.checks, known), tasks: mergeTasks(s.tasks ?? {}, known) }));
+    // Single-task runs (aina-hw check LAB --task N) show per-task progress but are not a lab attempt.
+    update((p) => known.filter((r) => r.only_task === null).reduce((acc, r) => recordHwCheck(acc, r.lab, r), p));
     return known.length;
   }, [labIds, setHw, update]);
   const applyReport = useCallback((r: Report, source: string) => setHw((s) => ({ ...s, report: r, reportSource: source })), [setHw]);
@@ -182,7 +183,8 @@ function AgentCard({ ix }: { ix: ContentIndex }) {
       if (status.report) applyReport(parseReport(await get('/api/report')), `agent ${base}`);
       const checks = await get('/api/checks');
       if (Array.isArray(checks)) n = applyChecks(checks.map(parseCheckJson));
-      setSt({ phase: 'ok', host: status.host, at: new Date().toLocaleTimeString(), msg: `${status.report ? 'report' : 'no report yet (run collect-all)'} · ${n} lab check(s)` });
+      setSt({ phase: 'ok', host: status.host, at: new Date().toLocaleTimeString(), live: !!status.live, msg: `${status.report ? 'report' : 'no report yet (run collect-all)'} · ${n} lab check(s)` });
+      setHw((s) => ({ ...s, agentAt: new Date().toISOString() }));
     } catch (e) {
       const m = e instanceof TypeError
         ? `Could not reach ${base}. Is "aina-hw serve" running and the SSH tunnel open? If it is, the browser may have blocked the request: allow local network access when asked, or start the agent with --allow-origin ${window.location.origin}.`
@@ -190,7 +192,7 @@ function AgentCard({ ix }: { ix: ContentIndex }) {
       setSt({ phase: 'error', msg: m });
       setAuto(false);
     }
-  }, [hw.agentUrl, applyChecks, applyReport]);
+  }, [hw.agentUrl, applyChecks, applyReport, setHw]);
   useEffect(() => {
     if (!auto) return;
     const t = setInterval(() => void pull(), 15000);
@@ -207,6 +209,7 @@ function AgentCard({ ix }: { ix: ContentIndex }) {
       <label className="mt-3 flex items-center gap-2 text-xs text-muted"><input type="checkbox" checked={auto} disabled={st.phase !== 'ok'} onChange={(e) => setAuto(e.target.checked)} className="accent-[var(--accent)]" />Refresh every 15 s (picks up new check results as you work)</label>
       <div role="status">
         {st.phase === 'ok' && <div className="mt-3 flex items-start gap-2 rounded-lg border border-accent/40 bg-accent-soft p-2.5 text-xs text-accent"><CheckCircle2 size={14} className="mt-px shrink-0" aria-hidden />Connected to {st.host} at {st.at}: {st.msg}</div>}
+        {st.phase === 'ok' && st.live && <Link to="/hw/live" className="mt-2 inline-flex items-center gap-1.5 text-xs text-data hover:underline"><Activity size={13} aria-hidden />Open the live counters</Link>}
         {st.phase === 'error' && <div className="mt-3 flex items-start gap-2 rounded-lg border border-danger/40 bg-danger/10 p-2.5 text-xs text-danger"><Unplug size={14} className="mt-px shrink-0" aria-hidden />{st.msg}</div>}
       </div>
     </Card>
@@ -433,8 +436,13 @@ function Checks({ ix }: { ix: ContentIndex }) {
               {r.passed ? <CheckCircle2 size={16} className="text-accent" aria-label="Passed" /> : <XCircle size={16} className="text-danger" aria-label="Not passed" />}
               <Link to={`/hw/labs/${r.lab}`} className="hover:text-accent" onClick={(e) => e.stopPropagation()}>{title(r.lab)}</Link>
             </span>
-            <span className="font-mono text-[11px] text-muted">{r.counts.PASS} pass · {r.counts.FAIL} fail · {r.counts.WARN} warn · {r.host ?? 'pasted'} · {r.finished.slice(0, 16).replace('T', ' ')}</span>
+            <span className="font-mono text-[11px] text-muted">{(r.tasks ?? []).length > 0 && `${r.tasks.filter((t) => t.n > 0 && t.status !== 'FAIL').length}/${r.tasks.filter((t) => t.n > 0).length} tasks ok · `}{r.counts.PASS} pass · {r.counts.FAIL} fail · {r.counts.WARN} warn · {r.host ?? 'pasted'} · {r.finished.slice(0, 16).replace('T', ' ')}</span>
           </summary>
+          {(r.tasks ?? []).length > 0 && (
+            <ul className="mt-3 flex flex-wrap gap-1.5 text-[11px]" aria-label="Tasks">
+              {r.tasks.map((t) => <li key={t.n}><Pill className={t.status === 'FAIL' ? 'text-danger' : t.status === 'PASS' ? 'text-accent' : t.status === 'WARN' ? 'text-warn' : ''}>{t.n === 0 ? 'Before you start' : `Task ${t.n}`}: {t.status === 'NONE' ? 'info' : t.status === 'NOTRUN' ? 'not run' : t.status.toLowerCase()}</Pill></li>)}
+            </ul>
+          )}
           <ul className="mt-3 space-y-1 font-mono text-xs">
             {r.results.map((x, i) => <li key={i} className={x.status === 'PASS' ? 'text-accent' : x.status === 'FAIL' ? 'text-danger' : x.status === 'WARN' ? 'text-warn' : 'text-muted'}>{x.status}: <span className="text-fg">{x.text}</span></li>)}
           </ul>

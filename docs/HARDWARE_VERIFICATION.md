@@ -4,7 +4,8 @@ What host tools really print and do, verified on real hardware on 2026-10-23. Co
 reference, quizzes, exams) and the Fabric Simulator's host-tool output must match the formats and behaviours
 recorded here; values in sample output stay illustrative. Anything not listed here is unverified: hedge it or
 verify it before stating it as fact. Parser fixtures from this run are in `labs/hw-toolkit/tests/captures/` and
-`frontend/tests/fixtures/`; the simulator's format tests are in `frontend/tests/sim-real-format.test.ts`.
+`frontend/tests/fixtures/`; the simulator's format tests are `frontend/tests/sim-golden.test.ts` (simulator output vs
+the real captures in `frontend/tests/fixtures/real/`, see docs/SIMULATOR.md) and `frontend/tests/sim-real-format.test.ts`.
 
 Hosts: 2x Dell R640, ESXi VMs, ConnectX-5 MCX556A-ECAT (VPI, EDR IB / 100GbE) via PCI passthrough, ports
 cabled back to back with 1 m DAC (MCP1600-E00AE30). Ubuntu 26.04.1 LTS, kernel 7.0.0-38-generic, Secure Boot ON
@@ -17,7 +18,8 @@ Two driver stacks were tested on the same hardware:
   signed `linux-modules-doca-ofed-3.4-generic` (load under Secure Boot; no DKMS).
 
 Raw captures (exact output, one file per command) were taken with a capture script on host A; they contain
-adapter and cable serial numbers and are not in the repository.
+adapter and cable serial numbers and are not in the repository as a whole. A curated subset without serial numbers
+is in `frontend/tests/fixtures/real/`.
 
 ## Verified facts
 
@@ -88,6 +90,11 @@ mlnx-ofed-kernel-utils). Not in Ubuntu's archive. INBOX equivalents:
 - `dcb ets show dev X` -> lines `willing off ets-cap 8 cbs off`, `tc-bw 0:0 ...`, `pg-bw ...`,
   `tc-tsa 0:vendor ...`, `prio-tc 0:1 1:0 2:2 3:3 4:4 5:5 6:6 7:7`, `reco-tc-bw`, `reco-tc-tsa 0:strict ...`, `reco-prio-tc`.
   NOTE default prio-tc mapping on mlx5: priority 0 -> TC1 and priority 1 -> TC0.
+- `dcb ets set dev X tc-tsa all:ets 6:strict tc-bw 0:10 1:5 2:5 3:60 4:5 5:5 6:0 7:10` (run on the DOCA host)
+  -> rc 0; `dcb ets show` then reads `tc-bw ... 6:100 ...` for the strict TC, and `mlnx_qos` shows the same ETS table.
+  With DOCA the default read `tc-bw` 100 for every TC (the inbox capture above read 0). Restore with
+  `tc-tsa all:vendor tc-bw all:0`; `tc-bw all:100` is rejected by dcb itself:
+  `Bandwidth percentages in tc-bw sum to 800%, expected 0%` (rc 1).
 - `mlnx_qos -i X` (DOCA, default):
   ```
   DCBX mode: OS controlled
@@ -339,6 +346,21 @@ mlnx-ofed-kernel-utils). Not in Ubuntu's archive. INBOX equivalents:
 - `setup-rdma-host.sh` ran clean on both hosts (installs rdmacm-utils, lldpd, ...); flags memlock 8192 KiB;
   `--set-memlock` fixes it after re-login.
 - `ethtool -m` needs sudo (closes the hw-05 open question in NEXT_STEPS).
+- Live counters (`aina-hw serve --live-remote`, `GET /api/live`, toolkit 1.1, DOCA, default QoS: global pause on,
+  PFC off): during a 15 s `ib_write_bw -q 4` A -> B, A's `tx_vport_rdma_unicast_bytes` rate read 81-83 Gb/s per 1 s
+  sample (perftest reported 80.12 Gb/s average) and B's `rx_vport_rdma_unicast_bytes` 81-82 Gb/s; `rx_prio3_bytes`
+  stayed 0 (untagged traffic, PCP trust). At ramp-up B sent 802.3x pauses (`tx_global_pause` ~1800/s over 2 s) and A
+  counted them (`rx_global_pause` ~3070/s, then 15/s, then 0); `out_of_sequence` and the CNP counters stayed 0. The
+  netdev `rx_bytes`/`tx_bytes` barely moved (offloaded RDMA). `ethtool -S` on the CX-5 (~7000 counters) takes about
+  12 ms, so a 1 s poll is cheap. Non-root can read every live counter (sysfs `hw_counters`, `ethtool -S`), the
+  Secure Boot EFI variable and `/sys/kernel/security/lockdown` (`[none] integrity confidentiality` with Secure Boot
+  off), and the rdma_cm configfs directory (`/sys/kernel/config/rdma_cm/` exists with no per-device entry by default).
+- umad order on the mixed host: `umad0` = `mlx5_0` (RoCE), `umad1` = `mlx5_1` (IB). IPoIB netdevs have sysfs
+  `type` 32 (ARPHRD_INFINIBAND).
+- Per-task checks (`TASK:` markers): hw-01, hw-02, hw-04 and hw-05 passed on both hosts with the RoCE profile
+  (hw-02: 98.0 Gb/s, hw-05: 89.1 Gb/s under 20 s load); hw-03 fails Tasks 2-4 as expected with the default QoS
+  (trust pcp, PFC off) and passes Task 5 (DOCA ECN switches on for priority 3). hw-01 `--task 8` reran only the
+  report task.
 
 ## InfiniBand mode (verified 2026-10-23)
 
@@ -435,3 +457,58 @@ UMAD port (mlx5_9:0)` / `Failed to open mlx5_9 port 0`.
   one row, `fe80:...` with empty IPv4 and DEV columns, VER `v1`, `n_gids_found=1`.
 - RDMA hw_counters on an IB port: the same mlx5 set minus the CNP/ECN counters (no `np_cnp_sent`,
   `rp_cnp_handled`, `np_ecn_marked_roce_packets`; `lifespan` appears).
+
+## InfiniBand operations and CPU collectives (verified 2026-10-23, labs hw-10 to hw-15)
+
+Same hosts and stack as the InfiniBand section (OpenSM 5.27.1 from DOCA, ibutils2 `IBDIAGNET 2.26.0`), plus Ubuntu's
+Open MPI 5.0.10 (`openmpi-bin`), DOCA's UCX 1.21.0, Ubuntu's UCC 1.7.0 and OSU Micro-Benchmarks 7.5.2 built from source.
+
+**SM failover (hw-10):**
+- `opensm -B -g <port GUID> -p <prio> -f <log> -J <pidfile>` works; `-F <file>` accepts a partial config file (two lines,
+  `sminfo_polling_timeout 1000` / `polling_retry_number 2`, took effect). `opensm -c <file>` writes every option with defaults:
+  `sm_priority 0`, `master_sm_priority 14`, `sminfo_polling_timeout 10000`, `polling_retry_number 4`, `sweep_interval 10`,
+  `force_link_speed_ext 31`, `routing_engine ar_updn`, `partition_config_file /etc/opensm/partitions.conf` (absent on DOCA).
+- Takeover with defaults after killing the master: 51, 54, 58 s (from the first failed `sminfo`); the standby's log shows five
+  `ERR 3111: Received MAD with error status = 0xC` (SubnGetResp(SMInfo)) ten seconds apart, then `Entering DISCOVERING state` /
+  `Entering MASTER state` ten seconds after the last. With the 1000 ms / 2 config: 3-4 s. Ports stayed ACTIVE; `sm_lid` changed.
+- The new master reports `priority 14` (master_sm_priority), so a returning SM with priority 14 stays `SMINFO_STANDBY` (the master
+  here also had the lower GUID). A returning SM with `-p 15` became master within about a second and the other dropped back to
+  standby with its configured 13.
+
+**IPoIB (hw-11):** with no partition file (or a `Default` line without `mtu=`) the IPv4 broadcast group is `Mtu 0x84` (2048) in
+`saquery -g` and the IPoIB MTU is **2044**; with `Default=0x7fff, ipoib, mtu=5 : ALL=full ;` it is 4092 (the interfaces followed
+the SM restart without intervention). `ip link set ibs64f1 mtu 9000` -> `RTNETLINK answers: Invalid argument`;
+`ping -M do -s 4065` -> `ping: sendmsg: Message too long`. `echo connected > /sys/class/net/ibs64f1/mode` -> `Invalid argument`,
+dmesg `ibs64f1: Connected Mode not supported from MLNX_OFED 23.07 and above` (inbox driver not tested). iperf3 over IPoIB:
+25-37 Gb/s one stream, 79-95 Gb/s with 4 (EDR); `ping` RTT 0.2-0.3 ms; `ib_write_lat` 0.95 us typical.
+
+**P_Keys (hw-12):** sysfs `pkeys/N` and `smpquery pkeys <lid>` (`128 pkeys capacity for this port`) show full (`0x8002`) and
+limited (`0x0002`) entries as configured. Child `ip link add ... type ipoib pkey 0x8003` comes up on a limited entry; a P_Key not in
+the table gives `NO-CARRIER`. Limited-limited: ping fails (neighbour `INCOMPLETE`), `ib_write_bw --pkey_index=3` ->
+`Failed status-transport retry counter exceeded (12): wr_id 0 syndrom 0x81`; the receiver's PortInfo `PkeyViolations` rises and
+saturates at 65535 (16-bit); `perfquery` error counters unchanged. Restarting OpenSM without `-P` rewrites the tables to `0xffff`
+only; stopping the SM leaves them as they are.
+
+**Triage (hw-13):** `ibdiagnet` exits 0 even when stages report errors (parse the Summary). `ibportstate -C mlx5_1 -P 1 -D 0 1
+espeed 1` + `reset` trains FDR (`Rate: 56`, ib_write_bw 52 Gb/s); OpenSM restores LinkSpeedExtEnabled on its next sweep but the
+link stays FDR until retrained; `iblinkinfo` shows `( Could be 25.78125 Gbps)`, ibdiagnet `-E- ... Unexpected actual link speed 14
+(... therefore final speed should be 25)`. `espeed 31` restores all supported speeds. `disable`: local `Down`/`Disabled`, peer
+`Down`/`Polling`; ibdiagnet on the peer: `-E- Failed to initialize - ... Ibis could't find viable ports in the system`, fatal.
+SM stopped + `reset`: both ends `Initialize/LinkUp` in iblinkinfo, LIDs kept, ibdiagnet `Link logical state is INI` and
+`Not found master subnet manager in fabric`, while the reset host's own `ibstat` said `State: Down` (driver view lagging).
+`saquery --src-to-dst 1:2` path record: `mtu 0x85`, `rate 0x90`, `pkt_life 0x92`. ibdiagnet `--ls 50` flags the EDR link.
+
+**MPI/UCX (hw-14/15):** DOCA 3.4's `openmpi` package (`/usr/mpi/gcc/openmpi-5.0.10rc2...`) has no UCX PML (`ompi_info`: pml cm,
+monitoring, ob1, v only). Ubuntu's `openmpi-bin` installs next to DOCA (its `libucx0` dependency is satisfied by DOCA's `ucx`,
+`Provides: libucx0`) and has `MCA pml: ucx`, `MCA osc: ucx`, `MCA coll: ucc`. `mpirun --version` prints the PRRTE "Sorry! You
+were supposed to get help about: version" text (help files missing). UCC needs `libucc-dev` (unversioned plugin names), else
+`UCC ERROR no CL components were found in the ucc modules dir`. `osu_* --help` aborts with `*** buffer overflow detected ***`
+(Ubuntu 26.04 build); the benchmarks themselves run. `ucx_perftest` MB/s = MiB/s (source divides by 1024*1024; latency tests
+report half the round trip). OSU MB/s = 10^6. Measured (1 rank per host): RC 0.92 us RoCE / 0.80-0.88 us IB, ~11-12 GB/s;
+UD 1.0-1.2 us, ~8.5 GB/s; DC 2.8 us on RoCE, 1.2 us on IB; `UCX_IB_PATH_MTU=1024` ~5-7% lower bandwidth, `=999` makes the UCX
+PML fail (`Failed to create UCP worker`); TCP (ob1/tcp btl) 14-15 us, ~6 GB/s; `--mca pml ucx -x UCX_TLS=tcp,self` fails
+(`No components were able to be opened in the pml framework`, pml_ucx_tls). Allreduce on CPUs: 2 ranks busbw peak ~4.5-4.7 GB/s;
+8 ranks (4/host) ring vs recursive doubling crossover between 64 and 256 KiB, 2.3x at 64 MiB; 8 ranks on one host as slow as across
+hosts at 16-64 MiB (endpoint-bound); `--mca coll_ucc_enable 1` alone leaves `han` in charge, `coll_ucc_priority 100` makes UCC run
+(`running ucc allreduce`), ~4x faster at 1 MiB. Open MPI's ring falls back to recursive doubling when count < ranks
+(`coll_base_allreduce.c`).

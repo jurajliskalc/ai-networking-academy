@@ -1,0 +1,8 @@
+### cmd: ethtool -a $N
+### ----
+Pause parameters for ens64f0np0:
+Autonegotiate:	off
+RX:		on
+TX:		on
+
+### rc=0

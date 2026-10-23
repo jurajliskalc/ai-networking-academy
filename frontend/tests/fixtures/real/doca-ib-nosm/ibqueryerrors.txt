@@ -1,0 +1,4 @@
+### cmd: sudo ibqueryerrors -C mlx5_1 -P 1
+### ----
+ibwarn: [7738] sa_get_handle: No SM/SA found on port :1
+### rc=0

@@ -311,6 +311,19 @@ body {
 .callout-warning { border-left-color: var(--warn); } .callout-warning .callout-title { color: var(--warn); }
 .callout-analogy { border-left-color: var(--analogy); } .callout-analogy .callout-title { color: var(--analogy); }
 .callout-interview { border-left-color: var(--interview); } .callout-interview .callout-title { color: var(--interview); }
+/* Verified on real hardware: a filled badge, so it reads as evidence rather than advice. */
+.callout-verified { border-left-color: var(--accent); background: linear-gradient(90deg, var(--accent-soft), var(--panel) 60%); }
+.callout-verified .callout-title { justify-content: space-between; flex-wrap: wrap; }
+.verified-badge { display: inline-flex; gap: .4rem; align-items: center; background: var(--accent); color: var(--on-accent); border-radius: 999px; padding: .18rem .6rem .18rem .5rem; }
+.prose .verified-all, .verified-all { font-size: .72rem; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--data); }
+
+/* Driver-stack variant groups and real captures (src/stackMarkdown.ts). */
+.stack-group { border: 1px solid var(--border); border-radius: 12px; background: var(--panel-2); padding: .45rem .5rem .5rem; }
+.stack-group-bar { display: flex; justify-content: flex-end; padding: 0 .1rem .4rem; }
+.stack-group > [data-stack]:not([hidden]) ~ [data-stack]:not([hidden]) { margin-top: .5rem; }
+.stack-group pre { margin: 0; }
+.capture { margin: 0; }
+.capture-label { display: flex; gap: .35rem; align-items: center; font-family: var(--font-mono); font-size: .68rem; letter-spacing: .04em; color: var(--accent); margin-bottom: .3rem; }
 
 /* highlight.js tokens (works on the always-dark code background) */
 .hljs-comment, .hljs-quote { color: #8190a6; font-style: italic; }

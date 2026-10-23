@@ -1,0 +1,6 @@
+### cmd: ssh -n 192.0.2.12 "pkill -x ib_write_bw; nohup timeout 40 ib_write_bw -d mlx5_1 -i 1 -F --report_gbits >/tmp/srvib.txt 2>&1 </dev/null &"; sleep 2; ib_write_bw -d mlx5_1 -i 1 -F --report_gbits 192.0.2.12 2>&1 | grep -v libionic
+### ----
+ Port number 1 state is Init
+ Couldn't set the link layer
+ Couldn't get context for the device
+### rc=0

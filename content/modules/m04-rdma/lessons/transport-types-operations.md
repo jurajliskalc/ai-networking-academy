@@ -158,9 +158,20 @@ transport-matrix
 
 `ibv_devinfo -v` prints the device's capabilities, including limits that matter for transport choice:
 
-```text
+```text stack=inbox real
+$ ibv_devinfo -v -d rocep3s0f0 | grep -E "max_qp:|max_qp_wr|max_msg_sz|max_qp_rd_atom|max_srq:|atomic_cap"
+	max_qp:				262144
+	max_qp_wr:			8192
+	max_qp_rd_atom:			16
+	atomic_cap:			ATOMIC_HCA (1)
+	max_srq:			8388608
+			max_msg_sz:		0x40000000
+```
+
+```text stack=doca real
 $ ibv_devinfo -v -d mlx5_0 | grep -E "max_qp:|max_qp_wr|max_msg_sz|max_qp_rd_atom|max_srq:|atomic_cap"
-	max_qp:				131072
+libibverbs: Warning: couldn't load driver 'libionic-rdmav59.so': libionic-rdmav59.so: cannot open shared object file: No such file or directory
+	max_qp:				262144
 	max_qp_wr:			32768
 	max_qp_rd_atom:			16
 	atomic_cap:			ATOMIC_HCA (1)
@@ -168,7 +179,7 @@ $ ibv_devinfo -v -d mlx5_0 | grep -E "max_qp:|max_qp_wr|max_msg_sz|max_qp_rd_ato
 			max_msg_sz:		0x40000000
 ```
 
-*(Illustrative values; they vary with adapter, firmware and configuration.)* `max_qp` is a hard limit, not a performance guarantee — performance usually degrades well before you reach it. `max_qp_rd_atom` bounds how many RDMA Reads you can keep in flight per QP.
+*(Values vary with adapter, firmware and driver stack: on this ConnectX-5 the same card reported `max_qp_wr` 8192 with the distribution's stack and 32768 with DOCA-OFED.)* `max_qp` is a hard limit, not a performance guarantee — performance usually degrades well before you reach it. `max_qp_rd_atom` bounds how many RDMA Reads you can keep in flight per QP.
 
 ### Exercising each transport
 
@@ -181,13 +192,23 @@ $ ibv_uc_pingpong -d mlx5_0 -g 3          $ ibv_uc_pingpong -d mlx5_0 -g 3 10.0.
 $ ibv_ud_pingpong -d mlx5_0 -g 3          $ ibv_ud_pingpong -d mlx5_0 -g 3 10.0.0.12
 ```
 
-A successful RC run on RoCE prints something like this on the client (illustrative):
+A successful RC run on RoCE prints this on the client (two 100G ConnectX-5 hosts back to back; the server is 10.10.10.2):
 
-```text
-  local address:  LID 0x0000, QPN 0x000048, PSN 0x7bb49d, GID ::ffff:10.0.0.11
-  remote address: LID 0x0000, QPN 0x000183, PSN 0xa6939e, GID ::ffff:10.0.0.12
+```text stack=inbox real
+$ ibv_rc_pingpong -d rocep3s0f0 -g 3 10.10.10.2
+  local address:  LID 0x0000, QPN 0x000048, PSN 0x7bb49d, GID ::ffff:10.10.10.1
+  remote address: LID 0x0000, QPN 0x000183, PSN 0xa6939e, GID ::ffff:10.10.10.2
 8192000 bytes in 0.01 seconds = 11330.57 Mbit/sec
 1000 iters in 0.01 seconds = 5.78 usec/iter
+```
+
+```text stack=doca real
+$ ibv_rc_pingpong -d mlx5_0 -g 3 10.10.10.2
+libibverbs: Warning: couldn't load driver 'libionic-rdmav59.so': libionic-rdmav59.so: cannot open shared object file: No such file or directory
+  local address:  LID 0x0000, QPN 0x000047, PSN 0xb3948c, GID ::ffff:10.10.10.1
+  remote address: LID 0x0000, QPN 0x000086, PSN 0x519117, GID ::ffff:10.10.10.2
+8192000 bytes in 0.01 seconds = 11663.29 Mbit/sec
+1000 iters in 0.01 seconds = 5.62 usec/iter
 ```
 
 The default run is 1000 iterations of 4 KiB, so the Mbit/sec figure is a connectivity check, not a benchmark. Both sides must use the same kind of GID: a client started with `-g 0` (link-local) against a server on `-g 3` failed with `client read/write: No space left on device` and `Couldn't read/write remote address` on a ConnectX-5 test setup. On native InfiniBand the `-g` option is not needed. perftest (see `perftest-benchmarking`) selects the transport with `-c` (for example `ib_send_bw -c UD`), and only offers combinations the transport supports: you cannot run `ib_read_bw` over UC or UD.

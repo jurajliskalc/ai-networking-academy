@@ -8,6 +8,8 @@ export interface RdmaPort {
   port: number; state: string | null; phys_state: string | null; rate: string | null; rate_gbps: number | null;
   link_layer: string | null; lid: number | null; sm_lid: number | null; netdev: string | null; active_mtu: number | null;
   gids: Gid[]; counters: Record<string, number>; hw_counters: Record<string, number>;
+  /** rdma_cm configfs defaults (toolkit 1.1+): null without rdma_cm configfs; configured=false means kernel defaults (ToS 0). */
+  rdma_cm?: { configured: boolean; default_roce_tos: number | null; default_roce_mode: string | null } | null;
 }
 export interface RdmaDevice {
   name: string; node_type: string | null; fw_ver: string | null; board_id: string | null; hca_type: string | null;
@@ -18,16 +20,22 @@ export interface RdmaDevice {
 export interface Qos { source: string; trust: string | null; pfc_enabled: number[] | null; dscp_prio: Record<string, number> | null }
 export interface Netdev {
   name: string; mtu: number | null; operstate: string | null; speed_mbps: number | null; mac?: string | null; ipv4: string[];
+  /** IPoIB interface (toolkit 1.1+): Ethernet QoS fields are null for it. */
+  ipoib?: boolean;
   driver?: string; driver_version?: string; firmware?: string; bus?: string;
   pause: Record<string, boolean> | null; qos: Qos | null; ecn: Record<string, number[]> | null;
   stats: Record<string, number>; lldp: { system: string | null; port: string | null } | null;
 }
 export interface HostFacts {
   schema: string; toolkit: string; collected: string; role: string | null; redacted?: boolean;
-  host: { hostname: string | null; kernel: string | null; os: string | null; arch?: string; cpu: string | null; numa_nodes: number | null; mem_gb: number | null; cmdline_flags: string[]; governor: string | null; memlock: string | null };
+  host: { hostname: string | null; kernel: string | null; os: string | null; arch?: string; cpu: string | null; numa_nodes: number | null; mem_gb: number | null; cmdline_flags: string[]; governor: string | null; memlock: string | null;
+    /** toolkit 1.1+: EFI Secure Boot state and the active kernel lockdown mode ('none', 'integrity', 'confidentiality'). */
+    secure_boot?: boolean | null; lockdown?: string | null };
   software: { rdma_core: string | null; perftest: string | null; ofed: string | null; nvidia_driver: string | null; python?: string; tools: Record<string, boolean> };
   modules: Record<string, boolean>;
   rdma: RdmaDevice[];
+  /** umad devices in kernel order (toolkit 1.1+): umad tools without -C/-P open the first. */
+  umad?: { name: string; ibdev: string | null; port: number | null }[];
   netdevs: Netdev[];
   gpus: { index: number; name: string; pci: string; driver: string }[];
   gpu_topo: string | null;
@@ -76,6 +84,11 @@ export const gidToIpv4 = (gid: string) => {
 export type Severity = 'error' | 'warn' | 'info';
 export interface Finding { id: string; severity: Severity; title: string; detail: string; where?: string; fix?: string; lesson?: string; lab?: string }
 
+/** An InfiniBand port without a subnet manager reports LID 65535 (0xffff), not 0. */
+export const UNASSIGNED_LID = 0xffff;
+const IB_INIT_DETAIL = 'The link trained (physical state LinkUp) but no subnet manager has configured the port: its LID is 65535 (0xffff, unassigned) and its SM LID 0. Verbs traffic cannot start (perftest prints "Port number 1 state is Init"), and sminfo times out.';
+const IB_INIT_FIX = 'Run one subnet manager on the fabric. With NVIDIA DOCA the unit is opensmd.service (sudo systemctl start opensmd); opensm -B -g <port GUID> binds it to one port. The InfiniBand bring-up lab walks through it.';
+
 const ERROR_COUNTERS = ['symbol_error', 'link_error_recovery', 'port_rcv_errors','local_link_integrity_errors', 'excessive_buffer_overrun_errors'];
 const PHY_ERRORS = ['rx_crc_errors_phy', 'rx_symbol_err_phy'];
 
@@ -107,11 +120,23 @@ export function review(r: Report, p: Profile, now = new Date()): Finding[] {
       add({ id: 'profile-dev', severity: 'warn', where, title: `Profile device ${p[`${h.role}_RDMA_DEV`]} not found`, detail: `The host has ${h.rdma.map((d) => d.name).join(', ')}; the review used ${pid}.`, fix: `Set ${h.role}_RDMA_DEV on the Connect page.` });
     if (port.state !== 'ACTIVE') {
       const ib = port.link_layer === 'InfiniBand';
-      add({ id: 'port-state', severity: 'error', where, title: `${pid} is ${port.state ?? 'unknown'}`, detail: ib && port.state === 'INIT' ? 'An InfiniBand port stays in INIT until a subnet manager configures it.' : `Physical state ${port.phys_state ?? 'unknown'}.`, fix: ib && port.state === 'INIT' ? 'Start a subnet manager (opensm on one host, or the switch SM).' : 'Check the cable, the peer port and the link speed/FEC settings on both ends.', lesson: ib ? 'subnet-manager-routing' : 'link-layer-ber-fec', lab: ib ? 'hw-09-infiniband-bringup' : 'hw-05-link-health-optics' });
+      const init = ib && port.state === 'INIT';
+      add({ id: 'port-state', severity: 'error', where, title: `${pid} is ${port.state ?? 'unknown'}`, detail: init ? IB_INIT_DETAIL : `Physical state ${port.phys_state ?? 'unknown'}.${ib && /polling/i.test(port.phys_state ?? '') ? ' POLLING means the port keeps trying to train: no link partner yet (peer down, cable).' : ''}`, fix: init ? IB_INIT_FIX : 'Check the cable, the peer port and the link speed/FEC settings on both ends.', lesson: ib ? 'subnet-manager-routing' : 'link-layer-ber-fec', lab: ib ? 'hw-09-infiniband-bringup' : 'hw-05-link-health-optics' });
     }
     if (port.link_layer && port.link_layer !== fabric)
       add({ id: 'link-layer', severity: 'error', where, title: `${pid} runs ${port.link_layer}, profile says ${fabric}`, detail: 'VPI adapters can run either; the port type is a persistent firmware setting.', fix: 'Change FABRIC in the profile, or set the port type with mlxconfig (LINK_TYPE_P1) and reset the NIC.', lesson: 'nics-dpus-supernics' });
-    if (port.link_layer === 'InfiniBand' && port.state === 'ACTIVE' && (!port.sm_lid || !port.lid))
+    // InfiniBand ports other than the lab port: INIT means no SM; an IPoIB netdev that is down.
+    for (const d of h.rdma) for (const x of d.ports) {
+      if (x === port || x.link_layer !== 'InfiniBand') continue;
+      if (x.state === 'INIT')
+        add({ id: 'ib-init', severity: p.FABRIC === 'ib' ? 'warn' : 'info', where, title: `${d.name}/${x.port} (InfiniBand) is INIT: no subnet manager`, detail: IB_INIT_DETAIL, fix: IB_INIT_FIX, lesson: 'subnet-manager-routing', lab: 'hw-09-infiniband-bringup' });
+    }
+    for (const n of h.netdevs) {
+      const ibPort = h.rdma.flatMap((d) => d.ports).find((x) => x.netdev === n.name && x.link_layer === 'InfiniBand');
+      if (n.ipoib && n.operstate === 'down' && ibPort && (p.FABRIC === 'ib' || ibPort === port))
+        add({ id: 'ipoib-down', severity: 'info', where, title: `IPoIB interface ${n.name} is down`, detail: 'An IPoIB netdev stays DOWN until it is configured. Verbs traffic (perftest, NCCL over IB verbs) and the umad tools (ibstat, sminfo, perfquery) do not need it; IP over the InfiniBand fabric does, including rdma_cm address resolution (rping, ib_write_bw -R) to an IPoIB address.', fix: `sudo ip link set ${n.name} up, then give it an address (netplan), if you want IP over InfiniBand.`, lab: 'hw-09-infiniband-bringup' });
+    }
+    if (port.link_layer === 'InfiniBand' && port.state === 'ACTIVE' && (!port.sm_lid || !port.lid || port.lid === UNASSIGNED_LID))
       add({ id: 'ib-no-sm', severity: 'error', where, title: `${pid} has no LID or SM LID`, detail: 'No subnet manager has assigned addresses.', fix: 'Run one subnet manager on the fabric.', lesson: 'subnet-manager-routing' });
     const pc = dev.pcie;
     if (pc.speed && pc.max_speed && pc.width && pc.max_width && (pc.speed < pc.max_speed || pc.width < pc.max_width))
@@ -141,7 +166,9 @@ export function review(r: Report, p: Profile, now = new Date()): Finding[] {
             add({ id: 'pfc', severity: q.pfc_enabled.length ? 'warn' : 'info', where, title: q.pfc_enabled.length ? `PFC on priorities ${q.pfc_enabled.join(', ')}, profile says ${p.ROCE_PRIO}` : 'PFC is off', detail: q.pfc_enabled.length ? 'PFC must be enabled on the same priority at both ends of every link.' : 'Fine for Tier 1 basics; the lossless labs enable it.', lesson: 'pfc-priority-flow-control', lab: 'hw-03-host-qos-pfc-ecn' });
           if (q.dscp_prio && q.dscp_prio[p.ROCE_DSCP] !== undefined && String(q.dscp_prio[p.ROCE_DSCP]) !== p.ROCE_PRIO)
             add({ id: 'dscp-map', severity: 'warn', where, title: `DSCP ${p.ROCE_DSCP} maps to priority ${q.dscp_prio[p.ROCE_DSCP]}`, detail: `RoCE traffic marked DSCP ${p.ROCE_DSCP} should land in lossless priority ${p.ROCE_PRIO}.`, lesson: 'qos-trust-and-mapping', lab: 'hw-03-host-qos-pfc-ecn' });
+          flowControl(nd, q, p, where, add);
         }
+        roceTos(dev.name, port, nd, p, where, add);
         if (nd.ecn?.roce_np && !nd.ecn.roce_np.includes(Number(p.ROCE_PRIO)))
           add({ id: 'ecn-np', severity: 'warn', where, title: `RoCE ECN (notification point) off for priority ${p.ROCE_PRIO}`, detail: 'Without ECN reaction, congestion is handled by PFC alone, which spreads pauses through the fabric.', lesson: 'ecn-and-dcqcn', lab: 'hw-03-host-qos-pfc-ecn' });
       }
@@ -159,8 +186,16 @@ export function review(r: Report, p: Profile, now = new Date()): Finding[] {
       add({ id: 'link-downed', severity: 'info', where, title: `${pid} link went down ${port.counters.link_downed} time(s)`, detail: 'Expected after a peer reboot, a cable reseat or a switch reload. If it grows while nothing was touched, the link is flapping.', lesson: 'link-layer-ber-fec', lab: 'hw-05-link-health-optics' });
     const seq = ['out_of_sequence', 'packet_seq_err'].filter((k) => (port.hw_counters[k] ?? 0) > 0);
     if (seq.length) add({ id: 'seq-errors', severity: 'info', where, title: `${pid} has seen packet loss`, detail: seq.map((k) => `${k}=${port.hw_counters[k]}`).join(', ') + ': gaps in packet sequence numbers at this receiver. Expected on a lossy fabric; on a lossless one it points at drops.', lesson: 'lossless-misconfigurations' });
-    if (h.host.memlock && h.host.memlock !== 'unlimited')
-      add({ id: 'memlock', severity: 'warn', where, title: `Locked-memory limit is ${h.host.memlock} KiB`, detail: 'RDMA pins registered memory; large perftest or NCCL runs can fail to register buffers.', fix: 'setup-rdma-host.sh --set-memlock, then log in again.' });
+    if (h.host.memlock && h.host.memlock !== 'unlimited') {
+      const kib = Number.parseInt(h.host.memlock, 10);
+      const small = Number.isFinite(kib) && kib <= 8192;
+      add({ id: 'memlock', severity: small ? 'warn' : 'info', where, title: `Locked-memory limit is ${h.host.memlock} KiB`,
+        detail: small
+          ? 'RDMA pins every registered buffer, and the limit counts against it. With 8192 KiB (a common default), ib_write_bw -a (message sizes up to 8 MiB) fails on the reference hosts: "Couldn\'t allocate MR" (DOCA\'s perftest adds "with error=12"), then "failed to create mr", "Failed to create MR" and " Couldn\'t create IB resources". Large NCCL runs hit the same limit.'
+          : 'RDMA pins every registered buffer, and the limit counts against it. Whether this is enough depends on message sizes and queue depths (not verified for this value); unlimited takes the question away.',
+        fix: 'setup-rdma-host.sh --set-memlock (memlock unlimited), then log in again.', lab: 'hw-01-inventory-baseline' });
+    }
+    hostPlatform(h, where, add);
     if (h.host.governor && h.host.governor !== 'performance')
       add({ id: 'governor', severity: 'info', where, title: `CPU governor is ${h.host.governor}`, detail: 'perftest warns about CPU frequency scaling; latency results are noisier when cores clock down.' });
     if (h.gpus.length && !h.modules.nvidia_peermem && !h.modules.nv_peer_mem)
@@ -177,18 +212,90 @@ export function review(r: Report, p: Profile, now = new Date()): Finding[] {
   if (rates.length > 1) add({ id: 'rate-mismatch', severity: 'warn', title: 'Port rates differ between hosts', detail: live.map((x) => `${hostLabel(x.h)} ${x.dp!.port.rate}`).join(', ') + '. Tests run at the slowest rate; a port that came up at a lower speed than expected often has a cable or FEC problem.', lesson: 'link-layer-ber-fec' });
   const pfcs = distinct(live.map((x) => (x.nd?.qos?.pfc_enabled ? x.nd.qos.pfc_enabled.join(',') || 'none' : null)));
   if (pfcs.length > 1) add({ id: 'pfc-mismatch', severity: 'error', title: 'PFC priorities differ between hosts', detail: live.map((x) => `${hostLabel(x.h)} [${x.nd?.qos?.pfc_enabled?.join(',') || 'off'}]`).join(', ') + '. A NIC that pauses a priority its peer never pauses gives you a link that is lossless in one direction only.', lesson: 'pfc-priority-flow-control', lab: 'hw-03-host-qos-pfc-ecn' });
+  // Flow control must be the same kind on both ends (PFC priorities are compared above).
+  const fc = live.filter((x) => x.nd && !x.nd.ipoib && x.nd.pause && x.nd.qos?.pfc_enabled && !x.nd.qos.pfc_enabled.length);
+  if (p.FABRIC === 'roce' && fc.length === live.length && live.length > 1 && distinct(fc.map((x) => (x.nd!.pause!.rx || x.nd!.pause!.tx ? 'global' : 'none'))).length > 1)
+    add({ id: 'flow-control-mismatch', severity: 'warn', title: 'Flow control differs between hosts', detail: fc.map((x) => `${hostLabel(x.h)} ${x.nd!.name}: global pause ${x.nd!.pause!.rx ? 'RX on' : 'RX off'}/${x.nd!.pause!.tx ? 'TX on' : 'TX off'}`).join(', ') + '. With PFC off, one end sends 802.3x pause frames the other never sends: the link is flow-controlled in one direction only.', fix: 'Use the same mode on both ends: PFC on the RoCE priority for the lossless labs (hw-03), or the default global pause (ethtool -A <if> rx on tx on) on both.', lesson: 'pfc-priority-flow-control', lab: 'hw-03-host-qos-pfc-ecn' });
+  // Classification must match: same trust, and the RoCE DSCP in the same priority everywhere.
+  const anyPfc = live.some((x) => x.nd?.qos?.pfc_enabled?.length);
+  const trusts = distinct(live.map((x) => (x.nd?.ipoib ? null : x.nd?.qos?.trust ?? null)));
+  if (p.FABRIC === 'roce' && trusts.length > 1)
+    add({ id: 'trust-mismatch', severity: anyPfc ? 'error' : 'warn', title: 'Hosts trust different QoS fields', detail: live.map((x) => `${hostLabel(x.h)} ${x.nd?.name}: ${x.nd?.qos?.trust ?? '?'}`).join(', ') + `. A PCP-trusting host puts untagged RoCE in priority 0 whatever its DSCP. On the reference hosts, removing the DSCP entry on one side (trust back to pcp) moved the same tclass-106 traffic from rx_prio3_bytes to rx_prio0_bytes${anyPfc ? ', out of the lossless priority' : ''}.`, fix: 'Set DSCP trust on every host (hw-03 apply-qos.sh: mlnx_qos -i <if> --trust dscp; with iproute2 on mlx5 a dcb app dscp-prio entry switches the port to DSCP trust).', lesson: 'qos-trust-and-mapping', lab: 'hw-03-host-qos-pfc-ecn' });
+  const maps = live.filter((x) => x.nd?.qos?.trust === 'dscp' && x.nd.qos.dscp_prio?.[p.ROCE_DSCP] !== undefined);
+  if (p.FABRIC === 'roce' && distinct(maps.map((x) => x.nd!.qos!.dscp_prio![p.ROCE_DSCP])).length > 1)
+    add({ id: 'dscp-map-mismatch', severity: anyPfc ? 'error' : 'warn', title: `DSCP ${p.ROCE_DSCP} maps to different priorities on different hosts`, detail: maps.map((x) => `${hostLabel(x.h)} -> priority ${x.nd!.qos!.dscp_prio![p.ROCE_DSCP]}`).join(', ') + '. The same packets are lossless on one host and lossy on the other.', fix: `Map DSCP ${p.ROCE_DSCP} to priority ${p.ROCE_PRIO} everywhere (QoS lab).`, lesson: 'qos-trust-and-mapping', lab: 'hw-03-host-qos-pfc-ecn' });
   const byModel = new Map<string, Set<string>>();
   for (const h of hosts) for (const d of h.rdma) if (d.fw_ver) {
     const k = d.board_id || d.hca_type || 'unknown';
     byModel.set(k, (byModel.get(k) ?? new Set()).add(d.fw_ver));
   }
-  for (const [model, fw] of byModel) if (fw.size > 1) add({ id: 'fw-mismatch', severity: 'warn', title: `Firmware differs across ${model} NICs`, detail: `Versions: ${[...fw].join(', ')}. Mixed firmware makes results hard to compare and can differ in defaults.`, lesson: 'fabric-validation-burn-in' });
+  for (const [model, fw] of byModel) if (fw.size > 1) {
+    const vs = [...fw].sort(cmpVersion);
+    const latest = vs[vs.length - 1];
+    add({ id: 'fw-mismatch', severity: 'warn', title: `Firmware differs across ${model} NICs`, detail: `Versions: ${vs.join(', ')}. Mixed firmware makes results hard to compare and can differ in defaults. ibdiagnet flags it too: "... has FW version ${vs[0]} while the latest FW version for the same Devid/PSID on this fabric is ${latest}".`, fix: `Bring every ${model} card to the same release (${latest} is the newest here) with NVIDIA's firmware tools (MFT mlxfwmanager or flint), then reset the adapter as the tool tells you. Under kernel lockdown MFT cannot open the device: see the lockdown finding.`, lesson: 'fabric-validation-burn-in' });
+  }
   const ofed = distinct(hosts.map((h) => (h.software.ofed ? 'ofed' : 'inbox')));
   if (ofed.length > 1) add({ id: 'stack-mismatch', severity: 'warn', title: 'Driver stacks differ', detail: 'Some hosts run NVIDIA OFED/DOCA, others the inbox kernel drivers. Tools, counters and defaults differ between the two.' });
   const kernels = distinct(hosts.map((h) => h.host.kernel));
   if (kernels.length > 1) add({ id: 'kernel-mismatch', severity: 'info', title: 'Kernels differ between hosts', detail: kernels.join(', ') });
   const order: Severity[] = ['error', 'warn', 'info'];
   return f.sort((a, b) => order.indexOf(a.severity) - order.indexOf(b.severity));
+}
+
+/** Dotted numeric versions: 16.29.1016 < 16.34.1002. */
+export function cmpVersion(a: string, b: string): number {
+  const x = a.split(/[.-]/).map((n) => Number.parseInt(n, 10) || 0), y = b.split(/[.-]/).map((n) => Number.parseInt(n, 10) || 0);
+  for (let i = 0; i < Math.max(x.length, y.length); i++) if ((x[i] ?? 0) !== (y[i] ?? 0)) return (x[i] ?? 0) - (y[i] ?? 0);
+  return 0;
+}
+
+type Add = (x: Finding) => void;
+
+/** 802.3x global pause against PFC on one RoCE netdev (mlx5 behaviour from docs/HARDWARE_VERIFICATION.md). */
+function flowControl(nd: Netdev, q: Qos, p: Profile, where: string, add: Add) {
+  if (!nd.pause || !q.pfc_enabled || nd.ipoib) return;
+  const global = !!(nd.pause.rx || nd.pause.tx);
+  const pfcOn = q.pfc_enabled.length > 0;
+  const seen = ['rx_global_pause', 'tx_global_pause'].filter((k) => (nd.stats[k] ?? 0) > 0).map((k) => `${k}=${nd.stats[k]}`);
+  if (pfcOn && global)
+    add({ id: 'pfc-global-pause', severity: 'warn', where, title: `${nd.name} reports PFC and global pause both on`, detail: `On mlx5 they exclude each other: enabling PFC on any priority turns global 802.3x pause off (ethtool -a then shows RX off, TX off), and ethtool -A ${nd.name} rx on tx on while PFC is enabled silently clears PFC on all priorities (rc 0, no warning). Seeing both on means the two reads disagree, for example because a setting changed while the report was collected.`, fix: `Read both again (ethtool -a ${nd.name}; mlnx_qos -i ${nd.name} or dcb pfc show dev ${nd.name}). If PFC was cleared, re-apply it (hw-03 apply-qos.sh) and do not run ethtool -A rx on tx on afterwards.`, lesson: 'pfc-priority-flow-control', lab: 'hw-03-host-qos-pfc-ecn' });
+  else if (!pfcOn && global)
+    add({ id: 'global-pause', severity: 'info', where, title: `${nd.name}: global 802.3x pause on, PFC off`, detail: `The mlx5 default (ethtool -a: RX on, TX on). A pause frame then stops all traffic on the link, whatever its priority, so RoCE has no lossless class of its own; ethtool -S counts rx_global_pause / tx_global_pause instead of per-priority prioN_pause${seen.length ? ` (here: ${seen.join(', ')})` : ''}.`, fix: `For the lossless labs enable PFC on priority ${p.ROCE_PRIO} (hw-03): that turns global pause off automatically. Do not run ethtool -A rx on tx on afterwards: it silently clears PFC.`, lesson: 'pfc-priority-flow-control', lab: 'hw-03-host-qos-pfc-ecn' });
+  else if (!pfcOn && !global)
+    add({ id: 'no-flow-control', severity: 'warn', where, title: `${nd.name} has no link-level flow control`, detail: 'Global pause and PFC are both off, so RoCE runs lossy: a receiver short of buffer drops packets and RC recovers by retransmitting. On the reference hosts, RoCE in a priority with neither PFC nor global pause showed out_of_sequence +30 and np_cnp_sent +17 at the receiver in a 10 s run, with np_ecn_marked_roce_packets +0: CNPs caused by loss, not by ECN.', fix: `Enable PFC on priority ${p.ROCE_PRIO} on both hosts (hw-03), or restore the default global pause: sudo ethtool -A ${nd.name} rx on tx on.`, lesson: 'lossless-misconfigurations', lab: 'hw-03-host-qos-pfc-ecn' });
+}
+
+/** rdma_cm's per-port default ToS (configfs) against the profile's traffic class. */
+function roceTos(dev: string, port: RdmaPort, nd: Netdev, p: Profile, where: string, add: Add) {
+  const rc = port.rdma_cm;
+  if (!rc || port.link_layer !== 'Ethernet' || !p.TCLASS) return;
+  const tos = rc.configured ? rc.default_roce_tos : 0;
+  if (tos === null || String(tos) === p.TCLASS) return;
+  const lossless = !!nd.qos?.pfc_enabled?.includes(Number(p.ROCE_PRIO));
+  if (!rc.configured && !lossless) return; // kernel default on a lossy setup: nothing to align yet
+  add({ id: 'roce-tos', severity: 'warn', where, title: `rdma_cm default ToS on ${dev}/${port.port} is ${tos}${rc.configured ? '' : ' (kernel default)'}, profile traffic class is ${p.TCLASS}`,
+    detail: `Connections set up through rdma_cm that do not pick a ToS themselves (rping, ib_write_bw -R without -T) use this per-port default, so their packets carry DSCP ${tos >> 2} instead of ${p.ROCE_DSCP}${lossless ? ` and miss lossless priority ${p.ROCE_PRIO}` : ''}. Tools that set the traffic class per run (ib_write_bw --tclass, ib_write_bw -R -T ${p.TCLASS}) are not affected.`,
+    fix: `sudo mkdir -p /sys/kernel/config/rdma_cm/${dev} && echo ${p.TCLASS} | sudo tee /sys/kernel/config/rdma_cm/${dev}/ports/${port.port}/default_roce_tos (with NVIDIA's tools, cma_roce_tos -d ${dev} reads it back). Runtime only: configfs does not survive a reboot.`,
+    lesson: 'qos-trust-and-mapping', lab: 'hw-03-host-qos-pfc-ecn' });
+}
+
+/** Host-level platform facts: kernel lockdown, umad device order on mixed RoCE + InfiniBand hosts. */
+function hostPlatform(h: HostFacts, where: string, add: Add) {
+  const ld = h.host.lockdown;
+  if (ld && ld !== 'none')
+    add({ id: 'lockdown', severity: 'info', where, title: `Kernel lockdown is on (${ld})${h.host.secure_boot ? ', Secure Boot enabled' : ''}`,
+      detail: 'Lockdown blocks debugfs even for root (cat .../cc_params/rp_ai_rate: "Operation not permitted"), so the DCQCN parameters there are unreadable. MFT and mstflint cannot open the device (mlxconfig: "-E- Failed to open the device"; mstconfig: "crspace read (0xf0014) failed: Bad file descriptor"), and mlxlink -d mlx5_0 fails. On kernel 7.0 with MFT 4.37, mlxlink -d /dev/fwctl/fwctl0 works; mlxconfig and flint over fwctl do not.',
+      fix: "Use mlxlink -d /dev/fwctl/fwctl0 for link diagnostics and, with NVIDIA's stack, /sys/class/net/<if>/ecn/ for the DCQCN switches. Firmware changes (mlxconfig settings such as LINK_TYPE, firmware updates) need Secure Boot off or a signed MFT kernel module." });
+  const lls = new Set(h.rdma.flatMap((d) => d.ports.map((x) => x.link_layer)));
+  if (!lls.has('Ethernet') || !lls.has('InfiniBand')) return;
+  const first = h.umad?.[0]?.ibdev ?? h.rdma[0]?.name;
+  const dev = h.rdma.find((d) => d.name === first);
+  const ib = h.rdma.find((d) => d.ports.some((x) => x.link_layer === 'InfiniBand'));
+  if (!dev || !ib || dev.ports[0]?.link_layer !== 'Ethernet') return;
+  const ibPort = ib.ports.find((x) => x.link_layer === 'InfiniBand')!.port;
+  add({ id: 'umad-first', severity: 'info', where, title: `umad tools open ${dev.name} (RoCE) unless told otherwise`,
+    detail: `This host has RoCE and InfiniBand ports. Without -C/-P, sminfo, perfquery, iblinkinfo and the other umad tools open the first RDMA device, here the RoCE port ${dev.name}, and fail: "ibwarn: [pid] mad_rpc_open_port2: client_register for mgmt 1 failed" / "sminfo: iberror: failed: Failed to open '(null)' port '0'".`,
+    fix: `Always name the InfiniBand CA and port: sminfo -C ${ib.name} -P ${ibPort} (ibdiagnet uses -i ${ib.name} -p ${ibPort}). ibstat -l lists every CA, RoCE ones included.`, lab: 'hw-09-infiniband-bringup' });
 }
 
 export type Readiness = 'ready' | 'missing' | 'unknown' | 'self';

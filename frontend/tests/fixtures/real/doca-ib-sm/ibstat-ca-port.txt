@@ -1,0 +1,14 @@
+### cmd: ibstat mlx5_1 1
+### ----
+CA: 'mlx5_1'
+Port 1:
+State: Active
+Physical state: LinkUp
+Rate: 100
+Base lid: 1
+LMC: 0
+SM lid: 1
+Capability mask: 0x2651e84a
+Port GUID: 0x248a0703000011ef
+Link layer: InfiniBand
+### rc=0

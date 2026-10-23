@@ -47,7 +47,7 @@ export function stripMarkdown(md) {
     .replace(/^\s*\|?\s*:?-{2,}.*$/gm, ' ') // table separator rows
     .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
     .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
-    .replace(/\[!(NOTE|TIP|WARNING|ANALOGY|INTERVIEW)\]/gi, ' ')
+    .replace(/\[!(NOTE|TIP|WARNING|ANALOGY|INTERVIEW|VERIFIED)\]/gi, ' ')
     .replace(/^\s{0,3}#{1,6}\s+/gm, '')
     .replace(/^\s*>+\s?/gm, '')
     .replace(/^\s*(?:[-*+]|\d+[.)])\s+/gm, '')
@@ -146,7 +146,7 @@ export function buildSearchIndex(c) {
   for (const grp of c.commands ?? [])
     for (const cmd of grp.commands ?? [])
       one('command', `/reference?tab=commands&q=${encodeURIComponent(cmd.cmd)}`, cmd.cmd, grp.title ?? '', cmd.summary ?? '',
-        `${cmd.notes ?? ''} ${(cmd.tags ?? []).join(' ')} ${cmd.platform ?? ''}`);
+        `${cmd.notes ?? ''} ${(cmd.tags ?? []).join(' ')} ${cmd.platform ?? ''} ${Object.values(cmd.stacks ?? {}).map((v) => `${v?.cmd ?? ''} ${v?.notes ?? ''}`).join(' ')}`);
   for (const t of c.glossary ?? [])
     one('term', `/reference?tab=glossary&q=${encodeURIComponent(t.term)}`, t.term, t.expansion ?? '', t.definition ?? '');
   for (const w of c.widgets ?? []) one('widget', `/visualize/${w.id}`, w.title, '', w.summary ?? '');

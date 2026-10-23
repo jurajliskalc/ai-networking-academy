@@ -81,18 +81,43 @@ imports a result, so editing `"passed": true` into a file does not count.
 It works for the Tier 0 labs too (`sudo ./aina-hw check hol-soft-roce-perftest`): their check
 scripts print the same line format.
 
+**Per-task results.** The hardware lab checks group their lines by the lab's tasks: a `TASK: 3 ...`
+line starts the checks for Task 3, and the lines before the first one are the "Before you start"
+prerequisites. The result file then carries a `tasks` list (PASS, FAIL, WARN, SKIP per task, or
+NOTRUN when the run stopped at the prerequisites), the terminal prints one line per task, and the
+lab page shows which tasks are done and where to resume. To recheck only the task you just fixed:
+
+```bash
+./hw-toolkit/aina-hw check hw-03-host-qos-pfc-ecn --task 3
+```
+
+The prerequisites always run. A single-task result (`"only_task": 3`) updates that task on the lab
+page but never marks the whole lab verified: run the full check for that.
+
+### `aina-hw live`
+
+Prints the lab port's counters as rates once a second in the terminal (RDMA Gb/s from
+`tx/rx_vport_rdma_unicast_bytes`, PFC or global pause frames per second, CNPs sent and handled,
+out-of-sequence packets). `--once` prints one JSON snapshot instead. Read-only: it reads sysfs and
+`ethtool -S`.
+
 ### `aina-hw serve`
 
-A **read-only** HTTP agent for the Connect page. It serves three endpoints and nothing else:
+A **read-only** HTTP agent for the Connect page. It serves four GET endpoints and nothing else:
 
 | Endpoint | Returns |
 |---|---|
-| `GET /api/status` | toolkit version, host name, whether a report exists, number of check results |
+| `GET /api/status` | toolkit version, host name, whether a report exists, number of check results, whether live counters are on |
 | `GET /api/report` | the latest `results/aina-report.json` |
-| `GET /api/checks` | the newest check result per lab |
+| `GET /api/checks` | the newest check result per lab (and newer single-task results) |
+| `GET /api/live` | a timestamped snapshot of the lab ports' counters (see [Live](#/hw/live)) |
 
-It never runs commands on request: data only changes when you run `collect-all` or `check` in a
-terminal.
+It never runs commands on request: reports and results only change when you run `collect-all` or
+`check` in a terminal. `/api/live` reads the lab port named in `lab.env` (sysfs and `ethtool -S`;
+nothing in the request reaches a command), at most twice a second however many tabs poll it. With
+`--live-remote` it also reads host B (and C) through **one** long-lived SSH session per host while the
+Live view is open (sampled every 2 seconds, `--live-interval` to change), and closes the session a
+minute after the last request.
 
 ## Connecting the academy
 

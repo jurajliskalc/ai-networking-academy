@@ -1,0 +1,5 @@
+### cmd: mlnx_qos -i $N | grep -iE 'trust|enabled'
+### ----
+Priority trust state: dscp
+	enabled     0   0   0   1   0   0   0   0   
+### rc=0

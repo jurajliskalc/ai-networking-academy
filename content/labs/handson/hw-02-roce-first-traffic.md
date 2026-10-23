@@ -37,8 +37,10 @@ By the end you can:
 - Show the effect of path MTU, queue pairs and NUMA placement on the numbers.
 
 > [!NOTE]
-> Command output in this lab is **illustrative**. Your device names, firmware, GID indexes and
-> numbers will differ; that is the point of doing it on your own gear.
+> Blocks labelled **Real capture** were copied from the reference hosts (ConnectX-5, firmware 16.29,
+> Ubuntu 26.04, host A `10.10.10.1`, host B `10.10.10.2`) with the stack named in the label; use the
+> stack switch to see the inbox or DOCA version. Other output is **illustrative**. Your device names,
+> firmware, GID indexes and numbers will differ; that is the point of doing it on your own gear.
 
 ## Before you start
 
@@ -89,20 +91,31 @@ bytes + ICMP header 8 bytes = 28):
 ping -M do -s $(({{MTU}} - 28)) -c 3 {{B_IP}}
 ```
 
-Illustrative output with a 9000-byte MTU (the replies are 8972 bytes of payload plus the 8-byte ICMP header):
+Output with a 9000-byte MTU (the replies are 8972 bytes of payload plus the 8-byte ICMP header):
 
-```
-PING 192.168.50.12 (192.168.50.12) 8972(9000) bytes of data.
-8980 bytes from 192.168.50.12: icmp_seq=1 ttl=64 time=0.275 ms
-8980 bytes from 192.168.50.12: icmp_seq=2 ttl=64 time=0.229 ms
-8980 bytes from 192.168.50.12: icmp_seq=3 ttl=64 time=0.270 ms
+```text real=inbox
+PING 10.10.10.2 (10.10.10.2) 8972(9000) bytes of data.
+8980 bytes from 10.10.10.2: icmp_seq=1 ttl=64 time=0.275 ms
+8980 bytes from 10.10.10.2: icmp_seq=2 ttl=64 time=0.229 ms
+8980 bytes from 10.10.10.2: icmp_seq=3 ttl=64 time=0.270 ms
 
---- 192.168.50.12 ping statistics ---
+--- 10.10.10.2 ping statistics ---
 3 packets transmitted, 3 received, 0% packet loss, time 2034ms
+rtt min/avg/max/mdev = 0.229/0.258/0.275/0.020 ms
 ```
 
 If the **local** netdev MTU is smaller than the packet, `ping` refuses to send it and says
-`ping: sendmsg: Message too long` (the statistics then show `+1 errors`).
+`ping: sendmsg: Message too long` (the statistics then show `+1 errors`). One byte too many on the
+same hosts:
+
+```text real=inbox
+$ ping -M do -s 8973 -c 1 10.10.10.2
+PING 10.10.10.2 (10.10.10.2) 8973(9001) bytes of data.
+ping: sendmsg: Message too long
+
+--- 10.10.10.2 ping statistics ---
+1 packets transmitted, 0 received, +1 errors, 100% packet loss, time 0ms
+```
 
 **Why:** RDMA tools fail with timeouts that look like RDMA problems when the real problem is an IP
 path that drops large frames. A small ping succeeding proves very little; a full-size,
@@ -122,12 +135,34 @@ rdma link show
 ibv_devinfo -d {{A_RDMA_DEV}} -i {{RDMA_PORT}}     # host B: {{B_RDMA_DEV}}
 ```
 
-Illustrative excerpt:
+Output of `ibv_devinfo -d <dev> -i 1` on host A:
 
+```text stack=inbox real
+hca_id:	rocep3s0f0
+	transport:			InfiniBand (0)
+	fw_ver:				16.29.1016
+	node_guid:			248a:0703:0000:11ee
+	...
+	vendor_part_id:			4119
+	...
+		port:	1
+			state:			PORT_ACTIVE (4)
+			max_mtu:		4096 (5)
+			active_mtu:		4096 (5)
+			sm_lid:			0
+			port_lid:		0
+			port_lmc:		0x00
+			link_layer:		Ethernet
 ```
+
+```text stack=doca real
+libibverbs: Warning: couldn't load driver 'libionic-rdmav59.so': libionic-rdmav59.so: cannot open shared object file: No such file or directory
 hca_id:	mlx5_0
 	transport:			InfiniBand (0)
-	fw_ver:				28.39.1002
+	fw_ver:				16.29.1016
+	node_guid:			248a:0703:0000:11ee
+	...
+	vendor_part_id:			4119
 	...
 		port:	1
 			state:			PORT_ACTIVE (4)
@@ -140,7 +175,8 @@ hca_id:	mlx5_0
 ```
 
 The device name is `mlx5_0` with NVIDIA's OFED/DOCA stack; distribution rdma-core names it after
-the PCI address (for example `rocep59s0f0`). Use whatever `rdma link show` prints on your host.
+the PCI address (here `rocep3s0f0`, PCI `0000:03:00.0`). The `libionic` warning comes from DOCA's
+rdma-core and is harmless. Use whatever `rdma link show` prints on your host.
 `transport: InfiniBand (0)` is normal on RoCE too: it names the verbs transport, not the link.
 
 **Check:** `state PORT_ACTIVE`, `link_layer Ethernet`, and `active_mtu 4096`. The active MTU is the
@@ -167,6 +203,14 @@ Illustrative output:
 3   0000:0000:0000:0000:0000:ffff:c0a8:320b  RoCE v2      ens1f0np0
 ```
 
+> [!NOTE]
+> **With one IPv4 address on the netdev, GID index 3 was the RoCE v2 IPv4 entry on both stacks.**
+> On the ConnectX-5 reference hosts (inbox rdma-core 61 and DOCA-OFED 3.4) the table read: 0 = fe80
+> link-local RoCE v1, 1 = the same address as RoCE v2, 2 = IPv4-mapped RoCE v1, 3 = IPv4-mapped RoCE v2
+> (`show_gids` with DOCA: `n_gids_found=8` for the two ports). That is why `-x 3` and
+> `NCCL_IB_GID_INDEX=3` are so common, and also why they break: an extra IPv6 address or a VLAN
+> interface adds entries and can move the one you want.
+
 The entry you want is **RoCE v2** with the IPv4-mapped address `::ffff:` + your IP in hex
 (`c0a8:320b` is 192.168.50.11). Write down the index on each host. Your profile says
 `GID_INDEX={{GID_INDEX}}`; if your hosts disagree with it, update the profile. If you have NVIDIA's
@@ -191,14 +235,26 @@ Host A (client), with **A's** GID index and B's IP address:
 ibv_rc_pingpong -d {{A_RDMA_DEV}} -i {{RDMA_PORT}} -g {{GID_INDEX}} {{B_IP}}
 ```
 
-Illustrative client output:
+Client output on host A:
 
+```text stack=inbox real
+  local address:  LID 0x0000, QPN 0x000048, PSN 0x7bb49d, GID ::ffff:10.10.10.1
+  remote address: LID 0x0000, QPN 0x000183, PSN 0xa6939e, GID ::ffff:10.10.10.2
+8192000 bytes in 0.01 seconds = 11330.57 Mbit/sec
+1000 iters in 0.01 seconds = 5.78 usec/iter
 ```
-  local address:  LID 0x0000, QPN 0x0000b2, PSN 0x1f3c2a, GID ::ffff:192.168.50.11
-  remote address: LID 0x0000, QPN 0x0001c4, PSN 0x8d2e10, GID ::ffff:192.168.50.12
-8192000 bytes in 0.01 seconds = 6553.60 Mbit/sec
-1000 iters in 0.01 seconds = 10.00 usec/iter
+
+```text stack=doca real
+libibverbs: Warning: couldn't load driver 'libionic-rdmav59.so': libionic-rdmav59.so: cannot open shared object file: No such file or directory
+  local address:  LID 0x0000, QPN 0x000047, PSN 0xb3948c, GID ::ffff:10.10.10.1
+  remote address: LID 0x0000, QPN 0x000086, PSN 0x519117, GID ::ffff:10.10.10.2
+8192000 bytes in 0.01 seconds = 11663.29 Mbit/sec
+1000 iters in 0.01 seconds = 5.62 usec/iter
 ```
+
+If the two sides use GID entries of different types (for example `-g 0` against `-g 3`), the client
+fails with `client read/write: No space left on device`, which says nothing about GIDs; see the
+[RDMA connection failures lesson](#/lesson/rdma-connection-failures).
 
 **What happened:** the two sides exchanged QPN, PSN and GID over TCP port 18515, moved their RC
 queue pairs through INIT, RTR and RTS, then bounced 1000 messages with SEND/RECV. The usec/iter
@@ -218,13 +274,24 @@ rping -s -a {{B_IP}} -v -C 5          # host B: server, bound to its data IP
 rping -c -a {{B_IP}} -v -C 5          # host A: client
 ```
 
-Illustrative client output:
+Client output on host A (the `DISCONNECT EVENT` line came first in this capture: the order of lines
+from the tool's output streams is not guaranteed):
 
-```
+```text stack=inbox real
+client DISCONNECT EVENT...
 ping data: rdma-ping-0: ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqr
 ping data: rdma-ping-1: BCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqrs
 ...
+ping data: rdma-ping-4: EFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqrstuv
+```
+
+```text stack=doca real
+libibverbs: Warning: couldn't load driver 'libionic-rdmav59.so': libionic-rdmav59.so: cannot open shared object file: No such file or directory
 client DISCONNECT EVENT...
+ping data: rdma-ping-0: ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqr
+ping data: rdma-ping-1: BCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqrs
+...
+ping data: rdma-ping-4: EFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqrstuv
 ```
 
 `rping` is in the `rdmacm-utils` package, which distributions do not install by default (the setup
@@ -247,15 +314,68 @@ ib_write_bw -d {{B_RDMA_DEV}} -i {{RDMA_PORT}} -x {{GID_INDEX}} -F --report_gbit
 ib_write_bw -d {{A_RDMA_DEV}} -i {{RDMA_PORT}} -x {{GID_INDEX}} -F --report_gbits {{B_IP}}         # host A
 ```
 
-Illustrative result (100 GbE link; the client first prints a header with the device, QP and MTU
-settings and one `local address` / `remote address` pair with GIDs per QP):
+Client output on host A (100 GbE back to back). The header lists the device, QP and MTU settings,
+then one `local address` / `remote address` pair with GIDs per QP; a few header lines differ between
+the distro perftest and DOCA's:
 
-```
+```text stack=inbox real
+---------------------------------------------------------------------------------------
+                    RDMA_Write BW Test
+ Dual-port       : OFF		Device         : rocep3s0f0
+ Number of qps   : 1		Transport type : IB
+ Connection type : RC		Using SRQ      : OFF
+ PCIe relax order: ON		Lock-free      : OFF
+ ibv_wr* API     : ON		Using DDP      : OFF
+ TX depth        : 128
+ CQ Moderation   : 1
+ Mtu             : 4096[B]
+ Link type       : Ethernet
+ GID index       : 3
+ Max inline data : 0[B]
+ rdma_cm QPs	 : OFF
+ Data ex. method : Ethernet
+---------------------------------------------------------------------------------------
+ local address: LID 0000 QPN 0x004b PSN 0xd59040 RKey 0x184d00 VAddr 0x0071e7d1051000
+ GID: 00:00:00:00:00:00:00:00:00:00:255:255:10:10:10:01
+ remote address: LID 0000 QPN 0x0186 PSN 0xb9398 RKey 0x004300 VAddr 0x00784a42c47000
+ GID: 00:00:00:00:00:00:00:00:00:00:255:255:10:10:10:02
 ---------------------------------------------------------------------------------------
  #bytes     #iterations    BW peak[Gb/sec]    BW average[Gb/sec]   MsgRate[Mpps]
- 65536      5000             95.59              95.57  		     0.182279
+ 65536      5000             94.73              94.72  		     0.180663
 ---------------------------------------------------------------------------------------
 ```
+
+```text stack=doca real
+---------------------------------------------------------------------------------------
+                    RDMA_Write BW Test
+ Dual-port       : OFF		Device         : mlx5_0
+ Number of qps   : 1		Transport type : IB
+ Connection type : RC		Using SRQ      : OFF
+ PCIe relax order: ON		Lock-free      : OFF
+ ibv_wr* API     : ON		Using Enhanced Reorder      : OFF
+ TX depth        : 128
+ CQ Moderation   : 1
+ CQE Poll Batch  : Dynamic
+ Mtu             : 4096[B]
+ Link type       : Ethernet
+ GID index       : 3
+ Max inline data : 0[B]
+ rdma_cm QPs	 : OFF
+ Data ex. method : Ethernet
+ NUMA node       : 0
+---------------------------------------------------------------------------------------
+ local address: LID 0000 QPN 0x004b PSN 0x47e235 RKey 0x201dbc VAddr 0x00792fd34ab000
+ GID: 00:00:00:00:00:00:00:00:00:00:255:255:10:10:10:01
+ remote address: LID 0000 QPN 0x008a PSN 0xcaa37b RKey 0x0353bc VAddr 0x00790ff303a000
+ GID: 00:00:00:00:00:00:00:00:00:00:255:255:10:10:10:02
+---------------------------------------------------------------------------------------
+ #bytes     #iterations    BW peak[Gb/sec]    BW average[Gb/sec]   MsgRate[Mpps]
+ 65536      5000             95.73              95.73  		     0.182590
+---------------------------------------------------------------------------------------
+```
+
+`Transport type : IB` names the verbs transport, as in `ibv_devinfo`; `Link type : Ethernet` is the
+RoCE port.
 
 Compare with the port rate:
 
@@ -303,11 +423,14 @@ numactl --cpunodebind=$N --membind=$N ib_write_lat -d {{B_RDMA_DEV}} -x {{GID_IN
 numactl --cpunodebind=$N --membind=$N ib_write_lat -d {{A_RDMA_DEV}} -x {{GID_INDEX}} -a -F {{B_IP}}      # host A
 ```
 
-Illustrative excerpt:
+Excerpt from host A (inbox perftest, back to back, run without `numactl`):
 
-```
+```text real=inbox
  #bytes #iterations    t_min[usec]    t_max[usec]  t_typical[usec]    t_avg[usec]    t_stdev[usec]   99% percentile[usec]   99.9% percentile[usec]
- 2       1000          1.62           6.85         1.68     	       1.70        	0.06   		1.98    		6.85
+ 2       1000          1.07           3.40         1.10     	       1.11        	0.08   		1.24    		3.40
+ ...
+ 4096    1000          2.47           4.56         2.58     	       2.60        	0.07   		2.85    		4.56
+ ...
 ```
 
 **Read it:** report `t_typical` (the median) and the 99th/99.9th percentiles, not `t_min`. On a
@@ -347,8 +470,62 @@ grep -H . /sys/class/infiniband/{{B_RDMA_DEV}}/ports/{{RDMA_PORT}}/hw_counters/{
 ethtool -S {{B_NETDEV}} | grep -E 'vport_rdma_unicast|discard|pause' | head -20
 ```
 
-Recent iproute2 prints one counter per line under `link <dev>/<port>` (older versions put them all
-on one line). In `ethtool -S`, RDMA traffic shows up in the `*_vport_rdma_unicast_*` counters, not in
+```text stack=inbox real
+$ rdma statistic show link rocep3s0f0/1
+link rocep3s0f0/1
+    rx_write_requests 0
+    rx_read_requests 0
+    ...
+    out_of_sequence 0
+    duplicate_request 0
+    rnr_nak_retry_err 0
+    packet_seq_err 0
+    implied_nak_seq_err 0
+    local_ack_timeout_err 0
+    ...
+    np_ecn_marked_roce_packets 0
+    np_cnp_sent 0
+    rx_icrc_encapsulated 0
+```
+
+```text stack=doca real
+$ rdma statistic show link mlx5_0/1
+link mlx5_0/1
+    rx_write_requests 0
+    rx_read_requests 0
+    ...
+    out_of_sequence 0
+    duplicate_request 0
+    rnr_nak_retry_err 0
+    packet_seq_err 0
+    implied_nak_seq_err 0
+    local_ack_timeout_err 0
+    ...
+    np_ecn_marked_roce_packets 0
+    np_cnp_sent 0
+    rx_icrc_encapsulated 0
+```
+
+(Snapshots from host A; on the receiving side of a write test `rx_write_requests` rises.) Recent
+iproute2 prints one counter per line under `link <dev>/<port>` (older versions put them all on one
+line). The `ethtool -S` filter on host A, after some RDMA traffic (both stacks print the same names):
+
+```text real=inbox
+     rx_vport_rdma_unicast_packets: 5835
+     rx_vport_rdma_unicast_bytes: 361770
+     tx_vport_rdma_unicast_packets: 80000
+     tx_vport_rdma_unicast_bytes: 332400000
+     rx_pause_ctrl_phy: 0
+     tx_pause_ctrl_phy: 0
+     rx_discards_phy: 0
+     tx_discards_phy: 0
+     rx_prio0_discards: 0
+     ...
+     rx_global_pause: 0
+     rx_global_pause_duration: 0
+     tx_global_pause: 0
+     tx_global_pause_duration: 0
+``` In `ethtool -S`, RDMA traffic shows up in the `*_vport_rdma_unicast_*` counters, not in
 the ordinary netdev packet counters; per-priority pause counters (`rx_prio3_pause` ...) appear only
 for priorities with PFC enabled, so here (global pause on, PFC off) you see the `*_global_pause*`
 ones instead.

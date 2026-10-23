@@ -1,0 +1,10 @@
+### cmd: show_gids $D
+### ----
+DEV	PORT	INDEX	GID					IPv4  		VER	DEV
+---	----	-----	---					------------  	---	---
+mlx5_0	1	0	fe80:0000:0000:0000:268a:07ff:fe00:11ee			v1	ens64f0np0
+mlx5_0	1	1	fe80:0000:0000:0000:268a:07ff:fe00:11ee			v2	ens64f0np0
+mlx5_0	1	2	0000:0000:0000:0000:0000:ffff:0a0a:0a01	10.10.10.1  	v1	ens64f0np0
+mlx5_0	1	3	0000:0000:0000:0000:0000:ffff:0a0a:0a01	10.10.10.1  	v2	ens64f0np0
+n_gids_found=4
+### rc=0

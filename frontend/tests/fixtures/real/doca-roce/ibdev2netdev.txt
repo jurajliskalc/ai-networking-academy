@@ -1,0 +1,5 @@
+### cmd: ibdev2netdev
+### ----
+mlx5_0 port 1 ==> ens64f0np0 (Up)
+mlx5_1 port 1 ==> ens64f1np1 (Up)
+### rc=0

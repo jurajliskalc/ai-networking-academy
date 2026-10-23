@@ -1,0 +1,5 @@
+### cmd: sudo mlnx_qos -i $N --pfc 0,0,0,1; echo rc=$?
+### note: output of the trailing shell commands (echo rc=$?) removed
+### ----
+pfc list must have 8 items
+### rc=0

@@ -2,7 +2,7 @@ import { appearanceMenu, chooseMode, chooseScheme, content, expect, progressOf, 
 
 interface Index {
   glossary: { term: string; definition: string }[];
-  commands: { id: string; title: string; commands: { cmd: string; summary: string; notes?: string; tags?: string[] }[] }[];
+  commands: { id: string; title: string; commands: { cmd: string; summary: string; notes?: string; tags?: string[]; stacks?: Record<string, { cmd?: string; notes?: string }> }[] }[];
 }
 const ix = content<Index>('index.json');
 
@@ -33,13 +33,14 @@ test('reference: the search box filters commands and glossary terms', async ({ p
   const search = page.getByPlaceholder(/Search commands/);
   const all = ix.commands.flatMap((g) => g.commands);
   const needle = 'show_gids';
-  const want = all.filter((c) => [c.cmd, c.summary, c.notes ?? '', ...(c.tags ?? [])].join(' ').toLowerCase().includes(needle));
+  // The filter also matches the per-stack variants; a card shows the command of the chosen stack (default DOCA-OFED).
+  const want = all.filter((c) => [c.cmd, c.summary, c.notes ?? '', ...(c.tags ?? []), ...Object.values(c.stacks ?? {}).flatMap((v) => [v.cmd ?? '', v.notes ?? ''])].join(' ').toLowerCase().includes(needle));
   expect(want.length).toBeGreaterThan(0);
   const commandCodes = page.locator('main code.font-semibold');
   await expect(commandCodes).toHaveCount(all.length);
   await search.fill(needle);
   await expect(commandCodes).toHaveCount(want.length);
-  for (const c of want) await expect(page.locator('main').getByText(c.cmd, { exact: true }).first()).toBeVisible();
+  for (const c of want) await expect(page.locator('main').getByText(c.stacks?.doca?.cmd ?? c.cmd, { exact: true }).first()).toBeVisible();
   await search.fill('zzz-no-such-command');
   await expect(page.getByText('No commands match.')).toBeVisible();
 

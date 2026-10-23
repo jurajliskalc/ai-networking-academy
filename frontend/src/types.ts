@@ -82,7 +82,12 @@ export interface HandsOnLab {
 }
 export type Lab = SimLab | HandsOnLab;
 
-export interface CommandEntry { cmd: string; platform?: string; summary: string; example?: string; notes?: string; tags?: string[] }
+export type DriverStack = 'inbox' | 'doca';
+export interface CommandVariant { cmd?: string; example?: string; notes?: string; real?: boolean }
+/** `real`: the example is a real capture on the reference hardware with that stack; `stacks`: per-stack variants. */
+export interface CommandEntry { cmd: string; platform?: string; summary: string; example?: string; notes?: string; tags?: string[]; real?: DriverStack; stacks?: Partial<Record<DriverStack, CommandVariant>> }
+/** A `> [!VERIFIED]` callout, collected by build-content.mjs for the "Verified on hardware" page. */
+export interface VerifiedNote { kind: 'lesson' | 'lab' | 'guide'; id: string; page: string; module?: string; title: string; text: string; heading: string; anchor: string }
 export interface CommandGroup { id: string; title: string; description?: string; commands: CommandEntry[] }
 export interface GlossaryTerm { term: string; expansion?: string; definition: string; lesson?: string }
 
@@ -102,4 +107,5 @@ export interface ContentIndex {
   commands: CommandGroup[];
   glossary: GlossaryTerm[];
   hardware: HardwareMeta;
+  verifiedNotes: VerifiedNote[];
 }

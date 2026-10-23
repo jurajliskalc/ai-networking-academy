@@ -1,0 +1,30 @@
+### cmd: srv "ib_write_bw -d $D -x 3 -D 5 -F --report_gbits"; ib_write_bw -d $D -x 3 -D 5 -F --report_gbits $B
+### ----
+ WARNING: BW peak won't be measured in this run.
+---------------------------------------------------------------------------------------
+                    RDMA_Write BW Test
+ Dual-port       : OFF		Device         : mlx5_0
+ Number of qps   : 1		Transport type : IB
+ Connection type : RC		Using SRQ      : OFF
+ PCIe relax order: ON		Lock-free      : OFF
+ ibv_wr* API     : ON		Using Enhanced Reorder      : OFF
+ TX depth        : 128
+ CQ Moderation   : 1
+ CQE Poll Batch  : Dynamic
+ Mtu             : 4096[B]
+ Link type       : Ethernet
+ GID index       : 3
+ Max inline data : 0[B]
+ rdma_cm QPs	 : OFF
+ Data ex. method : Ethernet
+ NUMA node       : 0
+---------------------------------------------------------------------------------------
+ local address: LID 0000 QPN 0x0050 PSN 0xd65641 RKey 0x201f00 VAddr 0x007130af965000
+ GID: 00:00:00:00:00:00:00:00:00:00:255:255:10:10:10:01
+ remote address: LID 0000 QPN 0x008f PSN 0x8e48ee RKey 0x057d00 VAddr 0x007f991ec88000
+ GID: 00:00:00:00:00:00:00:00:00:00:255:255:10:10:10:02
+---------------------------------------------------------------------------------------
+ #bytes     #iterations    BW peak[Gb/sec]    BW average[Gb/sec]   MsgRate[Mpps]
+ 65536      556367           0.00               97.23  		     0.185458
+---------------------------------------------------------------------------------------
+### rc=0

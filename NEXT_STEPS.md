@@ -13,7 +13,7 @@ Ordered by value. See IMPLEMENTATION_STATUS.md for what is done and how it was v
    on Dell R640, PCI passthrough, Ubuntu 26.04, DOCA-OFED 3.4; `ssh r640-a` / `r640-b`). Done: every command
    form and sample output in the content checked against these hosts on the inbox and DOCA stacks
    (`docs/HARDWARE_VERIFICATION.md`), `setup-rdma-host.sh` and `aina-hw collect-all` run, parsers tested
-   against real captures. hw-01 to hw-05 and hw-09 are run end to end and verified (see `labs/README.md`); port 2 of both
+   against real captures. hw-01 to hw-05 and hw-09 to hw-15 are run end to end and verified (see `labs/README.md`), including the InfiniBand track (SM failover, IPoIB, P_Keys, ibdiagnet) and two GPU-less collectives labs (MPI/UCX, CPU allreduce busbw); port 2 of both
    cards now runs InfiniBand (`mlx5_1`, DOCA OpenSM via `start-sm.sh`), port 1 RoCE. Next: hw-06 needs a
    lossless switch and hw-07/hw-08 GPU nodes. The `hw-*` scripts and the toolkit are ShellCheck clean (0.11, no warnings), and every check now verifies the
    tools it needs on the other hosts too (`need_cmd_on`). Still open, all needing other hardware: 400G-specific
@@ -32,8 +32,9 @@ Ordered by value. See IMPLEMENTATION_STATUS.md for what is done and how it was v
    a spine is down (sim-21); the sandbox page switches between RoCE and InfiniBand. Ideas left: adaptive
    routing or packet spraying on the RoCE fabric, an `ibnetdiscover` view, partition (P_Key) problems, and
    a browser test for the sandbox's fabric switch.
-7. **InfiniBand hands-on alternative**: there is no software InfiniBand, so consider an `ibsim`-based
-   lab for the diagnostic tools.
+7. **InfiniBand without hardware**: the IB track (hw-09 to hw-13) needs two IB-capable adapters; for
+   learners without them, consider an `ibsim`-based lab for the diagnostic tools. Also open: run the IPoIB
+   and UCX labs on the inbox stack, and Live Lab over `--live-remote` through a jump host.
 8. **Content depth**: storage-fabric labs (NVMe-oF over RDMA), more design reviews, and a "read this
    real capture" series once real captures (with permission) are available.
 9. **Periodic refresh**: re-run the link check and review vendor-specific lessons (m07 Spectrum-X and

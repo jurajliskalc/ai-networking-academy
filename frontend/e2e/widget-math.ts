@@ -19,15 +19,19 @@ import type * as Straggler from '../src/widgets/StragglerTail';
 import type * as Collective from '../src/widgets/CollectiveExplorer';
 import type * as Pkey from '../src/widgets/PkeyMembership';
 import type * as Frame from '../src/widgets/EthernetFrame';
+import type * as Perftest from '../src/widgets/PerftestExplorer';
+import type * as Baselines from '../src/widgets/perftestBaselines';
 
 const MODULES = {
   pcie: 'PcieBandwidth', ibSpeeds: 'IbSpeeds', dscp: 'DscpMapper', nccl: 'NcclTestsReader', headroom: 'HeadroomCalculator',
   subnet: 'SubnetCalculator', berFec: 'BerFec', straggler: 'StragglerTail', collective: 'CollectiveExplorer', pkey: 'PkeyMembership', frame: 'EthernetFrame',
+  perftest: 'PerftestExplorer', baselines: 'perftestBaselines',
 } as const;
 
 export interface WidgetMath {
   pcie: typeof Pcie; ibSpeeds: typeof IbSpeeds; dscp: typeof Dscp; nccl: typeof Nccl; headroom: typeof Headroom;
   subnet: typeof Subnet; berFec: typeof BerFec; straggler: typeof Straggler; collective: typeof Collective; pkey: typeof Pkey; frame: typeof Frame;
+  perftest: typeof Perftest; baselines: typeof Baselines;
 }
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');

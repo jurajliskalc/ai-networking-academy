@@ -1,0 +1,10 @@
+### cmd: ethtool -S $N | grep -E 'crc_errors_phy|symbol_err_phy|link_down_events_phy|corrected_bits_phy|discards_phy'
+### ----
+     rx_crc_errors_phy: 0
+     rx_symbol_err_phy: 0
+     rx_discards_phy: 0
+     tx_discards_phy: 0
+     link_down_events_phy: 0
+     rx_pcs_symbol_err_phy: 0
+     rx_corrected_bits_phy: 0
+### rc=0

@@ -1,0 +1,22 @@
+### cmd: ethtool -S $N | grep -E 'prio[0-7]_(bytes|pause)|discards_phy|out_of_buffer'
+### ----
+     rx_out_of_buffer: 0
+     rx_discards_phy: 0
+     tx_discards_phy: 0
+     rx_prio0_bytes: 2043
+     tx_prio0_bytes: 765
+     rx_prio1_bytes: 0
+     tx_prio1_bytes: 0
+     rx_prio2_bytes: 0
+     tx_prio2_bytes: 0
+     rx_prio3_bytes: 0
+     tx_prio3_bytes: 0
+     rx_prio4_bytes: 0
+     tx_prio4_bytes: 0
+     rx_prio5_bytes: 0
+     tx_prio5_bytes: 0
+     rx_prio6_bytes: 0
+     tx_prio6_bytes: 0
+     rx_prio7_bytes: 0
+     tx_prio7_bytes: 0
+### rc=0

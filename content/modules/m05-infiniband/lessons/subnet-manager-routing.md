@@ -56,6 +56,9 @@ In an Ethernet AI fabric, path selection is spread across ECMP hash functions in
 
 Several SMs can run on one subnet for redundancy, but only one is **master**. Election compares the SM **priority** (0-15, higher wins) and, on a tie, the **lower port GUID** wins. Other SMs become **standby**, poll the master and take over if it stops responding. If no SM is left at all, ports that are already Active stay Active and running traffic is unaffected, because the SM does not forward data; what stops is change handling (a port that resets comes back in Init and stays there), SA queries and `sminfo` answers. A higher-priority SM that comes up later can take over the master role (OpenSM has options that control whether it does).
 
+> [!VERIFIED]
+> **Stopping OpenSM left the ports ACTIVE and traffic running, and a standby SM became master about 53 s after the master was killed.** On two ConnectX-5 hosts in InfiniBand mode (EDR, back to back, DOCA-OFED 3.4 with its OpenSM): with a single SM, stopping it during a 60 s `ib_write_bw` changed nothing for the test (it finished at 97.44 Gb/s) and the ports stayed ACTIVE; only `sminfo` started failing with `iberror: failed: query`. With OpenSM on host A at `-p 14` and on host B at `-p 13`, `sminfo -C mlx5_1 -P 1` reported A as `priority 14 state 3 SMINFO_MASTER` and `sminfo -C mlx5_1 -P 1 2` (B's LID as the positional argument) reported B as `priority 13 state 2 SMINFO_STANDBY`. After `pkill opensm` on A, B reported `state 3 SMINFO_MASTER` 53 s later (now showing `priority 14`, not the 13 it was started with), and the ports' `SM lid` changed from 1 to 2 without leaving ACTIVE. That takeover time is one observation on a two-node fabric with default timers; measure your own before relying on a figure.
+
 > [!WARNING]
 > An unmanaged extra SM is a classic incident source: someone starts OpenSM on a test host plugged into the production fabric with a higher priority, it becomes master, and it reprograms the fabric with its own (default) routing engine and configuration. Lock down which hosts may run an SM, set priorities deliberately, and monitor `sminfo`.
 
@@ -176,6 +179,15 @@ sminfo: sm lid 1 sm guid 0x0002c90300aabbcc, activity count 98321 priority 15 st
 ```
 
 *(Illustrative.)* State 3 is master. A steadily increasing activity count shows the SM is alive. Query the standby with `sminfo` against its LID to confirm it is in standby state.
+
+On real hardware (two ConnectX-5 hosts back to back, DOCA-OFED's OpenSM running on the first host at priority 0) the master is the local port, and on a host that also has a RoCE device you name the InfiniBand port with `-C`/`-P`:
+
+```text real=doca
+$ sudo sminfo -C mlx5_1 -P 1
+sminfo: sm lid 1 sm guid 0x248a0703000011ef, activity count 48 priority 0 state 3 SMINFO_MASTER
+```
+
+The standby check takes the SM's LID as a positional argument (`sudo sminfo -C mlx5_1 -P 1 2` asks the SM at LID 2; in our two-SM test it answered `state 2 SMINFO_STANDBY`). DOCA-OFED installs OpenSM as `opensmd.service`; on this host `systemctl status opensm` answered `Unit opensm.service could not be found.`
 
 ### What route did the SM install?
 

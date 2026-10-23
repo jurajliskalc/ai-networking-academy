@@ -41,8 +41,10 @@ By the end you can:
 - Run perftest over InfiniBand and explain why it needs no GID index.
 
 > [!NOTE]
-> Command output in this lab is **illustrative**. GUIDs, LIDs, rates and versions on your fabric
-> will differ.
+> Output blocks labelled as a real capture come from the verification run (DOCA-OFED 3.4; `mlx5_1` is
+> the InfiniBand port, `mlx5_0` the RoCE port 1 of the same card; OpenSM on host A, LID 1; host B
+> LID 2). Other output is **illustrative**. GUIDs, LIDs, rates, device names and versions on your
+> fabric will differ.
 
 ## Before you start
 
@@ -100,19 +102,20 @@ Before any SM runs (if your fabric has one, just observe the `ACTIVE` result), o
 ibstat {{A_RDMA_DEV}} {{RDMA_PORT}}          # host B: {{B_RDMA_DEV}}
 ```
 
-Illustrative output without an SM:
+Output without an SM (EDR, back to back):
 
-```
-CA: 'mlx5_0'
+```text real=doca
+$ ibstat mlx5_1 1
+CA: 'mlx5_1'
 Port 1:
 State: Initializing
 Physical state: LinkUp
-Rate: 200
+Rate: 100
 Base lid: 65535
 LMC: 0
 SM lid: 0
-Capability mask: 0x...
-Port GUID: 0x...
+Capability mask: 0x2651e848
+Port GUID: 0x248a0703000011ef
 Link layer: InfiniBand
 ```
 
@@ -125,6 +128,21 @@ Also: `ibstatus` (a compact summary script) and the raw sysfs view:
 ```bash
 grep -H . /sys/class/infiniband/{{A_RDMA_DEV}}/ports/{{RDMA_PORT}}/{state,phys_state,lid,sm_lid,link_layer}
 ```
+
+```text real=doca
+$ grep -H . /sys/class/infiniband/mlx5_1/ports/1/{state,phys_state,rate,link_layer,lid,sm_lid,lid_mask_count,sm_sl,cap_mask}
+/sys/class/infiniband/mlx5_1/ports/1/state:2: INIT
+/sys/class/infiniband/mlx5_1/ports/1/phys_state:5: LinkUp
+/sys/class/infiniband/mlx5_1/ports/1/rate:100 Gb/sec (4X EDR)
+/sys/class/infiniband/mlx5_1/ports/1/link_layer:InfiniBand
+/sys/class/infiniband/mlx5_1/ports/1/lid:0xffff
+/sys/class/infiniband/mlx5_1/ports/1/sm_lid:0x0
+...
+```
+
+If the far host is down or rebooting, the port does not even reach `LinkUp`: in the verification run
+`rdma link` then showed `state DOWN physical_state POLLING` (the port keeps looking for a link
+partner).
 
 **Read it:** `Physical state: LinkUp` means the cable trained: electrically, the link is fine.
 `State: Initializing` (`2: INIT` in sysfs) means the port is waiting for the SM. The LID is
@@ -162,18 +180,36 @@ ibstat {{A_RDMA_DEV}} {{RDMA_PORT}}
 sudo sminfo -C {{A_RDMA_DEV}} -P {{RDMA_PORT}}
 ```
 
-Illustrative output:
+Output on host A (which runs the SM, so its own port got LID 1):
 
-```
+```text real=doca
+$ ibstat mlx5_1 1
+CA: 'mlx5_1'
+Port 1:
 State: Active
 Physical state: LinkUp
-...
-Base lid: 2
+Rate: 100
+Base lid: 1
 LMC: 0
 SM lid: 1
-...
-sminfo: sm lid 1 sm guid 0x..., activity count 1290 priority 0 state 3 SMINFO_MASTER
+Capability mask: 0x2651e84a
+Port GUID: 0x248a0703000011ef
+Link layer: InfiniBand
+$ sudo sminfo -C mlx5_1 -P 1
+sminfo: sm lid 1 sm guid 0x248a0703000011ef, activity count 48 priority 0 state 3 SMINFO_MASTER
 ```
+
+The capability mask changed from `0x2651e848` to `0x2651e84a`: the extra bit is IsSM, set on the
+port the SM runs on. Host B shows its own LID (2 in this run) and the same `SM lid: 1`.
+
+> [!VERIFIED]
+> **DOCA-OFED names the OpenSM unit `opensmd.service`; there is no `opensm.service`.** On Ubuntu
+> 26.04 with DOCA-OFED 3.4, `systemctl status opensm` printed `Unit opensm.service could not be
+> found.`, while `systemctl status opensmd` showed `opensmd.service - OpenSM`, `Loaded: loaded
+> (/usr/lib/systemd/system/opensmd.service; disabled; preset: enabled)`. Ubuntu's own `opensm`
+> package is packaged differently, so check `systemctl list-unit-files | grep -i opensm` before
+> scripting a start or stop. Starting the daemon by hand (`opensm -B`, with `-g <port GUID>` to
+> bind it to the InfiniBand port) also worked in the verification run.
 
 **What happened:** OpenSM discovered every node and port, assigned each port a **LID** (local
 identifier, the 16-bit address used for forwarding inside a subnet), computed forwarding tables for
@@ -191,12 +227,24 @@ sudo ibswitches -C {{A_RDMA_DEV}} -P {{RDMA_PORT}}
 sudo iblinkinfo -C {{A_RDMA_DEV}} -P {{RDMA_PORT}}
 ```
 
-Illustrative `ibhosts` output:
+Output on host A, back to back:
 
+```text real=doca
+$ sudo ibhosts -C mlx5_1 -P 1
+Ca	: 0x1c34da0300002229 ports 1 "ESXI-2-UbuntuServer-1 mlx5_1"
+Ca	: 0x248a0703000011ef ports 1 "ESXI-1-UbuntuServer-1 mlx5_1"
+$ sudo ibswitches -C mlx5_1 -P 1
+$ sudo iblinkinfo -C mlx5_1 -P 1
+CA: ESXI-2-UbuntuServer-1 mlx5_1:
+      0x1c34da0300002229      2    1[  ] ==( 4X      25.78125 Gbps Active/  LinkUp)==>       1    1[  ] "ESXI-1-UbuntuServer-1 mlx5_1" ( )
+CA: ESXI-1-UbuntuServer-1 mlx5_1:
+      0x248a0703000011ef      1    1[  ] ==( 4X      25.78125 Gbps Active/  LinkUp)==>       2    1[  ] "ESXI-2-UbuntuServer-1 mlx5_1" ( )
 ```
-Ca	: 0x... ports 1 "node-b mlx5_0"
-Ca	: 0x... ports 1 "node-a mlx5_0"
-```
+
+The node description is `<hostname> <device>`. `ibswitches` prints nothing without a switch, and
+EDR appears in `iblinkinfo` as 4 lanes of 25.78125 Gbps. These tools discover by directed route, so
+they already answer before the SM runs (`iblinkinfo` then shows `Initialize/  LinkUp` and LID 65535
+on both ends).
 
 **Read it:** `ibnetdiscover` walks the fabric with management datagrams and prints every node, port
 and link: it is the InfiniBand equivalent of drawing your topology from LLDP, except that it works
@@ -214,10 +262,11 @@ sudo perfquery -C {{A_RDMA_DEV}} -P {{RDMA_PORT}}
 sudo perfquery -C {{A_RDMA_DEV}} -P {{RDMA_PORT}} -x <LID of host B> 1
 ```
 
-Illustrative excerpt:
+Excerpt from host A's local port, after the verification run's bandwidth tests:
 
-```
-# Port counters: Lid 2 port 1 (CapMask: 0x...)
+```text real=doca
+$ sudo perfquery -C mlx5_1 -P 1
+# Port counters: Lid 1 port 1 (CapMask: 0x5A00)
 PortSelect:......................1
 CounterSelect:...................0x0000
 SymbolErrorCounter:..............0
@@ -226,14 +275,23 @@ LinkDownedCounter:...............0
 PortRcvErrors:...................0
 PortRcvRemotePhysicalErrors:.....0
 PortRcvSwitchRelayErrors:........0
-PortXmitDiscards:................0
+PortXmitDiscards:................11
 ...
-PortXmitData:....................123456
-PortRcvData:.....................123400
-PortXmitPkts:....................2210
-PortRcvPkts:.....................2190
-PortXmitWait:....................0
+PortXmitData:....................4294967295
+PortRcvData:.....................95779411
+PortXmitPkts:....................193443485
+PortRcvPkts:.....................13680303
+PortXmitWait:....................65571
+$ sudo perfquery -x -C mlx5_1 -P 1
+# Port extended counters: Lid 1 port 1 (CapMask: 0x5A00 CapMask2: 0x0000000)
+PortSelect:......................1
+CounterSelect:...................0x0000
+PortXmitData:....................199294892652
+...
 ```
+
+`PortXmitData` of the classic block is stuck at 4294967295 (2^32 - 1: the 32-bit counter
+saturated), while `-x` shows the real 64-bit value for the same port.
 
 **Read it:**
 
@@ -250,6 +308,9 @@ PortXmitWait:....................0
 
 Fabric-wide, `ibqueryerrors` scans every port and prints only those whose error counters exceed
 thresholds (its options vary across `infiniband-diags` versions; see `ibqueryerrors --help`).
+In the verification run it flagged both ports (for example `[PortXmitDiscards == 11] [PortXmitWait
+== 65571]` on host A) and exited with status 1; without an SM it prints only `sa_get_handle: No
+SM/SA found on port :1`.
 
 ### Task 5: Reachability without IP: `ibping`
 
@@ -259,6 +320,23 @@ On host B start a responder; on host A ping B's LID:
 sudo ibping -C {{B_RDMA_DEV}} -P {{RDMA_PORT}} -S          # host B (Ctrl-C when done)
 sudo ibping -C {{A_RDMA_DEV}} -P {{RDMA_PORT}} -c 5 <LID of host B>        # host A
 ```
+
+Client output on host A (this capture used `-c 3`, and `-L`, which marks the address as a LID; see
+`ibping --help`):
+
+```text real=doca
+$ sudo ibping -C mlx5_1 -P 1 -c 3 -L 2
+Pong from ESXI-2-UbuntuServer-1.(none) (Lid 2): time 0.048 ms
+Pong from ESXI-2-UbuntuServer-1.(none) (Lid 2): time 0.045 ms
+Pong from ESXI-2-UbuntuServer-1.(none) (Lid 2): time 0.052 ms
+
+--- ESXI-2-UbuntuServer-1.(none) (Lid 2) ibping statistics ---
+3 packets transmitted, 3 received, 0% packet loss, time 3000 ms
+rtt min/avg/max = 0.045/0.048/0.052 ms
+```
+
+Before an SM runs, host B's LID is 0xffff and the client fails with `ibping: iberror: failed:
+can't resolve destination port 65535`.
 
 **Why:** `ibping` uses InfiniBand management datagrams, so it tests the InfiniBand path itself,
 independent of IPoIB or any IP configuration. When an application fails, `ibping` working tells you
@@ -272,6 +350,35 @@ Server on host B, client on host A:
 ib_write_bw -d {{B_RDMA_DEV}} -i {{RDMA_PORT}} -F --report_gbits                 # host B
 ib_write_bw -d {{A_RDMA_DEV}} -i {{RDMA_PORT}} -F --report_gbits {{HOST_B}}      # host A
 ```
+
+Client output on host A (trimmed):
+
+```text real=doca
+$ ib_write_bw -d mlx5_1 -i 1 -F --report_gbits 192.0.2.12
+---------------------------------------------------------------------------------------
+                    RDMA_Write BW Test
+ Dual-port       : OFF		Device         : mlx5_1
+ Number of qps   : 1		Transport type : IB
+ Connection type : RC		Using SRQ      : OFF
+...
+ Mtu             : 4096[B]
+ Link type       : IB
+ Max inline data : 0[B]
+ rdma_cm QPs	 : OFF
+ Data ex. method : Ethernet
+...
+---------------------------------------------------------------------------------------
+ local address: LID 0x01 QPN 0x014c PSN 0x9b74b6 RKey 0x03df00 VAddr 0x007edbd6e34000
+ remote address: LID 0x02 QPN 0x014a PSN 0x7b3292 RKey 0x23bf00 VAddr 0x00771145b11000
+---------------------------------------------------------------------------------------
+ #bytes     #iterations    BW peak[Gb/sec]    BW average[Gb/sec]   MsgRate[Mpps]
+ 65536      5000             94.79              94.79  		     0.180790
+---------------------------------------------------------------------------------------
+```
+
+`Link type : IB`, no `GID index` line, and address lines that carry a LID but no `GID:` field.
+`Data ex. method : Ethernet` is the TCP handshake described below. On a port still in `INIT` (no
+SM) perftest stops with ` Port number 1 state is Init` / ` Couldn't set the link layer`.
 
 **Two things to notice:**
 
@@ -309,7 +416,9 @@ With traffic running (`ib_write_bw ... -D 60` on both sides), stop the SM:
 sudo ./stop-sm.sh            # host A, lab directory
 ```
 
-**Observe:** the running test continues and ports stay `ACTIVE`. The SM configures the fabric; it
+**Observe:** the running test continues and ports stay `ACTIVE` (in the verification run the 60 s
+test finished at 97.44 Gb/s with the SM stopped part-way; `sminfo` then failed with `iberror:
+failed: query`). The SM configures the fabric; it
 does not forward data. Without it, though, nothing **changes** safely: a link that flaps or a host
 that reboots will come back in `INIT` and stay there. Start it again with `sudo ./start-sm.sh` for
 the check.
@@ -356,7 +465,8 @@ VPI adapter's `LINK_TYPE`, set it back before returning to the RoCE labs (and re
 
 - Start a second OpenSM on host B with a higher priority (`opensm --help` shows the priority option on
   your version) and watch with `sminfo` which one becomes master, then stop the master and time the
-  takeover.
+  takeover (about 53 s in our two-host run; see the
+  [subnet manager lesson](#/lesson/subnet-manager-routing)).
 - Read the [subnet manager and routing lesson](#/lesson/subnet-manager-routing) and look up which
   routing engine your OpenSM uses in its configuration file.
 - Run `./hw-toolkit/aina-hw collect-all` and import the report on the [Connect page](#/hw/connect):

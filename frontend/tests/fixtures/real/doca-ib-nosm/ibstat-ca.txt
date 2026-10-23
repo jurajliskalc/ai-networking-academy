@@ -1,0 +1,20 @@
+### cmd: ibstat mlx5_1
+### ----
+CA 'mlx5_1'
+	CA type: MT4119
+	Number of ports: 1
+	Firmware version: 16.29.1016
+	Hardware version: 0
+	Node GUID: 0x248a0703000011ef
+	System image GUID: 0x248a0703000011ee
+	Port 1:
+		State: Initializing
+		Physical state: LinkUp
+		Rate: 100
+		Base lid: 65535
+		LMC: 0
+		SM lid: 0
+		Capability mask: 0x2651e848
+		Port GUID: 0x248a0703000011ef
+		Link layer: InfiniBand
+### rc=0

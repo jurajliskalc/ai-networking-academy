@@ -1,0 +1,5 @@
+### cmd: ib_write_bw -d mlx5_0 -x 3 -F --report_gbits $B
+### ----
+IB device mlx5_0 not found
+ Unable to find the Infiniband/RoCE device
+### rc=1

@@ -199,21 +199,34 @@ flowchart TD
 
 ### Host side: check trust, PFC and the DSCP map
 
-`mlnx_qos` (shipped only with the NVIDIA stack, MLNX_OFED / DOCA-OFED, in mlnx-tools; it is not in
-distro archives) shows and sets the NIC's QoS state:
+With the NVIDIA stack (MLNX_OFED / DOCA-OFED), `mlnx_qos` from mlnx-tools shows and sets the NIC's QoS
+state; it is not in distro archives. With the distro (inbox) stack, iproute2 `dcb` does the same job.
+Below, a correctly configured host (`ens64f0np0` on the reference hardware; use your interface):
 
-```bash
+```bash stack=inbox
+dcb app show dev eth3
+dcb pfc show dev eth3 prio-pfc
+```
+
+```text stack=inbox real
+$ dcb app show dev ens64f0np0
+dscp-prio AF31:3
+$ dcb pfc show dev ens64f0np0 prio-pfc
+prio-pfc 0:off 1:off 2:off 3:on 4:off 5:off 6:off 7:off
+```
+
+```bash stack=doca
 mlnx_qos -i eth3
 ```
 
-```text
-# Illustrative output, trimmed (DOCA-OFED mlnx_qos); layout differs by version
+```text stack=doca real
+$ mlnx_qos -i ens64f0np0
 DCBX mode: OS controlled
 Priority trust state: dscp
 dscp2prio mapping:
 	prio:0 dscp:07,06,05,04,03,02,01,00,
 	...
-	prio:3 dscp:31,30,29,28,27,26,25,24,
+	prio:3 dscp:26,31,30,29,28,27,25,24,
 	...
 Receive buffer size (bytes): 130944,130944,0,0,0,0,0,0,max_buffer_size=262016
 Cable len: 7
@@ -223,26 +236,29 @@ PFC configuration:
 	buffer      0   0   0   1   0   0   0   0
 tc: 0 ratelimit: unlimited, tsa: vendor
 	 priority:  1
+tc: 1 ratelimit: unlimited, tsa: vendor
+	 priority:  0
 ...
 ```
 
 Check: trust is `dscp`; DSCP 26 maps to priority 3; PFC is enabled on 3 and only 3. The default trust
-state on mlx5 is `pcp`. To correct (each set command prints the full status again afterwards):
+state on mlx5 is `pcp`. `dcb app show` names well-known DSCP values (`AF31` is DSCP 26; `dcb -N app show`
+prints the number), and `dcb` has no trust line: on mlx5 the DSCP app entry itself switches the port to
+DSCP trust (`dcb apptrust` is not supported by mlx5 on the releases we have tested; see the
+[QoS trust lesson](#/lesson/qos-trust-and-mapping)). In `mlnx_qos`, DSCP trust already maps DSCP 24-31
+to priority 3 by default; after an explicit `--dscp2prio set,26,3` the driver lists 26 first in that
+row. Note also the default priority-to-TC map: priority 0 goes to TC 1 and priority 1 to TC 0. To correct
+(each `mlnx_qos` set command prints the full status again afterwards; `dcb` set commands print nothing
+on success):
 
-```bash
-sudo mlnx_qos -i eth3 --trust dscp
-sudo mlnx_qos -i eth3 --pfc 0,0,0,1,0,0,0,0
-```
-
-With the distro (inbox) stack, use iproute2 `dcb` instead. On mlx5, adding a DSCP application entry
-also switches the port to DSCP trust (`dcb apptrust` is not supported by mlx5 on the releases we have
-tested):
-
-```bash
+```bash stack=inbox
 sudo dcb app replace dev eth3 dscp-prio 26:3
 sudo dcb pfc set dev eth3 prio-pfc all:off 3:on
-dcb app show dev eth3                 # names well-known DSCPs: dscp-prio AF31:3 (dcb -N app show prints 26:3)
-dcb pfc show dev eth3 prio-pfc        # prio-pfc 0:off 1:off 2:off 3:on 4:off 5:off 6:off 7:off
+```
+
+```bash stack=doca
+sudo mlnx_qos -i eth3 --trust dscp
+sudo mlnx_qos -i eth3 --pfc 0,0,0,1,0,0,0,0
 ```
 
 ### Host side: PFC and global pause interact
@@ -283,8 +299,50 @@ can set directly on the inbox stack after `mkdir /sys/kernel/config/rdma_cm/<dev
 
 On some driver versions you will also find per-priority discard counters and pause-storm counters
 (`tx_pause_storm_warning_events`, `tx_pause_storm_error_events`). Check the mlx5 counters
-documentation for your kernel and driver release. Remember that `rx_prioN_pause` and `tx_prioN_pause`
-exist only for priorities with PFC enabled, while the `rx_global_pause`/`tx_global_pause` counters are listed only while global pause is on (they disappear once PFC is enabled).
+documentation for your kernel and driver release. Which pause counters exist at all depends on the
+flow-control mode. On a ConnectX-5 back to back, with the default settings (global pause on, PFC off),
+`ethtool -S` lists global-pause counters and no per-priority pause counters:
+
+```text real=inbox
+$ ethtool -S ens64f0np0
+...
+     rx_global_pause: 0
+     rx_global_pause_duration: 0
+     tx_global_pause: 0
+     tx_global_pause_duration: 0
+     rx_global_pause_transition: 0
+     tx_pause_storm_warning_events: 0
+     tx_pause_storm_error_events: 0
+...
+```
+
+After `dcb pfc set ... 3:on` and a 10 s `ib_write_bw --tclass=106` run, the same filter that asks for
+global pause returns only priority-3 counters (even back to back, the receiver sent pauses under load):
+
+```text real=inbox
+$ ethtool -S ens64f0np0 | grep -E 'prio3_pause|pause_storm|global_pause'
+     rx_prio3_pause: 696
+     rx_prio3_pause_duration: 608
+     tx_prio3_pause: 26
+     tx_prio3_pause_duration: 114
+     rx_prio3_pause_transition: 348
+     tx_pause_storm_warning_events: 0
+     tx_pause_storm_error_events: 0
+```
+
+> [!VERIFIED]
+> **Once PFC is on, the global-pause counters vanish from `ethtool -S` and pause counters appear only for PFC-enabled priorities.**
+> On ConnectX-5 (fw 16.29, Ubuntu 26.04) with both the inbox driver and DOCA-OFED 3.4 we saw
+> `rx_global_pause`, `tx_global_pause`, `*_global_pause_duration` and `rx_global_pause_transition` only
+> while 802.3x global pause was on (the default). Enabling PFC on priority 3 removed them and added
+> `rx_prio3_pause`, `rx_prio3_pause_duration`, `tx_prio3_pause`, `tx_prio3_pause_duration` and
+> `rx_prio3_pause_transition`; no `prioN_pause` counters exist for priorities without PFC.
+> `tx_pause_storm_*`, `rx_pause_ctrl_phy` and `tx_pause_ctrl_phy` are always listed. So a missing
+> counter is evidence in itself: no `rx_prio3_pause` means PFC is not enabled on priority 3 on this
+> host, and `rx_global_pause` reappearing means someone turned global pause back on (which clears PFC;
+> see the [PFC lesson](#/lesson/pfc-priority-flow-control)). Monitoring that expects a fixed counter
+> set must handle counters appearing and disappearing.
+
 RoCE traffic is counted in `rx_vport_rdma_unicast_bytes`/`tx_vport_rdma_unicast_bytes` and the
 per-priority byte counters, not in the netdev packet counters.
 
@@ -327,17 +385,30 @@ path exists.
 
 ### Host side: MTU chain
 
-```bash
+```bash stack=inbox
+ip link show eth3 | grep -o 'mtu [0-9]*'
+ibv_devinfo -d rocep3s0f0 | grep -E 'max_mtu|active_mtu'
+```
+
+```text stack=inbox real
+mtu 9000
+			max_mtu:		4096 (5)
+			active_mtu:		4096 (5)
+```
+
+```bash stack=doca
 ip link show eth3 | grep -o 'mtu [0-9]*'
 ibv_devinfo -d mlx5_3 | grep -E 'max_mtu|active_mtu'
 ```
 
-```text
-# Illustrative output
+```text stack=doca real
 mtu 9000
-                        max_mtu:                4096 (5)
-                        active_mtu:             4096 (5)
+libibverbs: Warning: couldn't load driver 'libionic-rdmav59.so': libionic-rdmav59.so: cannot open shared object file: No such file or directory
+			max_mtu:		4096 (5)
+			active_mtu:		4096 (5)
 ```
+
+(The `libionic` warning is harmless noise from DOCA's rdma-core on hosts without that NIC.)
 
 Then confirm every switch port in the path supports frames larger than a 4096-byte RoCE payload
 plus headers. A quick probe for the IP path (not RDMA itself) is a do-not-fragment ping at the size

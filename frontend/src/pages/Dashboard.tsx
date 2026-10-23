@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { ArrowRight, Boxes, Flame, FlaskConical, Layers, Network, Server, Terminal, Timer } from 'lucide-react';
+import { ArrowRight, BadgeCheck, Boxes, Flame, FlaskConical, Layers, Network, Server, Terminal, Timer } from 'lucide-react';
 import { useIndex } from '../content';
 import { useProgress } from '../store';
 import { isDue, streak } from '../progress';
@@ -104,6 +104,7 @@ export default function Dashboard() {
         <span>{questions} quiz questions</span>
         <span>{ix.exams.reduce((s, e) => s + e.count, 0)} exam questions</span>
         <span>{ix.commands.reduce((s, c) => s + c.commands.length, 0)} commands</span>
+        {(ix.verifiedNotes?.length ?? 0) > 0 && <Link to="/verified" className="text-data hover:underline"><BadgeCheck size={12} className="mr-1 inline" aria-hidden />{ix.verifiedNotes.length} notes verified on real hardware</Link>}
         <span className="ml-auto">Progress is stored only in this browser · export it in Settings</span>
       </section>
     </div>

@@ -1,0 +1,5 @@
+### cmd: rdma link show
+### ----
+link mlx5_0/1 state ACTIVE physical_state LINK_UP netdev ens64f0np0 
+link mlx5_1/1 state ACTIVE physical_state LINK_UP netdev ens64f1np1 
+### rc=0

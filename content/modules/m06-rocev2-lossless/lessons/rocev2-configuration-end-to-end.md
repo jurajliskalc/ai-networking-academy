@@ -90,7 +90,8 @@ traffic class 0, and a correct `NCCL_IB_TC` does nothing on a host that trusts P
 ### Host configuration (NVIDIA ConnectX)
 
 The steps below use NVIDIA's OFED tools (`mlnx_qos`, `cma_roce_mode`, `cma_roce_tos`, `show_gids`)
-and upstream tools (`ip`, `ethtool`). Replace `ens1f0np0` / `mlx5_0` with your devices, and repeat
+and upstream tools (`ip`, `ethtool`), with the inbox (`dcb`, configfs) equivalent next to each where
+it differs; real captures come from a ConnectX-5 test host. Replace `ens64f0np0` / `mlx5_0` with your devices, and repeat
 on **every** RDMA NIC (in a rail-optimised server, typically eight).
 
 > [!NOTE]
@@ -104,8 +105,8 @@ on **every** RDMA NIC (in a rail-optimised server, typically eight).
 **1. MTU and global pause**
 
 ```bash
-ip link set dev ens1f0np0 mtu 9000
-ethtool -A ens1f0np0 rx off tx off        # disable 802.3x link-level pause
+ip link set dev ens64f0np0 mtu 9000
+ethtool -A ens64f0np0 rx off tx off       # disable 802.3x link-level pause
 ```
 
 On ConnectX (mlx5) global pause is on by default, and enabling PFC on any priority turns it off
@@ -121,72 +122,182 @@ mtu-calculator
 
 **2. Trust and PFC**
 
-```bash
-mlnx_qos -i ens1f0np0 --trust dscp
-mlnx_qos -i ens1f0np0 --pfc 0,0,0,1,0,0,0,0     # PFC on priority 3 only
+With NVIDIA's stack, `mlnx_qos` sets both. With the inbox driver, use iproute2's `dcb` instead.
+`dcb apptrust` is not supported by mlx5 (it prints `Attribute not found: Success`); adding a DSCP
+entry to the APP table is what switches the port to DSCP trust:
+
+```bash stack=inbox
+sudo dcb pfc set dev ens64f0np0 prio-pfc all:off 3:on
+sudo dcb app replace dev ens64f0np0 dscp-prio 26:3    # DSCP 26 -> prio 3; also switches mlx5 to DSCP trust
+dcb pfc show dev ens64f0np0 prio-pfc
+dcb app show dev ens64f0np0                           # well-known DSCPs print by name ('dcb -N' for 26:3)
+```
+
+```text stack=inbox real
+prio-pfc 0:off 1:off 2:off 3:on 4:off 5:off 6:off 7:off
+dscp-prio AF31:3
+```
+
+```bash stack=doca
+sudo mlnx_qos -i ens64f0np0 --trust dscp
+sudo mlnx_qos -i ens64f0np0 --pfc 0,0,0,1,0,0,0,0     # PFC on priority 3 only (all 8 values required)
+mlnx_qos -i ens64f0np0 | grep -iE 'trust|enabled'
+```
+
+```text stack=doca real
+Priority trust state: dscp
+	enabled     0   0   0   1   0   0   0   0
 ```
 
 With trust DSCP, the NIC's default DSCP-to-priority map already sends DSCP 26 to priority 3 and DSCP
-48 to priority 6 (DSCP >> 3). Verify it in the `mlnx_qos` output rather than assuming it: after
-`--trust dscp` it prints a `dscp2prio mapping:` block, and the `PFC configuration:` table shows `1`
-under priority 3 in the `enabled` row.
-
-With the inbox driver, use iproute2's `dcb` instead. `dcb apptrust` is not supported by mlx5 (it
-prints `Attribute not found`); adding a DSCP entry to the APP table is what switches the port to
-DSCP trust:
-
-```bash
-dcb pfc set dev ens1f0np0 prio-pfc all:off 3:on
-dcb app replace dev ens1f0np0 dscp-prio 26:3     # DSCP 26 -> prio 3; also switches mlx5 to DSCP trust
-dcb pfc show dev ens1f0np0 prio-pfc               # prio-pfc 0:off 1:off 2:off 3:on 4:off ...
-dcb app show dev ens1f0np0                        # prints dscp-prio AF31:3 (use 'dcb -N' for 26:3)
-```
+48 to priority 6 (DSCP >> 3). Verify it rather than assuming it: after `--trust dscp`, `mlnx_qos`
+prints a `dscp2prio mapping:` block, and the `PFC configuration:` table shows `1` under priority 3 in
+the `enabled` row. With `dcb`, the APP table holds only the entries you added; the rest of the map is
+the driver's default.
 
 **3. ETS (optional, if you want explicit shares)**
 
-```bash
-mlnx_qos -i ens1f0np0 --tsa ets,ets,ets,ets,ets,ets,strict,ets --tcbw 10,5,5,60,5,5,0,10
+```bash stack=inbox
+dcb ets show dev ens64f0np0                           # default state
 ```
 
-The shares are per TC, and mlx5's default map puts priority 0 in TC1 and priority 1 in TC0, so
-check the `priority:` line under each `tc:` in the output (or set `--prio_tc` explicitly) before
-deciding which share your default traffic gets. The percentages must add up to 100.
+```text stack=inbox real
+willing off ets-cap 8 cbs off
+tc-bw 0:0 1:0 2:0 3:0 4:0 5:0 6:0 7:0
+pg-bw 0:0 1:0 2:0 3:0 4:0 5:0 6:0 7:0
+tc-tsa 0:vendor 1:vendor 2:vendor 3:vendor 4:vendor 5:vendor 6:vendor 7:vendor
+prio-tc 0:1 1:0 2:2 3:3 4:4 5:5 6:6 7:7
+...
+```
+
+```bash stack=inbox
+sudo dcb ets set dev ens64f0np0 tc-tsa all:ets 6:strict tc-bw 0:10 1:5 2:5 3:60 4:5 5:5 6:0 7:10
+dcb ets show dev ens64f0np0 tc-tsa tc-bw
+```
+
+```text stack=inbox
+tc-tsa 0:ets 1:ets 2:ets 3:ets 4:ets 5:ets 6:strict 7:ets
+tc-bw 0:10 1:5 2:5 3:60 4:5 5:5 6:100 7:10
+```
+
+```bash stack=doca
+sudo mlnx_qos -i ens64f0np0 --tsa ets,ets,ets,ets,ets,ets,strict,ets --tcbw 10,5,5,60,5,5,0,10
+```
+
+```text stack=doca real
+...
+tc: 0 ratelimit: unlimited, tsa: ets, bw: 10%
+	 priority:  1
+tc: 1 ratelimit: unlimited, tsa: ets, bw: 5%
+	 priority:  0
+tc: 2 ratelimit: unlimited, tsa: ets, bw: 5%
+	 priority:  2
+tc: 3 ratelimit: unlimited, tsa: ets, bw: 60%
+	 priority:  3
+...
+tc: 6 ratelimit: unlimited, tsa: strict
+	 priority:  6
+tc: 7 ratelimit: unlimited, tsa: ets, bw: 10%
+	 priority:  7
+```
+
+> [!VERIFIED] `dcb ets` reads a strict TC back with a share of 100
+> This run was on the DOCA-OFED host (`dcb` is the same iproute2 tool on both stacks). The strict TC
+> read back as `6:100`, not the `6:0` that was set, and `mlnx_qos` showed the same table as above.
+> `dcb` checks that the ETS shares add up to 100% (0% when no TC uses ETS), so to go back to the
+> default use `sudo dcb ets set dev ens64f0np0 tc-tsa all:vendor tc-bw all:0`: `tc-bw all:100` is
+> refused with `Bandwidth percentages in tc-bw sum to 800%, expected 0%`.
+
+The shares are per TC, and
+mlx5's default map puts priority 0 in TC1 and priority 1 in TC0 (`prio-tc 0:1 1:0` in `dcb`, the
+`priority:` line under each `tc:` in `mlnx_qos`), so check it (or set `--prio_tc` / `prio-tc`
+explicitly) before deciding which share your default traffic gets. The percentages must add up to
+100: eight shares of 10 % made `mlnx_qos` fail with `Netlink error: Bad value. see dmesg.`
 
 **4. ECN / DCQCN and CNP marking**
 
 On ConnectX with NVIDIA's stack, DCQCN is typically enabled by default: on a ConnectX-5 with
 DOCA-OFED, NP and RP were enabled on all eight priorities, with `cnp_dscp` 48 and `cnp_802p_prio` 6.
-Verify it on yours. The per-netdev `ecn/` sysfs tree below exists **only with NVIDIA's stack**. With
+Verify it on yours. The per-netdev `ecn/` sysfs tree exists **only with NVIDIA's stack**. With
 the inbox driver the directory does not exist; DCQCN parameters live in debugfs
 (`/sys/kernel/debug/mlx5/<pci-address>/cc_params/`), which kernel lockdown blocks even for root
 when Secure Boot is on. Defaults and availability vary by driver release and NIC generation.
 
-```bash
-echo 1  > /sys/class/net/ens1f0np0/ecn/roce_np/enable/3    # send CNPs for CE-marked prio-3 packets
-echo 1  > /sys/class/net/ens1f0np0/ecn/roce_rp/enable/3    # react to CNPs on prio 3
-echo 48 > /sys/class/net/ens1f0np0/ecn/roce_np/cnp_dscp    # CNP DSCP
-echo 6  > /sys/class/net/ens1f0np0/ecn/roce_np/cnp_802p_prio
+```bash stack=inbox
+cat /sys/class/net/ens64f0np0/ecn/roce_np/enable/3 /sys/class/net/ens64f0np0/ecn/roce_rp/enable/3
 ```
+
+```text stack=inbox real
+cat: /sys/class/net/ens64f0np0/ecn/roce_np/enable/3: No such file or directory
+cat: /sys/class/net/ens64f0np0/ecn/roce_rp/enable/3: No such file or directory
+```
+
+```bash stack=doca
+echo 1  | sudo tee /sys/class/net/ens64f0np0/ecn/roce_np/enable/3 >/dev/null    # send CNPs for CE-marked prio-3 packets
+echo 1  | sudo tee /sys/class/net/ens64f0np0/ecn/roce_rp/enable/3 >/dev/null    # react to CNPs on prio 3
+echo 48 | sudo tee /sys/class/net/ens64f0np0/ecn/roce_np/cnp_dscp >/dev/null    # CNP DSCP
+echo 6  | sudo tee /sys/class/net/ens64f0np0/ecn/roce_np/cnp_802p_prio >/dev/null
+cat /sys/class/net/ens64f0np0/ecn/roce_np/enable/3 /sys/class/net/ens64f0np0/ecn/roce_rp/enable/3
+```
+
+```text stack=doca real
+1
+1
+```
+
+With the inbox stack the DCQCN algorithm still runs in the NIC with its firmware defaults; you just
+cannot read or change its parameters from a locked-down host. The RoCE CC counters (`np_cnp_sent`,
+`rp_cnp_handled`, `np_ecn_marked_roce_packets`) exist on both stacks in `rdma statistic` and
+`hw_counters`.
 
 If you plan to use an RTT-based algorithm instead (NVIDIA RTTCC / ZTR-RTTCC), it is selected
 through NIC firmware configuration. Follow NVIDIA's documentation for your NIC and firmware.
 
 **5. rdma_cm defaults (for rdma_cm-based applications)**
 
-```bash
-cma_roce_mode -d mlx5_0 -p 1 -m 2      # default RoCE mode for rdma_cm: v2 (prints "RoCE v2")
-cma_roce_tos  -d mlx5_0 -t 106         # default ToS for rdma_cm: DSCP 26, ECT(0)
+NVIDIA's `cma_roce_mode` and `cma_roce_tos` write to the rdma_cm configfs tree
+(`/sys/kernel/config/rdma_cm/`, which needs the `configfs` module). Without them, write the same
+files directly (the defaults are ToS `0` and mode `RoCE v2`):
+
+```bash stack=inbox
+sudo modprobe configfs
+sudo mkdir -p /sys/kernel/config/rdma_cm/rocep3s0f0     # creates ports/1/default_roce_tos and default_roce_mode
+cat /sys/kernel/config/rdma_cm/rocep3s0f0/ports/1/default_roce_tos /sys/kernel/config/rdma_cm/rocep3s0f0/ports/1/default_roce_mode
 ```
 
-These write to the rdma_cm configfs tree (`/sys/kernel/config/rdma_cm/`), which must be mounted.
-Without NVIDIA's scripts, write the same files directly (the defaults are ToS `0` and mode `RoCE v2`):
-
-```bash
-mkdir /sys/kernel/config/rdma_cm/rocep3s0f0           # creates ports/1/default_roce_tos and default_roce_mode
-echo 106 > /sys/kernel/config/rdma_cm/rocep3s0f0/ports/1/default_roce_tos
+```text stack=inbox real
+0
+RoCE v2
 ```
 
-They do **not** affect applications that create QPs without rdma_cm.
+```bash stack=inbox
+echo 106 | sudo tee /sys/kernel/config/rdma_cm/rocep3s0f0/ports/1/default_roce_tos   # DSCP 26, ECT(0)
+```
+
+```bash stack=doca
+sudo cma_roce_mode -d mlx5_0 -p 1 -m 2; echo rc=$?    # default RoCE mode for rdma_cm: v2
+sudo cma_roce_tos  -d mlx5_0 -t 106; echo rc=$?       # default ToS for rdma_cm: DSCP 26, ECT(0)
+sudo cma_roce_tos  -d mlx5_0                          # read it back
+```
+
+```text stack=doca real
+RoCE v2
+rc=0
+106
+rc=0
+106
+```
+
+They do **not** affect applications that create QPs without rdma_cm. perftest shows the difference:
+its `-T` (ToS) option applies only to rdma_cm QPs, so it needs `-R`; for its default (non-rdma_cm)
+connections use `--tclass`.
+
+> [!VERIFIED]
+> **`ib_write_bw -T 106` without `-R` printed ` TOS only valid for rdma_cm based QP and RawEth QP ` and ran no test.**
+> On ConnectX-5 (fw 16.29) with DOCA-OFED 3.4's perftest, `ib_write_bw -d mlx5_0 -x 3 -T 106 ...` printed only
+> that line. With `-R -T 106` the header read ` rdma_cm QPs	 : ON` and ` Data ex. method : rdma_cm 	TOS    : 106`,
+> and the test ran (96.1 Gb/s). Use `--tclass 106` for perftest's default connections, `-R -T 106` to test
+> the rdma_cm path.
 
 **6. Application settings**
 

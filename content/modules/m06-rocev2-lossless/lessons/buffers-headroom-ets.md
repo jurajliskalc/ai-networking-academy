@@ -249,12 +249,30 @@ before any congestion signal reaches the sender.
 
 ### Host: inspect priority-to-TC, ETS and buffers
 
-```bash
-mlnx_qos -i ens1f0np0
+The captures are from a ConnectX-5 with PFC on priority 3. The inbox one shows the default ETS state;
+the DOCA one was taken after the `mlnx_qos --tsa ... --tcbw ...` command shown further down, without
+`--prio_tc`:
+
+```bash stack=inbox
+dcb ets show dev ens64f0np0
 ```
 
-```text
-# illustrative, trimmed (after the ETS command below)
+```text stack=inbox real
+willing off ets-cap 8 cbs off
+tc-bw 0:0 1:0 2:0 3:0 4:0 5:0 6:0 7:0
+pg-bw 0:0 1:0 2:0 3:0 4:0 5:0 6:0 7:0
+tc-tsa 0:vendor 1:vendor 2:vendor 3:vendor 4:vendor 5:vendor 6:vendor 7:vendor
+prio-tc 0:1 1:0 2:2 3:3 4:4 5:5 6:6 7:7
+reco-tc-bw 0:0 1:0 2:0 3:0 4:0 5:0 6:0 7:0
+reco-tc-tsa 0:strict 1:strict 2:strict 3:strict 4:strict 5:strict 6:strict 7:strict
+reco-prio-tc 0:0 1:0 2:0 3:0 4:0 5:0 6:0 7:0
+```
+
+```bash stack=doca
+mlnx_qos -i ens64f0np0
+```
+
+```text stack=doca real
 DCBX mode: OS controlled
 Priority trust state: dscp
 dscp2prio mapping:
@@ -266,6 +284,8 @@ PFC configuration:
 	enabled     0   0   0   1   0   0   0   0
 	buffer      0   0   0   1   0   0   0   0
 tc: 0 ratelimit: unlimited, tsa: ets, bw: 10%
+	 priority:  1
+tc: 1 ratelimit: unlimited, tsa: ets, bw: 5%
 	 priority:  0
 ...
 tc: 3 ratelimit: unlimited, tsa: ets, bw: 60%
@@ -273,25 +293,28 @@ tc: 3 ratelimit: unlimited, tsa: ets, bw: 60%
 ...
 tc: 6 ratelimit: unlimited, tsa: strict
 	 priority:  6
-...
+tc: 7 ratelimit: unlimited, tsa: ets, bw: 10%
+	 priority:  7
 ```
 
-Line by line: priority 3 is PFC-enabled and mapped to receive buffer 1 (the lossless one), TC3 gets
-an ETS share, and TC6 is strict for CNPs. On a ConnectX-5, enabling PFC on one priority split the
-262016-byte receive buffer into two buffers of 130944 bytes. Before any ETS configuration, every TC
-shows `tsa: vendor`. The exact layout of this output varies between versions.
+Line by line (`mlnx_qos`): priority 3 is PFC-enabled and mapped to receive buffer 1 (the lossless
+one), TC3 gets an ETS share, and TC6 is strict for CNPs. On a ConnectX-5, enabling PFC on one priority
+split the 262016-byte receive buffer into two buffers of 130944 bytes. Before any ETS configuration,
+every TC shows `tsa: vendor` (in `dcb`, `tc-tsa 0:vendor ...`). The exact layout of this output varies
+between versions; under DOCA-OFED the default `dcb ets show` read `tc-bw 0:100 1:100 ...` where the
+inbox driver printed `tc-bw 0:0 1:0 ...`.
 
-> [!WARNING]
-> Check the priority-to-TC map before you assign ETS shares. The default map on mlx5 is **not** the
-> identity: priority 0 sits in TC1 and priority 1 in TC0 (`tc: 0 ... priority: 1`, `tc: 1 ...
-> priority: 0`; `dcb ets show` prints `prio-tc 0:1 1:0 2:2 3:3 ...`). `--tcbw` values are per TC,
-> so without an explicit `--prio_tc` the first percentage applies to priority 1, not to default
-> traffic on priority 0.
+> [!VERIFIED]
+> **The default mlx5 priority-to-TC map put priority 0 in TC1 and priority 1 in TC0.**
+> On ConnectX-5 (fw 16.29) with both stacks, `dcb ets show` printed `prio-tc 0:1 1:0 2:2 3:3 4:4 5:5 6:6 7:7`
+> and `mlnx_qos` listed `tc: 0 ... priority:  1` and `tc: 1 ... priority:  0`. Because `--tcbw` values are per TC,
+> the `--tcbw 10,5,...` above gave priority 1 the 10 % and default traffic on priority 0 only 5 %. Check the map
+> before you assign ETS shares, or set it explicitly with `--prio_tc` (`mlnx_qos`) or `prio-tc` (`dcb ets`).
 
 Setting ETS explicitly with `mlnx_qos` looks like this (the values are an example policy):
 
 ```bash
-mlnx_qos -i ens1f0np0 \
+mlnx_qos -i ens64f0np0 \
   --prio_tc 0,1,2,3,4,5,6,7 \
   --tsa ets,ets,ets,ets,ets,ets,strict,ets \
   --tcbw 10,5,5,60,5,5,0,10
@@ -301,14 +324,21 @@ mlnx_qos -i ens1f0np0 \
 gives the ETS percentages, which must add up to 100, with 0 for strict TCs (otherwise the command
 fails with `Netlink error: Bad value. see dmesg.`). `mlnx_qos` comes with NVIDIA's stack only. The
 upstream Linux alternative is the iproute2 `dcb` tool (`dcb ets`, `dcb pfc`, `dcb buffer`). See
-`man dcb` for the syntax supported by your iproute2 version and driver.
+`man dcb` for the syntax supported by your iproute2 version and driver. `dcb buffer` shows the
+receive-buffer split on both stacks:
 
-```text
-# illustrative: dcb buffer show dev ens1f0np0 (PFC on priority 3)
+```bash
+dcb buffer show dev ens64f0np0
+```
+
+```text real=inbox
 prio-buffer 0:0 1:0 2:0 3:1 4:0 5:0 6:0 7:0
 buffer-size 0:130944b 1:130944b 2:0b 3:0b 4:0b 5:0b 6:0b 7:0b
 total-size 262016b
 ```
+
+Before PFC was enabled the same command printed `prio-buffer 0:0 1:0 ...` and `buffer-size 0:262016b 1:0b ...`:
+one buffer holding everything.
 
 ### Switch: watch PG and queue watermarks
 

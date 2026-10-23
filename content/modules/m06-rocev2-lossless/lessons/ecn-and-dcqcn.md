@@ -214,6 +214,54 @@ when Secure Boot is on. NVIDIA also documents firmware-level configuration. Trea
 including those in this lesson, as illustrative, and check the release notes and documentation for
 your NIC generation and firmware.
 
+With DOCA-OFED on a ConnectX-5 (fw 16.29) the NP and RP knobs read like this (trimmed):
+
+```bash
+grep -H . /sys/class/net/ens64f0np0/ecn/roce_np/* /sys/class/net/ens64f0np0/ecn/roce_rp/* | grep -v enable
+```
+
+```text real=doca
+/sys/class/net/ens64f0np0/ecn/roce_np/cnp_802p_prio:6
+/sys/class/net/ens64f0np0/ecn/roce_np/cnp_dscp:48
+/sys/class/net/ens64f0np0/ecn/roce_np/min_time_between_cnps:4
+...
+/sys/class/net/ens64f0np0/ecn/roce_rp/initial_alpha_value:1023
+...
+/sys/class/net/ens64f0np0/ecn/roce_rp/rate_to_set_on_first_cnp:0
+/sys/class/net/ens64f0np0/ecn/roce_rp/rpg_ai_rate:5
+/sys/class/net/ens64f0np0/ecn/roce_rp/rpg_byte_reset:32767
+/sys/class/net/ens64f0np0/ecn/roce_rp/rpg_gd:11
+/sys/class/net/ens64f0np0/ecn/roce_rp/rpg_hai_rate:50
+/sys/class/net/ens64f0np0/ecn/roce_rp/rpg_max_rate:0
+/sys/class/net/ens64f0np0/ecn/roce_rp/rpg_min_dec_fac:50
+/sys/class/net/ens64f0np0/ecn/roce_rp/rpg_min_rate:1
+/sys/class/net/ens64f0np0/ecn/roce_rp/rpg_threshold:1
+/sys/class/net/ens64f0np0/ecn/roce_rp/rpg_time_reset:300
+```
+
+The debugfs route is the one the inbox driver offers, and under Secure Boot it fails for root. The
+lockdown is the kernel's, so it blocks debugfs with either stack (this capture was taken with DOCA loaded):
+
+```bash
+cat /sys/kernel/security/lockdown
+sudo sh -c 'cd /sys/kernel/debug/mlx5/0000:03:00.0/cc_params && ls | head -5 && cat rp_ai_rate'
+sudo dmesg | grep -i 'Lockdown:' | tail -1
+```
+
+```text real=doca
+none [integrity] confidentiality
+np_cnp_dscp
+np_cnp_prio
+np_cnp_prio_mode
+np_min_time_between_cnps
+rp_ai_rate
+cat: rp_ai_rate: Operation not permitted
+[ 2228.927858] Lockdown: cat: debugfs access is restricted; see man kernel_lockdown.7
+```
+
+The file names are listed, but no value can be read. With Secure Boot off, `cc_params/rp_ai_rate`
+read 5 on the same card, matching DOCA's `rpg_ai_rate`.
+
 ### Ordering of thresholds
 
 ```text
@@ -252,22 +300,39 @@ Module 7 covers telemetry-driven congestion control in end-to-end Ethernet AI pl
 
 On ConnectX NICs with NVIDIA's stack (MLNX_OFED / DOCA-OFED), the per-priority ECN enables for the
 NP and RP roles are exposed in sysfs like this. The `ecn/` directory does not exist with the inbox
-driver (`cat` reports `No such file or directory`); see the debugfs note above.
+driver; see the debugfs note above.
 
-```bash
-cat /sys/class/net/ens1f0np0/ecn/roce_np/enable/3    # 1 = act as NP (send CNPs) for prio 3
-cat /sys/class/net/ens1f0np0/ecn/roce_rp/enable/3    # 1 = act as RP (react to CNPs) for prio 3
-cat /sys/class/net/ens1f0np0/ecn/roce_np/cnp_dscp    # DSCP used for generated CNPs
-cat /sys/class/net/ens1f0np0/ecn/roce_np/cnp_802p_prio
+```bash stack=inbox
+cat /sys/class/net/ens64f0np0/ecn/roce_np/enable/3 /sys/class/net/ens64f0np0/ecn/roce_rp/enable/3
 ```
 
-```text
-# illustrative: ConnectX-5 with DOCA-OFED, defaults
+```text stack=inbox real
+cat: /sys/class/net/ens64f0np0/ecn/roce_np/enable/3: No such file or directory
+cat: /sys/class/net/ens64f0np0/ecn/roce_rp/enable/3: No such file or directory
+```
+
+```bash stack=doca
+cat /sys/class/net/ens64f0np0/ecn/roce_np/enable/3    # 1 = act as NP (send CNPs) for prio 3
+cat /sys/class/net/ens64f0np0/ecn/roce_rp/enable/3    # 1 = act as RP (react to CNPs) for prio 3
+```
+
+```text stack=doca real
 1
 1
+```
+
+```bash stack=doca
+cat /sys/class/net/ens64f0np0/ecn/roce_np/cnp_dscp    # DSCP used for generated CNPs
+cat /sys/class/net/ens64f0np0/ecn/roce_np/cnp_802p_prio
+```
+
+```text stack=doca real
 48
 6
 ```
+
+The files are writable (as root): `echo 0 | sudo tee /sys/class/net/ens64f0np0/ecn/roce_rp/enable/3`
+turns RP reaction off for priority 3, and writing 1 turns it back on.
 
 On that setup NP and RP were enabled on all eight priorities by default, so the question is less
 "is it on?" than "is RoCE actually on the priority you think?". Defaults can differ by NIC
@@ -277,11 +342,36 @@ The most reliable evidence comes from the RDMA hardware counters, which exist wi
 and NVIDIA's driver. The RDMA device is `mlx5_0` with NVIDIA's stack and has a name like
 `rocep3s0f0` with distro rdma-core; take it from `rdma link`.
 
-```bash
+```bash stack=inbox
+rdma statistic show link rocep3s0f0/1 | grep -E '_cnp_|np_ecn'
+# or
+grep -H . /sys/class/infiniband/rocep3s0f0/ports/1/hw_counters/{np_cnp_sent,rp_cnp_handled,np_ecn_marked_roce_packets,rp_cnp_ignored}
+```
+
+```text stack=inbox real
+/sys/class/infiniband/rocep3s0f0/ports/1/hw_counters/np_cnp_sent:0
+/sys/class/infiniband/rocep3s0f0/ports/1/hw_counters/rp_cnp_handled:0
+/sys/class/infiniband/rocep3s0f0/ports/1/hw_counters/np_ecn_marked_roce_packets:0
+/sys/class/infiniband/rocep3s0f0/ports/1/hw_counters/rp_cnp_ignored:0
+```
+
+```bash stack=doca
 rdma statistic show link mlx5_0/1 | grep -E '_cnp_|np_ecn'
 # or
-grep . /sys/class/infiniband/mlx5_0/ports/1/hw_counters/{np_ecn_marked_roce_packets,np_cnp_sent,rp_cnp_handled,rp_cnp_ignored}
+grep -H . /sys/class/infiniband/mlx5_0/ports/1/hw_counters/{np_cnp_sent,rp_cnp_handled,np_ecn_marked_roce_packets,rp_cnp_ignored}
 ```
+
+```text stack=doca real
+/sys/class/infiniband/mlx5_0/ports/1/hw_counters/np_cnp_sent:0
+/sys/class/infiniband/mlx5_0/ports/1/hw_counters/rp_cnp_handled:0
+/sys/class/infiniband/mlx5_0/ports/1/hw_counters/np_ecn_marked_roce_packets:0
+/sys/class/infiniband/mlx5_0/ports/1/hw_counters/rp_cnp_ignored:0
+```
+
+The real captures above are from a back-to-back pair after the QoS test runs (no drops): all zero, as
+expected without a switch. `rdma statistic` lists the same counters, in iproute2 6.19 one per line and
+in this order near the end: `rp_cnp_ignored`, `rp_cnp_handled`, `np_ecn_marked_roce_packets`,
+`np_cnp_sent`. On a fabric with ECN-marking switches, an incast looks more like this:
 
 ```text
 # illustrative, receiver host during an incast test (recent iproute2: one counter per line)
@@ -305,6 +395,14 @@ switch is there to mark. The CNP counters stay at 0 too as long as nothing is dr
 ConnectX-5 pair the receiver's `np_cnp_sent` (and the sender's `rp_cnp_handled`) rose together with
 `out_of_sequence` when lossy traffic was dropped, with no ECN-marked packet at all: a CNP without an
 ECN mark points at loss, not at switch marking.
+
+> [!VERIFIED]
+> **CNPs were sent with zero ECN-marked packets when lossy traffic dropped.**
+> On a back-to-back ConnectX-5 pair (fw 16.29/16.34) with PFC on priority 3 and global pause therefore off,
+> a 10-second `ib_write_bw` with untagged traffic (lossy priority 0) raised the receiver's `np_cnp_sent` by 17
+> and `out_of_sequence` by 30, while `np_ecn_marked_roce_packets` stayed +0; the sender's `rp_cnp_handled`
+> counted those CNPs. Runs without drops sent no CNPs. So a non-zero `np_cnp_sent` alone does not prove a
+> switch is marking: compare it with `np_ecn_marked_roce_packets` and the sequence-error counters.
 
 How to read the pair:
 

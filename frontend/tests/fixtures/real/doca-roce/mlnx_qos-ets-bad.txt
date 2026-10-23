@@ -1,0 +1,5 @@
+### cmd: sudo mlnx_qos -i $N --tsa ets,ets,ets,ets,ets,ets,ets,ets --tcbw 10,10,10,10,10,10,10,10; echo rc=$?
+### note: output of the trailing shell commands (echo rc=$?) removed
+### ----
+Netlink error: Bad value. see dmesg.
+### rc=0

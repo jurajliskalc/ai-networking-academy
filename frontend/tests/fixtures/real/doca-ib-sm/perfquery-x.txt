@@ -1,0 +1,14 @@
+### cmd: sudo perfquery -x -C mlx5_1 -P 1
+### ----
+# Port extended counters: Lid 1 port 1 (CapMask: 0x5A00 CapMask2: 0x0000000)
+PortSelect:......................1
+CounterSelect:...................0x0000
+PortXmitData:....................199294892652
+PortRcvData:.....................95779411
+PortXmitPkts:....................193443485
+PortRcvPkts:.....................13680303
+PortUnicastXmitPkts:.............193443485
+PortUnicastRcvPkts:..............13680303
+PortMulticastXmitPkts:...........0
+PortMulticastRcvPkts:............0
+### rc=0

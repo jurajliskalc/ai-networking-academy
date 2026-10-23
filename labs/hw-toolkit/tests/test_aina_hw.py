@@ -90,7 +90,8 @@ def fake_commands(h):
     outputs = {
         ("rdma", "-j", "link", "show"): json.dumps([{"ifindex": 1, "ifname": "mlx5_0", "port": 1, "state": "ACTIVE", "physical_state": "LINK_UP", "netdev": "ens1f0np0", "netdev_index": 4}]),
         ("ibv_devinfo", "-d", "mlx5_0", "-i", "1"): "hca_id:\tmlx5_0\n\t\tport:\t1\n\t\t\tstate:\t\t\tPORT_ACTIVE (4)\n\t\t\tmax_mtu:\t\t4096 (5)\n\t\t\tactive_mtu:\t\t%d (%d)\n" % ((4096, 5) if h["mtu"] >= 4200 else (1024, 3)),
-        ("ethtool", "-a", "ens1f0np0"): "Pause parameters for ens1f0np0:\nAutonegotiate:\toff\nRX:\t\ton\nTX:\t\ton\n",
+        # mlx5: enabling PFC on any priority turns global 802.3x pause off (docs/HARDWARE_VERIFICATION.md)
+        ("ethtool", "-a", "ens1f0np0"): "Pause parameters for ens1f0np0:\nAutonegotiate:\toff\nRX:\t\t%s\nTX:\t\t%s\n" % (("off", "off") if h["pfc"] else ("on", "on")),
         ("ethtool", "-S", "ens1f0np0"): "NIC statistics:\n     rx_packets: 1000\n     rx_prio3_bytes: 52428800\n     tx_prio3_pause: 0\n     rx_prio3_pause: 0\n     rx_discards_phy: 0\n     rx_crc_errors_phy: %d\n     rx_symbol_err_phy: 0\n     rx_out_of_buffer: 0\n" % h.get("crc", 0),
         ("ethtool", "-i", "ens1f0np0"): "driver: mlx5_core\nversion: 6.8.0-45-generic\nfirmware-version: %s (MT_0000000222)\nbus-info: 0000:3b:00.0\n" % h["fw"],
         ("ip", "-j", "addr", "show", "dev", "ens1f0np0"): json.dumps([{"ifname": "ens1f0np0", "addr_info": [{"family": "inet", "local": h["ip"], "prefixlen": 24}, {"family": "inet6", "local": "fe80::ba3f:d2ff:feaa:bb01", "prefixlen": 64}]}]),

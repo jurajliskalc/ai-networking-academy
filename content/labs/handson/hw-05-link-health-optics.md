@@ -42,9 +42,11 @@ By the end you can:
 - Describe a safe reseat-and-clean procedure.
 
 > [!NOTE]
-> Command output in this lab is **illustrative**. Counter names below are those of NVIDIA ConnectX
-> (`mlx5`) drivers where stated; other vendors expose similar information under different names
-> (`ethtool -S` on your NIC lists them).
+> Blocks labelled **Real capture** were copied from the reference hosts (ConnectX-5, firmware 16.29,
+> Ubuntu 26.04, 1 m 100G DAC, netdev `ens64f0np0`) with the stack named in the label; other output is
+> **illustrative** (the optical-module example in particular: the reference link has no optics).
+> Counter names below are those of NVIDIA ConnectX (`mlx5`) drivers where stated; other vendors
+> expose similar information under different names (`ethtool -S` on your NIC lists them).
 
 ## Before you start
 
@@ -69,14 +71,22 @@ sudo ethtool {{A_NETDEV}}
 ```
 
 Without `sudo` the settings still print, preceded by `netlink error: Operation not permitted`
-(only the Wake-on-LAN query needs root). Illustrative excerpt (100GbE over a DAC):
+(only the Wake-on-LAN query needs root). Excerpt from the reference host, run without `sudo`
+(100GbE over a DAC):
 
-```
-Settings for ens1f0np0:
+```text real=inbox
+$ ethtool ens64f0np0
+netlink error: Operation not permitted
+Settings for ens64f0np0:
 	Supported ports: [ Backplane ]
-	Supported link modes:   ...
-	Advertised link modes:  ...
+	Supported link modes:   1000baseKX/Full
+	...
+	Supported FEC modes: None	 RS	 BASER
+	Advertised link modes:  1000baseKX/Full
+	...
 	Advertised FEC modes: RS
+	Link partner advertised link modes:  Not reported
+	...
 	Speed: 100000Mb/s
 	Lanes: 4
 	Duplex: Full
@@ -138,13 +148,24 @@ Illustrative excerpt from an optical module:
   healthy links rather than against a number you remember.
 
 Which fields appear depends on the module type and on your `ethtool` and kernel versions. A passive
-DAC shows identification, attenuation and length but no laser: illustrative lines from a 1 m
-100G DAC:
+DAC shows identification, attenuation and length but no laser: lines from the 1 m 100G DAC on the
+reference hosts (`sudo ethtool -m`, trimmed):
 
-```
+```text real=inbox
+	Identifier                                : 0x0d (QSFP+)
+	...
 	Transceiver type                          : 100G Ethernet: 100G Base-CR4 or 25G Base-CR CA-L
+	...
 	Length (Copper or Active cable)           : 1m
 	Transmitter technology                    : 0xa0 (Copper cable, unequalized)
+	Attenuation at 2.5GHz                     : 2db
+	Attenuation at 5.0GHz                     : 3db
+	Attenuation at 7.0GHz                     : 2db
+	Attenuation at 12.9GHz                    : 3db
+	Vendor name                               : Mellanox
+	...
+	Vendor PN                                 : MCP1600-E00AE30
+	...
 	Module temperature                        : 0.00 degrees C / 32.00 degrees F
 	Module voltage                            : 0.0000 V
 ```
@@ -159,10 +180,10 @@ module EEPROM for that port; that is not an error in the link.
 ethtool --show-fec {{A_NETDEV}}
 ```
 
-Illustrative output:
+Output on the reference host (the same with both stacks):
 
-```
-FEC parameters for ens1f0np0:
+```text real=inbox
+FEC parameters for ens64f0np0:
 Supported/Configured FEC encodings: Auto
 Active FEC encoding: RS
 ```
@@ -187,16 +208,17 @@ Ethernet driver counters (names from `mlx5`; check `ethtool -S` on your NIC for 
 ethtool -S {{A_NETDEV}} | grep -E 'crc_errors_phy|symbol_err_phy|link_down_events_phy|corrected_bits_phy|discards_phy'
 ```
 
-Illustrative output:
+Output on the reference host (a clean 1 m DAC: even the corrected-bits counter reads 0; on longer
+or optical links it may well count):
 
-```
+```text real=inbox
      rx_crc_errors_phy: 0
      rx_symbol_err_phy: 0
      rx_discards_phy: 0
      tx_discards_phy: 0
-     link_down_events_phy: 1
+     link_down_events_phy: 0
      rx_pcs_symbol_err_phy: 0
-     rx_corrected_bits_phy: 18342
+     rx_corrected_bits_phy: 0
 ```
 
 RDMA port counters (generic sysfs, present for InfiniBand ports and, on many drivers, for RoCE
@@ -205,6 +227,22 @@ ports too):
 ```bash
 D=/sys/class/infiniband/{{A_RDMA_DEV}}/ports/{{RDMA_PORT}}/counters
 grep -H . $D/symbol_error $D/link_downed $D/link_error_recovery $D/port_rcv_errors 2>/dev/null
+```
+
+On the reference host the mlx5 RoCE port exposes these generic counters too (excerpt of the whole
+directory):
+
+```text real=inbox
+$ grep -H . /sys/class/infiniband/rocep3s0f0/ports/1/counters/*
+/sys/class/infiniband/rocep3s0f0/ports/1/counters/excessive_buffer_overrun_errors:0
+/sys/class/infiniband/rocep3s0f0/ports/1/counters/link_downed:0
+/sys/class/infiniband/rocep3s0f0/ports/1/counters/link_error_recovery:0
+/sys/class/infiniband/rocep3s0f0/ports/1/counters/local_link_integrity_errors:0
+...
+/sys/class/infiniband/rocep3s0f0/ports/1/counters/port_rcv_errors:0
+...
+/sys/class/infiniband/rocep3s0f0/ports/1/counters/symbol_error:0
+...
 ```
 
 **What each tells you:**
@@ -241,9 +279,35 @@ shows `NA`, which is normal. On a host with **Secure Boot** (kernel lockdown) th
 paths fail with `-E- Failed to open device`; with a recent kernel and MFT, `mst status -v` then lists a
 `/dev/fwctl/fwctl0` device in its `FWCTL` column, and `sudo mlxlink -d /dev/fwctl/fwctl0` works.
 
-Illustrative excerpt (values start in a fixed column; on a terminal some are coloured):
+On the reference host (DOCA-OFED with MFT 4.37, Secure Boot on), `mst start` loads and immediately
+unloads its modules, and `mst status -v` shows the fwctl devices:
 
+```text real=doca
+$ sudo mst start
+Starting MST (Mellanox Software Tools) driver set
+Loading MST PCI module - Success
+Loading MST PCI configuration module - Success
+Create devices
+Unloading MST PCI module (unused) - Success
+Unloading MST PCI configuration module (unused) - Success
+$ sudo mst status -v
+MST modules:
+------------
+    MST PCI module is not loaded
+    MST PCI configuration module is not loaded
+PCI devices:
+------------
+DEVICE_TYPE                                 MST      PCI       RDMA            NET             NUMA  VFIO              FWCTL                    STATE
+NA                                          NA       03:00.0   mlx5_0          net-ens64f0np0  0                       /dev/fwctl/fwctl0
+
+NA                                          NA       03:00.1   mlx5_1          net-ens64f1np1  0                       /dev/fwctl/fwctl1
 ```
+
+`mlxlink -d /dev/fwctl/fwctl0 -c` on the same host (values start in a fixed column; on a terminal some
+are coloured). Under Secure Boot, `mlxlink` over fwctl was the only MFT tool we tried that worked on these hosts:
+`mlxconfig` and `flint` failed (see the [BER and FEC lesson](#/lesson/link-layer-ber-fec)).
+
+```text real=doca
 Operational Info
 ----------------
 State                              : Active

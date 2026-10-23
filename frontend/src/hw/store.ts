@@ -2,7 +2,7 @@
 // check result per lab. Separate from learner progress (aina.progress.v1) because it describes a lab, not a
 // learner, and it can hold host names and IPs; nothing leaves the browser.
 import { useCallback, useSyncExternalStore } from 'react';
-import type { CheckRecord } from './checks';
+import type { CheckRecord, LabTasks } from './checks';
 import type { Profile } from './profile';
 import type { Report } from './report';
 
@@ -13,10 +13,14 @@ export interface HwState {
   report: Report | null;
   reportSource: string | null; // "file name", "agent http://127.0.0.1:8765" or "demo"
   checks: Record<string, CheckRecord>;
+  /** Per-task progress per lab (full runs overlaid by `aina-hw check LAB --task N` runs). */
+  tasks: Record<string, LabTasks>;
   agentUrl: string;
+  /** When the agent last answered (ISO time): lab pages offer the live counters after that. */
+  agentAt: string | null;
 }
 
-const empty = (): HwState => ({ profile: null, report: null, reportSource: null, checks: {}, agentUrl: 'http://127.0.0.1:8765' });
+const empty = (): HwState => ({ profile: null, report: null, reportSource: null, checks: {}, tasks: {}, agentUrl: 'http://127.0.0.1:8765', agentAt: null });
 
 function load(): HwState {
   try {
@@ -28,7 +32,9 @@ function load(): HwState {
       report: raw.report && typeof raw.report === 'object' && Array.isArray(raw.report.hosts) ? raw.report : null,
       reportSource: typeof raw.reportSource === 'string' ? raw.reportSource : null,
       checks: raw.checks && typeof raw.checks === 'object' ? raw.checks : {},
+      tasks: raw.tasks && typeof raw.tasks === 'object' && !Array.isArray(raw.tasks) ? raw.tasks : {},
       agentUrl: typeof raw.agentUrl === 'string' ? raw.agentUrl : empty().agentUrl,
+      agentAt: typeof raw.agentAt === 'string' ? raw.agentAt : null,
     };
   } catch {
     return empty();
@@ -55,7 +61,9 @@ function subscribe(l: () => void) {
 }
 
 export function setHw(fn: (s: HwState) => HwState) {
-  state = fn(state);
+  const next = fn(state);
+  if (next === state) return; // no change: no write, no re-render
+  state = next;
   try {
     localStorage.setItem(HW_KEY, JSON.stringify(state));
   } catch {

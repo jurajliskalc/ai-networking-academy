@@ -2,6 +2,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { Pill } from '../components/ui';
 import { MIN_FRAME, WIRE_OVERHEAD, l3HeaderBytes } from './EthernetFrame';
 import NumInput from '../components/NumInput';
+import { CX5_BW_SWEEP, CX5_LAT_SWEEP, CX5_MODEL, CX5_RUNS, CX5_SETUP, cx5LargeMessagePct } from './perftestBaselines';
 
 // ---------- Pure calculation (unit-testable) ----------
 // Header sizes: IBTA InfiniBand Architecture Specification Vol. 1 (LRH 8, BTH 12, RETH 16, ICRC 4, VCRC 2) and
@@ -114,6 +115,18 @@ export function bwRow(size: number, iters: number, peak: number, avg: number, mp
   return ` ${String(size).padEnd(7)}    ${String(iters).padEnd(10)}       ${peak.toFixed(2).padEnd(7)}            ${avg.toFixed(2).padEnd(7)}             ${mpps.toFixed(6)}`;
 }
 
+export interface SweepRow { size: number; realGbps: number; modelGbps: number; realUs: number; modelUs: number }
+
+/** Measured (real ConnectX-5 pair, perftestBaselines.ts) vs modelled bandwidth and t_typical at every -a sweep size. */
+export function compareSweep(m: Model): SweepRow[] {
+  return CX5_BW_SWEEP.map((p, i) => ({
+    size: p.size, realGbps: p.bwGbps, modelGbps: bwBps(p.size, m) / 1e9, realUs: CX5_LAT_SWEEP[i].tTypicalUs, modelUs: latUs(p.size, m),
+  }));
+}
+
+/** Model minus measurement as a share of the measurement, in percent (positive: the model is higher). */
+export const deviationPct = (model: number, real: number) => (100 * (model - real)) / real;
+
 // ---------- formatting ----------
 
 export function fmtSize(b: number): string {
@@ -123,6 +136,7 @@ export function fmtSize(b: number): string {
 }
 const fmtUs = (us: number) => (us >= 1000 ? `${(us / 1000).toFixed(2)} ms` : `${us.toFixed(us < 10 ? 2 : 1)} µs`);
 const fmtG = (bps: number) => `${(bps / 1e9).toFixed(bps < 1e10 ? 2 : 1)} Gb/s`;
+const fmtDev = (pct: number) => `${pct >= 0 ? '+' : ''}${pct.toFixed(0)} %`;
 const fmtMib = (bps: number) => `${Math.round(bps / 8 / MIB).toLocaleString('en-US')} MiB/s`;
 
 // ---------- UI ----------
@@ -158,9 +172,20 @@ function Out({ label, value, sub, tone = 'text-fg' }: { label: string; value: Re
 
 const TICKS = [2, 64, 1024, 32768, MIB, MAX_SIZE];
 
-function Chart({ points, yLog, yMax, yMin = 0, cursor, label, fmtY, yTicks, refs = [], vMark }: {
+function Legend() {
+  return (
+    <div className="flex flex-wrap gap-3 px-1 pb-1 text-[11px] text-muted" aria-hidden="true">
+      <span><span className="mr-1 inline-block h-0.5 w-4 align-middle" style={{ background: 'var(--data)' }} />model</span>
+      <span><span className="mr-1 inline-block w-4 border-t-2 border-dashed align-middle" style={{ borderColor: 'var(--fg)' }} />measured, ConnectX-5 100G</span>
+    </div>
+  );
+}
+
+function Chart({ points, yLog, yMax, yMin = 0, cursor, label, fmtY, yTicks, refs = [], vMark, overlay }: {
   points: [number, number][]; yLog: boolean; yMax: number; yMin?: number; cursor: number; label: string; fmtY: (v: number) => string;
   yTicks: number[]; refs?: { y: number; text: string; tone: string }[]; vMark?: { x: number; text: string };
+  /** A measured series, drawn dashed with square markers in the text colour. */
+  overlay?: [number, number][];
 }) {
   const W = 640, H = 210, L = 64, B = 28, T = 12, R = 14;
   const lx = (s: number) => Math.log2(s);
@@ -199,6 +224,12 @@ function Chart({ points, yLog, yMax, yMin = 0, cursor, label, fmtY, yTicks, refs
           <text x={x(vMark.x) + 4} y={T + 12} fontSize={11} fill="var(--warn)" fontFamily="var(--font-mono)">{vMark.text}</text>
         </g>
       )}
+      {overlay && (
+        <g data-series="measured">
+          <path d={overlay.map((p, i) => `${i ? 'L' : 'M'}${x(p[0]).toFixed(1)},${y(p[1]).toFixed(1)}`).join(' ')} fill="none" stroke="var(--fg)" strokeWidth={1.5} strokeDasharray="5 3" />
+          {overlay.map((p) => <rect key={p[0]} x={x(p[0]) - 2.5} y={y(p[1]) - 2.5} width={5} height={5} fill="var(--fg)" />)}
+        </g>
+      )}
       <path d={d} fill="none" stroke="var(--data)" strokeWidth={2} />
       {points.map((p) => <circle key={p[0]} cx={x(p[0])} cy={y(p[1])} r={2} fill="var(--data)" />)}
       {cur && (
@@ -226,6 +257,7 @@ export default function PerftestExplorer() {
   const [legacy, setLegacy] = useState(false);
   const [convVal, setConvVal] = useState(46000);
   const [convUnit, setConvUnit] = useState<'MiB/s' | 'Gb/s'>('MiB/s');
+  const [real, setReal] = useState(false);
 
   const m: Model = { t, mtu, gbps, alphaUs, mrM };
   const size = SWEEP[idx];
@@ -240,8 +272,19 @@ export default function PerftestExplorer() {
 
   const bwPts = useMemo(() => SWEEP.map((s) => [s, bwBps(s, { t, mtu, gbps, alphaUs, mrM }) / 1e9] as [number, number]), [t, mtu, gbps, alphaUs, mrM]);
   const latPts = useMemo(() => SWEEP.map((s) => [s, latUs(s, { t, mtu, gbps, alphaUs, mrM })] as [number, number]), [t, mtu, gbps, alphaUs, mrM]);
+  const realBw = CX5_BW_SWEEP.map((p) => [p.size, p.bwGbps] as [number, number]);
+  const realLat = CX5_LAT_SWEEP.map((p) => [p.size, p.tTypicalUs] as [number, number]);
   const latMax = latPts[latPts.length - 1][1];
-  const latTicks = [1, 10, 100, 1000, 10000].filter((v) => v >= alphaUs * 0.5 && v <= latMax * 1.5);
+  const latLo = Math.min(alphaUs, real ? realLat[0][1] : Infinity) * 0.5;
+  const latHi = Math.max(latMax, real ? realLat[realLat.length - 1][1] : 0) * 1.5;
+  const latTicks = [1, 10, 100, 1000, 10000].filter((v) => v >= latLo && v <= latHi);
+  const cmp = compareSweep(m);
+  const atSize = cmp.find((r) => r.size === size)!;
+  const matched = gbps === CX5_MODEL.gbps && t === CX5_MODEL.t && mtu === CX5_MODEL.mtu && alphaUs === CX5_MODEL.alphaUs && mrM === CX5_MODEL.mrM;
+  const useCx5 = () => {
+    setGbps(CX5_MODEL.gbps); setT(CX5_MODEL.t); setMtu(CX5_MODEL.mtu); setAlpha(CX5_MODEL.alphaUs); setMr(CX5_MODEL.mrM); setReal(true);
+  };
+  const run = (id: string) => CX5_RUNS.find((r) => r.id === id)!;
 
   const convGbps = convUnit === 'MiB/s' ? mibToGbps(convVal) : convVal;
   const convMib = convUnit === 'MiB/s' ? convVal : gbpsToMib(convVal);
@@ -292,19 +335,22 @@ export default function PerftestExplorer() {
       <div className="grid gap-3 lg:grid-cols-2">
         <div className="rounded-lg border border-line bg-panel p-2">
           <div className="px-1 pb-1 font-mono text-[10px] uppercase tracking-[0.14em] text-muted">Bandwidth vs message size (ib_write_bw -a), Gb/s</div>
+          {real && <Legend />}
           <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Bandwidth chart">
           <Chart points={bwPts} yLog={false} yMax={gbps * 1.08} cursor={size} fmtY={(v) => `${v}`}
             yTicks={[0.25, 0.5, 0.75, 1].map((f) => f * gbps)}
             refs={[{ y: gbps, text: `nominal ${gbps}G`, tone: 'var(--muted)' }]}
             vMark={{ x: Math.max(2, n2), text: `n½ ≈ ${fmtSize(n2)}` }}
-            label={`Bandwidth rises from ${fmtG(bwPts[0][1] * 1e9)} at 2 bytes to ${fmtG(peak)} at 8 MiB on a ${gbps}G ${TRANSPORT_LABEL[t]} link; it reaches half of that at about ${fmtSize(n2)}. Selected ${fmtSize(size)}: ${fmtG(bw)}.`} />
+            overlay={real ? realBw : undefined}
+            label={`Bandwidth rises from ${fmtG(bwPts[0][1] * 1e9)} at 2 bytes to ${fmtG(peak)} at 8 MiB on a ${gbps}G ${TRANSPORT_LABEL[t]} link; it reaches half of that at about ${fmtSize(n2)}. Selected ${fmtSize(size)}: ${fmtG(bw)}.${real ? ` Measured on the ConnectX-5 pair at 100G: ${fmtG(atSize.realGbps * 1e9)} at ${fmtSize(size)}, ${fmtG(realBw[realBw.length - 1][1] * 1e9)} at 8 MiB.` : ''}`} />
           </div>
         </div>
         <div className="rounded-lg border border-line bg-panel p-2">
           <div className="px-1 pb-1 font-mono text-[10px] uppercase tracking-[0.14em] text-muted">Latency vs message size (ib_write_lat -a), microseconds, log scale</div>
+          {real && <Legend />}
           <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Latency chart">
-          <Chart points={latPts} yLog yMin={alphaUs * 0.5} yMax={latMax * 1.5} cursor={size} fmtY={(v) => `${v}`} yTicks={latTicks}
-            label={`One-way latency stays near ${fmtUs(latPts[0][1])} for small messages and grows to ${fmtUs(latMax)} at 8 MiB, where serialization dominates. Selected ${fmtSize(size)}: ${fmtUs(lat)}.`} />
+          <Chart points={latPts} yLog yMin={latLo} yMax={latHi} cursor={size} fmtY={(v) => `${v}`} yTicks={latTicks} overlay={real ? realLat : undefined}
+            label={`One-way latency stays near ${fmtUs(latPts[0][1])} for small messages and grows to ${fmtUs(latMax)} at 8 MiB, where serialization dominates. Selected ${fmtSize(size)}: ${fmtUs(lat)}.${real ? ` Measured t_typical on the ConnectX-5 pair: ${fmtUs(atSize.realUs)} at ${fmtSize(size)}.` : ''}`} />
           </div>
         </div>
       </div>
@@ -314,6 +360,84 @@ export default function PerftestExplorer() {
         <Out label="n½ streaming (ib_write_bw)" value={fmtSize(n2)} tone="text-warn" sub={`${n2.toLocaleString('en-US')} B: half of the ceiling, many messages in flight`} />
         <Out label="n½ one in flight (ping-pong)" value={fmtSize(n2pp)} sub={`α × rate = ${alphaUs.toFixed(1)} µs × ${(peak / 8 / 1e9).toFixed(1)} GB/s`} />
       </div>
+
+      <section className="rounded-lg border border-line p-3" aria-labelledby="pe-real-title">
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          <h3 id="pe-real-title" className="text-sm font-semibold text-fg">{CX5_SETUP.title}</h3>
+          <button type="button" aria-pressed={real} onClick={() => setReal(!real)} className={btn(real)}>Overlay the measurement</button>
+          <button type="button" aria-pressed={matched} onClick={useCx5} className={btn(matched)}>Set the model to this setup</button>
+        </div>
+        <p className="text-xs text-muted">
+          One pair, one setup, measured on {CX5_SETUP.date}. Hardware: {CX5_SETUP.hardware}; {CX5_SETUP.hosts}. Link: {CX5_SETUP.link}.
+          Stack: {CX5_SETUP.stack}. Reference points to hold the model against, not a benchmark of the adapter: other hosts, firmware,
+          BIOS and switch settings give other numbers.
+        </p>
+        {real && (
+          <div className="mt-3 space-y-3">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3" aria-live="polite">
+              <Out label={`Measured BW at ${fmtSize(size)}`} value={fmtG(atSize.realGbps * 1e9)} sub={`model ${fmtG(atSize.modelGbps * 1e9)} (${fmtDev(deviationPct(atSize.modelGbps, atSize.realGbps))})`} />
+              <Out label={`Measured t_typical at ${fmtSize(size)}`} value={fmtUs(atSize.realUs)} sub={`model ${fmtUs(atSize.modelUs)} (${fmtDev(deviationPct(atSize.modelUs, atSize.realUs))})`} />
+              <Out label="Measured at 8 MiB" value={`${cx5LargeMessagePct().toFixed(1)} %`} sub="of the 100 Gb/s line rate (BW average)" />
+            </div>
+            {!matched && (
+              <p className="text-xs text-warn">
+                The model is set to {gbps}G {TRANSPORT_LABEL[t]}, MTU {mtu}, α {alphaUs.toFixed(1)} µs, {mrM} M msgs/s; the measurement is 100G RoCEv2 / IPv4 at
+                MTU 4096. Use "Set the model to this setup" for a like-for-like comparison.
+              </p>
+            )}
+            <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Measured and modelled results by message size">
+              <table className="w-full min-w-[460px] text-left text-xs">
+                <caption className="mb-1 text-left text-xs text-muted">ib_write_bw -a (BW average) and ib_write_lat -a (t_typical): measured vs this model</caption>
+                <thead className="font-mono text-[10px] uppercase text-muted">
+                  <tr><th className="pr-3">Size</th><th className="pr-3">Measured BW</th><th className="pr-3">Model BW</th><th className="pr-3">Measured t_typical</th><th>Model latency</th></tr>
+                </thead>
+                <tbody>
+                  {cmp.filter((r) => SHOW_ROWS.includes(r.size) || r.size === size).map((r) => (
+                    <tr key={r.size} className={`border-t border-line ${r.size === size ? 'font-semibold' : ''}`}>
+                      <td className="py-1 pr-3 font-mono">{fmtSize(r.size)}{r.size === size ? ' ◂' : ''}</td>
+                      <td className="pr-3 font-mono text-fg">{fmtG(r.realGbps * 1e9)}</td>
+                      <td className="pr-3 font-mono text-data">{fmtG(r.modelGbps * 1e9)}</td>
+                      <td className="pr-3 font-mono text-fg">{fmtUs(r.realUs)}</td>
+                      <td className="font-mono text-data">{fmtUs(r.modelUs)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Other measurements on the same pair">
+              <table className="w-full min-w-[460px] text-left text-xs">
+                <caption className="mb-1 text-left text-xs text-muted">Other runs on the same pair (BW average; latency at 2 bytes)</caption>
+                <thead className="font-mono text-[10px] uppercase text-muted">
+                  <tr><th className="pr-3">Run</th><th className="pr-3">Size</th><th className="pr-3">Result</th><th>Command (client side)</th></tr>
+                </thead>
+                <tbody>
+                  {CX5_RUNS.map((r) => (
+                    <tr key={r.id} className="border-t border-line">
+                      <td className="py-1 pr-3 text-fg">{r.label}</td>
+                      <td className="pr-3 font-mono">{fmtSize(r.size)}</td>
+                      <td className="pr-3 font-mono text-fg">
+                        {r.bwGbps !== undefined && `${r.bwGbps.toFixed(2)} Gb/s`}
+                        {r.latTypicalUs !== undefined && ` · ${r.latTypicalUs.toFixed(2)} µs (min ${r.latMinUs!.toFixed(2)})`}
+                      </td>
+                      <td className="font-mono text-muted">{r.command}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <ul className="list-disc space-y-1 pl-5 text-xs text-muted">
+              <li>One QP reached {fmtG(Math.max(...CX5_BW_SWEEP.filter((p) => p.size >= 8192 && p.size <= 131072).map((p) => p.bwGbps)) * 1e9)} between 8 and 128 KiB and
+                settled near {fmtG(CX5_BW_SWEEP[CX5_BW_SWEEP.length - 1].bwGbps * 1e9)} from 256 KiB up. The model has no term for that step; it is simply what this pair measured.</li>
+              <li>4 QPs gave {(run('q4').bwGbps! - run('q1').bwGbps!).toFixed(2)} Gb/s more than 1 QP at 64 KiB: at 100G one QP already nearly fills the link.
+                Bidirectional (-b) reports both directions together: {run('bidir').bwGbps!.toFixed(2)} Gb/s.</li>
+              <li>Path MTU 1024 cost bandwidth at 64 KiB and 1 MiB (four times the packets and headers).{run('m1024-4k').bwGbps! > run('m4096-4k').bwGbps!
+                ? ' At 4 KiB the MTU 1024 run happened to measure higher than MTU 4096, but three repeat runs put both between 82 and 88 Gb/s: at that size the difference is noise. Repeat a run before reading a few Gb/s into it.' : ''}</li>
+              <li>2-byte latency: {run('roce').latTypicalUs!.toFixed(2)} µs typical on RoCE, {run('ib').latTypicalUs!.toFixed(2)} µs on InfiniBand EDR (same adapters, no CPU pinning);
+                the sweep was pinned with numactl and measured {CX5_LAT_SWEEP[0].tTypicalUs.toFixed(2)} µs.</li>
+            </ul>
+          </div>
+        )}
+      </section>
 
       <div className="rounded-lg border border-line p-3">
         <div className="mb-2 flex flex-wrap items-center gap-2">

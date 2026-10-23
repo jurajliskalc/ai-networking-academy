@@ -5,170 +5,438 @@ commands:
   - cmd: ibv_devices
     platform: rdma
     summary: List RDMA devices visible to user space with their node GUIDs.
-    example: |
-      # illustrative output
-          device                 node GUID
-          ------              ----------------
-          mlx5_0              b83fd20300aabb01
-          mlx5_1              b83fd20300aabb11
+    stacks:
+      inbox:
+        example: |
+          $ ibv_devices
+              device          	   node GUID
+              ------          	----------------
+              rocep3s0f0      	248a0703000011ee
+              rocep3s0f1      	248a0703000011ef
+        real: true
+      doca:
+        example: |
+          $ ibv_devices
+          libibverbs: Warning: couldn't load driver 'libionic-rdmav59.so': libionic-rdmav59.so: cannot open shared object file: No such file or directory
+              device          	   node GUID
+              ------          	----------------
+              mlx5_0          	248a0703000011ee
+              mlx5_1          	248a0703000011ef
+        real: true
     notes: "Device names depend on the driver stack: NVIDIA's DOCA/MLNX_OFED names them mlx5_0, mlx5_1, ...; distribution rdma-core renames them from the PCI address, for example rocep59s0f0 for 0000:3b:00.0. Take the name from this list or from 'rdma link' rather than assuming mlx5_0 (tools given a wrong name report that the device was not found). If a device is missing, check that the kernel driver (for example mlx5_ib) is loaded and that rdma-core user-space providers are installed."
     tags: [rdma-core, inventory]
 
   - cmd: ibv_devinfo
     platform: rdma
     summary: Show each RDMA device's firmware, port state, active MTU, link layer and LID.
-    example: |
-      # illustrative output (trimmed)
-      hca_id: mlx5_0
-              transport:                      InfiniBand (0)
-              fw_ver:                         28.41.1000
-              node_guid:                      b83f:d203:00aa:bb01
-              vendor_id:                      0x02c9
-              vendor_part_id:                 4129
-              board_id:                       MT_0000000838
-              phys_port_cnt:                  1
-                      port:   1
-                              state:                  PORT_ACTIVE (4)
-                              max_mtu:                4096 (5)
-                              active_mtu:             4096 (5)
-                              sm_lid:                 0
-                              port_lid:               0
-                              port_lmc:               0x00
-                              link_layer:             Ethernet
-    notes: "link_layer tells you RoCE (Ethernet) vs InfiniBand. On IB, port_lid 65535 (unassigned) with state PORT_INIT (2) usually means no subnet manager has configured the port. On RoCE, active_mtu below 4096 usually means the netdev MTU is too small. 'transport: InfiniBand' is printed for RoCE devices too: it refers to the IB transport layer. vendor_part_id identifies the chip (4119 ConnectX-5, 4129 ConnectX-7). Asking for a device that does not exist (-d mlx5_0 on a host whose device is called rocep59s0f0) prints: IB device 'mlx5_0' wasn't found."
+    stacks:
+      inbox:
+        example: |
+          $ ibv_devinfo
+          hca_id:	rocep3s0f0
+          	transport:			InfiniBand (0)
+          	fw_ver:				16.29.1016
+          	node_guid:			248a:0703:0000:11ee
+          	sys_image_guid:			248a:0703:0000:11ee
+          	vendor_id:			0x02c9
+          	vendor_part_id:			4119
+          	hw_ver:				0x0
+          	board_id:			MT_0000000008
+          	phys_port_cnt:			1
+          		port:	1
+          			state:			PORT_ACTIVE (4)
+          			max_mtu:		4096 (5)
+          			active_mtu:		4096 (5)
+          			sm_lid:			0
+          			port_lid:		0
+          			port_lmc:		0x00
+          			link_layer:		Ethernet
+          ...
+        real: true
+      doca:
+        example: |
+          $ ibv_devinfo
+          libibverbs: Warning: couldn't load driver 'libionic-rdmav59.so': libionic-rdmav59.so: cannot open shared object file: No such file or directory
+          hca_id:	mlx5_0
+          	transport:			InfiniBand (0)
+          	fw_ver:				16.29.1016
+          	node_guid:			248a:0703:0000:11ee
+          	sys_image_guid:			248a:0703:0000:11ee
+          	vendor_id:			0x02c9
+          	vendor_part_id:			4119
+          	hw_ver:				0x0
+          	board_id:			MT_0000000008
+          	phys_port_cnt:			1
+          		port:	1
+          			state:			PORT_ACTIVE (4)
+          			max_mtu:		4096 (5)
+          			active_mtu:		4096 (5)
+          			sm_lid:			0
+          			port_lid:		0
+          			port_lmc:		0x00
+          			link_layer:		Ethernet
+          ...
+        real: true
+    notes: "link_layer tells you RoCE (Ethernet) vs InfiniBand. On IB, port_lid 65535 (unassigned) with state PORT_INIT (2) usually means no subnet manager has configured the port. On RoCE, active_mtu below 4096 usually means the netdev MTU is too small. 'transport: InfiniBand' is printed for RoCE devices too: it refers to the IB transport layer. vendor_part_id identifies the chip (4119 ConnectX-5, 4129 ConnectX-7). Asking for a device that does not exist (-d mlx5_0 on a host whose device is called rocep3s0f0) prints: IB device 'mlx5_0' wasn't found (exit code 255). With DOCA-OFED every libibverbs tool first prints a harmless 'libibverbs: Warning: couldn't load driver libionic-rdmav59.so' line."
     tags: [rdma-core, verify, mtu]
 
   - cmd: ibv_devinfo -d mlx5_0 -v
     platform: rdma
     summary: Verbose capabilities for one device, including max QPs, max MR size, atomic support, and on RoCE the GID table.
-    notes: "Long output; pipe to less or grep. On RoCE the GID table appears as lines such as 'GID[  3]: ::ffff:10.0.0.11, RoCE v2'. Useful when an application fails because it requests more QPs, CQ entries or MR size than the device supports."
+    stacks:
+      inbox:
+        cmd: ibv_devinfo -d rocep3s0f0 -v
+        example: |
+          $ ibv_devinfo -d rocep3s0f0 -v | grep -E 'state|active_mtu|link_layer|GID'
+          			state:			PORT_ACTIVE (4)
+          			active_mtu:		4096 (5)
+          			link_layer:		Ethernet
+          			phys_state:		LINK_UP (5)
+          			GID[  0]:		fe80:0000:0000:0000:268a:07ff:fe00:11ee, RoCE v1
+          			GID[  1]:		fe80::268a:7ff:fe00:11ee, RoCE v2
+          			GID[  2]:		0000:0000:0000:0000:0000:ffff:0a0a:0a01, RoCE v1
+          			GID[  3]:		::ffff:10.10.10.1, RoCE v2
+        real: true
+      doca:
+        example: |
+          $ ibv_devinfo -d mlx5_0 -v | grep -E 'state|active_mtu|link_layer|GID'
+          libibverbs: Warning: couldn't load driver 'libionic-rdmav59.so': libionic-rdmav59.so: cannot open shared object file: No such file or directory
+          			state:			PORT_ACTIVE (4)
+          			active_mtu:		4096 (5)
+          			link_layer:		Ethernet
+          			phys_state:		LINK_UP (5)
+          			GID[  0]:		fe80:0000:0000:0000:268a:07ff:fe00:11ee, RoCE v1
+          			GID[  1]:		fe80::268a:7ff:fe00:11ee, RoCE v2
+          			GID[  2]:		0000:0000:0000:0000:0000:ffff:0a0a:0a01, RoCE v1
+          			GID[  3]:		::ffff:10.10.10.1, RoCE v2
+        real: true
+    notes: "Long output; pipe to less or grep. On RoCE the GID table appears as lines such as 'GID[  3]: ::ffff:10.10.10.1, RoCE v2': RoCE v1 entries are printed in full hexadecimal, RoCE v2 entries in compressed IPv6 notation. Useful when an application fails because it requests more QPs, CQ entries or MR size than the device supports."
     tags: [rdma-core, capabilities]
 
   - cmd: ibdev2netdev -v
     platform: rdma
     summary: NVIDIA OFED/DOCA helper script that maps RDMA devices to network interfaces and shows link state.
-    example: |
-      # illustrative output as a normal user (the card's VPD needs root)
-      cat: /sys/class/infiniband/mlx5_0/device/vpd: Permission denied
-      0000:3b:00.0 mlx5_0 (MT4129 -            )                 fw 28.41.1000 port 1 (ACTIVE) ==> ens1f0np0 (Up)
-      # without -v
-      mlx5_0 port 1 ==> ens1f0np0 (Up)
+    stacks:
+      inbox:
+        cmd: rdma link show
+        example: |
+          $ rdma link show
+          link rocep3s0f0/1 state ACTIVE physical_state LINK_UP netdev ens64f0np0 
+          link rocep3s0f1/1 state ACTIVE physical_state LINK_UP netdev ens64f1np1 
+        notes: "ibdev2netdev does not exist with the distribution's stack (it is not in rdma-core or the Ubuntu archive). rdma link show gives the same RDMA device to netdev mapping for RoCE ports, with state and physical state."
+        real: true
+      doca:
+        example: |
+          $ ibdev2netdev -v          # as a normal user (the card's VPD needs root)
+          cat: /sys/class/infiniband/mlx5_0/device/vpd: Permission denied
+          0000:03:00.0 mlx5_0 (MT4119 -            )                 fw 16.29.1016 port 1 (ACTIVE) ==> ens64f0np0 (Up)
+          cat: /sys/class/infiniband/mlx5_1/device/vpd: Permission denied
+          0000:03:00.1 mlx5_1 (MT4119 -            )                 fw 16.29.1016 port 1 (ACTIVE) ==> ens64f1np1 (Up)
+          $ ibdev2netdev
+          mlx5_0 port 1 ==> ens64f0np0 (Up)
+          mlx5_1 port 1 ==> ens64f1np1 (Up)
+        real: true
     notes: "Shipped with MLNX_OFED/DOCA-Host (mlnx-tools), not with upstream rdma-core or the distribution archives. Run as root to fill the blank fields from the card's VPD. The upstream equivalent is 'rdma link show', which prints the netdev for each RoCE port (for an InfiniBand port it prints no netdev, even when an IPoIB interface exists, while ibdev2netdev shows it)."
     tags: [ofed, doca, inventory, mapping]
 
   - cmd: rdma link show
     platform: rdma
     summary: iproute2 view of every RDMA port with state, physical state and the associated netdev.
-    example: |
-      # illustrative output
-      link mlx5_0/1 state ACTIVE physical_state LINK_UP netdev ens1f0np0
-      link mlx5_1/1 state DOWN physical_state DISABLED netdev ens2f0np0
-      # the first port on a host with distribution rdma-core names
-      link rocep59s0f0/1 state ACTIVE physical_state LINK_UP netdev ens1f0np0
+    stacks:
+      inbox:
+        example: |
+          $ rdma link show
+          link rocep3s0f0/1 state ACTIVE physical_state LINK_UP netdev ens64f0np0 
+          link rocep3s0f1/1 state ACTIVE physical_state LINK_UP netdev ens64f1np1 
+        real: true
+      doca:
+        example: |
+          $ rdma link show
+          link mlx5_0/1 state ACTIVE physical_state LINK_UP netdev ens64f0np0 
+          link mlx5_1/1 state ACTIVE physical_state LINK_UP netdev ens64f1np1 
+        real: true
     notes: Available without OFED, and the place to read the RDMA device name on your host (mlx5_N with NVIDIA's stack, rocep<bus>s<slot>f<fn> with distribution rdma-core). state ACTIVE plus physical_state LINK_UP is what you want; physical_state DISABLED means the netdev is administratively down; physical_state POLLING means the port is trying to train (cable or peer issue). An InfiniBand port prints a different line, with no netdev field, for example 'link mlx5_1/1 subnet_prefix fe80:0000:0000:0000 lid 1 sm_lid 1 lmc 0 state ACTIVE physical_state LINK_UP' (before the SM has run, lid 65535, sm_lid 0 and state INIT).
     tags: [iproute2, rdma, verify, mapping]
 
   - cmd: rdma dev show
     platform: rdma
     summary: List RDMA devices with node type, firmware version and GUIDs.
-    example: |
-      # illustrative output
-      0: mlx5_0: node_type ca protocol roce fw 28.41.1000 node_guid b83f:d203:00aa:bb01 sys_image_guid b83f:d203:00aa:bb01
-    notes: protocol shows roce or ib for each device; -j prints JSON.
+    stacks:
+      inbox:
+        example: |
+          $ rdma dev show
+          0: rocep3s0f0: node_type ca protocol roce fw 16.29.1016 node_guid 248a:0703:0000:11ee sys_image_guid 248a:0703:0000:11ee 
+          1: rocep3s0f1: node_type ca protocol roce fw 16.29.1016 node_guid 248a:0703:0000:11ef sys_image_guid 248a:0703:0000:11ee 
+        real: true
+      doca:
+        example: |
+          $ rdma dev show
+          0: mlx5_0: node_type ca protocol roce fw 16.29.1016 node_guid 248a:0703:0000:11ee sys_image_guid 248a:0703:0000:11ee 
+          1: mlx5_1: node_type ca protocol roce fw 16.29.1016 node_guid 248a:0703:0000:11ef sys_image_guid 248a:0703:0000:11ee 
+        real: true
+    notes: protocol shows roce or ib for each device; -j prints JSON. Both ports of a dual-port adapter share the sys_image_guid.
     tags: [iproute2, rdma, inventory]
 
   - cmd: rdma resource show qp
     platform: rdma
     summary: List RDMA queue pairs currently allocated, with their state, type, owning process and peer QP number.
-    example: |
-      # illustrative output on an idle host (only the kernel's GSI QP)
-      link mlx5_0/1 lqpn 1 type GSI state RTS sq-psn 0 comm [ib_core]
-      # per-device totals
-      $ rdma resource show
-      0: mlx5_0: pd 3 cq 4 qp 1 cm_id 0 mr 0 ctx 0 srq 2
+    stacks:
+      inbox:
+        example: |
+          $ rdma resource show qp          # idle host: only the kernel's GSI QPs
+          link rocep3s0f0/1 lqpn 1 type GSI state RTS sq-psn 0 comm [ib_core] 
+          link rocep3s0f1/1 lqpn 1 type GSI state RTS sq-psn 0 comm [ib_core] 
+          $ rdma resource show             # per-device totals
+          0: rocep3s0f0: pd 3 cq 4 qp 1 cm_id 0 mr 0 ctx 0 srq 2 
+          1: rocep3s0f1: pd 3 cq 3 qp 1 cm_id 0 mr 0 ctx 0 srq 2 
+        real: true
+      doca:
+        example: |
+          $ rdma resource show qp          # idle host: only the kernel's GSI QPs
+          link mlx5_0/1 lqpn 1 type GSI state RTS sq-psn 0 comm [ib_core] 
+          link mlx5_1/1 lqpn 1 type GSI state RTS sq-psn 0 comm [ib_core] 
+          $ rdma resource show             # per-device totals
+          0: mlx5_0: pd 3 cq 3 qp 1 cm_id 0 mr 0 ctx 0 srq 2 
+          1: mlx5_1: pd 3 cq 3 qp 1 cm_id 0 mr 0 ctx 0 srq 2 
+        real: true
     notes: "QPs of running applications (NCCL, perftest and so on) show up as extra lines with type RC, the remote QP number, PSNs and the owning process. 'rdma resource show' (no object) gives per-device totals of PDs, CQs, QPs, MRs. A QP stuck in ERR or a growing QP count across job restarts can reveal leaks or failed connections. Requires a kernel and iproute2 recent enough to support resource tracking."
     tags: [iproute2, rdma, qp, troubleshooting]
 
   - cmd: rdma statistic show link mlx5_0/1
     platform: rdma
     summary: Show the port's RDMA hardware counters (on mlx5 these include out_of_buffer, out_of_sequence, packet_seq_err, local_ack_timeout_err, np_cnp_sent, rp_cnp_handled, np_ecn_marked_roce_packets).
-    example: |
-      # illustrative output (recent iproute2, trimmed, values made up)
-      link mlx5_0/1
-          rx_write_requests 0
-          rx_read_requests 0
-          out_of_buffer 0
-          out_of_sequence 12
-          rnr_nak_retry_err 0
-          packet_seq_err 0
-          local_ack_timeout_err 0
-          req_transport_retries_exceeded 0
-          roce_adp_retrans 0
-          rp_cnp_ignored 0
-          rp_cnp_handled 90233
-          np_ecn_marked_roce_packets 88412
-          np_cnp_sent 88019
-          rx_icrc_encapsulated 0
+    stacks:
+      inbox:
+        cmd: rdma statistic show link rocep3s0f0/1
+        example: |
+          $ rdma statistic show link rocep3s0f0/1      # iproute2 6.19, after some perftest runs
+          link rocep3s0f0/1 
+              rx_write_requests 106000 
+              rx_read_requests 0 
+              rx_atomic_requests 0 
+              rx_dct_connect 0 
+              out_of_buffer 0 
+              out_of_sequence 0 
+              duplicate_request 0 
+              rnr_nak_retry_err 0 
+              packet_seq_err 0 
+              implied_nak_seq_err 0 
+              local_ack_timeout_err 0 
+          ...
+              req_transport_retries_exceeded 0 
+          ...
+              rp_cnp_ignored 0 
+              rp_cnp_handled 0 
+              np_ecn_marked_roce_packets 0 
+              np_cnp_sent 0 
+              rx_icrc_encapsulated 0 
+        real: true
+      doca:
+        example: |
+          $ rdma statistic show link mlx5_0/1          # after some perftest runs
+          link mlx5_0/1 
+              rx_write_requests 129005 
+              rx_read_requests 5 
+              rx_atomic_requests 0 
+              rx_dct_connect 0 
+              out_of_buffer 0 
+              out_of_sequence 0 
+              duplicate_request 0 
+              rnr_nak_retry_err 0 
+              packet_seq_err 0 
+              implied_nak_seq_err 0 
+              local_ack_timeout_err 0 
+          ...
+              req_transport_retries_exceeded 0 
+          ...
+              rp_cnp_ignored 0 
+              rp_cnp_handled 0 
+              np_ecn_marked_roce_packets 0 
+              np_cnp_sent 0 
+              rx_icrc_encapsulated 0 
+        real: true
     notes: "Recent iproute2 prints one counter per line as above; older versions printed them all on the link line, so scripts should not depend on the layout (-j gives JSON). Counter names are driver-specific (these are mlx5). Read as deltas. np_* counters are the receiver ('notification point') side of DCQCN, rp_* the sender ('reaction point'). Rising out_of_sequence or local_ack_timeout_err on RoCE usually means packet loss in the fabric; rising CNP counters mean ECN congestion control is active. Back to back without a switch nothing marks ECN, so np_ecn_marked_roce_packets stays at 0; np_cnp_sent can still rise together with out_of_sequence when packets are dropped (seen on ConnectX-5)."
     tags: [iproute2, counters, dcqcn, roce, troubleshooting]
 
   - cmd: ls /sys/class/infiniband/mlx5_0/ports/1/hw_counters/
     platform: rdma
     summary: The same driver hardware counters exposed as sysfs files; the standard IB port counters live in ../counters/.
-    example: |
-      # read one counter
-      $ cat /sys/class/infiniband/mlx5_0/ports/1/hw_counters/out_of_sequence
-      12
+    stacks:
+      inbox:
+        cmd: ls /sys/class/infiniband/rocep3s0f0/ports/1/hw_counters/
+        example: |
+          $ grep -H . /sys/class/infiniband/rocep3s0f0/ports/1/hw_counters/*     # every counter with its value
+          /sys/class/infiniband/rocep3s0f0/ports/1/hw_counters/duplicate_request:0
+          /sys/class/infiniband/rocep3s0f0/ports/1/hw_counters/implied_nak_seq_err:0
+          /sys/class/infiniband/rocep3s0f0/ports/1/hw_counters/lifespan:10
+          /sys/class/infiniband/rocep3s0f0/ports/1/hw_counters/local_ack_timeout_err:0
+          /sys/class/infiniband/rocep3s0f0/ports/1/hw_counters/np_cnp_sent:0
+          /sys/class/infiniband/rocep3s0f0/ports/1/hw_counters/np_ecn_marked_roce_packets:0
+          /sys/class/infiniband/rocep3s0f0/ports/1/hw_counters/out_of_buffer:0
+          /sys/class/infiniband/rocep3s0f0/ports/1/hw_counters/out_of_sequence:0
+          ...
+          /sys/class/infiniband/rocep3s0f0/ports/1/hw_counters/rx_dct_connect:0
+          /sys/class/infiniband/rocep3s0f0/ports/1/hw_counters/rx_icrc_encapsulated:0
+          /sys/class/infiniband/rocep3s0f0/ports/1/hw_counters/rx_read_requests:0
+          /sys/class/infiniband/rocep3s0f0/ports/1/hw_counters/rx_write_requests:106000
+        real: true
+      doca:
+        example: |
+          $ ls /sys/class/infiniband/mlx5_0/ports/1/hw_counters/
+          duplicate_request
+          implied_nak_seq_err
+          lifespan
+          local_ack_timeout_err
+          np_cnp_sent
+          np_ecn_marked_roce_packets
+          out_of_buffer
+          out_of_sequence
+          packet_seq_err
+          ...
+          rp_cnp_handled
+          rp_cnp_ignored
+          rx_atomic_requests
+          rx_dct_connect
+          rx_icrc_encapsulated
+          rx_read_requests
+          rx_write_requests
+        real: true
     notes: Handy for scripts and exporters; the file names match the rdma statistic counter names. ports/1/counters/ holds the IB PortCounters (port_xmit_data, port_rcv_data in 4-byte units, symbol_error, link_downed, port_rcv_errors, port_xmit_discards, ...). Exact file sets depend on driver and kernel.
     tags: [sysfs, counters, telemetry]
 
   - cmd: cat /sys/class/infiniband/mlx5_0/ports/1/gid_attrs/types/3
     platform: rdma
     summary: Show the RoCE version of one GID table entry (index 3 here); the sibling gid_attrs/ndevs/3 shows its netdev and gids/3 the GID value.
-    example: |
-      # illustrative output
-      RoCE v2
+    stacks:
+      inbox:
+        cmd: cat /sys/class/infiniband/rocep3s0f0/ports/1/gid_attrs/types/3
+        example: |
+          $ cat /sys/class/infiniband/rocep3s0f0/ports/1/gids/3 /sys/class/infiniband/rocep3s0f0/ports/1/gid_attrs/types/3 /sys/class/infiniband/rocep3s0f0/ports/1/gid_attrs/ndevs/3
+          0000:0000:0000:0000:0000:ffff:0a0a:0a01
+          RoCE v2
+          ens64f0np0
+        real: true
+      doca:
+        example: |
+          $ cat /sys/class/infiniband/mlx5_0/ports/1/gids/3 /sys/class/infiniband/mlx5_0/ports/1/gid_attrs/types/3 /sys/class/infiniband/mlx5_0/ports/1/gid_attrs/ndevs/3
+          0000:0000:0000:0000:0000:ffff:0a0a:0a01
+          RoCE v2
+          ens64f0np0
+        real: true
     notes: "This is what show_gids reads under the hood, and the way to read the GID table without NVIDIA's tools. The type strings are 'IB/RoCE v1' and 'RoCE v2'. On a ConnectX port with one IPv4 address the usual layout is 0 link-local RoCE v1, 1 link-local RoCE v2, 2 IPv4-mapped RoCE v1, 3 IPv4-mapped RoCE v2. Reading an unpopulated index typically returns an error (behaviour can vary by kernel), which is normal."
     tags: [sysfs, gid, roce]
 
   - cmd: show_gids
     platform: rdma
     summary: NVIDIA OFED/DOCA helper script that prints the GID table of every RDMA port with index, GID, IPv4 address, RoCE version and netdev.
-    example: |
-      # illustrative output
-      DEV     PORT    INDEX   GID                                     IPv4            VER     DEV
-      ---     ----    -----   ---                                     ------------    ---     ---
-      mlx5_0  1       0       fe80:0000:0000:0000:ba3f:d2ff:feaa:bb01                 v1      ens1f0np0
-      mlx5_0  1       1       fe80:0000:0000:0000:ba3f:d2ff:feaa:bb01                 v2      ens1f0np0
-      mlx5_0  1       2       0000:0000:0000:0000:0000:ffff:0a00:000b 10.0.0.11       v1      ens1f0np0
-      mlx5_0  1       3       0000:0000:0000:0000:0000:ffff:0a00:000b 10.0.0.11       v2      ens1f0np0
-      n_gids_found=4
+    stacks:
+      inbox:
+        cmd: "ibv_devinfo -d rocep3s0f0 -v | grep -E 'state|active_mtu|link_layer|GID'"
+        example: |
+          $ ibv_devinfo -d rocep3s0f0 -v | grep -E 'state|active_mtu|link_layer|GID'
+          			state:			PORT_ACTIVE (4)
+          			active_mtu:		4096 (5)
+          			link_layer:		Ethernet
+          			phys_state:		LINK_UP (5)
+          			GID[  0]:		fe80:0000:0000:0000:268a:07ff:fe00:11ee, RoCE v1
+          			GID[  1]:		fe80::268a:7ff:fe00:11ee, RoCE v2
+          			GID[  2]:		0000:0000:0000:0000:0000:ffff:0a0a:0a01, RoCE v1
+          			GID[  3]:		::ffff:10.10.10.1, RoCE v2
+        notes: "show_gids does not exist with the distribution's stack. ibv_devinfo -v lists the GID table with the RoCE version of each entry (v1 in full hex, v2 in compressed IPv6 notation); for the netdev of an entry read /sys/class/infiniband/<dev>/ports/1/gid_attrs/ndevs/N. Pick the RoCE v2 entry with your fabric IPv4 address (index 3 here, with one IPv4 address on the port). Indexes shift when addresses, VLANs or IPv6 addresses are added."
+        real: true
+      doca:
+        example: |
+          $ show_gids
+          DEV	PORT	INDEX	GID					IPv4  		VER	DEV
+          ---	----	-----	---					------------  	---	---
+          mlx5_0	1	0	fe80:0000:0000:0000:268a:07ff:fe00:11ee			v1	ens64f0np0
+          mlx5_0	1	1	fe80:0000:0000:0000:268a:07ff:fe00:11ee			v2	ens64f0np0
+          mlx5_0	1	2	0000:0000:0000:0000:0000:ffff:0a0a:0a01	10.10.10.1  	v1	ens64f0np0
+          mlx5_0	1	3	0000:0000:0000:0000:0000:ffff:0a0a:0a01	10.10.10.1  	v2	ens64f0np0
+          mlx5_1	1	0	fe80:0000:0000:0000:268a:07ff:fe00:11ef			v1	ens64f1np1
+          mlx5_1	1	1	fe80:0000:0000:0000:268a:07ff:fe00:11ef			v2	ens64f1np1
+          mlx5_1	1	2	0000:0000:0000:0000:0000:ffff:0a0a:1401	10.10.20.1  	v1	ens64f1np1
+          mlx5_1	1	3	0000:0000:0000:0000:0000:ffff:0a0a:1401	10.10.20.1  	v2	ens64f1np1
+          n_gids_found=8
+        real: true
     notes: "Pick the index whose VER is v2 and whose IPv4 is the routable address; that is the value for NCCL_IB_GID_INDEX or perftest -x. The index is commonly 3 on a single-IP interface but is not guaranteed: it changes if addresses, VLANs or IPv6 addresses are added. Not part of upstream rdma-core or the distribution archives (it comes with DOCA/MLNX_OFED); if absent, read gids/N, gid_attrs/types/N and gid_attrs/ndevs/N in sysfs."
     tags: [ofed, doca, gid, roce]
 
   - cmd: cma_roce_mode -d mlx5_0 -p 1 -m 2
     platform: rdma
     summary: NVIDIA OFED/DOCA script that sets the default RoCE version used by RDMA CM connections on a port (-m 2 = RoCEv2); without -m it shows the current mode.
+    stacks:
+      inbox:
+        cmd: cat /sys/kernel/config/rdma_cm/rocep3s0f0/ports/1/default_roce_mode
+        example: |
+          $ sudo modprobe configfs; sudo mkdir -p /sys/kernel/config/rdma_cm/rocep3s0f0
+          $ ls /sys/kernel/config/rdma_cm/rocep3s0f0/ports/1/
+          default_roce_mode
+          default_roce_tos
+          $ cat /sys/kernel/config/rdma_cm/rocep3s0f0/ports/1/default_roce_tos /sys/kernel/config/rdma_cm/rocep3s0f0/ports/1/default_roce_mode
+          0
+          RoCE v2
+        notes: "cma_roce_mode is not available with the distribution's stack; the setting is the rdma_cm configfs file default_roce_mode (default RoCE v2). Create the device directory first (mkdir as root) and remove it with rmdir when done. Affects only connections set up through RDMA CM."
+        real: true
+      doca:
+        example: |
+          $ sudo cma_roce_mode -d mlx5_0 -p 1
+          RoCE v2
+          $ sudo cma_roce_mode -d mlx5_0 -p 1 -m 2
+          RoCE v2
+        real: true
     notes: "Run as root; it prints the resulting mode (RoCE v2). Options are -d device, -p port and -m 1 or 2 (check -h on your version). Affects only connections set up through RDMA CM (librdmacm), not applications that pick a GID index themselves (NCCL, perftest without -R). The setting is held in configfs and is not persistent across reboot unless your provisioning reapplies it. Without NVIDIA's tools, use configfs directly: mkdir /sys/kernel/config/rdma_cm/<dev> (modprobe configfs first if needed), then read or write ports/1/default_roce_mode (default RoCE v2)."
     tags: [ofed, doca, rdma-cm, roce]
 
   - cmd: cma_roce_tos -d mlx5_0 -t 106
     platform: rdma
     summary: NVIDIA OFED/DOCA script that sets the default IP ToS byte for RDMA CM connections on a device (106 = DSCP 26 with ECN-capable bits set).
+    stacks:
+      inbox:
+        cmd: echo 106 | sudo tee /sys/kernel/config/rdma_cm/rocep3s0f0/ports/1/default_roce_tos
+        notes: "cma_roce_tos is not available with the distribution's stack; write the rdma_cm configfs file directly: sudo mkdir -p /sys/kernel/config/rdma_cm/<dev> (modprobe configfs first if needed), then echo 106 | sudo tee /sys/kernel/config/rdma_cm/<dev>/ports/1/default_roce_tos. It reads 0 by default; rmdir the device directory to drop the setting. ToS is DSCP shifted left 2 bits plus the 2 ECN bits (26 << 2 = 104, +2 for ECT(0) = 106). Only RDMA CM traffic picks it up; NCCL sets its own traffic class via NCCL_IB_TC."
+      doca:
+        example: |
+          $ sudo cma_roce_tos -d mlx5_0                # current value
+          0
+          $ sudo cma_roce_tos -d mlx5_0 -t 106
+          106
+          $ cat /sys/kernel/config/rdma_cm/mlx5_0/ports/1/default_roce_tos /sys/kernel/config/rdma_cm/mlx5_0/ports/1/default_roce_mode
+          106
+          RoCE v2
+        real: true
     notes: "ToS is DSCP shifted left 2 bits plus the 2 ECN bits: DSCP 26 << 2 = 104, +2 for ECT(0) = 106. Only RDMA CM traffic picks this up; NCCL sets its own traffic class via NCCL_IB_TC. Run as root; it prints the value, and without -t shows the current one (default 0). Without NVIDIA's tools the same setting is one configfs file: after mkdir /sys/kernel/config/rdma_cm/<dev>, write the value to ports/1/default_roce_tos."
     tags: [ofed, doca, rdma-cm, qos, dscp]
 
   - cmd: ibv_rc_pingpong -d mlx5_0 -g 3
     platform: rdma
     summary: Minimal RC QP ping-pong test from rdma-core examples. Run with no host on the server and with the server's address on the client.
-    example: |
-      # server:  ibv_rc_pingpong -d mlx5_0 -g 3
-      # client:  ibv_rc_pingpong -d mlx5_0 -g 3 10.0.0.11
-      # illustrative client output
-        local address:  LID 0x0000, QPN 0x00011a, PSN 0x5c1e2a, GID ::ffff:10.0.0.12
-        remote address: LID 0x0000, QPN 0x00021b, PSN 0x8a1f03, GID ::ffff:10.0.0.11
-      8192000 bytes in 0.01 seconds = 6213.11 Mbit/sec
-      1000 iters in 0.01 seconds = 10.55 usec/iter
+    stacks:
+      inbox:
+        cmd: ibv_rc_pingpong -d rocep3s0f0 -g 3
+        example: |
+          # server (10.10.10.2):  ibv_rc_pingpong -d rocep3s0f0 -g 3
+          $ ibv_rc_pingpong -d rocep3s0f0 -g 3 10.10.10.2
+            local address:  LID 0x0000, QPN 0x000048, PSN 0x7bb49d, GID ::ffff:10.10.10.1
+            remote address: LID 0x0000, QPN 0x000183, PSN 0xa6939e, GID ::ffff:10.10.10.2
+          8192000 bytes in 0.01 seconds = 11330.57 Mbit/sec
+          1000 iters in 0.01 seconds = 5.78 usec/iter
+          # client with -g 0 against a server with -g 3:
+          $ ibv_rc_pingpong -d rocep3s0f0 -g 0 10.10.10.2
+          client read/write: No space left on device
+          Couldn't read/write remote address
+            local address:  LID 0x0000, QPN 0x00004a, PSN 0x308e57, GID fe80::268a:7ff:fe00:11ee
+        real: true
+      doca:
+        example: |
+          # server (10.10.10.2):  ibv_rc_pingpong -d mlx5_0 -g 3
+          $ ibv_rc_pingpong -d mlx5_0 -g 3 10.10.10.2
+          libibverbs: Warning: couldn't load driver 'libionic-rdmav59.so': libionic-rdmav59.so: cannot open shared object file: No such file or directory
+            local address:  LID 0x0000, QPN 0x000047, PSN 0xb3948c, GID ::ffff:10.10.10.1
+            remote address: LID 0x0000, QPN 0x000086, PSN 0x519117, GID ::ffff:10.10.10.2
+          8192000 bytes in 0.01 seconds = 11663.29 Mbit/sec
+          1000 iters in 0.01 seconds = 5.62 usec/iter
+        real: true
     notes: "Proves end-to-end RC connectivity. -d device, -i IB port, -g GID index (required on RoCE), -s message size, -n iterations, -m path MTU. The QP information is exchanged over a TCP socket (default port 18515), so that port must be reachable. Both sides need matching GID kinds: a client with -g 0 against a server with -g 3 fails with 'client read/write: No space left on device' and 'Couldn't read/write remote address'. Not a performance tool; use perftest for that."
     tags: [rdma-core, connectivity, verify]
 
@@ -176,19 +444,25 @@ commands:
     platform: rdma
     summary: librdmacm ping test server; pair it with a client "rping -c -a <server-ip> -v -C 5". Exercises RDMA CM address and route resolution.
     example: |
-      # client: rping -c -a 10.0.0.11 -v -C 5
-      # illustrative output (the client may also print 'client DISCONNECT EVENT...')
+      # server (10.10.10.2): rping -s -a 10.10.10.2 -v -C 5
+      $ rping -c -a 10.10.10.2 -v -C 5
+      client DISCONNECT EVENT...
       ping data: rdma-ping-0: ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqr
       ping data: rdma-ping-1: BCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqrs
-    notes: "Part of librdmacm-utils (rdmacm-utils on Ubuntu), which is often not installed by default. -s server, -c client, -a address, -v print ping data, -C count. Because it uses RDMA CM it validates IP routing, ARP and GID selection; if ibv_rc_pingpong works but rping fails, suspect routing/ARP or the RDMA CM RoCE mode."
+      ping data: rdma-ping-2: CDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqrst
+      ping data: rdma-ping-3: DEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqrstu
+      ping data: rdma-ping-4: EFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqrstuv
+    real: inbox
+    notes: "Part of librdmacm-utils (rdmacm-utils on Ubuntu), which is often not installed by default. -s server, -c client, -a address, -v print ping data, -C count. The client's 'client DISCONNECT EVENT...' line can appear before the ping data (output buffering); with DOCA-OFED a harmless libionic warning line comes first. Because it uses RDMA CM it validates IP routing, ARP and GID selection; if ibv_rc_pingpong works but rping fails, suspect routing/ARP or the RDMA CM RoCE mode."
     tags: [librdmacm, rdma-cm, connectivity]
 
   - cmd: rdma system show
     platform: rdma
     summary: Show system-wide RDMA settings such as the network namespace mode (shared or exclusive).
     example: |
-      # illustrative output (the fields after netns depend on the iproute2 and kernel version)
+      $ rdma system show          # iproute2 6.19, kernel 7.0 (the fields after netns depend on the version)
       netns shared privileged-qkey off monitor on copy-on-fork on
+    real: inbox
     notes: In exclusive mode RDMA devices must be moved into a container's network namespace (rdma dev set <dev> netns <ns>); relevant to Kubernetes and multi-tenant setups.
     tags: [iproute2, namespaces, containers]
 

@@ -1,0 +1,6 @@
+### cmd: sudo sminfo -C mlx5_1 -P 1
+### ----
+ibwarn: [7657] _do_madrpc: recv failed: Connection timed out
+ibwarn: [7657] mad_rpc: _do_madrpc failed; dport (DR path slid 0; dlid 0; 0)
+sminfo: iberror: failed: query
+### rc=255

@@ -1,0 +1,11 @@
+### cmd: ping -M do -s 8972 -c 3 $B
+### ----
+PING 10.10.10.2 (10.10.10.2) 8972(9000) bytes of data.
+8980 bytes from 10.10.10.2: icmp_seq=1 ttl=64 time=0.693 ms
+8980 bytes from 10.10.10.2: icmp_seq=2 ttl=64 time=0.294 ms
+8980 bytes from 10.10.10.2: icmp_seq=3 ttl=64 time=0.218 ms
+
+--- 10.10.10.2 ping statistics ---
+3 packets transmitted, 3 received, 0% packet loss, time 2031ms
+rtt min/avg/max/mdev = 0.218/0.401/0.693/0.208 ms
+### rc=0

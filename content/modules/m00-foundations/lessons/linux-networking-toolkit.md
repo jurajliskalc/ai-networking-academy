@@ -79,17 +79,22 @@ Linux "predictable" names encode the hardware location: `eno1` (onboard), `ens1f
 | `ip route get DST from SRC` | The exact route the kernel would use |
 | `ip neigh show` | ARP / neighbour table |
 
+```text real=inbox
+$ ip -s -s link show dev ens64f0np0
+4: ens64f0np0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 9000 qdisc mq state UP mode DEFAULT group default qlen 1000
+    link/ether 24:8a:07:00:11:ee brd ff:ff:ff:ff:ff:ff
+    RX:  bytes packets errors dropped  missed   mcast           
+         47520      86      0       0       0       0 
+    RX errors:  length    crc   frame    fifo overrun
+                     0      0       0       0       0 
+    TX:  bytes packets errors dropped carrier collsns           
+         44388      82      0       0       0       0 
+    TX errors: aborted   fifo  window heartbt transns
+                     0      0       0       0       1 
+    altname enp3s0f0np0
+    altname enx248a070011ee
 ```
-$ ip -s link show dev ens1f0np0
-2: ens1f0np0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 9000 qdisc mq state UP mode DEFAULT group default qlen 1000
-    link/ether b8:3f:d2:12:34:56 brd ff:ff:ff:ff:ff:ff
-    RX:   bytes  packets errors dropped  missed   mcast
-    81923311204 20114522      0       0       0     112
-    TX:   bytes  packets errors dropped carrier collsns
-    79201188321 19470031      0       0       0       0
-    altname enp1s0f0np0
-```
-*(illustrative output; recent iproute2 sizes the columns to fit the largest value, and `-s -s` adds `RX errors:` and `TX errors:` detail rows)*
+*(Real capture from a 100G ConnectX-5 RoCE port; recent iproute2 sizes the columns to fit the largest value, and the doubled `-s` adds the `RX errors:` and `TX errors:` detail rows. The output is the same with NVIDIA's stack: `ip` is iproute2 either way.)*
 
 These are **kernel-level** counters: on an RDMA NIC they usually do not include RDMA traffic handled entirely in hardware. For the full picture, use the NIC's own counters via `ethtool -S` or `rdma statistic`.
 
@@ -108,7 +113,26 @@ Settings for ens1f0np0:
 ```
 *(illustrative output, trimmed)*
 
-Run as a normal user, `ethtool <if>` first prints `netlink error: Operation not permitted` (the Wake-on-LAN query needs root) and then the settings; use `sudo` to get a clean output. On a copper DAC the `Port:` line reads `Direct Attach Copper`.
+Run as a normal user, `ethtool <if>` first prints `netlink error: Operation not permitted` (the Wake-on-LAN query needs root) and then the settings; use `sudo` to get a clean output. On a copper DAC the `Port:` line reads `Direct Attach Copper`. A 100G ConnectX-5 port on a 1 m DAC, as a normal user:
+
+```text real=inbox
+$ ethtool ens64f0np0
+netlink error: Operation not permitted
+Settings for ens64f0np0:
+	Supported ports: [ Backplane ]
+...
+	Supported FEC modes: None	 RS	 BASER
+...
+	Advertised FEC modes: RS
+...
+	Speed: 100000Mb/s
+	Lanes: 4
+	Duplex: Full
+	Auto-negotiation: on
+	Port: Direct Attach Copper
+...
+	Link detected: yes
+```
 
 Check `Speed` against what you expect (400000Mb/s = 400 Gb/s). A port that came up at a lower speed than its peers is a classic cause of one slow rank.
 
@@ -133,7 +157,26 @@ $ ethtool -S ens1f0np0 | grep -E 'crc_errors_phy|discards_phy|prio3_pause:'
 ```
 *(illustrative output, mlx5-style counter names)*
 
-Reading it: no CRC errors and no discards at the physical port is good; the NIC has *received* pause frames on priority 3 (the switch asked it to slow down), but never *sent* any. Whether 18,234 pauses is a problem depends on rate and context, a question for `pfc-priority-flow-control`. Note that mlx5 only shows the `prioN_pause` counters (and their `_duration` and `_transition` companions) for priorities with PFC enabled on the NIC, so if `rx_prio3_pause` does not appear at all, PFC is not enabled on priority 3. RDMA traffic itself shows up in mlx5 counters such as `tx_vport_rdma_unicast_bytes` and the per-priority `tx_prioN_bytes`, not in the netdev packet counters.
+Reading it: no CRC errors and no discards at the physical port is good; the NIC has *received* pause frames on priority 3 (the switch asked it to slow down), but never *sent* any. Whether 18,234 pauses is a problem depends on rate and context, a question for `pfc-priority-flow-control`. Note that mlx5 only shows the `prioN_pause` counters (and their `_duration` and `_transition` companions) for priorities with PFC enabled on the NIC, so if `rx_prio3_pause` does not appear at all, PFC is not enabled on priority 3. RDMA traffic itself shows up in mlx5 counters such as `tx_vport_rdma_unicast_bytes` and the per-priority `tx_prioN_bytes`, not in the netdev packet counters. On a ConnectX-5 port with the default settings (global pause on, PFC off) that had carried some RDMA traffic:
+
+```text real=inbox
+$ ethtool -S ens64f0np0 | grep -E 'vport_rdma_unicast|discard|pause' | head -20
+     rx_vport_rdma_unicast_packets: 5835
+     rx_vport_rdma_unicast_bytes: 361770
+     tx_vport_rdma_unicast_packets: 80000
+     tx_vport_rdma_unicast_bytes: 332400000
+     rx_pause_ctrl_phy: 0
+     tx_pause_ctrl_phy: 0
+     rx_discards_phy: 0
+     tx_discards_phy: 0
+...
+     rx_global_pause: 0
+     rx_global_pause_duration: 0
+     tx_global_pause: 0
+     tx_global_pause_duration: 0
+```
+
+The RDMA bytes are there, there are no `prioN_pause` counters (PFC is off), and the `rx_global_pause`/`tx_global_pause` counters exist because 802.3x global pause is on; they disappear once PFC is enabled.
 
 ### Finding your switch port with LLDP
 
@@ -188,6 +231,24 @@ ESTAB  0      0           10.0.0.11:51544      10.4.7.25:5201
 
 `tcpdump -i X -e -n` prints frames with MAC addresses; filters such as `udp port 4791`, `arp`, or `icmp` narrow it down; `-w file.pcap` saves for Wireshark. As covered in `osi-ethernet-frames`, kernel-bypass RDMA traffic is invisible to a capture on the netdev: `tcpdump -i ens1f0np0 udp port 4791` reports 0 packets even while `ib_write_bw` runs at line rate. On mlx5 NICs, libpcap's RDMA sniffer can capture it if you name the **RDMA device** instead (`tcpdump -D` lists it as `mlx5_0 (RDMA sniffer)`; `sudo tcpdump -i mlx5_0 -w roce.pcap`). Distribution security profiles can block this (on Ubuntu the AppArmor profile for tcpdump does, and tcpdump then reports `No such device exists`), and at line rate the capture is huge, so keep it short.
 
+Here is the netdev capture during an `ib_write_bw` run between two ConnectX-5 hosts:
+
+```text real=inbox
+$ sudo timeout 8 tcpdump -i ens64f0np0 -nn -c 20 udp port 4791
+libibverbs: Warning: couldn't open config directory '/etc/libibverbs.d'.
+tcpdump: verbose output suppressed, use -v[v]... for full protocol decode
+listening on ens64f0np0, link-type EN10MB (Ethernet), snapshot length 262144 bytes
+
+0 packets captured
+0 packets received by filter
+0 packets dropped by kernel
+```
+
+The first line is a harmless warning from libibverbs inside the confined tcpdump (AppArmor stops it from reading `/etc/libibverbs.d`); the result is zero RoCEv2 packets on the netdev.
+
+> [!VERIFIED]
+> **On Ubuntu 26.04, `tshark` could not read a capture that `sudo tcpdump -w /tmp/...` had just written.** tcpdump drops privileges and writes the file as user `tcpdump`, and Ubuntu's AppArmor profile for tshark (`/etc/apparmor.d/tshark`, through `abstractions/user-tmp`) only lets it read files in `/tmp` that the user owns, so `tshark -r /tmp/x.pcap` failed with `tshark: You don't have permission to read the file "/tmp/x.pcap".` (dmesg: `apparmor="DENIED" operation="open" ... profile="tshark"`), for root too. Both fixes worked: `sudo tcpdump -Z $USER -w /tmp/x.pcap ...` (the file is then owned by you) or `tshark -r - < /tmp/x.pcap` (the shell opens the file). The host profile applied inside a privileged container as well.
+
 To see why, step through a send on the kernel TCP/IP path and on the RDMA path below, and use the tool lens to check which of this lesson's tools can observe RDMA traffic at all.
 
 ```widget
@@ -196,17 +257,22 @@ host-stack-paths
 
 ### RDMA devices: `rdma` and `ibv_devinfo`
 
-```
+```text stack=inbox real
 $ rdma link show
-link mlx5_0/1 state ACTIVE physical_state LINK_UP netdev ens1f0np0
-link mlx5_1/1 state ACTIVE physical_state LINK_UP netdev ens2f0np0
-...
+link rocep3s0f0/1 state ACTIVE physical_state LINK_UP netdev ens64f0np0 
+link rocep3s0f1/1 state ACTIVE physical_state LINK_UP netdev ens64f1np1 
+```
+
+```text stack=doca real
+$ rdma link show
+link mlx5_0/1 state ACTIVE physical_state LINK_UP netdev ens64f0np0 
+link mlx5_1/1 state ACTIVE physical_state LINK_UP netdev ens64f1np1 
 
 $ ibdev2netdev
-mlx5_0 port 1 ==> ens1f0np0 (Up)
-mlx5_1 port 1 ==> ens2f0np0 (Up)
+mlx5_0 port 1 ==> ens64f0np0 (Up)
+mlx5_1 port 1 ==> ens64f1np1 (Up)
 ```
-*(illustrative output; `ibdev2netdev` is a script shipped with NVIDIA's OFED/DOCA stack, not part of upstream rdma-core. With distribution rdma-core the same port appears as, for example, `link rocep3s0f0/1 ... netdev ens1f0np0`)*
+*(The same dual-port ConnectX-5 under each driver stack: the netdev names are identical, the RDMA device names are not. `ibdev2netdev` is a script shipped with NVIDIA's OFED/DOCA stack, not part of upstream rdma-core or the distribution packages.)*
 
 `rdma link show` (from iproute2) is available everywhere and maps RDMA device and port to netdev; it is the inbox replacement for `ibdev2netdev`. `ibv_devinfo -d mlx5_0` shows the port state, `link_layer` (`Ethernet` for RoCE, `InfiniBand` for IB) and the `active_mtu`.
 

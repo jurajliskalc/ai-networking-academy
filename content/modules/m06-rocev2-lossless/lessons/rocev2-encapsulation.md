@@ -280,22 +280,51 @@ for the same bandwidth.
 ## In practice
 
 The examples below assume an NVIDIA ConnectX NIC with rdma-core (and, where noted, the MLNX_OFED or
-DOCA-OFED utilities). Output is **illustrative** and trimmed. Your device names and values will differ:
-`mlx5_0` is the name NVIDIA's stack gives the first device, while distro rdma-core names it after
-the PCI address (for example `rocep3s0f0`). Take the name from `rdma link` or `ibv_devices`.
+DOCA-OFED utilities). Blocks labelled as real captures come from two ConnectX-5 hosts cabled back to
+back at 100G (10.10.10.1 and 10.10.10.2), trimmed; your names and values will differ. The RDMA device
+name follows the driver stack: `mlx5_0` with NVIDIA's stack, a name built from the PCI address (for
+example `rocep3s0f0`) with distro rdma-core. Take it from `rdma link` or `ibv_devices`. The netdev
+name (`ens64f0np0` here) is the same on both.
 
 ### Is the device RoCE, and what MTU is active?
 
-```bash
+```bash stack=inbox
+ibv_devinfo -d rocep3s0f0
+```
+
+```text stack=inbox real
+hca_id:	rocep3s0f0
+	transport:			InfiniBand (0)
+	fw_ver:				16.29.1016
+	node_guid:			248a:0703:0000:11ee
+	...
+	vendor_part_id:			4119
+	...
+	phys_port_cnt:			1
+		port:	1
+			state:			PORT_ACTIVE (4)
+			max_mtu:		4096 (5)
+			active_mtu:		4096 (5)
+			sm_lid:			0
+			port_lid:		0
+			port_lmc:		0x00
+			link_layer:		Ethernet
+```
+
+```bash stack=doca
 ibv_devinfo -d mlx5_0
 ```
 
-```text
-# illustrative output
+```text stack=doca real
+libibverbs: Warning: couldn't load driver 'libionic-rdmav59.so': libionic-rdmav59.so: cannot open shared object file: No such file or directory
 hca_id:	mlx5_0
 	transport:			InfiniBand (0)
-	fw_ver:				28.xx.xxxx
+	fw_ver:				16.29.1016
+	node_guid:			248a:0703:0000:11ee
 	...
+	vendor_part_id:			4119
+	...
+	phys_port_cnt:			1
 		port:	1
 			state:			PORT_ACTIVE (4)
 			max_mtu:		4096 (5)
@@ -311,50 +340,143 @@ hca_id:	mlx5_0
 - `link_layer: Ethernet` is what tells you this is RoCE. `sm_lid` and `port_lid` are 0 because
   RoCE has no subnet manager and no LIDs.
 - `active_mtu: 1024 (3)` on a fabric meant for jumbo frames is a red flag: check `ip link show` for the netdev MTU.
+- The `libibverbs: Warning: couldn't load driver 'libionic-rdmav59.so'` line that DOCA-OFED's rdma-core
+  printed is harmless noise (a provider for other hardware that is not installed).
 
 ### Read the GID table
 
 `show_gids` is a script shipped with NVIDIA's OFED distributions (MLNX_OFED / DOCA-OFED); it is not
-part of upstream rdma-core. It reads sysfs and prints one line per GID (tab-separated):
+part of upstream rdma-core. It reads sysfs and prints one line per GID (tab-separated). Without the
+script (for example with a distro rdma-core install), the same information is in sysfs, and
+`ibv_devinfo -v` lists the GIDs with their type:
 
-```text
-# illustrative output of: show_gids mlx5_0
+```bash stack=inbox
+cat /sys/class/infiniband/rocep3s0f0/ports/1/gids/3              # the 128-bit GID
+cat /sys/class/infiniband/rocep3s0f0/ports/1/gid_attrs/types/3   # "RoCE v2" or "IB/RoCE v1"
+cat /sys/class/infiniband/rocep3s0f0/ports/1/gid_attrs/ndevs/3   # bound netdev
+```
+
+```text stack=inbox real
+0000:0000:0000:0000:0000:ffff:0a0a:0a01
+RoCE v2
+ens64f0np0
+```
+
+```bash stack=inbox
+ibv_devinfo -d rocep3s0f0 -v | grep -E 'GID'
+```
+
+```text stack=inbox real
+			GID[  0]:		fe80:0000:0000:0000:268a:07ff:fe00:11ee, RoCE v1
+			GID[  1]:		fe80::268a:7ff:fe00:11ee, RoCE v2
+			GID[  2]:		0000:0000:0000:0000:0000:ffff:0a0a:0a01, RoCE v1
+			GID[  3]:		::ffff:10.10.10.1, RoCE v2
+```
+
+```bash stack=doca
+show_gids mlx5_0
+```
+
+```text stack=doca real
 DEV	PORT	INDEX	GID					IPv4  		VER	DEV
 ---	----	-----	---					------------  	---	---
-mlx5_0	1	0	fe80:0000:0000:0000:0e42:a1ff:fe12:3456			v1	ens1f0np0
-mlx5_0	1	1	fe80:0000:0000:0000:0e42:a1ff:fe12:3456			v2	ens1f0np0
-mlx5_0	1	2	0000:0000:0000:0000:0000:ffff:0a00:000b	10.0.0.11  	v1	ens1f0np0
-mlx5_0	1	3	0000:0000:0000:0000:0000:ffff:0a00:000b	10.0.0.11  	v2	ens1f0np0
+mlx5_0	1	0	fe80:0000:0000:0000:268a:07ff:fe00:11ee			v1	ens64f0np0
+mlx5_0	1	1	fe80:0000:0000:0000:268a:07ff:fe00:11ee			v2	ens64f0np0
+mlx5_0	1	2	0000:0000:0000:0000:0000:ffff:0a0a:0a01	10.10.10.1  	v1	ens64f0np0
+mlx5_0	1	3	0000:0000:0000:0000:0000:ffff:0a0a:0a01	10.10.10.1  	v2	ens64f0np0
 n_gids_found=4
 ```
 
-Without the script (for example with a distro rdma-core install), the same information is in sysfs:
-
-```bash
-cat /sys/class/infiniband/mlx5_0/ports/1/gids/3              # the 128-bit GID
-cat /sys/class/infiniband/mlx5_0/ports/1/gid_attrs/types/3   # "RoCE v2" or "IB/RoCE v1"
-cat /sys/class/infiniband/mlx5_0/ports/1/gid_attrs/ndevs/3   # bound netdev, e.g. ens1f0np0
-```
-
-`ibv_devinfo -v` also lists the GIDs together with their type in recent rdma-core versions
-(lines like `GID[  3]:  ::ffff:10.0.0.11, RoCE v2`).
+The table has the same layout on both stacks: index 0 and 1 are the IPv6 link-local address as RoCE v1
+and v2, index 2 and 3 the IPv4 address (IPv4-mapped, `::ffff:10.10.10.1`) as v1 and v2. With one IPv4
+address and no extra IPv6 address, index 3 is therefore the RoCE v2 IPv4 entry. `ibv_devinfo -v` prints
+v1 entries in full hex and v2 entries in compressed IPv6 notation; the sysfs type strings are
+`IB/RoCE v1` and `RoCE v2`.
 
 ### Prove RoCEv2 connectivity with perftest
 
 ```bash
-# server (10.0.0.12)
+# server (10.10.10.2)
 ib_write_bw -d mlx5_0 -x 3 --report_gbits
 # client
-ib_write_bw -d mlx5_0 -x 3 --report_gbits 10.0.0.12
+ib_write_bw -d mlx5_0 -x 3 --report_gbits 10.10.10.2
 ```
 
 `-x 3` selects GID index 3, the IPv4 RoCEv2 entry in the table above. If you pass a v1 index
-between hosts on *different* subnets, the connection fails, because v1 cannot be routed.
+between hosts on *different* subnets, the connection fails, because v1 cannot be routed. Replace
+`mlx5_0` with the distro name (`rocep3s0f0`) on an inbox stack. The client's header confirms the choice
+(trimmed; perftest's header lines differ slightly between the distro and NVIDIA builds, and these runs
+also passed `-F`):
+
+```text stack=inbox real
+---------------------------------------------------------------------------------------
+                    RDMA_Write BW Test
+ Dual-port       : OFF		Device         : rocep3s0f0
+...
+ Mtu             : 4096[B]
+ Link type       : Ethernet
+ GID index       : 3
+ Max inline data : 0[B]
+ rdma_cm QPs	 : OFF
+ Data ex. method : Ethernet
+---------------------------------------------------------------------------------------
+ local address: LID 0000 QPN 0x004b PSN 0xd59040 RKey 0x184d00 VAddr 0x0071e7d1051000
+ GID: 00:00:00:00:00:00:00:00:00:00:255:255:10:10:10:01
+ remote address: LID 0000 QPN 0x0186 PSN 0xb9398 RKey 0x004300 VAddr 0x00784a42c47000
+ GID: 00:00:00:00:00:00:00:00:00:00:255:255:10:10:10:02
+---------------------------------------------------------------------------------------
+ #bytes     #iterations    BW peak[Gb/sec]    BW average[Gb/sec]   MsgRate[Mpps]
+ 65536      5000             94.73              94.72  		     0.180663
+---------------------------------------------------------------------------------------
+```
+
+```text stack=doca real
+---------------------------------------------------------------------------------------
+                    RDMA_Write BW Test
+ Dual-port       : OFF		Device         : mlx5_0
+...
+ Mtu             : 4096[B]
+ Link type       : Ethernet
+ GID index       : 3
+ Max inline data : 0[B]
+ rdma_cm QPs	 : OFF
+ Data ex. method : Ethernet
+ NUMA node       : 0
+---------------------------------------------------------------------------------------
+ local address: LID 0000 QPN 0x004b PSN 0x47e235 RKey 0x201dbc VAddr 0x00792fd34ab000
+ GID: 00:00:00:00:00:00:00:00:00:00:255:255:10:10:10:01
+ remote address: LID 0000 QPN 0x008a PSN 0xcaa37b RKey 0x0353bc VAddr 0x00790ff303a000
+ GID: 00:00:00:00:00:00:00:00:00:00:255:255:10:10:10:02
+---------------------------------------------------------------------------------------
+ #bytes     #iterations    BW peak[Gb/sec]    BW average[Gb/sec]   MsgRate[Mpps]
+ 65536      5000             95.73              95.73  		     0.182590
+---------------------------------------------------------------------------------------
+```
+
+The `GID:` lines print the 16 bytes of the GID in decimal: `...:255:255:10:10:10:01` is
+`::ffff:10.10.10.1`.
 
 ### Seeing the packets
 
-RDMA traffic bypasses the kernel network stack, so a plain `tcpdump -i ens1f0np0 udp port 4791`
-captures **nothing** for an active RDMA flow (`0 packets captured`). Your options are:
+RDMA traffic bypasses the kernel network stack, so a plain `tcpdump` on the netdev captures
+**nothing** for an active RDMA flow, here during an `ib_write_bw` run:
+
+```bash
+sudo timeout 8 tcpdump -i ens64f0np0 -nn -c 20 udp port 4791
+```
+
+```text real=inbox
+libibverbs: Warning: couldn't open config directory '/etc/libibverbs.d'.
+tcpdump: verbose output suppressed, use -v[v]... for full protocol decode
+listening on ens64f0np0, link-type EN10MB (Ethernet), snapshot length 262144 bytes
+
+0 packets captured
+0 packets received by filter
+0 packets dropped by kernel
+```
+
+(The `libibverbs` warning comes from the AppArmor-confined tcpdump probing for RDMA devices; it is
+harmless.) Your options are:
 
 - Mirror the switch port (SPAN/ERSPAN) to a capture host. Wireshark decodes UDP 4791 as RoCEv2 and
   dissects the BTH and extended headers.
@@ -367,6 +489,37 @@ captures **nothing** for an active RDMA flow (`0 packets captured`). Your option
   mechanisms have changed between driver releases, so check the documentation for yours.
 - Look at counters instead of packets. Much of RoCE troubleshooting happens with counters, which
   later lessons cover.
+
+> [!VERIFIED]
+> **`tcpdump -i <netdev>` saw no RoCE, but libpcap's RDMA sniffer on the RDMA device captured it.**
+> On ConnectX-5 (fw 16.29, Ubuntu 26.04) with both stacks, `tcpdump -i ens64f0np0 udp port 4791` reported
+> `0 packets captured` during `ib_write_bw`. Ubuntu's confined tcpdump listed no sniffer, and `tcpdump -i mlx5_0`
+> failed with `tcpdump: mlx5_0: No such device exists` (AppArmor denied `/etc/libibverbs.d/`). An unconfined
+> copy of the binary listed `17.mlx5_0 (RDMA sniffer)`, and `-i mlx5_0 -w` recorded the RoCEv2 writes
+> (`10.10.10.1.58312 > 10.10.10.2.4791: UDP, length 3032`) next to the TCP setup and LLDP traffic. Capture on
+> the RDMA device name (`rocep3s0f0` with the inbox stack), put the tcpdump profile in complain mode or use an
+> unconfined binary in a lab, and filter when reading the file.
+
+With an unconfined tcpdump the sniffer capture looked like this (DOCA stack, a 5-iteration, 3000-byte
+`ib_write_bw`; 52 packets in total, of which 10 were RoCEv2):
+
+```bash
+sudo tcpdump -D | grep -i rdma
+sudo timeout 10 tcpdump -i mlx5_0 -nn -c 60 -w /tmp/sn.pcap
+sudo tcpdump -nn -r /tmp/sn.pcap 'udp port 4791' | head -3
+```
+
+```text real=doca
+17.mlx5_0 (RDMA sniffer)
+18.mlx5_1 (RDMA sniffer)
+52 packets captured
+14:24:38.017670 IP 10.10.10.1.58312 > 10.10.10.2.4791: UDP, length 3032
+14:24:38.017696 IP 10.10.10.1.58312 > 10.10.10.2.4791: UDP, length 3032
+14:24:38.017704 IP 10.10.10.1.58312 > 10.10.10.2.4791: UDP, length 3032
+```
+
+tcpdump drops privileges after opening the device, so `-w` into an existing root-owned file fails with
+`Permission denied`: write to a new file.
 
 ### Firewalls, ACLs and security groups
 

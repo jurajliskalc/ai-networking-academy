@@ -119,8 +119,11 @@ judge.
 `aina-hw serve` lets the [Connect page](#/hw/connect) read your latest report and check results
 directly. It is designed to be boring:
 
-- **Read-only.** It answers three GET endpoints (`/api/status`, `/api/report`, `/api/checks`) from
-  files in `labs/hw-toolkit/results/`. It never runs a command on request.
+- **Read-only.** It answers four GET endpoints: `/api/status`, `/api/report` and `/api/checks` from
+  files in `labs/hw-toolkit/results/`, and `/api/live`, which reads the lab port's counters (sysfs,
+  `ethtool -S`) for the ports named in `lab.env`. Nothing in a request reaches a command. Only with
+  `--live-remote` does it also open one SSH session per remote host (the same read-only collection
+  path as `collect-all`), and only while the Live view is polling.
 - **Localhost only by default.** It binds `127.0.0.1:8765`. Binding to another address prints a
   warning, because it would expose your inventory to the network.
 - **Origin allow-list.** Browsers only get CORS permission for the academy's published site and for

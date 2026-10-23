@@ -1,0 +1,4 @@
+### cmd: sudo sminfo -C mlx5_1 -P 1
+### ----
+sminfo: sm lid 1 sm guid 0x248a0703000011ef, activity count 48 priority 0 state 3 SMINFO_MASTER
+### rc=0

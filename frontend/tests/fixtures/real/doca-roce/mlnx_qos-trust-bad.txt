@@ -1,0 +1,5 @@
+### cmd: sudo mlnx_qos -i $N --trust foo; echo rc=$?
+### note: output of the trailing shell commands (echo rc=$?) removed
+### ----
+Invalid trust state command. Refer to the help.
+### rc=0

@@ -1,0 +1,12 @@
+### cmd: ibstatus mlx5_1
+### ----
+Infiniband device 'mlx5_1' port 1 status:
+	default gid:	 fe80:0000:0000:0000:248a:0703:0000:11ef
+	base lid:	 0xffff
+	sm lid:		 0x0
+	state:		 2: INIT
+	phys state:	 5: LinkUp
+	rate:		 100 Gb/sec (4X EDR)
+	link_layer:	 InfiniBand
+
+### rc=0

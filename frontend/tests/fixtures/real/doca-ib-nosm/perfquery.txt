@@ -1,0 +1,6 @@
+### cmd: sudo perfquery -C mlx5_1 -P 1
+### ----
+ibwarn: [7715] _do_madrpc: recv failed: Connection timed out
+ibwarn: [7715] mad_rpc: _do_madrpc failed; dport (Lid 65535)
+perfquery: iberror: failed: classportinfo query
+### rc=255

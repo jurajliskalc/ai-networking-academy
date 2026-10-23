@@ -45,9 +45,11 @@ By the end you can:
 - Restore the original configuration exactly.
 
 > [!NOTE]
-> Command output in this lab is **illustrative**. Output layouts of `mlnx_qos` and `dcb` differ
-> between releases, and counter names differ between drivers. The examples are from NVIDIA
-> ConnectX (mlx5) NICs, the most common RoCE NICs in lab gear.
+> Blocks labelled **Real capture** were copied from the reference hosts (ConnectX-5, firmware 16.29,
+> Ubuntu 26.04, netdev `ens64f0np0`) with the stack named in the label; use the stack switch to see
+> `dcb` (inbox) or `mlnx_qos` (DOCA). Other output is **illustrative**. Output layouts of `mlnx_qos`
+> and `dcb` differ between releases, and counter names differ between drivers. The examples are from
+> NVIDIA ConnectX (mlx5) NICs, the most common RoCE NICs in lab gear.
 
 ## Before you start
 
@@ -83,22 +85,24 @@ By the end you can:
 
 ### Task 1: Read the current state before changing anything
 
-On each host, with the tool you have:
+On each host, with the tool you have (`dcb` with the inbox stack, `mlnx_qos` with NVIDIA's). The
+output shows the factory defaults on the reference hosts:
 
-```bash
-mlnx_qos -i {{A_NETDEV}}                     # host B: {{B_NETDEV}}
-```
-
-or
-
-```bash
-dcb pfc show dev {{A_NETDEV}}
+```bash stack=inbox
+dcb pfc show dev {{A_NETDEV}}                # host B: {{B_NETDEV}}
 dcb app show dev {{A_NETDEV}}
 ```
 
-Illustrative `mlnx_qos` excerpt (factory defaults on many ConnectX releases):
-
+```text stack=inbox real
+pfc-cap 8 macsec-bypass off delay 7
+prio-pfc 0:off 1:off 2:off 3:off 4:off 5:off 6:off 7:off
 ```
+
+```bash stack=doca
+mlnx_qos -i {{A_NETDEV}}                     # host B: {{B_NETDEV}}
+```
+
+```text stack=doca real
 DCBX mode: OS controlled
 Priority trust state: pcp
 Receive buffer size (bytes): 262016,0,0,0,0,0,0,0,max_buffer_size=262016
@@ -111,15 +115,12 @@ tc: 0 ratelimit: unlimited, tsa: vendor
 	 priority:  1
 tc: 1 ratelimit: unlimited, tsa: vendor
 	 priority:  0
+tc: 2 ratelimit: unlimited, tsa: vendor
+	 priority:  2
 ...
 ```
 
-Illustrative `dcb` output (`dcb app show` prints nothing while the APP table is empty):
-
-```
-pfc-cap 8 macsec-bypass off delay 7
-prio-pfc 0:off 1:off 2:off 3:off 4:off 5:off 6:off 7:off
-```
+`dcb app show` prints nothing while the APP table is empty, as here.
 
 **Read it:** the **trust state** says what the NIC looks at to choose a priority for received
 packets: the 3-bit PCP of a VLAN tag (`pcp`) or the 6-bit DSCP of the IP header (`dscp`). The PFC
@@ -140,19 +141,40 @@ data IPs in your lab profile, and refuses to overwrite an existing save.
 
 ### Task 2: Trust DSCP and map {{ROCE_DSCP}} to priority {{ROCE_PRIO}}
 
-The apply script does this for you, but do it once by hand to see each step. With `mlnx_qos`:
+The apply script does this for you, but do it once by hand to see each step:
 
-```bash
+```bash stack=inbox
+sudo dcb app replace dev {{A_NETDEV}} dscp-prio {{ROCE_DSCP}}:{{ROCE_PRIO}}
+dcb app show dev {{A_NETDEV}} dscp-prio
+dcb -N app show dev {{A_NETDEV}} dscp-prio     # numeric DSCP values
+```
+
+```text stack=inbox real
+$ sudo dcb app replace dev ens64f0np0 dscp-prio 26:3
+$ dcb app show dev ens64f0np0 dscp-prio
+dscp-prio AF31:3
+```
+
+```bash stack=doca
 sudo mlnx_qos -i {{A_NETDEV}} --trust dscp
 sudo mlnx_qos -i {{A_NETDEV}} --dscp2prio set,{{ROCE_DSCP}},{{ROCE_PRIO}}
 ```
 
-With `dcb`:
-
-```bash
-sudo dcb app replace dev {{A_NETDEV}} dscp-prio {{ROCE_DSCP}}:{{ROCE_PRIO}}
-dcb app show dev {{A_NETDEV}} dscp-prio
-dcb -N app show dev {{A_NETDEV}} dscp-prio     # numeric DSCP values
+```text stack=doca real
+$ sudo mlnx_qos -i ens64f0np0 --dscp2prio set,26,3
+DCBX mode: OS controlled
+Priority trust state: dscp
+dscp2prio mapping:
+	prio:0 dscp:07,06,05,04,03,02,01,00,
+	prio:1 dscp:15,14,13,12,11,10,09,08,
+	prio:2 dscp:23,22,21,20,19,18,17,16,
+	prio:3 dscp:26,31,30,29,28,27,25,24,
+	prio:4 dscp:39,38,37,36,35,34,33,32,
+	prio:5 dscp:47,46,45,44,43,42,41,40,
+	prio:6 dscp:55,54,53,52,51,50,49,48,
+	prio:7 dscp:63,62,61,60,59,58,57,56,
+Receive buffer size (bytes): 262016,0,0,0,0,0,0,0,max_buffer_size=262016
+...
 ```
 
 `dcb app show` prints well-known DSCP values by name, so DSCP 26 appears as `dscp-prio AF31:3`;
@@ -161,7 +183,8 @@ dcb -N app show dev {{A_NETDEV}} dscp-prio     # numeric DSCP values
 **What to observe:** after `--trust dscp`, `mlnx_qos` prints a `dscp2prio mapping` table (one
 `prio:N dscp:...` line per priority) right after the trust line. On
 ConnectX the default map takes the top three bits of the DSCP as the priority, so DSCP 26 (binary
-011010) already lands in priority 3, and DSCP 48 (CNPs, binary 110000) in priority 6. That is why
+011010) already lands in priority 3, and DSCP 48 (CNPs, binary 110000) in priority 6. After the
+explicit `set`, the driver lists 26 first in the `prio:3` row, as above. That is why
 "DSCP 26 / priority 3" became a common convention: it works with the defaults. The explicit
 `set` makes the intent visible and survives a different default. (The `--dscp2prio` option exists
 on current `mlnx_qos` releases; if yours rejects it, check `mlnx_qos --help` and rely on the default
@@ -181,28 +204,42 @@ read-out of the trust state on these NICs.
 
 ### Task 3: PFC on priority {{ROCE_PRIO}}, and only there
 
-```bash
-sudo mlnx_qos -i {{A_NETDEV}} --pfc 0,0,0,1,0,0,0,0          # one flag per priority 0..7; this example is priority 3
-```
-
-or
-
-```bash
+```bash stack=inbox
 sudo dcb pfc set dev {{A_NETDEV}} prio-pfc all:off {{ROCE_PRIO}}:on
 dcb pfc show dev {{A_NETDEV}} prio-pfc
 dcb buffer show dev {{A_NETDEV}}
 ```
 
-`mlnx_qos --pfc` needs exactly eight flags (otherwise: `pfc list must have 8 items`). After the
-change the NIC gives the lossless priority its own receive buffer; illustrative `dcb buffer show`
-with PFC on priority 3 (`mlnx_qos` shows the same as `Receive buffer size (bytes):
-130944,130944,0,...` and a `buffer` row):
-
-```
+```text stack=inbox real
+$ dcb pfc show dev ens64f0np0 prio-pfc
+prio-pfc 0:off 1:off 2:off 3:on 4:off 5:off 6:off 7:off
+$ dcb buffer show dev ens64f0np0
 prio-buffer 0:0 1:0 2:0 3:1 4:0 5:0 6:0 7:0
 buffer-size 0:130944b 1:130944b 2:0b 3:0b 4:0b 5:0b 6:0b 7:0b
 total-size 262016b
 ```
+
+```bash stack=doca
+sudo mlnx_qos -i {{A_NETDEV}} --pfc 0,0,0,1,0,0,0,0          # one flag per priority 0..7; this example is priority 3
+```
+
+```text stack=doca real
+DCBX mode: OS controlled
+Priority trust state: dscp
+...
+Receive buffer size (bytes): 130944,130944,0,0,0,0,0,0,max_buffer_size=262016
+Cable len: 7
+PFC configuration:
+	priority    0   1   2   3   4   5   6   7
+	enabled     0   0   0   1   0   0   0   0
+	buffer      0   0   0   1   0   0   0   0
+...
+```
+
+`mlnx_qos --pfc` needs exactly eight flags (otherwise: `pfc list must have 8 items`). After the
+change the NIC gives the lossless priority its own receive buffer: `dcb buffer show` maps priority 3
+to buffer 1, and `mlnx_qos` shows the same as `Receive buffer size (bytes): 130944,130944,0,...` and
+a `1` in the `buffer` row.
 
 Now look at link-level (802.3x) pause, which is on by default on mlx5:
 
@@ -210,8 +247,8 @@ Now look at link-level (802.3x) pause, which is on by default on mlx5:
 ethtool -a {{A_NETDEV}}
 ```
 
-```
-Pause parameters for ens1f0np0:
+```text real=inbox
+Pause parameters for ens64f0np0:
 Autonegotiate:	off
 RX:		off
 TX:		off
@@ -269,8 +306,19 @@ Illustrative excerpt:
      rx_prio3_pause_transition: 0
 ```
 
+On the sender (host A of the reference pair), after a 10-second 4-QP run with `--tclass=106` (the
+counters are cumulative since the driver loaded, so compare before and after):
+
+```text real=inbox
+$ ethtool -S ens64f0np0 | grep -E 'tx_prio3_bytes|rx_prio3_bytes|tx_prio0_bytes'
+     tx_prio0_bytes: 304352834939
+     rx_prio3_bytes: 155986842
+     tx_prio3_bytes: 124422973040
+```
+
 The `*_prioN_pause*` counters appear only for priorities with PFC enabled; the `*_global_pause*`
-counters are listed only while global pause is on, so they disappear once PFC is enabled.
+counters are listed only while global pause is on, so they disappear once PFC is enabled (see the
+[lossless misconfigurations lesson](#/lesson/lossless-misconfigurations)).
 
 **What to observe:** the bytes accumulate on `rx_prio{{ROCE_PRIO}}_bytes`, not on priority 0. Now
 run the same test **without** `--tclass`: the packets carry DSCP 0, so they land in priority 0, the
@@ -282,19 +330,51 @@ priority 0 now has no flow control at all: rerun the hw-02 check (untagged traff
 a few dozen sequence errors per run (out-of-sequence packets: drops that RDMA recovered by retransmitting),
 where it counted none with global pause on. `restore-qos.sh` puts the saved global pause setting back.
 
+> [!NOTE]
+> **`ib_write_bw -T 106` without `-R` was refused: ` TOS only valid for rdma_cm based QP and RawEth QP `.**
+> On the reference hosts (ConnectX-5, DOCA-OFED 3.4, perftest 6.29), perftest's `-T` (ToS) option
+> works only with rdma_cm connection setup. With `-R -T 106` the header showed ` rdma_cm QPs	 : ON`
+> and ` Data ex. method : rdma_cm 	TOS    : 106`, and the run reached 96.1 Gb/s. For the explicit-GID
+> runs in this lab use `--tclass={{TCLASS}}` instead, which sets the traffic class without rdma_cm.
+
 The `--tclass` option exists on recent perftest releases (check `ib_write_bw --help`). For NCCL,
 the equivalent is `NCCL_IB_TC={{TCLASS}}`. For RDMA CM applications, NVIDIA's OFED/DOCA packages
 include a `cma_roce_tos` script that sets a default traffic class per device (`sudo cma_roce_tos -d
 {{A_RDMA_DEV}} -t {{TCLASS}}`). It writes the kernel's rdma_cm configfs, which you can use directly
-on any stack:
+on any stack (and must, with the inbox stack):
 
-```bash
+```bash stack=inbox
 sudo modprobe configfs
 sudo mkdir -p /sys/kernel/config/rdma_cm/{{A_RDMA_DEV}}
 echo {{TCLASS}} | sudo tee /sys/kernel/config/rdma_cm/{{A_RDMA_DEV}}/ports/{{RDMA_PORT}}/default_roce_tos
 ```
 
-(The default is `0`; `default_roce_mode` in the same directory reads `RoCE v2`.)
+```text stack=inbox real
+$ ls /sys/kernel/config/rdma_cm/rocep3s0f0/ports/1/
+default_roce_mode
+default_roce_tos
+$ cat /sys/kernel/config/rdma_cm/rocep3s0f0/ports/1/default_roce_tos /sys/kernel/config/rdma_cm/rocep3s0f0/ports/1/default_roce_mode
+0
+RoCE v2
+```
+
+```bash stack=doca
+sudo cma_roce_tos -d {{A_RDMA_DEV}} -t {{TCLASS}}
+sudo cma_roce_tos -d {{A_RDMA_DEV}}               # show the current value
+```
+
+```text stack=doca real
+$ sudo cma_roce_tos -d mlx5_0 -t 106
+106
+$ sudo cma_roce_tos -d mlx5_0
+106
+$ cat /sys/kernel/config/rdma_cm/mlx5_0/ports/1/default_roce_tos /sys/kernel/config/rdma_cm/mlx5_0/ports/1/default_roce_mode
+106
+RoCE v2
+```
+
+(The default is `0`, as the inbox capture shows before the write; `default_roce_mode` in the same
+directory reads `RoCE v2`. `cma_roce_tos` wrote exactly the configfs file.)
 
 > [!NOTE]
 > A **few pause frames** here are normal, even back to back: under a line-rate `ib_write_bw` the
@@ -320,6 +400,26 @@ cat /sys/class/net/{{A_NETDEV}}/ecn/roce_np/enable/{{ROCE_PRIO}} /sys/class/net/
 cat /sys/class/net/{{A_NETDEV}}/ecn/roce_np/cnp_dscp /sys/class/net/{{A_NETDEV}}/ecn/roce_np/cnp_802p_prio 2>/dev/null
 ```
 
+On the reference hosts (without the `2>/dev/null`, so the inbox error is visible):
+
+```text stack=inbox real
+$ cat /sys/class/net/ens64f0np0/ecn/roce_np/enable/3 /sys/class/net/ens64f0np0/ecn/roce_rp/enable/3
+cat: /sys/class/net/ens64f0np0/ecn/roce_np/enable/3: No such file or directory
+cat: /sys/class/net/ens64f0np0/ecn/roce_rp/enable/3: No such file or directory
+```
+
+```text stack=doca real
+$ ls /sys/class/net/ens64f0np0/ecn/
+roce_np
+roce_rp
+$ cat /sys/class/net/ens64f0np0/ecn/roce_np/enable/3 /sys/class/net/ens64f0np0/ecn/roce_rp/enable/3
+1
+1
+$ cat /sys/class/net/ens64f0np0/ecn/roce_np/cnp_dscp /sys/class/net/ens64f0np0/ecn/roce_np/cnp_802p_prio
+48
+6
+```
+
 If the files exist, both switches are normally already `1`: the NVIDIA stack enables the NP and RP
 on all eight priorities by default, and `apply-qos.sh` only makes sure of it for priority
 {{ROCE_PRIO}}. `cnp_dscp` (default 48) and `cnp_802p_prio` (default 6) show how CNPs are marked;
@@ -333,6 +433,14 @@ The evidence of DCQCN at work lives in the RDMA hardware counters:
 
 ```bash
 grep -H . /sys/class/infiniband/{{A_RDMA_DEV}}/ports/{{RDMA_PORT}}/hw_counters/{np_ecn_marked_roce_packets,np_cnp_sent,rp_cnp_handled,rp_cnp_ignored} 2>/dev/null
+```
+
+```text real=inbox
+$ grep -H . /sys/class/infiniband/rocep3s0f0/ports/1/hw_counters/{np_cnp_sent,rp_cnp_handled,np_ecn_marked_roce_packets,rp_cnp_ignored}
+/sys/class/infiniband/rocep3s0f0/ports/1/hw_counters/np_cnp_sent:0
+/sys/class/infiniband/rocep3s0f0/ports/1/hw_counters/rp_cnp_handled:0
+/sys/class/infiniband/rocep3s0f0/ports/1/hw_counters/np_ecn_marked_roce_packets:0
+/sys/class/infiniband/rocep3s0f0/ports/1/hw_counters/rp_cnp_ignored:0
 ```
 
 The same counters appear in `rdma statistic show link {{A_RDMA_DEV}}/{{RDMA_PORT}}`. `np_*` counters

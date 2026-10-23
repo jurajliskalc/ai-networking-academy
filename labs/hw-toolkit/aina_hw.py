@@ -10,8 +10,9 @@ runs on any Linux host with Python 3.8 or newer, and it can stream itself to rem
     aina-hw collect      [--out FILE] [--role A] [--netdev IF ...] [--redact]
     aina-hw collect-all  [--env lab.env] [--out FILE] [--sudo] [--redact]
     aina-hw summary      [REPORT]
-    aina-hw check        LAB_ID [ARGS ...]
-    aina-hw serve        [--port 8765] [--bind 127.0.0.1] [--allow-origin URL ...]
+    aina-hw check        [--task N] LAB_ID [ARGS ...]
+    aina-hw live         [--env lab.env] [--interval 1] [--once | --stream]
+    aina-hw serve        [--port 8765] [--bind 127.0.0.1] [--allow-origin URL ...] [--live-remote]
     aina-hw env          [--env lab.env]
 
 Nothing here changes the system: collection only reads sysfs/procfs and runs "show"-type commands.
@@ -28,12 +29,18 @@ import shutil
 import socket
 import subprocess
 import sys
+import tempfile
+import threading
+import time
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 REPORT_SCHEMA = "aina.hw.report/1"
 HOST_SCHEMA = "aina.hw.host/1"
 CHECK_SCHEMA = "aina.hw.check/1"
 AGENT_SCHEMA = "aina.hw.agent/1"
+LIVE_SCHEMA = "aina.hw.live/1"
+# EFI variable holding the Secure Boot state: 4 bytes of attributes, then one byte (1 = enabled).
+SECURE_BOOT_VAR = "/sys/firmware/efi/efivars/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c"
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 LABS_DIR = os.path.dirname(HERE)
@@ -258,13 +265,79 @@ def parse_env(text):
 
 
 def parse_check_output(text):
-    """Lines 'PASS: ...', 'FAIL: ...', 'WARN: ...', 'SKIP: ...' -> list of results."""
+    """Lines 'PASS: ...', 'FAIL: ...', 'WARN: ...', 'SKIP: ...' -> list of results.
+
+    'TASK: <n> <title>' lines (lib.sh `task`) start the checks for the lab's Task n; every result after one
+    carries "task": n. Results before the first marker belong to no task (key absent), so output of
+    scripts without markers parses exactly as before."""
     out = []
+    cur = None
     for line in (text or "").splitlines():
+        t = re.match(r"\s*TASK:\s*(\d+)\b", line)
+        if t:
+            cur = int(t.group(1))
+            continue
         m = re.match(r"\s*(PASS|FAIL|WARN|SKIP):\s?(.*)$", line)
         if m:
-            out.append({"status": m.group(1), "text": m.group(2).strip()})
+            r = {"status": m.group(1), "text": m.group(2).strip()}
+            if cur is not None:
+                r["task"] = cur
+            out.append(r)
     return out
+
+
+def parse_task_markers(text):
+    """'TASK: 3 PFC on priority 3' lines -> [(3, 'PFC on priority 3')], first title per number wins."""
+    seen = {}
+    for line in (text or "").splitlines():
+        t = re.match(r"\s*TASK:\s*(\d+)\s*(.*)$", line)
+        if t and int(t.group(1)) not in seen:
+            seen[int(t.group(1))] = t.group(2).strip()
+    return sorted(seen.items())
+
+
+def task_status(counts):
+    """FAIL if anything failed; PASS if something passed (warnings allowed); WARN or SKIP if that is all
+    there is; NONE for a task that printed no result lines."""
+    if counts["FAIL"]:
+        return "FAIL"
+    if counts["PASS"]:
+        return "PASS"
+    if counts["WARN"]:
+        return "WARN"
+    if counts["SKIP"]:
+        return "SKIP"
+    return "NONE"
+
+
+def parse_declared_tasks(text):
+    """'TASKS: 1 2 3 5 8' (lib.sh aina_tasks) -> [1, 2, 3, 5, 8]: the lab tasks the script covers."""
+    for line in (text or "").splitlines():
+        t = re.match(r"\s*TASKS:\s*([\d\s]+)$", line)
+        if t:
+            return sorted({int(x) for x in t.group(1).split()})
+    return []
+
+
+def summarize_tasks(results, markers, declared=()):
+    """Per-task summary. Task 0 ("Before you start") collects the prerequisite checks that run before the
+    first marker, but only when the script uses markers at all. Declared tasks that never started (the run
+    stopped at the prerequisites) are NOTRUN."""
+    if not markers and not declared:
+        return []
+    titles = dict(markers)
+    numbers = sorted(set(titles) | {r["task"] for r in results if "task" in r} | set(declared))
+    pre = [r for r in results if "task" not in r]
+    tasks = []
+    if pre and 0 not in titles:
+        numbers = [0] + numbers
+        titles[0] = "Before you start"
+    for n in numbers:
+        mine = [r for r in results if r.get("task") == n] if n else [r for r in results if r.get("task", 0) == 0]
+        counts = {s: sum(1 for r in mine if r["status"] == s) for s in ("PASS", "FAIL", "WARN", "SKIP")}
+        started = n == 0 or n in titles or bool(mine)
+        tasks.append({"n": n, "title": titles.get(n, ""), "status": task_status(counts) if started else "NOTRUN", "counts": counts})
+    return tasks
 
 
 # ---------------------------------------------------------------- collection
@@ -337,6 +410,7 @@ def collect_rdma(notes):
                     v = to_int(read(pbase + "/" + sub + "/" + c))
                     if v is not None:
                         port[sub][c] = v
+            port["rdma_cm"] = collect_rdma_cm(dev, pnum)
             # netdev: rdma's JSON first, then the GID table, then the PCI function's net directory.
             for e in link_json or []:
                 if e.get("ifname") == dev and e.get("port") == pnum and e.get("netdev"):
@@ -351,20 +425,71 @@ def collect_rdma(notes):
     return devices
 
 
+def collect_rdma_cm(dev, port):
+    """rdma_cm's per-port defaults from configfs (what cma_roce_tos / cma_roce_mode write). None when the
+    rdma_cm configfs is not there (module not loaded or configfs not mounted). The per-device entry only
+    exists after someone ran `mkdir /sys/kernel/config/rdma_cm/<dev>`; without it the kernel defaults apply
+    (ToS 0, RoCE v2). Read-only: this never creates the entry."""
+    root = "/sys/kernel/config/rdma_cm"
+    if not os.path.isdir(sys_path(root)):
+        return None
+    base = "%s/%s/ports/%d" % (root, dev, port)
+    if not os.path.isdir(sys_path(base)):
+        return {"configured": False, "default_roce_tos": None, "default_roce_mode": None}
+    return {"configured": True, "default_roce_tos": to_int(read(base + "/default_roce_tos")),
+            "default_roce_mode": read(base + "/default_roce_mode")}
+
+
+def parse_lockdown(text):
+    """'[none] integrity confidentiality' -> 'none' (the bracketed mode is the active one)."""
+    m = re.search(r"\[(\w+)\]", text or "")
+    return m.group(1) if m else None
+
+
+def parse_secure_boot(raw):
+    """EFI variable bytes (4 attribute bytes + value) -> True/False, None if unreadable."""
+    if raw is None or len(raw) < 5:
+        return None
+    return raw[4] == 1
+
+
+def collect_secure_boot():
+    try:
+        with open(sys_path(SECURE_BOOT_VAR), "rb") as f:
+            return parse_secure_boot(f.read())
+    except OSError:
+        return None
+
+
+def collect_umad():
+    """umad devices in kernel order: umad tools without -C/-P open the first one."""
+    out = []
+    for name in listdir("/sys/class/infiniband_mad"):
+        if not re.match(r"umad\d+$", name):
+            continue
+        base = "/sys/class/infiniband_mad/" + name
+        out.append({"name": name, "ibdev": read(base + "/ibdev"), "port": to_int(read(base + "/port"))})
+    out.sort(key=lambda u: int(u["name"][4:]))
+    return out
+
+
 def collect_netdev(name, notes):
     base = "/sys/class/net/" + name
     if not os.path.isdir(sys_path(base)):
         notes.append("netdev %s does not exist" % name)
         return None
     speed = to_int(read(base + "/speed"))
+    # ARPHRD_INFINIBAND (32): an IPoIB interface. Ethernet QoS (pause, PFC, DSCP trust) does not apply to it.
+    ipoib = to_int(read(base + "/type")) == 32
     nd = {
         "name": name,
+        "ipoib": ipoib,
         "mtu": to_int(read(base + "/mtu")),
         "operstate": read(base + "/operstate"),
         "speed_mbps": speed if speed and speed > 0 else None,
         "mac": read(base + "/address"),
         "ipv4": [],
-        "pause": parse_ethtool_pause(run(["ethtool", "-a", name])),
+        "pause": None if ipoib else parse_ethtool_pause(run(["ethtool", "-a", name])),
         "qos": None,
         "ecn": None,
         "stats": parse_ethtool_stats(run(["ethtool", "-S", name])),
@@ -380,6 +505,8 @@ def collect_netdev(name, notes):
                         nd["ipv4"].append("%s/%s" % (a.get("local"), a.get("prefixlen")))
         except ValueError:
             pass
+    if ipoib:
+        return nd
     # QoS: mlnx_qos is authoritative on NVIDIA NICs; iproute2's dcb is the generic fallback.
     q = parse_mlnx_qos(run(["mlnx_qos", "-i", name]))
     if q and (q["trust"] or q["pfc_enabled"] is not None):
@@ -456,6 +583,8 @@ def collect_host_info():
         "cmdline_flags": [t for t in cmdline.split() if re.match(r"(intel_iommu|amd_iommu|iommu|pci|pcie_\w+)=", t)],
         "governor": read("/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor"),
         "memlock": run(["sh", "-c", "ulimit -l"]),
+        "secure_boot": collect_secure_boot(),
+        "lockdown": parse_lockdown(read("/sys/kernel/security/lockdown")),
     }
 
 
@@ -490,6 +619,7 @@ def collect(role=None, extra_netdevs=(), redact=False):
         "software": collect_software(),
         "modules": {m: os.path.isdir(sys_path("/sys/module/" + m)) for m in MODULES},
         "rdma": rdma,
+        "umad": collect_umad(),
         "netdevs": netdevs,
         "gpus": gpus,
         "gpu_topo": topo,
@@ -632,7 +762,8 @@ def quick_findings(report):
                 if p.get("state") != "ACTIVE":
                     out.append(("ERROR", name, "%s/%s state %s" % (d["name"], p["port"], p.get("state"))))
         for nd in h.get("netdevs", []):
-            if nd.get("mtu"):
+            # IPoIB runs 2044/4092 by design; compare the Ethernet data netdevs only
+            if nd.get("mtu") and not nd.get("ipoib"):
                 mtus.setdefault(nd["mtu"], []).append("%s:%s" % (name, nd["name"]))
     if len(mtus) > 1:
         out.append(("ERROR", "fabric", "MTU differs between hosts: " + "; ".join("%s=%s" % (k, ", ".join(v)) for k, v in sorted(mtus.items()))))
@@ -727,34 +858,73 @@ def cmd_check(a):
     if not re.match(r"^[a-z0-9-]+$", a.lab) or not os.path.isfile(script):
         print("No check script for lab %r (expected %s)" % (a.lab, script), file=sys.stderr)
         return 2
+    args = list(a.args)
+    only = a.task
+    # `aina-hw check LAB --task N` as well as `aina-hw check --task N LAB`
+    if "--task" in args:
+        i = args.index("--task")
+        if i + 1 >= len(args) or not args[i + 1].isdigit():
+            print("--task needs a task number", file=sys.stderr)
+            return 2
+        only = int(args[i + 1])
+        del args[i:i + 2]
     env = dict(os.environ)
     env.setdefault("AINA_ENV", env_path(None))
+    env.pop("AINA_TASK", None)
+    if only is not None:
+        env["AINA_TASK"] = str(only)
     started = now()
     t0 = _dt.datetime.now()
     lines = []
-    p = subprocess.Popen(["bash", script] + a.args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+    p = subprocess.Popen(["bash", script] + args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                          universal_newlines=True, env=env, cwd=os.path.dirname(script))
-    for line in p.stdout:
-        sys.stdout.write(line)
-        sys.stdout.flush()
-        lines.append(line)
+    with p.stdout:
+        for line in p.stdout:
+            sys.stdout.write(line)
+            sys.stdout.flush()
+            lines.append(line)
     code = p.wait()
-    results = parse_check_output("".join(lines))
-    counts = {s: sum(1 for r in results if r["status"] == s) for s in ("PASS", "FAIL", "WARN", "SKIP")}
-    labenv = load_env(env["AINA_ENV"]) or {}
-    record = {
-        "schema": CHECK_SCHEMA, "toolkit": VERSION, "lab": a.lab, "host": socket.gethostname(),
-        "lab_name": labenv.get("LAB_NAME"), "fabric": labenv.get("FABRIC"),
-        "started": started, "finished": now(), "duration_s": round((_dt.datetime.now() - t0).total_seconds(), 1),
-        "exit_code": code, "passed": code == 0 and counts["FAIL"] == 0 and counts["PASS"] > 0,
-        "counts": counts, "results": results,
-    }
+    record = build_check_record(a.lab, "".join(lines), code, started, round((_dt.datetime.now() - t0).total_seconds(), 1),
+                                load_env(env["AINA_ENV"]) or {}, only)
+    counts = record["counts"]
     stamp = started.replace(":", "").replace("+0000", "Z")[:17]
-    out = os.path.join(results_dir(), "check-%s-%s.json" % (a.lab, stamp))
+    suffix = "-task%d" % only if only is not None else ""
+    out = os.path.join(results_dir(), "check-%s%s-%s.json" % (a.lab, suffix, stamp))
     write_json(out, record)
+    if record["tasks"]:
+        print()
+        for t in record["tasks"]:
+            print("  Task %-2s %-4s %s" % (t["n"], t["status"], t["title"]))
+        if only is None and not record["passed"]:
+            bad = [t for t in record["tasks"] if t["status"] == "FAIL"]
+            if bad and bad[0]["n"] == 0:
+                print("Fix the prerequisites (Before you start) first; the tasks did not run.")
+            elif bad:
+                print("Resume at Task %d; rerun just that part with: aina-hw check %s --task %d" % (bad[0]["n"], a.lab, bad[0]["n"]))
+    if only is not None:
+        verdict = "TASK %d %s" % (only, "PASSED" if counts["FAIL"] == 0 and counts["PASS"] > 0 and code == 0 else "NOT PASSED")
+        print("\nResult: %s (a single-task run never marks the whole lab verified)  saved to %s" % (verdict, out))
+        return 0 if counts["FAIL"] == 0 and counts["PASS"] > 0 and code == 0 else 1
     print("\nResult: %s  (%d pass, %d fail, %d warn, %d skip)  saved to %s" % (
         "PASSED" if record["passed"] else "NOT PASSED", counts["PASS"], counts["FAIL"], counts["WARN"], counts["SKIP"], out))
     return 0 if record["passed"] else 1
+
+
+def build_check_record(lab, output, code, started, duration, labenv, only=None, host=None, finished=None):
+    """The aina.hw.check/1 record for one run. `tasks` and `only_task` are additions: readers that do not know
+    them still see the same results/counts/passed fields as before. A single-task run (only_task) is never
+    `passed`, because it did not check the whole lab."""
+    results = parse_check_output(output)
+    counts = {s: sum(1 for r in results if r["status"] == s) for s in ("PASS", "FAIL", "WARN", "SKIP")}
+    return {
+        "schema": CHECK_SCHEMA, "toolkit": VERSION, "lab": lab, "host": host or socket.gethostname(),
+        "lab_name": labenv.get("LAB_NAME"), "fabric": labenv.get("FABRIC"),
+        "started": started, "finished": finished or now(), "duration_s": duration,
+        "exit_code": code, "passed": only is None and code == 0 and counts["FAIL"] == 0 and counts["PASS"] > 0,
+        "only_task": only, "counts": counts, "results": results,
+        # A single-task run says nothing about the tasks it skipped: leave them out instead of NOTRUN.
+        "tasks": summarize_tasks(results, parse_task_markers(output), parse_declared_tasks(output) if only is None else ()),
+    }
 
 
 def latest_checks(directory):
@@ -769,9 +939,297 @@ def latest_checks(directory):
             continue
         if not isinstance(rec, dict) or rec.get("schema") != CHECK_SCHEMA or not rec.get("lab") or not isinstance(rec.get("finished"), str):
             continue
-        if rec["lab"] not in latest or rec["finished"] >= latest[rec["lab"]]["finished"]:
-            latest[rec["lab"]] = rec
-    return [latest[k] for k in sorted(latest)]
+        # Newest full run per lab, plus the newest single-task run per (lab, task) that is newer than it,
+        # so the browser can show per-task progress after `aina-hw check LAB --task N`.
+        only = rec.get("only_task")
+        key = (rec["lab"], only if isinstance(only, int) else None)
+        if key not in latest or rec["finished"] >= latest[key]["finished"]:
+            latest[key] = rec
+    out = []
+    for (lab, only), rec in sorted(latest.items(), key=lambda kv: (kv[0][0], -1 if kv[0][1] is None else kv[0][1])):
+        full = latest.get((lab, None))
+        if only is not None and full and rec["finished"] < full["finished"]:
+            continue
+        out.append(rec)
+    return out
+
+
+# ---------------------------------------------------------------- live counters
+
+# RDMA hw_counters sampled live (RoCE; the CNP/ECN ones do not exist on InfiniBand ports).
+LIVE_HW = ["np_cnp_sent", "rp_cnp_handled", "np_ecn_marked_roce_packets", "out_of_sequence", "packet_seq_err",
+           "local_ack_timeout_err"]
+# IB port counters (sysfs counters/): port_xmit_data and port_rcv_data count 4-octet words.
+LIVE_IB = ["port_xmit_data", "port_rcv_data"]
+NAME_OK = re.compile(r"^[\w.:@-]+$")
+
+
+def live_eth_keys(prio):
+    p = int(prio)
+    return ["rx_vport_rdma_unicast_bytes", "tx_vport_rdma_unicast_bytes", "rx_prio%d_bytes" % p, "tx_prio%d_bytes" % p,
+            "rx_prio%d_pause" % p, "tx_prio%d_pause" % p, "rx_global_pause", "tx_global_pause", "rx_discards_phy"]
+
+
+def parse_ethtool_select(text, keys):
+    """ethtool -S output -> {key: value} for the wanted keys that exist (mlx5 shows prioN_pause only for
+    priorities with PFC on, and *_global_pause only while 802.3x pause is on)."""
+    want = set(keys)
+    out = {}
+    for line in (text or "").splitlines():
+        m = re.match(r"\s+([^:]+):\s+(-?\d+)\s*$", line)
+        if m and m.group(1).strip() in want:
+            out[m.group(1).strip()] = int(m.group(2))
+    return out
+
+
+def live_ports_from_env(env, role):
+    """The lab port of a role from lab.env: [(dev, port, netdev)]. Empty list if lab.env does not name one."""
+    dev, nd = env.get(role + "_RDMA_DEV"), env.get(role + "_NETDEV")
+    port = to_int(env.get("RDMA_PORT"), 1) or 1
+    if dev and NAME_OK.match(dev):
+        return [(dev, port, nd if nd and NAME_OK.match(nd) else None)]
+    return []
+
+
+def all_ports():
+    out = []
+    for dev in listdir("/sys/class/infiniband"):
+        nds = listdir("/sys/class/infiniband/%s/device/net" % dev)
+        for p in listdir("/sys/class/infiniband/%s/ports" % dev):
+            out.append((dev, to_int(p), nds[0] if len(nds) == 1 else None))
+    return out
+
+
+def live_port(dev, port, netdev, prio):
+    base = "/sys/class/infiniband/%s/ports/%d" % (dev, port)
+    snap = {"dev": dev, "port": port, "netdev": netdev, "state": parse_state(read(base + "/state")),
+            "phys_state": parse_state(read(base + "/phys_state")), "rate_gbps": parse_rate_gbps(read(base + "/rate")),
+            "link_layer": read(base + "/link_layer"), "operstate": None, "counters": {}}
+    c = snap["counters"]
+    for k in LIVE_HW:
+        v = to_int(read(base + "/hw_counters/" + k))
+        if v is not None:
+            c[k] = v
+    if snap["link_layer"] == "InfiniBand":
+        for k in LIVE_IB:
+            v = to_int(read(base + "/counters/" + k))
+            if v is not None:
+                c[k] = v
+    if netdev:
+        nb = "/sys/class/net/" + netdev
+        snap["operstate"] = read(nb + "/operstate")
+        for k in ("rx_bytes", "tx_bytes"):
+            v = to_int(read(nb + "/statistics/" + k))
+            if v is not None:
+                c["netdev_" + k] = v
+        if snap["link_layer"] != "InfiniBand":
+            c.update(parse_ethtool_select(run(["ethtool", "-S", netdev], timeout=5), live_eth_keys(prio)))
+    return snap
+
+
+def live_snapshot(ports, prio=3, role=None):
+    """One timestamped reading of the lab ports. `t` is this host's clock in seconds; rates are computed
+    from two snapshots of the same host, so clocks of different hosts never mix."""
+    return {"schema": LIVE_SCHEMA, "toolkit": VERSION, "host": socket.gethostname(), "role": role,
+            "t": round(time.time(), 3), "prio": int(prio), "ports": [live_port(d, p, n, prio) for d, p, n in ports]}
+
+
+def _bytes_gbps(d, dt):
+    return d * 8 / dt / 1e9
+
+
+# name -> (counter key or a function of the priority, scale(delta, dt))
+def rate_spec(prio):
+    p = int(prio)
+    per_s = lambda d, dt: d / dt  # noqa: E731
+    return [
+        ("rdma_rx_gbps", "rx_vport_rdma_unicast_bytes", _bytes_gbps),
+        ("rdma_tx_gbps", "tx_vport_rdma_unicast_bytes", _bytes_gbps),
+        ("prio_rx_gbps", "rx_prio%d_bytes" % p, _bytes_gbps),
+        ("prio_tx_gbps", "tx_prio%d_bytes" % p, _bytes_gbps),
+        ("pfc_rx_ps", "rx_prio%d_pause" % p, per_s),
+        ("pfc_tx_ps", "tx_prio%d_pause" % p, per_s),
+        ("global_pause_rx_ps", "rx_global_pause", per_s),
+        ("global_pause_tx_ps", "tx_global_pause", per_s),
+        ("discards_ps", "rx_discards_phy", per_s),
+        ("cnp_sent_ps", "np_cnp_sent", per_s),
+        ("cnp_handled_ps", "rp_cnp_handled", per_s),
+        ("ecn_marked_ps", "np_ecn_marked_roce_packets", per_s),
+        ("oos_ps", "out_of_sequence", per_s),
+        ("seq_err_ps", "packet_seq_err", per_s),
+        ("ack_timeout_ps", "local_ack_timeout_err", per_s),
+        ("netdev_rx_gbps", "netdev_rx_bytes", _bytes_gbps),
+        ("netdev_tx_gbps", "netdev_tx_bytes", _bytes_gbps),
+        ("ib_tx_gbps", "port_xmit_data", lambda d, dt: _bytes_gbps(d * 4, dt)),
+        ("ib_rx_gbps", "port_rcv_data", lambda d, dt: _bytes_gbps(d * 4, dt)),
+    ]
+
+
+def live_rates(prev, cur):
+    """Rates between two snapshots of the same host: {(dev, port): {name: value or None}}. A counter that is
+    missing in either snapshot, or went backwards (reset, driver reload), gives None, never a negative rate."""
+    out = {}
+    if not prev or not cur or prev.get("host") != cur.get("host"):
+        return out
+    dt = (cur.get("t") or 0) - (prev.get("t") or 0)
+    before = {(p["dev"], p["port"]): p for p in prev.get("ports", [])}
+    for p in cur.get("ports", []):
+        key = (p["dev"], p["port"])
+        b = before.get(key)
+        r = {}
+        for name, k, scale in rate_spec(cur.get("prio", 3)):
+            v0 = (b or {}).get("counters", {}).get(k)
+            v1 = p.get("counters", {}).get(k)
+            r[name] = scale(v1 - v0, dt) if (b and dt > 0 and v0 is not None and v1 is not None and v1 >= v0) else None
+        out[key] = r
+    return out
+
+
+class RemoteLive:
+    """Live snapshots of one remote host over ONE long-lived SSH session (`aina-hw live --stream` on the far
+    side prints a JSON line per interval), so polling never opens an SSH connection per sample. The session
+    starts on the first request and ends after `idle` seconds without requests; a failed session is retried
+    after `backoff` seconds."""
+
+    def __init__(self, role, cmd, script, idle=60.0, backoff=10.0):
+        self.role, self.cmd, self.script, self.idle, self.backoff = role, cmd, script, idle, backoff
+        self.latest, self.error, self.last = None, None, time.time()
+        self.thread = None
+        self.lock = threading.Lock()
+
+    def get(self):
+        with self.lock:
+            self.last = time.time()
+            if self.thread is None or not self.thread.is_alive():
+                self.thread = threading.Thread(target=self._run, name="live-" + self.role, daemon=True)
+                self.thread.start()
+            return self.latest, self.error
+
+    def _idle(self):
+        return time.time() - self.last > self.idle
+
+    def _run(self):
+        while not self._idle():
+            err = None
+            try:
+                with tempfile.TemporaryFile(mode="w+") as errf:
+                    proc = subprocess.Popen(self.cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=errf,
+                                            universal_newlines=True)
+                    try:
+                        proc.stdin.write(self.script)
+                        proc.stdin.close()
+                        for line in proc.stdout:
+                            try:
+                                snap = json.loads(line)
+                            except ValueError:
+                                continue
+                            if isinstance(snap, dict) and snap.get("schema") == LIVE_SCHEMA:
+                                self.latest, self.error = snap, None
+                            if self._idle():
+                                break
+                    finally:
+                        if proc.poll() is None:
+                            proc.terminate()
+                        proc.stdout.close()
+                        try:
+                            proc.wait(timeout=5)
+                        except subprocess.TimeoutExpired:
+                            proc.kill()
+                    errf.seek(0)
+                    err = errf.read().strip()[-300:] or "ssh exited %s" % proc.returncode
+            except (OSError, ValueError) as e:
+                err = str(e)
+            if self._idle():
+                break
+            self.error = err
+            time.sleep(self.backoff)
+
+
+class LiveSource:
+    """What /api/live serves: host A read locally (cached for half a second, so several browser tabs do not
+    multiply the work), plus B and C over SSH when the agent was started with --live-remote."""
+
+    def __init__(self, env, remote=False, interval=2.0, ssh_cmd=None):
+        self.env = env or {}
+        self.prio = to_int(self.env.get("ROCE_PRIO"), 3)
+        if self.prio is None or not 0 <= self.prio <= 7:
+            self.prio = 3
+        self.local_ports = live_ports_from_env(self.env, "A") or all_ports()
+        self.cache, self.cache_t = None, 0.0
+        self.lock = threading.Lock()
+        self.remotes = {}
+        self.remote = remote
+        if remote:
+            with open(os.path.abspath(__file__), encoding="utf-8") as f:
+                script = f.read()
+            for role in roles_of(self.env)[1:]:
+                host = self.env.get("HOST_" + role)
+                ports = live_ports_from_env(self.env, role)
+                if not host or not ports or is_local(host):
+                    continue
+                dev, port, nd = ports[0]
+                user = self.env.get("SSH_USER")
+                target = "%s@%s" % (user, host) if user else host
+                remote_cmd = ["python3", "-", "live", "--stream", "--interval", str(interval), "--duration", "900",
+                              "--role", role, "--dev", dev, "--port", str(port), "--prio", str(self.prio)]
+                if nd:
+                    remote_cmd += ["--netdev", nd]
+                cmd = (ssh_cmd or ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=8", "-o", "ServerAliveInterval=15"]) + \
+                    [target, " ".join(shlex.quote(c) for c in remote_cmd)]
+                self.remotes[role] = RemoteLive(role, cmd, script)
+
+    def local(self):
+        with self.lock:
+            if self.cache is None or time.time() - self.cache_t >= 0.5:
+                self.cache = live_snapshot(self.local_ports, self.prio, "A")
+                self.cache_t = time.time()
+            return self.cache
+
+    def get(self):
+        hosts = [{"role": "A", "ok": True, "error": None, "snapshot": self.local()}]
+        for role, r in sorted(self.remotes.items()):
+            snap, err = r.get()
+            hosts.append({"role": role, "ok": snap is not None and err is None, "error": err,
+                          "snapshot": snap})
+        return {"schema": LIVE_SCHEMA, "toolkit": VERSION, "generated": now(), "prio": self.prio,
+                "remote": self.remote, "hosts": hosts}
+
+
+def cmd_live(a):
+    if a.dev:
+        if not NAME_OK.match(a.dev) or (a.netdev and not NAME_OK.match(a.netdev)):
+            print("invalid device or netdev name", file=sys.stderr)
+            return 2
+        ports, prio = [(a.dev, a.port, a.netdev)], a.prio
+    else:
+        env = load_env(env_path(a.env)) or {}
+        ports = live_ports_from_env(env, a.role or "A") or all_ports()
+        prio = a.prio if a.prio is not None else to_int(env.get("ROCE_PRIO"), 3)
+    prio = 3 if prio is None else prio
+    if a.once:
+        print(json.dumps(live_snapshot(ports, prio, a.role), indent=2))
+        return 0
+    t_end = time.time() + a.duration if a.duration else None
+    prev = None
+    try:
+        while t_end is None or time.time() < t_end:
+            snap = live_snapshot(ports, prio, a.role)
+            if a.stream:
+                sys.stdout.write(json.dumps(snap) + "\n")
+                sys.stdout.flush()
+            else:
+                for (dev, port), r in live_rates(prev, snap).items():
+                    f = lambda k, fmt: ("-" if r[k] is None else fmt % r[k])  # noqa: E731
+                    print("%s %s/%s  rdma rx %s tx %s Gb/s  pfc rx %s tx %s /s  global pause rx %s /s  cnp sent %s handled %s /s  oos %s /s" % (
+                        time.strftime("%H:%M:%S"), dev, port, f("rdma_rx_gbps", "%.2f"), f("rdma_tx_gbps", "%.2f"),
+                        f("pfc_rx_ps", "%.0f"), f("pfc_tx_ps", "%.0f"), f("global_pause_rx_ps", "%.0f"),
+                        f("cnp_sent_ps", "%.0f"), f("cnp_handled_ps", "%.0f"), f("oos_ps", "%.0f")))
+                sys.stdout.flush()
+            prev = snap
+            time.sleep(max(0.2, a.interval))
+    except (KeyboardInterrupt, BrokenPipeError):
+        pass
+    return 0
 
 
 DEFAULT_ORIGINS = ["https://jurajliskalc.github.io", "http://localhost", "http://127.0.0.1"]
@@ -797,7 +1255,8 @@ def origin_allowed(origin, allowed, any_origin):
     return False
 
 
-def make_handler(directory, allowed, any_origin, bind="127.0.0.1"):
+def make_handler(directory, allowed, any_origin, bind="127.0.0.1", live=None):
+    """Read-only HTTP API. `live` is a LiveSource (or anything with .get()); /api/live answers 404 without one."""
     from http.server import BaseHTTPRequestHandler
 
     class Handler(BaseHTTPRequestHandler):
@@ -840,6 +1299,13 @@ def make_handler(directory, allowed, any_origin, bind="127.0.0.1"):
             if not self.host_ok():
                 return
             path = self.path.split("?", 1)[0]
+            if path == "/api/live":
+                # Counters only; nothing in the request reaches a command (ports come from lab.env).
+                if live is None:
+                    self.send_json(404, {"error": "live counters are not enabled on this agent"})
+                else:
+                    self.send_json(200, live.get())
+                return
             report_file = os.path.join(directory, "aina-report.json")
             report = None
             if os.path.isfile(report_file):
@@ -855,7 +1321,8 @@ def make_handler(directory, allowed, any_origin, bind="127.0.0.1"):
                 self.send_json(200, {"schema": AGENT_SCHEMA, "toolkit": VERSION, "host": socket.gethostname(),
                                      "read_only": True, "report": bool(report),
                                      "report_generated": report and report.get("generated"),
-                                     "lab": report and report.get("lab"), "checks": len(checks)})
+                                     "lab": report and report.get("lab"), "checks": len(checks),
+                                     "live": live is not None, "live_remote": bool(getattr(live, "remote", False))})
             elif path == "/api/report":
                 if report:
                     self.send_json(200, report)
@@ -864,7 +1331,7 @@ def make_handler(directory, allowed, any_origin, bind="127.0.0.1"):
             elif path == "/api/checks":
                 self.send_json(200, latest_checks(directory))
             else:
-                self.send_json(404, {"error": "not found", "endpoints": ["/api/status", "/api/report", "/api/checks"]})
+                self.send_json(404, {"error": "not found", "endpoints": ["/api/status", "/api/report", "/api/checks", "/api/live"]})
 
         def log_message(self, fmt, *args):
             sys.stderr.write("%s %s\n" % (self.address_string(), fmt % args))
@@ -881,12 +1348,17 @@ def cmd_serve(a):
 
     directory = results_dir()
     allowed = DEFAULT_ORIGINS + (a.allow_origin or [])
-    httpd = Server((a.bind, a.port), make_handler(directory, allowed, a.allow_any_origin, a.bind))
+    live = LiveSource(load_env(env_path(a.env)) or {}, remote=a.live_remote, interval=a.live_interval)
+    httpd = Server((a.bind, a.port), make_handler(directory, allowed, a.allow_any_origin, a.bind, live))
     print("aina-hw agent (read-only) on http://%s:%d serving %s" % (a.bind, a.port, directory))
     print("Allowed origins: %s" % ("any" if a.allow_any_origin else ", ".join(allowed)))
+    ports = ", ".join("%s/%s" % (d, p) for d, p, _ in live.local_ports) or "none found"
+    print("Live counters at /api/live: host A %s%s" % (ports, "; remote hosts over one SSH session each, every %gs" % a.live_interval
+                                                       if live.remotes else " (add --live-remote to include host B/C over SSH)"))
     if a.bind not in LOOPBACK_BINDS:
         print("WARNING: listening beyond localhost exposes your lab inventory to the network.")
     print("From your laptop: ssh -L %d:127.0.0.1:%d <this host>, then Connect in the academy. Ctrl-C to stop." % (a.port, a.port))
+    sys.stdout.flush()
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
@@ -936,6 +1408,7 @@ def main(argv=None):
     p.set_defaults(fn=cmd_summary)
 
     p = sub.add_parser("check", help="run a lab's check.sh and save the result")
+    p.add_argument("--task", type=int, help="run only the checks of this task (resume a lab)")
     p.add_argument("lab")
     p.add_argument("args", nargs=argparse.REMAINDER)
     p.set_defaults(fn=cmd_check)
@@ -945,7 +1418,24 @@ def main(argv=None):
     p.add_argument("--bind", default="127.0.0.1")
     p.add_argument("--allow-origin", action="append", help="extra allowed browser origin, e.g. https://example.org")
     p.add_argument("--allow-any-origin", action="store_true", help="allow every origin (not recommended)")
+    p.add_argument("--env", help="lab.env path (lab ports for /api/live)")
+    p.add_argument("--live-remote", action="store_true", help="include host B/C in /api/live (one SSH session per host while the Live view is open)")
+    p.add_argument("--live-interval", type=float, default=2.0, help="seconds between remote live samples (default 2)")
     p.set_defaults(fn=cmd_serve)
+
+    p = sub.add_parser("live", help="watch the lab port counters as rates (read-only)")
+    p.add_argument("--env", help="lab.env path")
+    p.add_argument("--role", help="role whose lab port to read (default A)")
+    p.add_argument("--dev", help="RDMA device (instead of lab.env)")
+    p.add_argument("--port", type=int, default=1, help="RDMA port (with --dev)")
+    p.add_argument("--netdev", help="netdev of that port (with --dev)")
+    p.add_argument("--prio", type=int, choices=range(8), metavar="0-7", help="lossless priority (default ROCE_PRIO or 3)")
+    p.add_argument("--interval", type=float, default=1.0)
+    p.add_argument("--duration", type=float, default=0, help="stop after this many seconds (0 = until Ctrl-C)")
+    g = p.add_mutually_exclusive_group()
+    g.add_argument("--once", action="store_true", help="print one JSON snapshot")
+    g.add_argument("--stream", action="store_true", help="print one JSON snapshot per line (used over SSH by serve)")
+    p.set_defaults(fn=cmd_live)
 
     p = sub.add_parser("env", help="show and validate lab.env")
     p.add_argument("--env", help="lab.env path")

@@ -5,7 +5,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import zlib from 'node:zlib';
 import yaml from 'js-yaml';
-import { buildSearchIndex, parseWidgetRegistry } from './search-index.mjs';
+import { buildSearchIndex, parseWidgetRegistry, slug } from './search-index.mjs';
+import { checkCommandStacks, extractVerified, scanStackFences } from './stack-variants.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const CONTENT = path.join(ROOT, 'content');
@@ -118,6 +119,20 @@ export function checkQuestions(file, questions, { domains } = {}) {
   }
 }
 
+/** Driver-stack variant groups and real-capture tags (stack-variants.mjs), and `> [!VERIFIED]` callouts,
+ *  which are collected for the "Verified on hardware" index page. */
+const verified = [];
+const stackStats = { groups: 0, real: 0 };
+function checkStacks(file, body, page) {
+  const s = scanStackFences(body);
+  for (const e of s.errors) err(file, e);
+  stackStats.groups += s.groups.length;
+  stackStats.real += s.fences.filter((f) => f.real).length;
+  const v = extractVerified(body);
+  for (const e of v.errors) err(file, e);
+  for (const it of v.items) verified.push({ ...page, title: it.title, text: it.text, heading: it.heading, anchor: it.heading ? slug(it.heading.replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')) : '' });
+}
+
 /** GFM splits table cells on every unescaped "|", even inside code spans; flag rows that do not match the header. */
 function checkTables(file, body) {
   const cells = (l) => {
@@ -184,6 +199,7 @@ for (const dir of moduleDirs) {
     }
     if ((body.match(/```/g) ?? []).length % 2) err(lfile, 'unbalanced code fences');
     checkTables(lfile, body);
+    checkStacks(lfile, body, { kind: 'lesson', id: lid, page: meta.title, module: mod.id });
     // An unquoted ": " inside a YAML list item silently becomes a mapping; catch it here, not in the browser.
     if (typeof meta.title !== 'string') err(lfile, 'title must be a string (quote it if it contains ": ")');
     for (const k of ['objectives', 'tags', 'prerequisites'])
@@ -252,6 +268,7 @@ for (const f of list(GUIDE_DIR, '.md')) {
   if ((body.match(/```/g) ?? []).length % 2) err(file, 'unbalanced code fences');
   checkTables(file, body);
   checkPlaceholders(file, body);
+  checkStacks(file, body, { kind: 'guide', id: meta.id, page: meta.title });
   for (const [, w] of body.matchAll(/```widget\n([\s\S]*?)\n```/g))
     if (!WIDGETS.includes(w.trim())) err(file, `unknown embedded widget ${w.trim()}`);
   guides.push({
@@ -315,6 +332,7 @@ for (const f of list(HOL_DIR, '.md')) {
   });
   checkTables(file, body);
   checkPlaceholders(file, body);
+  checkStacks(file, body, { kind: 'lab', id: meta.id, page: meta.title });
   labBodies.set(meta.id, body);
 }
 const labIds = new Set();
@@ -356,6 +374,9 @@ for (const f of list(path.join(CONTENT, 'commands'), '.yaml')) {
   for (const [i, e] of (c.commands ?? []).entries()) {
     if (typeof e.cmd !== 'string' || typeof e.summary !== 'string') err(file, `command #${i + 1} needs string cmd and summary`);
     for (const k of ['example', 'notes']) if (e[k] !== undefined && typeof e[k] !== 'string') err(file, `command #${i + 1}: ${k} must be a string`);
+    for (const m of checkCommandStacks(e)) err(file, `command #${i + 1} (${e.cmd}): ${m}`);
+    if (e.stacks) stackStats.groups++;
+    stackStats.real += (e.real ? 1 : 0) + Object.values(e.stacks ?? {}).filter((v) => v?.real === true).length;
   }
   commands.push(c);
 }
@@ -378,7 +399,7 @@ for (const e of errors) console.error(`ERROR ${e}`);
 const totalWords = [...lessons.values()].reduce((s, l) => s + l.words, 0);
 const totalQuestions = [...quizzes.values()].reduce((s, q) => s + q.questions.length, 0);
 const summary = `${modules.length} modules, ${lessons.size} lessons (${totalWords.toLocaleString('en')} words), ${quizzes.size} quizzes (${totalQuestions} questions), ` +
-  `${labs.filter((l) => l.kind === 'sim').length} simulator labs, ${labs.filter((l) => l.kind === 'handson').length} hands-on/hardware labs, ${guides.length} hardware guides, ${exams.length} exams, ${commands.reduce((s, c) => s + (c.commands?.length ?? 0), 0)} commands, ${glossary.length} glossary terms`;
+  `${labs.filter((l) => l.kind === 'sim').length} simulator labs, ${labs.filter((l) => l.kind === 'handson').length} hands-on/hardware labs, ${guides.length} hardware guides, ${exams.length} exams, ${commands.reduce((s, c) => s + (c.commands?.length ?? 0), 0)} commands, ${glossary.length} glossary terms, ${stackStats.groups} stack-variant groups, ${stackStats.real} real captures, ${verified.length} verified-on-hardware notes`;
 if (errors.length) {
   console.error(`\n${errors.length} error(s). ${summary}`);
   process.exit(1);
@@ -392,7 +413,7 @@ const write = (rel, data) => fs.writeFileSync(path.join(OUT, rel), JSON.stringif
 write('index.json', {
   generated: new Date().toISOString(),
   copyright: '© 2026 Juraj Liska. AI Networking Academy content: CC BY-NC-SA 4.0, noncommercial use only.',
-  modules, lessons: [...lessons.values()], labs, exams, commands, glossary,
+  modules, lessons: [...lessons.values()], labs, exams, commands, glossary, verifiedNotes: verified,
   hardware: { tiers, requirements, variables, guides },
   quizzes: [...quizzes.values()].map((q) => ({ id: q.id, title: q.title, lesson: q.lesson, count: q.questions.length })),
 });

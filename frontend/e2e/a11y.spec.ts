@@ -10,7 +10,7 @@ const TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa', 'best-prac
 const ROUTES = [
   '/', '/path', '/module/m04-rdma', '/lesson/mtu-jumbo-frames', '/lesson/pfc-priority-flow-control',
   '/quiz/quiz-mtu-jumbo-frames', '/labs', '/labs/sim-01-mtu-blackhole', '/simulator', '/exams', '/exams/exam-ai-fabric-1',
-  '/flashcards', '/reference', '/visualize', '/visualize/parallelism-map', '/progress', '/settings',
+  '/flashcards', '/reference', '/visualize', '/visualize/parallelism-map', '/progress', '/settings', '/verified',
   '/hw', '/hw/connect', '/hw/labs', '/hw/labs/hw-03-host-qos-pfc-ecn', '/does-not-exist',
 ];
 

@@ -145,26 +145,43 @@ Offloading the transport means the NIC holds per-connection state (sequence numb
 
 On a Linux host with rdma-core installed, list the RDMA devices:
 
-```text
+```text stack=inbox real
 $ ibv_devices
     device          	   node GUID
     ------          	----------------
-    mlx5_0          	b83fd20300a1b2c4
-    mlx5_1          	b83fd20300a1b2c5
+    rocep3s0f0      	248a0703000011ee
+    rocep3s0f1      	248a0703000011ef
 ```
 
-*(Illustrative output.)* `mlx5_*` devices are NVIDIA (Mellanox) ConnectX adapters driven by the `mlx5_ib` driver; that is the name NVIDIA's driver stack uses. A distribution's own rdma-core names the same adapter after its PCI address, for example `rocep3s0f0` (RoCE) or `ibp3s0f0` (InfiniBand), so use whatever name `ibv_devices` prints in the commands that follow. A device name such as `rxe0` would be Soft-RoCE, a software RDMA implementation useful for learning (you will use it in labs), and `irdma*` would be an Intel adapter. The full Linux stack is covered in `rdma-on-linux`.
+```text stack=doca real
+$ ibv_devices
+libibverbs: Warning: couldn't load driver 'libionic-rdmav59.so': libionic-rdmav59.so: cannot open shared object file: No such file or directory
+    device          	   node GUID
+    ------          	----------------
+    mlx5_0          	248a0703000011ee
+    mlx5_1          	248a0703000011ef
+```
+
+*(The same dual-port ConnectX-5 under the distribution's stack and under NVIDIA's DOCA-OFED, whose rdma-core also prints a harmless `libionic` warning.)* `mlx5_*` devices are NVIDIA (Mellanox) ConnectX adapters driven by the `mlx5_ib` driver; that is the name NVIDIA's driver stack uses. A distribution's own rdma-core names the same adapter after its PCI address, for example `rocep3s0f0` (RoCE) or `ibp3s0f0` (InfiniBand), so use whatever name `ibv_devices` prints in the commands that follow. A device name such as `rxe0` would be Soft-RoCE, a software RDMA implementation useful for learning (you will use it in labs), and `irdma*` would be an Intel adapter. The full Linux stack is covered in `rdma-on-linux`.
 
 To see whether a port is InfiniBand or Ethernet (RoCE):
 
-```text
-$ ibv_devinfo -d mlx5_0 | grep -E "state|link_layer|active_mtu"
+```text stack=inbox real
+$ ibv_devinfo -d rocep3s0f0 | grep -E "state|link_layer|active_mtu"
 			state:			PORT_ACTIVE (4)
 			active_mtu:		4096 (5)
-			link_layer:		InfiniBand
+			link_layer:		Ethernet
 ```
 
-*(Illustrative.)* `link_layer: Ethernet` would mean RoCE.
+```text stack=doca real
+$ ibv_devinfo -d mlx5_0 | grep -E "state|link_layer|active_mtu"
+libibverbs: Warning: couldn't load driver 'libionic-rdmav59.so': libionic-rdmav59.so: cannot open shared object file: No such file or directory
+			state:			PORT_ACTIVE (4)
+			active_mtu:		4096 (5)
+			link_layer:		Ethernet
+```
+
+`link_layer: Ethernet` means RoCE; an InfiniBand port prints `link_layer: InfiniBand`.
 
 ### Feeling the difference: TCP versus RDMA on the same link
 

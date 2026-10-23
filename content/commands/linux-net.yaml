@@ -6,11 +6,15 @@ commands:
     platform: linux
     summary: One line per interface with operational state and MAC address; the quickest "are my links up" check.
     example: |
-      # illustrative output
-      lo               UNKNOWN        00:00:00:00:00:00 <LOOPBACK,UP,LOWER_UP>
-      eno1             UP             3c:ec:ef:12:34:56 <BROADCAST,MULTICAST,UP,LOWER_UP>
-      ens1f0np0        UP             b8:3f:d2:aa:bb:01 <BROADCAST,MULTICAST,UP,LOWER_UP>
-      ens2f0np0        DOWN           b8:3f:d2:aa:bb:11 <NO-CARRIER,BROADCAST,MULTICAST,UP>
+      $ ip -br link show          # two ConnectX-5 ports (ens64f0np0, ens64f1np1) on a VM
+      lo               UNKNOWN        00:00:00:00:00:00 <LOOPBACK,UP,LOWER_UP> 
+      ens34            UP             00:0c:29:00:33:d7 <BROADCAST,MULTICAST,UP,LOWER_UP> 
+      ens37            UP             00:0c:29:00:33:e1 <BROADCAST,MULTICAST,UP,LOWER_UP> 
+      ens64f0np0       UP             24:8a:07:00:11:ee <BROADCAST,MULTICAST,UP,LOWER_UP> 
+      ens64f1np1       UP             24:8a:07:00:11:ef <BROADCAST,MULTICAST,UP,LOWER_UP> 
+      docker0          DOWN           ea:b3:da:a7:36:64 <NO-CARRIER,BROADCAST,MULTICAST,UP> 
+      ...
+    real: inbox
     notes: "-br (brief) works with link, addr and neigh. NO-CARRIER with UP means the interface is administratively up but has no physical link: check cable, optic and the switch port."
     tags: [iproute2, link, verify]
 
@@ -18,9 +22,14 @@ commands:
     platform: linux
     summary: One line per interface with state and IPv4/IPv6 addresses.
     example: |
-      # illustrative output
-      ens1f0np0        UP             10.0.0.11/31 fe80::ba3f:d2ff:feaa:bb01/64
-      ens2f0np0        UP             10.0.1.11/31 fe80::ba3f:d2ff:feaa:bb11/64
+      $ ip -br addr show
+      lo               UNKNOWN        127.0.0.1/8 ::1/128 
+      ens34            UP             192.0.2.11/24 fe80::20c:29ff:fe00:33d7/64 
+      ens37            UP             192.168.100.162/24 fe80::20c:29ff:fe00:33e1/64 
+      ens64f0np0       UP             10.10.10.1/24 
+      ens64f1np1       UP             10.10.20.1/24 
+      ...
+    real: inbox
     notes: For RoCEv2 each IP address on the netdev also appears as a GID entry on the matching RDMA device, so a missing IP usually means a missing RoCEv2 GID.
     tags: [iproute2, addressing, roce]
 
@@ -28,34 +37,44 @@ commands:
     platform: linux
     summary: Kernel-level RX/TX packet, byte, error and drop counters for one interface; the doubled -s adds detailed error breakdowns.
     example: |
-      # illustrative output
-      4: ens1f0np0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 9000 qdisc mq state UP mode DEFAULT group default qlen 1000
-          link/ether b8:3f:d2:aa:bb:01 brd ff:ff:ff:ff:ff:ff
-          RX:  bytes packets errors dropped  missed   mcast
-          9182736455 8812734      0       0       0     112
+      $ ip -s -s link show dev ens64f0np0
+      4: ens64f0np0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 9000 qdisc mq state UP mode DEFAULT group default qlen 1000
+          link/ether 24:8a:07:00:11:ee brd ff:ff:ff:ff:ff:ff
+          RX:  bytes packets errors dropped  missed   mcast           
+               47520      86      0       0       0       0 
           RX errors:  length    crc   frame    fifo overrun
-                           0      0       0       0       0
-          TX:  bytes packets errors dropped carrier collsns
-          8273645512 7712345      0       0       0       0
+                           0      0       0       0       0 
+          TX:  bytes packets errors dropped carrier collsns           
+               44388      82      0       0       0       0 
           TX errors: aborted   fifo  window heartbt transns
-                           0      0       0       0       1
-          altname enp59s0f0np0
+                           0      0       0       0       1 
+          altname enp3s0f0np0
+          altname enx248a070011ee
+    real: inbox
     notes: "RDMA traffic bypasses the kernel stack, so these counters mostly reflect TCP/IP traffic. On mlx5, RoCE traffic shows up in ethtool -S (tx_vport_rdma_unicast_packets/bytes and the per-priority rx/tx_prioN_bytes counters) and in the RDMA port counters, not here. altname lines (alternative interface names) follow the counters."
     tags: [iproute2, counters]
 
   - cmd: ip link set dev ens1f0np0 mtu 9000
     platform: linux
     summary: Set the interface MTU (non-persistent; use your distribution's network config to persist it).
-    notes: "For RoCE the netdev MTU caps the RDMA path MTU: RoCE uses the largest IB MTU (256-4096) that fits within the Ethernet MTU, so a 9000-byte netdev MTU allows a 4096 active_mtu. Every switch port in the path needs an MTU at least as large. Asking for more than the NIC supports fails with 'Error: mtu greater than device maximum.' (a ConnectX-5, for example, stops at 9978)."
+    notes: "For RoCE the netdev MTU caps the RDMA path MTU: RoCE uses the largest IB MTU (256-4096) that fits within the Ethernet MTU, so a 9000-byte netdev MTU allows a 4096 active_mtu. Every switch port in the path needs an MTU at least as large. Asking for more than the NIC supports fails with 'Error: mtu greater than device maximum.' (a ConnectX-5, for example, stops at 9978; ip -d link show prints the limit as maxmtu)."
+    example: |
+      $ sudo ip link set dev ens64f0np0 mtu 9979
+      Error: mtu greater than device maximum.
+    real: inbox
     tags: [iproute2, mtu, config]
 
   - cmd: ip route get 10.0.1.21
     platform: linux
     summary: Show which route, egress interface and source address the kernel would use to reach a destination.
     example: |
-      # illustrative output
+      # illustrative output (routed, multi-rail host)
       10.0.1.21 via 10.0.1.10 dev ens2f0np0 src 10.0.1.11 uid 0
           cache
+      # a directly connected peer on the reference host (real capture, as a normal user)
+      $ ip route get 10.10.10.2
+      10.10.10.2 dev ens64f0np0 src 10.10.10.1 uid 1001 
+          cache 
     notes: Essential on multi-rail hosts where each NIC has its own subnet. If the egress dev is not the NIC you expect, RDMA CM connections (which resolve routes the same way) may use the wrong rail or fail; fix with per-interface routes or policy routing.
     tags: [iproute2, routing, multi-rail]
 
@@ -67,6 +86,10 @@ commands:
   - cmd: ip neigh show dev ens1f0np0
     platform: linux
     summary: Show the ARP/ND neighbor table for one interface (REACHABLE, STALE, FAILED entries).
+    example: |
+      $ ip neigh show dev ens64f0np0
+      10.10.10.2 lladdr 1c:34:da:00:22:28 STALE 
+    real: inbox
     notes: RoCEv2 needs the next-hop MAC; a FAILED neighbor entry for the gateway is a common cause of RDMA CM address resolution errors.
     tags: [iproute2, arp, troubleshooting]
 
@@ -74,29 +97,57 @@ commands:
     platform: linux
     summary: Show link speed, duplex, autonegotiation, supported/advertised link modes and whether a link is detected.
     example: |
-      # illustrative output (trimmed)
-      Settings for ens1f0np0:
-              Supported ports: [ Backplane ]
-              Supported link modes:   400000baseCR4/Full ...
-              Advertised FEC modes: RS
-              Speed: 400000Mb/s
-              Lanes: 4
-              Duplex: Full
-              Auto-negotiation: on
-              Port: Direct Attach Copper
-              Link detected: yes
+      $ ethtool ens64f0np0          # 100G ConnectX-5 on a 1 m DAC, as a normal user (trimmed)
+      netlink error: Operation not permitted
+      Settings for ens64f0np0:
+      	Supported ports: [ Backplane ]
+      	Supported link modes:   1000baseKX/Full
+      ...
+      	Advertised FEC modes: RS
+      ...
+      	Speed: 100000Mb/s
+      	Lanes: 4
+      	Duplex: Full
+      	Auto-negotiation: on
+      	Port: Direct Attach Copper
+      ...
+      	Link detected: yes
+    real: inbox
     notes: "A port that came up at a lower speed than expected (for example 200000Mb/s on a 400G link) is a classic cause of one slow rank in a collective. Run as a normal user, ethtool first prints 'netlink error: Operation not permitted' (the Wake-on-LAN query needs root) and then the settings; that line is harmless. Lanes is printed by recent ethtool versions."
     tags: [ethtool, link, speed]
 
   - cmd: ethtool -i ens1f0np0
     platform: linux
     summary: Show driver name, driver version, firmware version and PCIe bus address of the NIC.
-    example: |
-      # illustrative output
-      driver: mlx5_core
-      version: 6.8.0-45-generic
-      firmware-version: 28.41.1000 (MT_0000000838)
-      bus-info: 0000:3b:00.0
+    stacks:
+      inbox:
+        example: |
+          $ ethtool -i ens64f0np0
+          driver: mlx5_core
+          version: 7.0.0-38-generic
+          firmware-version: 16.29.1016 (MT_0000000008)
+          expansion-rom-version: 
+          bus-info: 0000:03:00.0
+          supports-statistics: yes
+          supports-test: yes
+          supports-eeprom-access: no
+          supports-register-dump: no
+          supports-priv-flags: yes
+        real: true
+      doca:
+        example: |
+          $ ethtool -i ens64f0np0
+          driver: mlx5_core
+          version: 26.04-0.8.5
+          firmware-version: 16.29.1016 (MT_0000000008)
+          expansion-rom-version: 
+          bus-info: 0000:03:00.0
+          supports-statistics: yes
+          supports-test: yes
+          supports-eeprom-access: no
+          supports-register-dump: no
+          supports-priv-flags: yes
+        real: true
     notes: "Use bus-info with lspci and nvidia-smi topo to map the NIC to its NUMA node and GPU. Keep firmware consistent across the fleet. With the inbox driver, version is the kernel release; with NVIDIA's DOCA/MLNX_OFED driver it is the driver package version (for example 26.04-0.8.5). The part in brackets after the firmware version is the PSID."
     tags: [ethtool, driver, firmware, inventory]
 
@@ -104,16 +155,20 @@ commands:
     platform: linux
     summary: Show driver, PSID and running/stored firmware versions of every devlink-capable NIC, keyed by PCI address.
     example: |
-      # illustrative output (trimmed)
-      pci/0000:3b:00.0:
+      $ devlink dev info          # serial-number lines removed
+      pci/0000:03:00.0:
         driver mlx5_core
+      ...
         versions:
             fixed:
-              fw.psid MT_0000000838
+              fw.psid MT_0000000008
             running:
-              fw.version 28.41.1000
+              fw.version 16.29.1016
+              fw 16.29.1016
             stored:
-              fw.version 28.41.1000
+              fw.version 16.29.1016
+      ...
+    real: inbox
     notes: "Part of iproute2 and works with the inbox driver, without NVIDIA's firmware tools and under Secure Boot. A stored version different from the running one means a new image was burned but the card has not been reset yet. Serial numbers are printed too; remove them before sharing output."
     tags: [devlink, firmware, inventory]
 
@@ -121,19 +176,35 @@ commands:
     platform: linux
     summary: Dump the driver's extended NIC statistics, including per-priority PFC pause, physical-layer errors and discards.
     example: |
-      # illustrative output from an mlx5 NIC with PFC enabled on priority 3 (values made up)
-      $ ethtool -S ens1f0np0 | grep -E 'prio3_pause|discards_phy|crc_errors_phy|out_of_buffer|symbol_err'
-           rx_out_of_buffer: 0
+      # ConnectX-5, PFC on priority 3, after ib_write_bw runs in priority 3 (non-zero counters only)
+      $ ethtool -S ens64f0np0 | grep -E 'prio[0-7]_(bytes|packets|pause)' | grep -v ': 0$'
+           rx_prio0_bytes: 17733754135
+           rx_prio0_packets: 8676285
+           tx_prio0_bytes: 304352834939
+           tx_prio0_packets: 73817588
+           rx_prio3_bytes: 155986842
+           rx_prio3_packets: 2363437
+           tx_prio3_bytes: 124422973040
+           tx_prio3_packets: 29916560
+           rx_prio5_bytes: 15138
+           rx_prio5_packets: 42
+           tx_prio5_bytes: 14652
+           tx_prio5_packets: 51
+           rx_prio3_pause: 696
+           rx_prio3_pause_duration: 608
+           tx_prio3_pause: 26
+           tx_prio3_pause_duration: 114
+           rx_prio3_pause_transition: 348
+      # physical-layer error and discard counters on a clean link
+      $ ethtool -S ens64f0np0 | grep -E 'crc_errors_phy|symbol_err_phy|link_down_events_phy|corrected_bits_phy|discards_phy'
            rx_crc_errors_phy: 0
            rx_symbol_err_phy: 0
-           rx_discards_phy: 1834
+           rx_discards_phy: 0
            tx_discards_phy: 0
+           link_down_events_phy: 0
            rx_pcs_symbol_err_phy: 0
-           rx_prio3_pause: 551203
-           rx_prio3_pause_duration: 48210
-           tx_prio3_pause: 12
-           tx_prio3_pause_duration: 9
-           rx_prio3_pause_transition: 275601
+           rx_corrected_bits_phy: 0
+    real: inbox
     notes: "Counter names are driver-specific; the examples are mlx5 names (see the kernel mlx5 counters documentation). The full list is long (thousands of lines on mlx5 because of per-channel counters), so always grep. Growing rx_prioN_pause means the switch (or peer NIC) is pausing you; growing tx_prioN_pause means your NIC is pausing the link partner (receiver cannot keep up). rx_discards_phy indicates the NIC dropped packets for lack of buffer. On mlx5 the prioN_pause* counters appear only for priorities with PFC enabled, and the rx/tx_global_pause* counters only while global 802.3x pause is on. RoCE traffic is counted in tx/rx_vport_rdma_unicast_packets/bytes and in rx/tx_prioN_bytes, not in the netdev packet counters. Always read counters as deltas over time."
     tags: [ethtool, counters, pfc, troubleshooting]
 
@@ -141,12 +212,29 @@ commands:
     platform: linux
     summary: Read the transceiver EEPROM/DOM - vendor, part number, cable type and length, and on optics the per-lane temperature, voltage, TX/RX power.
     example: |
-      # illustrative output (trimmed; run with sudo)
+      # illustrative output from an optical module (trimmed; run with sudo)
               Identifier                                : 0x18 (QSFP-DD Double Density 8X Pluggable Transceiver)
               Vendor name                               : EXAMPLE
               Module temperature                        : 41.20 degrees C / 106.16 degrees F
               Rx loss of signal                         : None
               Rcvr signal avg optical power (Channel 1) : 0.9120 mW / -0.40 dBm
+      # captured on the reference hardware: a 1 m passive DAC on a ConnectX-5 (trimmed, serial number removed)
+      $ ethtool -m ens64f0np0
+      netlink error: Operation not permitted
+      $ sudo ethtool -m ens64f0np0
+      	Identifier                                : 0x0d (QSFP+)
+      ...
+      	Transceiver type                          : 100G Ethernet: 100G Base-CR4 or 25G Base-CR CA-L
+      ...
+      	Length (Copper or Active cable)           : 1m
+      	Transmitter technology                    : 0xa0 (Copper cable, unequalized)
+      ...
+      	Vendor name                               : Mellanox
+      	Vendor OUI                                : 00:02:c9
+      	Vendor PN                                 : MCP1600-E00AE30
+      ...
+      	Module temperature                        : 0.00 degrees C / 32.00 degrees F
+      	Module voltage                            : 0.0000 V
     notes: "Needs root: as a normal user it prints only 'netlink error: Operation not permitted'. Which fields appear depends on the module type and the ethtool/kernel version; every line is indented by one tab. A passive DAC has no optical power or bias lines at all, and typically reports 'Module temperature : 0.00 degrees C / 32.00 degrees F' plus 'Transmitter technology : 0xa0 (Copper cable, unequalized)' and 'Length (Copper or Active cable) : 1m'. A lane with RX power far below its siblings points to a dirty or damaged fiber. On NVIDIA NICs mlxlink gives a richer view."
     tags: [ethtool, optics, dom, physical]
 
@@ -154,10 +242,11 @@ commands:
     platform: linux
     summary: Show the configured and active Forward Error Correction mode (for example RS) on the port.
     example: |
-      # illustrative output
-      FEC parameters for ens1f0np0:
+      $ ethtool --show-fec ens64f0np0          # 100GbE on a DAC
+      FEC parameters for ens64f0np0:
       Supported/Configured FEC encodings: Auto
       Active FEC encoding: RS
+    real: inbox
     notes: FEC must agree with the link partner; a mismatch typically prevents link-up. High-speed PAM4 links (for example 200G/400G) depend on RS-FEC.
     tags: [ethtool, fec, physical]
 
@@ -171,11 +260,17 @@ commands:
     platform: linux
     summary: Show global (802.3x) link-level pause settings; -a is the short form.
     example: |
-      # illustrative output (after PFC was enabled on one priority)
-      Pause parameters for ens1f0np0:
-      Autonegotiate:  off
-      RX:             off
-      TX:             off
+      $ ethtool --show-pause ens64f0np0          # mlx5 default
+      Pause parameters for ens64f0np0:
+      Autonegotiate:	off
+      RX:		on
+      TX:		on
+      $ ethtool -a ens64f0np0                    # after PFC was enabled on priority 3
+      Pause parameters for ens64f0np0:
+      Autonegotiate:	off
+      RX:		off
+      TX:		off
+    real: inbox
     notes: "For RoCE with PFC you normally want global pause OFF and PFC enabled on the RoCE priority only. PFC is configured separately (dcb pfc from iproute2 on any stack, or mlnx_qos with NVIDIA's DOCA/MLNX_OFED tools). Global pause and PFC are mutually exclusive on most NICs. On mlx5 global pause is ON by default (RX on, TX on); enabling PFC on any priority turns it off automatically, and 'ethtool -A <dev> rx on tx on' while PFC is enabled silently clears PFC on every priority (exit code 0, no warning). Set with 'ethtool -A <dev> rx off tx off'."
     tags: [ethtool, pause, pfc, lossless]
 
@@ -183,9 +278,10 @@ commands:
     platform: linux
     summary: iproute2's DCB tool - show which priorities have PFC enabled on a NIC port; works with the inbox driver and with NVIDIA's stack.
     example: |
-      # illustrative output (mlx5, PFC on priority 3)
-      pfc-cap 8 macsec-bypass off delay 7
-      prio-pfc 0:off 1:off 2:off 3:on 4:off 5:off 6:off 7:off
+      $ dcb pfc show dev ens64f0np0          # ConnectX-5, PFC on priority 3
+      pfc-cap 8 macsec-bypass off delay 7 
+      prio-pfc 0:off 1:off 2:off 3:on 4:off 5:off 6:off 7:off 
+    real: inbox
     notes: "The generic equivalent of mlnx_qos's PFC rows. Add 'prio-pfc' at the end to print only that line. Requires a NIC driver with DCB netlink support (mlx5 has it) and an iproute2 recent enough to ship dcb."
     tags: [dcb, iproute2, pfc, lossless, verify]
 
@@ -199,11 +295,9 @@ commands:
     platform: linux
     summary: Map DSCP 26 to priority 3 in the port's DCB application table.
     example: |
-      # illustrative output
-      $ dcb app show dev ens1f0np0
-      dscp-prio AF31:3
-      $ dcb -N app show dev ens1f0np0
-      dscp-prio 26:3
+      $ dcb app show dev ens64f0np0
+      dscp-prio AF31:3 
+    real: inbox
     notes: "dcb app show prints well-known DSCP values by name (26 is AF31); -N prints numbers. An empty table prints nothing. On mlx5, adding a DSCP entry also switches the port to DSCP trust (traffic with tclass 106 is then counted in priority 3); 'dcb apptrust' is not supported by mlx5 and fails with 'Attribute not found: Success'. Remove the entry with 'dcb app del dev <dev> dscp-prio 26:3'."
     tags: [dcb, iproute2, dscp, qos, config]
 
@@ -211,27 +305,55 @@ commands:
     platform: linux
     summary: Show ETS settings - traffic-class bandwidth shares, transmission selection algorithm per TC and the priority-to-TC map.
     example: |
-      # illustrative output (mlx5 defaults)
-      willing off ets-cap 8 cbs off
-      tc-bw 0:0 1:0 2:0 3:0 4:0 5:0 6:0 7:0
-      pg-bw 0:0 1:0 2:0 3:0 4:0 5:0 6:0 7:0
-      tc-tsa 0:vendor 1:vendor 2:vendor 3:vendor 4:vendor 5:vendor 6:vendor 7:vendor
-      prio-tc 0:1 1:0 2:2 3:3 4:4 5:5 6:6 7:7
-      reco-tc-bw 0:0 1:0 2:0 3:0 4:0 5:0 6:0 7:0
-      reco-tc-tsa 0:strict 1:strict 2:strict 3:strict 4:strict 5:strict 6:strict 7:strict
-      reco-prio-tc 0:0 1:0 2:0 3:0 4:0 5:0 6:0 7:0
+      $ dcb ets show dev ens64f0np0          # mlx5 defaults on a ConnectX-5
+      willing off ets-cap 8 cbs off 
+      tc-bw 0:0 1:0 2:0 3:0 4:0 5:0 6:0 7:0 
+      pg-bw 0:0 1:0 2:0 3:0 4:0 5:0 6:0 7:0 
+      tc-tsa 0:vendor 1:vendor 2:vendor 3:vendor 4:vendor 5:vendor 6:vendor 7:vendor 
+      prio-tc 0:1 1:0 2:2 3:3 4:4 5:5 6:6 7:7 
+      reco-tc-bw 0:0 1:0 2:0 3:0 4:0 5:0 6:0 7:0 
+      reco-tc-tsa 0:strict 1:strict 2:strict 3:strict 4:strict 5:strict 6:strict 7:strict 
+      reco-prio-tc 0:0 1:0 2:0 3:0 4:0 5:0 6:0 7:0 
+    real: inbox
     notes: "Note the mlx5 default mapping: priority 0 goes to TC 1 and priority 1 to TC 0; the others map one to one. 'dcb buffer show dev <dev>' shows the receive-buffer split, which the driver changes when PFC is enabled (for example prio-buffer 3:1 and two 130944-byte buffers out of 262016 on a ConnectX-5)."
     tags: [dcb, iproute2, ets, qos]
 
   - cmd: ethtool -g ens1f0np0
     platform: linux
     summary: Show current and maximum RX/TX ring sizes.
+    example: |
+      $ ethtool -g ens64f0np0          # trimmed
+      Ring parameters for ens64f0np0:
+      Pre-set maximums:
+      RX:			8192
+      ...
+      TX:			8192
+      Current hardware settings:
+      RX:			1024
+      ...
+      TX:			1024
+      ...
+    real: inbox
     notes: Ring sizing affects kernel-path traffic (storage over TCP, front-end), not RDMA queues. Change with -G.
     tags: [ethtool, rings, tuning]
 
   - cmd: ethtool -l ens1f0np0
     platform: linux
     summary: Show current and maximum channel (queue) counts used by the kernel network stack.
+    example: |
+      $ ethtool -l ens64f0np0
+      Channel parameters for ens64f0np0:
+      Pre-set maximums:
+      RX:		n/a
+      TX:		n/a
+      Other:		n/a
+      Combined:	63
+      Current hardware settings:
+      RX:		n/a
+      TX:		n/a
+      Other:		n/a
+      Combined:	63
+    real: inbox
     notes: Change with -L. Relevant for TCP/IP throughput and IRQ affinity tuning.
     tags: [ethtool, channels, tuning]
 
@@ -256,6 +378,17 @@ commands:
   - cmd: tcpdump -i ens1f0np0 -nn -c 20 udp port 4791
     platform: linux
     summary: Capture RoCEv2 packets (UDP destination port 4791) on an interface without name resolution.
+    example: |
+      # during an ib_write_bw run between two ConnectX-5 hosts
+      $ sudo timeout 8 tcpdump -i ens64f0np0 -nn -c 20 udp port 4791
+      libibverbs: Warning: couldn't open config directory '/etc/libibverbs.d'.
+      tcpdump: verbose output suppressed, use -v[v]... for full protocol decode
+      listening on ens64f0np0, link-type EN10MB (Ethernet), snapshot length 262144 bytes
+
+      0 packets captured
+      0 packets received by filter
+      0 packets dropped by kernel
+    real: inbox
     notes: "RDMA traffic is offloaded and bypasses the kernel, so tcpdump on the netdev does not see RoCE data packets (on mlx5 this capture reports 0 packets even while ib_write_bw runs); it sees only TCP/IP traffic such as the perftest or RDMA CM setup. To see offloaded RoCE, capture on the RDMA device with libpcap's RDMA sniffer (next entry), use NVIDIA's ibdump (DOCA/MLNX_OFED), or mirror the switch port."
     tags: [tcpdump, roce, capture]
 
@@ -296,14 +429,21 @@ commands:
     platform: linux
     summary: Test the path MTU by sending non-fragmentable ICMP packets; 8972 bytes of payload + 28 bytes of IP/ICMP headers = 9000-byte IP packets.
     example: |
-      # illustrative output
-      PING 10.0.0.10 (10.0.0.10) 8972(9000) bytes of data.
-      8980 bytes from 10.0.0.10: icmp_seq=1 ttl=64 time=0.275 ms
-      8980 bytes from 10.0.0.10: icmp_seq=2 ttl=64 time=0.229 ms
-      8980 bytes from 10.0.0.10: icmp_seq=3 ttl=64 time=0.270 ms
+      $ ping -M do -s 8972 -c 3 10.10.10.2          # MTU 9000 on both hosts
+      PING 10.10.10.2 (10.10.10.2) 8972(9000) bytes of data.
+      8980 bytes from 10.10.10.2: icmp_seq=1 ttl=64 time=0.275 ms
+      8980 bytes from 10.10.10.2: icmp_seq=2 ttl=64 time=0.229 ms
+      8980 bytes from 10.10.10.2: icmp_seq=3 ttl=64 time=0.270 ms
 
-      --- 10.0.0.10 ping statistics ---
+      --- 10.10.10.2 ping statistics ---
       3 packets transmitted, 3 received, 0% packet loss, time 2034ms
       rtt min/avg/max/mdev = 0.229/0.258/0.275/0.020 ms
+      $ ping -M do -s 8973 -c 1 10.10.10.2          # one byte too many for the local MTU
+      PING 10.10.10.2 (10.10.10.2) 8973(9001) bytes of data.
+      ping: sendmsg: Message too long
+
+      --- 10.10.10.2 ping statistics ---
+      1 packets transmitted, 0 received, +1 errors, 100% packet loss, time 0ms
+    real: inbox
     notes: "Replies report 8980 bytes (the ICMP payload plus the 8-byte ICMP header). If the local interface MTU is too small, ping fails immediately with 'ping: sendmsg: Message too long' and the statistics show '+1 errors'; if a hop further along has a smaller MTU, the packets are silently lost (no reply lines, 100% packet loss) or, once the kernel has learned the path MTU, ping reports 'local error: message too long, mtu=N'. Add -I <source address> to pick the data interface on multi-NIC hosts. Tests the IP path only; it does not prove the RDMA active_mtu."
     tags: [mtu, verify]

@@ -1,8 +1,32 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Search } from 'lucide-react';
+import { BadgeCheck, Search } from 'lucide-react';
 import { useIndex } from '../content';
 import { Card, Loading, PageHeader, Pill } from '../components/ui';
+import StackToggle, { useStack } from '../components/StackToggle';
+import { captureLabel, commandForStack, STACK_LABELS } from '../../scripts/stack-variants.mjs';
+import type { CommandEntry } from '../types';
+
+function CommandCard({ c }: { c: CommandEntry }) {
+  const [stack] = useStack();
+  const v = commandForStack(c, stack);
+  return (
+    <Card className="p-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <code className="font-mono text-[0.92rem] font-semibold text-accent">{v.cmd}</code>{c.platform && <Pill>{c.platform}</Pill>}
+        {c.stacks && <Pill className="ml-auto">{STACK_LABELS[stack]}</Pill>}
+      </div>
+      <p className="mt-1.5 text-sm">{c.summary}</p>
+      {v.example && (
+        <>
+          {v.real && <div className="capture-label mt-3"><BadgeCheck size={12} aria-hidden />{captureLabel(v.real)}</div>}
+          <pre tabIndex={0} aria-label={`Example output of ${v.cmd}`} className={`${v.real ? 'mt-0' : 'mt-3'} overflow-x-auto rounded-lg border border-line bg-[var(--code-bg)] p-3 font-mono text-xs leading-relaxed text-[var(--code-text)]`}>{v.example.trimEnd()}</pre>
+        </>
+      )}
+      {v.notes && <p className="mt-2 text-[13px] text-muted">{v.notes}</p>}
+    </Card>
+  );
+}
 
 export default function Reference() {
   const { data: ix, error } = useIndex();
@@ -22,7 +46,7 @@ export default function Reference() {
     if (!ix) return [];
     return ix.commands.filter((g) => group === 'all' || g.id === group).map((g) => ({
       ...g,
-      commands: g.commands.filter((c) => !needle || [c.cmd, c.summary, c.notes ?? '', ...(c.tags ?? [])].join(' ').toLowerCase().includes(needle)),
+      commands: g.commands.filter((c) => !needle || [c.cmd, c.summary, c.notes ?? '', ...(c.tags ?? []), ...Object.values(c.stacks ?? {}).flatMap((v) => [v?.cmd ?? '', v?.notes ?? ''])].join(' ').toLowerCase().includes(needle)),
     })).filter((g) => g.commands.length);
   }, [ix, needle, group]);
   const terms = useMemo(() => (ix?.glossary ?? []).filter((t) => !needle || `${t.term} ${t.expansion ?? ''} ${t.definition}`.toLowerCase().includes(needle)), [ix, needle]);
@@ -31,7 +55,9 @@ export default function Reference() {
   return (
     <div>
       <PageHeader eyebrow="Reference" title="Commands and glossary">
-        The tools of the trade, with what to look for in their output. Example output is illustrative; real output varies by version and platform.
+        The tools of the trade, with what to look for in their output. Example output is illustrative unless it is labelled as a real
+        capture; real output varies by version and platform. Where the distro (inbox) and NVIDIA DOCA-OFED driver stacks differ, an entry
+        has a stack switch. Surprises seen on real adapters are collected under <Link to="/verified" className="text-data underline underline-offset-2">Verified on hardware</Link>.
       </PageHeader>
       <div className="mb-6 flex flex-wrap items-center gap-3">
         <div className="inline-flex rounded-xl border border-line bg-panel p-1" role="group" aria-label="Show">
@@ -48,6 +74,7 @@ export default function Reference() {
             {ix.commands.map((g) => <option key={g.id} value={g.id}>{g.title}</option>)}
           </select>
         )}
+        {tab === 'commands' && <StackToggle size="md" />}
       </div>
       {tab === 'commands' ? (
         <div className="space-y-10">
@@ -56,14 +83,7 @@ export default function Reference() {
               <h2 className="text-lg font-bold">{g.title}</h2>
               {g.description && <p className="mb-3 text-sm text-muted">{g.description}</p>}
               <div className="space-y-3">
-                {g.commands.map((c, i) => (
-                  <Card key={i} className="p-4">
-                    <div className="flex flex-wrap items-center gap-2"><code className="font-mono text-[0.92rem] font-semibold text-accent">{c.cmd}</code>{c.platform && <Pill>{c.platform}</Pill>}</div>
-                    <p className="mt-1.5 text-sm">{c.summary}</p>
-                    {c.example && <pre tabIndex={0} aria-label={`Example output of ${c.cmd}`} className="mt-3 overflow-x-auto rounded-lg border border-line bg-[var(--code-bg)] p-3 font-mono text-xs leading-relaxed text-[var(--code-text)]">{c.example.trimEnd()}</pre>}
-                    {c.notes && <p className="mt-2 text-[13px] text-muted">{c.notes}</p>}
-                  </Card>
-                ))}
+                {g.commands.map((c, i) => <CommandCard key={i} c={c} />)}
               </div>
             </section>
           ))}

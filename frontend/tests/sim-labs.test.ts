@@ -82,10 +82,11 @@ describe('symptoms', () => {
     const ar = node01(s, 'all_reduce_perf -b 8 -e 8G -f 2 -g 1');
     expect(peakBusbw(ar)).toBeGreaterThan(100);
     expect(peakBusbw(ar)).toBeLessThan(150);
-    // mlx5 shows per-priority pause counters only for PFC-enabled priorities: prio 4 here, not 3.
+    // mlx5 shows per-priority pause counters only for PFC-enabled priorities: prio 4 here, not 3. Each enabled
+    // priority has five (rx/tx pause, rx/tx pause_duration, rx pause_transition), as on a real ConnectX-5.
     expect(node01(s, 'ethtool -S enp170s0np0 | grep prio3_pause', 'node03')).toBe('');
-    expect(node01(s, 'ethtool -S enp170s0np0 | grep -c prio4_pause', 'node03')).toBe('2\n');
-    expect(node01(s, 'ethtool -S enp24s0np0 | grep -c prio3_pause', 'node03')).toBe('2\n');
+    expect(node01(s, 'ethtool -S enp170s0np0 | grep -c prio4_pause', 'node03')).toBe('5\n');
+    expect(node01(s, 'ethtool -S enp24s0np0 | grep -c prio3_pause', 'node03')).toBe('5\n');
     expect(node01(s, 'nv show interface swp3 counters | grep "TX PFC"', 'leaf06')).toMatch(/TX PFC pause\s+[1-9]\d{5}/);
   });
 

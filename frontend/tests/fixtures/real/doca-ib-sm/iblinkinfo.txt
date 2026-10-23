@@ -1,0 +1,7 @@
+### cmd: sudo iblinkinfo -C mlx5_1 -P 1
+### ----
+CA: ESXI-2-UbuntuServer-1 mlx5_1:
+      0x1c34da0300002229      2    1[  ] ==( 4X      25.78125 Gbps Active/  LinkUp)==>       1    1[  ] "ESXI-1-UbuntuServer-1 mlx5_1" ( )
+CA: ESXI-1-UbuntuServer-1 mlx5_1:
+      0x248a0703000011ef      1    1[  ] ==( 4X      25.78125 Gbps Active/  LinkUp)==>       2    1[  ] "ESXI-2-UbuntuServer-1 mlx5_1" ( )
+### rc=0

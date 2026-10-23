@@ -13,10 +13,10 @@ themselves live in `content/labs/handson/<lab-id>.md` (and in the web app); each
 directory here with its scripts, topologies and a `check.sh` that prints `PASS:`/`FAIL:` lines and
 exits non-zero if any check fails.
 
-> **Status:** 13 of the 16 hands-on labs are `verified: true` (see [Verification record](#verification-record)
+> **Status:** 19 of the 22 hands-on labs are `verified: true` (see [Verification record](#verification-record)
 > and [Hardware verification record](#hardware-verification-record) below): all seven Tier 0 labs (five on
 > WSL2, `hol-soft-roce-perftest` and `hol-rocev2-wireshark` on the hardware lab hosts) and the Tier 1 labs
-> `hw-01` to `hw-05` and `hw-09` on real ConnectX-5 hardware. `hw-06` (needs a lossless switch) and
+> `hw-01` to `hw-05` and `hw-09` to `hw-15` on real ConnectX-5 hardware. `hw-06` (needs a lossless switch) and
 > `hw-07`/`hw-08` (need GPU nodes) stay `verified: false`. Every shell script has been syntax-checked with
 > `bash -n` and every YAML file parsed. Please report anything that behaves differently on your system.
 
@@ -184,8 +184,17 @@ reference were also compared with this hardware on both driver stacks: see
 | `hw-04-break-fix-roce` | Passed: every fault injected, diagnosed and restored, and one random fault diagnosed from the lab's commands alone. Fixed: `trust-pcp` on the inbox stack; checks now say when host B is unreachable rather than suggesting `ssh-copy-id`; `HOST_*` must be management addresses (the data-path faults cut the checks off otherwise). |
 | `hw-05-link-health-optics` | Passed after a fix: the module check now uses `sudo -n ethtool -m` and matches tab-indented fields. |
 | `hw-09-infiniband-bringup` | Passed after fixes (port 2 of both cards in InfiniBand mode, back to back, DOCA OpenSM): the umad tools opened the first RDMA device (the RoCE port) and failed, so `start-sm.sh`, the check and the lab commands now name the device and port (`-C`/`-P`); `start-sm.sh` binds OpenSM to the lab port's GUID. 97 Gb/s over IB, SM loss leaves ports ACTIVE as the lab says. In a VM the port-type change needed a physical host reboot. |
+| `hw-10-ib-sm-failover` | Passed (OpenSM on both hosts via `lab-sm.sh`, priorities 14/13). Takeover after killing the master took 51, 54 and 58 s with OpenSM's defaults and 3-4 s with `--fast` (1 s polling, 2 retries); ports stayed ACTIVE. Found while writing it: the new master reports `master_sm_priority` 14, so an equal-priority returning SM stays standby; priority 15 preempts in about a second. `watch-sm.sh` now times the takeover from the first failed `sminfo`. |
+| `hw-11-ipoib` | Passed. OpenSM's default broadcast group gives IPoIB MTU 2044; `partitions-mtu4k.conf` (`mtu=5`) gives 4092. Connected mode is refused by DOCA's driver (`Connected Mode not supported from MLNX_OFED 23.07 and above`). iperf3 37 Gb/s one stream, 94 Gb/s four streams, `ib_write_bw` 94.6 Gb/s. |
+| `hw-12-ib-partitions` | Passed: storage (full/full) and compute (full/limited) ping, isolated (limited/limited) does not; `ib_write_bw --pkey_index` on isolated fails with `transport retry counter exceeded (12)` and B's `PkeyViolations` rose (16-bit, saturated at 65535). Restore rewrites the default P_Key tables by restarting the SM without `-P`. |
+| `hw-13-ibdiagnet-triage` | Passed after fixes: `fault.sh` printed state before the port was ACTIVE and mangled dotted speeds, now waits on PortInfo (MAD) instead of sysfs, which lagged (`ibstat` said `Down` on the reset host while the port was `Initialize`). All three faults (FDR link 52 Gb/s, disabled port, SM down plus retrain) injected, diagnosed and restored; the check was also run against an injected fault and failed as intended. `ibdiagnet` exits 0 even with errors, so the check parses its summary. |
+| `hw-14-mpi-ucx-rdma` | Passed after fixes, on the RoCE port (and the check plus Task 8 on the IB port). DOCA 3.4's `openmpi` package has no UCX PML, so the lab uses Ubuntu's `openmpi-bin` 5.0.10 on DOCA's UCX; UCC needs `libucc-dev`; OSU 7.5.2 built by `build-osu.sh` (pinned SHA-256). The check's `ucx_info | grep -q` failed under pipefail and now captures first; duplicate `UCX_NET_DEVICES` entries warn, so they are listed once. RC 0.92 us / 11-12 GB/s, TCP 14 us / 6 GB/s. |
+| `hw-15-cpu-allreduce-busbw` | Passed on the RoCE port (check also on IB). Ring vs recursive doubling crossover between 64 and 256 KiB; on these VMs large allreduces are endpoint-bound (8 ranks on one host as slow as across hosts); UCC (with `coll_ucc_priority 100`) about 4x faster at 1 MiB. `osu-busbw.sh` header order fixed. |
 | `hol-soft-roce-perftest` | Passed unchanged (Ubuntu 24.04 user space in a container on host A, Soft-RoCE on its VMXNET3 interface, generic kernel with the distribution's RDMA stack). Notes added: `linux-modules-extra` does not exist for newer kernels; Soft-RoCE cannot work next to NVIDIA's DOCA/OFED, whose `ib_core` the stock `rdma_rxe` refuses (`disagrees about version of symbol`). |
 | `hol-rocev2-wireshark` | Option A passed after two fixes (one container per host, Soft-RoCE on the shared 1500-byte segment): on Ubuntu 26.04 the `tshark` AppArmor profile only reads `/tmp` files you own, so captures now use `tcpdump -Z $USER`; `check.sh` demanded an RC ACKNOWLEDGE in the READ capture, where the READ responses carry the acknowledgement. |
+
+**Packages added for hw-14/hw-15** (left installed on both lab hosts): `openmpi-bin`, `libopenmpi-dev`, `libucc-dev`
+(Ubuntu 26.04) and their dependencies, plus the OSU build in `~/osu` and `~/osu-build`.
 
 **Caveats:** one NIC model, back to back, inside VMs, and the DOCA stack for the lab runs. The inbox-stack
 paths of the labs (`dcb` instead of `mlnx_qos`) were exercised command by command but not run end to end.

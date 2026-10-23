@@ -118,6 +118,71 @@ $ ib_write_bw -d mlx5_0 -x 3 -s 65536 -F --report_gbits 10.0.0.12
 - **BW average** is the number to report. **BW peak** is the best interval and is less meaningful; with `-D` perftest prints ` WARNING: BW peak won't be measured in this run.` and BW peak reads `0.00`.
 - **MsgRate** is messages per second in millions: here 391.85 Gb/s ÷ (65,536 B × 8) ≈ 0.75 million messages per second. At small message sizes the message rate, not the bandwidth, is the limit.
 
+On real hardware (two 100G ConnectX-5 hosts cabled back to back, RoCE) the same test prints the following on the client; switch the stack to compare the distribution's perftest 25.01 with NVIDIA's DOCA build (6.29):
+
+```text stack=inbox real
+$ ib_write_bw -d rocep3s0f0 -x 3 -F --report_gbits 10.10.10.2
+---------------------------------------------------------------------------------------
+                    RDMA_Write BW Test
+ Dual-port       : OFF		Device         : rocep3s0f0
+ Number of qps   : 1		Transport type : IB
+ Connection type : RC		Using SRQ      : OFF
+ PCIe relax order: ON		Lock-free      : OFF
+ ibv_wr* API     : ON		Using DDP      : OFF
+ TX depth        : 128
+ CQ Moderation   : 1
+ Mtu             : 4096[B]
+ Link type       : Ethernet
+ GID index       : 3
+ Max inline data : 0[B]
+ rdma_cm QPs	 : OFF
+ Data ex. method : Ethernet
+---------------------------------------------------------------------------------------
+ local address: LID 0000 QPN 0x004b PSN 0xd59040 RKey 0x184d00 VAddr 0x0071e7d1051000
+ GID: 00:00:00:00:00:00:00:00:00:00:255:255:10:10:10:01
+ remote address: LID 0000 QPN 0x0186 PSN 0xb9398 RKey 0x004300 VAddr 0x00784a42c47000
+ GID: 00:00:00:00:00:00:00:00:00:00:255:255:10:10:10:02
+---------------------------------------------------------------------------------------
+ #bytes     #iterations    BW peak[Gb/sec]    BW average[Gb/sec]   MsgRate[Mpps]
+ 65536      5000             94.73              94.72  		     0.180663
+---------------------------------------------------------------------------------------
+```
+
+```text stack=doca real
+$ ib_write_bw -d mlx5_0 -x 3 -F --report_gbits 10.10.10.2
+---------------------------------------------------------------------------------------
+                    RDMA_Write BW Test
+ Dual-port       : OFF		Device         : mlx5_0
+ Number of qps   : 1		Transport type : IB
+ Connection type : RC		Using SRQ      : OFF
+ PCIe relax order: ON		Lock-free      : OFF
+ ibv_wr* API     : ON		Using Enhanced Reorder      : OFF
+ TX depth        : 128
+ CQ Moderation   : 1
+ CQE Poll Batch  : Dynamic
+ Mtu             : 4096[B]
+ Link type       : Ethernet
+ GID index       : 3
+ Max inline data : 0[B]
+ rdma_cm QPs	 : OFF
+ Data ex. method : Ethernet
+ NUMA node       : 0
+---------------------------------------------------------------------------------------
+ local address: LID 0000 QPN 0x004b PSN 0x47e235 RKey 0x201dbc VAddr 0x00792fd34ab000
+ GID: 00:00:00:00:00:00:00:00:00:00:255:255:10:10:10:01
+ remote address: LID 0000 QPN 0x008a PSN 0xcaa37b RKey 0x0353bc VAddr 0x00790ff303a000
+ GID: 00:00:00:00:00:00:00:00:00:00:255:255:10:10:10:02
+---------------------------------------------------------------------------------------
+ #bytes     #iterations    BW peak[Gb/sec]    BW average[Gb/sec]   MsgRate[Mpps]
+ 65536      5000             95.73              95.73  		     0.182590
+---------------------------------------------------------------------------------------
+```
+
+95-96 Gb/s on a 100 Gb/s link is the "mid-90s of percent" you should expect (see below). The GID lines end in `10:10:10:01` and `10:10:10:02`: the IPv4-mapped RoCEv2 addresses 10.10.10.1 and 10.10.10.2, so GID index 3 was the right choice on these hosts.
+
+> [!VERIFIED]
+> **With `-D` perftest prints a warning first and reports BW peak as `0.00`.** On both stacks (ConnectX-5, perftest 25.01 and DOCA's 6.29) `ib_write_bw -D 5` started with ` WARNING: BW peak won't be measured in this run.` and ended with a result line such as `65536      554823           0.00               96.97 ...`: no peak, an iteration count that reflects the duration (about 555,000 messages in 5 s) and a BW average of 96.97 Gb/s (97.23 with DOCA). That is expected, not a failure: in duration mode read `BW average`.
+
 ### What "line rate" really is
 
 You will never see the nominal link rate as `BW average`, because headers and link-level overheads consume part of it:
@@ -140,6 +205,41 @@ Running with `-a` produces bandwidth for every message size. A healthy curve ris
 
 If the curve never flattens, or flattens well below line rate, suspect the host (PCIe, NUMA, power-saving states) or the path (lower negotiated link speed, errors, congestion).
 
+A real sweep on the 100G ConnectX-5 pair (inbox stack; header block trimmed) shows the shape:
+
+```text real=inbox
+$ ib_write_bw -d rocep3s0f0 -x 3 -a -F --report_gbits 10.10.10.2
+---------------------------------------------------------------------------------------
+                    RDMA_Write BW Test
+...
+ CQ Moderation   : 100
+...
+---------------------------------------------------------------------------------------
+ #bytes     #iterations    BW peak[Gb/sec]    BW average[Gb/sec]   MsgRate[Mpps]
+ 2          5000           0.077181            0.067564            4.222733
+ 4          5000             0.15               0.15   		     4.814764
+ 8          5000             0.31               0.31   		     4.814219
+ 16         5000             0.65               0.64   		     5.037279
+...
+ 256        5000             10.36              10.01  		     4.885645
+ 512        5000             20.62              20.53  		     5.012389
+ 1024       5000             40.86              40.58  		     4.953721
+ 2048       5000             73.24              72.83  		     4.445205
+ 4096       5000             94.88              94.81  		     2.893450
+ 8192       5000             96.15              94.06  		     1.435192
+ 16384      5000             96.73              96.71  		     0.737872
+ 32768      5000             96.91              96.91  		     0.369676
+ 65536      5000             96.94              96.93  		     0.184877
+ 131072     5000             96.78              96.74  		     0.092257
+ 262144     5000             92.22              92.14  		     0.043934
+ 524288     5000             91.53              91.53  		     0.021821
+...
+ 8388608    5000             91.96              91.96  		     0.001370
+---------------------------------------------------------------------------------------
+```
+
+Up to about 1 KiB the message rate is flat at roughly 5 million messages per second, so bandwidth doubles with every size step; from 4 KiB on the link is the limit. On these hosts bandwidth settled about 5 % lower (around 92 Gb/s) from 256 KiB upwards, with both stacks (the cause was not investigated): one more reason to compare hosts at one fixed size rather than across sizes. Note also that `-a` switched `CQ Moderation` to 100 in the header, and that it needs the 8 MiB buffers registered, so it fails with a low memlock limit (see the pitfalls).
+
 Try it in the explorer below: change the message-rate ceiling and the MTU to see where the curve reaches half its ceiling, then paste a `BW average` from your own run into the converter to turn MiB/s into Gb/s and a percentage of line rate.
 
 ```widget
@@ -148,14 +248,36 @@ perftest-explorer
 
 ### Reading latency output
 
-```text
-$ ib_write_lat -d mlx5_0 -x 3 -s 8 -n 100000 -F 10.0.0.12
+```text stack=inbox real
+$ ib_write_lat -d rocep3s0f0 -x 3 -F 10.10.10.2
+---------------------------------------------------------------------------------------
+                    RDMA_Write Latency Test
 ...
- #bytes #iterations    t_min[usec]    t_max[usec]  t_typical[usec]    t_avg[usec]    t_stdev[usec]   99% percentile[usec]   99.9% percentile[usec]
- 8       100000          0.98           6.10         1.02     	       1.03        	0.05   		1.10    		2.40
+ TX depth        : 1
+ Max inline data : 220[B]
+...
+---------------------------------------------------------------------------------------
+ #bytes #iterations    t_min[usec]    t_max[usec]  t_typical[usec]    t_avg[usec]    t_stdev[usec]   99% percentile[usec]   99.9% percentile[usec] 
+ 2       1000          1.09           3.32         1.11     	       1.12        	0.05   		1.22    		3.32   
+---------------------------------------------------------------------------------------
 ```
 
-*(Illustrative, header block trimmed; small-message latency on modern adapters through one switch is commonly around 1-2 µs, but depends on adapter, switch hops, CPU and settings.)* For write and send latency tests perftest reports half of the measured round trip; `ib_read_lat` reports the full time for the read to return, so read latency looks roughly double. Look at **t_typical** and the **99 %/99.9 % percentiles**: a large gap between typical and 99.9 % points at jitter from CPU power states, interrupts or a congested path.
+```text stack=doca real
+$ ib_write_lat -d mlx5_0 -x 3 -F 10.10.10.2
+Disabling dynamic polling
+---------------------------------------------------------------------------------------
+                    RDMA_Write Latency Test
+...
+ TX depth        : 1
+ Max inline data : 220[B]
+...
+---------------------------------------------------------------------------------------
+ #bytes #iterations    t_min[usec]    t_max[usec]  t_typical[usec]    t_avg[usec]    t_stdev[usec]   99% percentile[usec]   99.9% percentile[usec] 
+ 2       1000          0.98           6.01         1.00     	       1.01        	0.13   		1.14    		6.01   
+---------------------------------------------------------------------------------------
+```
+
+*(Real captures, header block trimmed: the default 2-byte message and 1000 iterations, back to back without a switch. A latency test runs with `TX depth : 1` and inlines small messages, `Max inline data : 220[B]`. Small-message latency on modern adapters through one switch is commonly around 1-2 µs, but depends on adapter, switch hops, CPU and settings; the same ConnectX-5 pair measured 0.83 µs minimum write latency over native InfiniBand.)* For write and send latency tests perftest reports half of the measured round trip; `ib_read_lat` reports the full time for the read to return, so read latency looks roughly double. Look at **t_typical** and the **99 %/99.9 % percentiles**: a large gap between typical and 99.9 % points at jitter from CPU power states, interrupts or a congested path.
 
 ### Where the bottleneck can be
 
@@ -177,6 +299,26 @@ Each stage has its own ceiling. PCIe is a frequent one: a PCIe Gen4 x16 slot has
 ```text
 server$ ib_write_bw -d mlx5_0 -D 10 --report_gbits
 client$ ib_write_bw -d mlx5_0 -D 10 --report_gbits server-hostname
+```
+
+On InfiniBand the header says `Link type : IB`, there is no `GID index` line, and the address lines carry the LIDs the Subnet Manager assigned, with no `GID:` line. From the ConnectX-5 pair with port 2 in InfiniBand mode (EDR, DOCA-OFED; `mlx5_1` is the IB device there, and the out-of-band exchange went over the management network):
+
+```text real=doca
+$ ib_write_bw -d mlx5_1 -i 1 -F --report_gbits 192.0.2.12
+---------------------------------------------------------------------------------------
+                    RDMA_Write BW Test
+...
+ Mtu             : 4096[B]
+ Link type       : IB
+ Max inline data : 0[B]
+...
+---------------------------------------------------------------------------------------
+ local address: LID 0x01 QPN 0x014c PSN 0x9b74b6 RKey 0x03df00 VAddr 0x007edbd6e34000
+ remote address: LID 0x02 QPN 0x014a PSN 0x7b3292 RKey 0x23bf00 VAddr 0x00771145b11000
+---------------------------------------------------------------------------------------
+ #bytes     #iterations    BW peak[Gb/sec]    BW average[Gb/sec]   MsgRate[Mpps]
+ 65536      5000             94.79              94.79  		     0.180790
+---------------------------------------------------------------------------------------
 ```
 
 ### The same on RoCE
@@ -206,7 +348,26 @@ If perftest was built with CUDA support, `--use_cuda=<gpu index>` places buffers
 client$ ib_write_bw -d mlx5_0 --use_cuda=0 -D 10 --report_gbits 10.0.0.12
 ```
 
-Distribution perftest packages are often built without CUDA: `ib_write_bw --help | grep -i cuda` prints nothing, and `--use_cuda=0` fails with ` Parser function exited with Error` / ` Unsupported memory type`. Use NVIDIA's build (DOCA-Host) or build perftest yourself against CUDA.
+Distribution perftest packages are often built without CUDA. Check your build first:
+
+```text stack=inbox real
+$ ib_write_bw --help | grep -i cuda
+$ ib_write_bw -d rocep3s0f0 -x 3 --use_cuda=0 -F --report_gbits 10.10.10.2
+ Parser function exited with Error
+ Unsupported memory type
+```
+
+```text stack=doca real
+$ ib_write_bw --help | grep -i cuda
+      --use_cuda=<cuda device id> Use CUDA specific device for GPUDirect RDMA testing
+      --cuda_mem_type=<value> Set CUDA memory type <value>=0(device,default),1(managed),4(malloc)
+      --use_cuda_bus_id=<cuda full BUS id> Use CUDA specific device, based on its full PCIe address, for GPUDirect RDMA testing
+      --use_cuda_dmabuf Use CUDA DMA-BUF for GPUDirect RDMA testing
+      --use_cuda_pcie_mapping Use CUDA DMABUF handle mapping via PCIe BAR1
+      --use_data_direct Use Data-Direct CUDA DMA-BUF for GPUDirect RDMA testing
+```
+
+Ubuntu's perftest 25.01 has no CUDA options at all (the grep prints nothing), while NVIDIA's DOCA build lists them. Use NVIDIA's build (DOCA-Host) or build perftest yourself against CUDA; the DOCA build still needs a GPU, the CUDA libraries and GPUDirect RDMA support to run the test.
 
 Pick a GPU that shares a PCIe switch with the NIC (`nvidia-smi topo -m`, see `reading-server-topology`). A large gap between host-memory and GPU-memory results points at topology or at GPUDirect RDMA not being active.
 

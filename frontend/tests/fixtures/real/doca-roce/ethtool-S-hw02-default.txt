@@ -1,0 +1,23 @@
+### cmd: ethtool -S $N | grep -E 'vport_rdma_unicast|discard|pause' | head -20
+### ----
+     rx_vport_rdma_unicast_packets: 0
+     rx_vport_rdma_unicast_bytes: 0
+     tx_vport_rdma_unicast_packets: 0
+     tx_vport_rdma_unicast_bytes: 0
+     rx_pause_ctrl_phy: 0
+     tx_pause_ctrl_phy: 0
+     rx_discards_phy: 0
+     tx_discards_phy: 0
+     rx_prio0_discards: 0
+     rx_prio1_discards: 0
+     rx_prio2_discards: 0
+     rx_prio3_discards: 0
+     rx_prio4_discards: 0
+     rx_prio5_discards: 0
+     rx_prio6_discards: 0
+     rx_prio7_discards: 0
+     rx_global_pause: 0
+     rx_global_pause_duration: 0
+     tx_global_pause: 0
+     tx_global_pause_duration: 0
+### rc=0

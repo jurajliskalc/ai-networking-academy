@@ -16,7 +16,7 @@ export function useProfile(ix: ContentIndex) {
   return { profile, vars, setProfile, isDefault, hw, setHw };
 }
 
-const SECTIONS_AFTER_SETUP = [{ id: 'connect', title: 'Connect' }, { id: 'labs', title: 'Labs' }];
+const SECTIONS_AFTER_SETUP = [{ id: 'connect', title: 'Connect' }, { id: 'live', title: 'Live' }, { id: 'labs', title: 'Labs' }];
 const SHORT: Record<string, string> = { requirements: 'Requirements', 'host-setup': 'Host setup', 'network-setup': 'Network setup', toolkit: 'Toolkit', safety: 'Safety', troubleshooting: 'Troubleshooting' };
 
 /** Sub-navigation shared by every /hw page. Guides come from content; Connect and Labs are app pages. */

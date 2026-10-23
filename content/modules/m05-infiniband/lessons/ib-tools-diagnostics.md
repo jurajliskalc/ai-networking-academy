@@ -55,6 +55,9 @@ This lesson turns the tools you met in earlier lessons into a systematic workflo
 
 Most of these tools send MADs from the local HCA (they need access to `/dev/infiniband/umad*`, usually root). They address remote ports by **LID** by default; many accept a GUID with `-G` or a directed route with `-D` for ports that have no LID yet. Check each tool's man page for the exact options in your version.
 
+> [!VERIFIED]
+> **Without `-C`/`-P` the umad tools open the first RDMA device, which on a mixed RoCE + InfiniBand host is the wrong one.** On a ConnectX-5 (fw 16.29, DOCA-OFED 3.4) with port 1 as RoCE (`mlx5_0`) and port 2 as InfiniBand (`mlx5_1`), a bare `sudo sminfo` or `sudo perfquery` printed `ibwarn: [pid] mad_rpc_open_port2: client_register for mgmt 1 failed` and `iberror: failed: Failed to open '(null)' port '0'` (exit 255); bare `iblinkinfo` printed `Failed to open (null) port 0`. Naming the IB port fixed every tool: `sminfo -C mlx5_1 -P 1`, `perfquery -C mlx5_1 -P 1`, and `ibdiagnet -i mlx5_1 -p 1` for ibdiagnet. `ibstat -l` lists every CA name, the RoCE ones included, so use it to find the right one.
+
 Pick a symptom or a tool in the map below to see what the tool reads, how far into the subnet it reaches and through which management interface; then turn the Subnet Manager off to see which tools still answer.
 
 ```widget
@@ -140,6 +143,23 @@ $ ibstat mlx5_3 | grep -E "State|Physical|Rate|Base lid|SM lid"
 
 *(Illustrative.)* Active, LinkUp, expected rate, a LID and an SM LID: the host's view is healthy. `ibstatus` gives a similar summary across all HCAs.
 
+On real hardware (two ConnectX-5 ports in InfiniBand mode, EDR, back to back, OpenSM running) the same check reads like this. Note that `ibstat <ca> <port>` prints a flat, unindented block, unlike `ibstat <ca>`:
+
+```text real=doca
+$ ibstat mlx5_1 1
+CA: 'mlx5_1'
+Port 1:
+State: Active
+Physical state: LinkUp
+Rate: 100
+Base lid: 1
+LMC: 0
+SM lid: 1
+Capability mask: 0x2651e84a
+Port GUID: 0x248a0703000011ef
+Link layer: InfiniBand
+```
+
 ### Step 2: the link and its neighbour
 
 ```text
@@ -148,6 +168,19 @@ $ iblinkinfo | grep '"node09 HCA-4"'
 ```
 
 *(Illustrative.)* The leaf side (LID 2, port 17) agrees: 4X at NDR lane speed. Filtering on the node description is the simplest version-independent way to find one link; your iblinkinfo version may also offer options to select a switch or port directly.
+
+Back to back on real hardware there is no switch, so `iblinkinfo` prints one `CA:` block per HCA, and EDR shows up as a lane speed of 25.78125 Gbps:
+
+```text real=doca
+$ sudo iblinkinfo -C mlx5_1 -P 1
+CA: ESXI-2-UbuntuServer-1 mlx5_1:
+      0x1c34da0300002229      2    1[  ] ==( 4X      25.78125 Gbps Active/  LinkUp)==>       1    1[  ] "ESXI-1-UbuntuServer-1 mlx5_1" ( )
+CA: ESXI-1-UbuntuServer-1 mlx5_1:
+      0x248a0703000011ef      1    1[  ] ==( 4X      25.78125 Gbps Active/  LinkUp)==>       2    1[  ] "ESXI-2-UbuntuServer-1 mlx5_1" ( )
+```
+
+> [!VERIFIED]
+> **`smpquery portinfo` reports `LinkSpeedActive: 10.0 Gbps` on a healthy EDR link.** On the ConnectX-5 EDR pair above (DOCA-OFED 3.4, infiniband-diags 2604), `sudo smpquery -C mlx5_1 -P 1 portinfo 1 1` printed `LinkSpeedSupported: 2.5 Gbps or 5.0 Gbps or 10.0 Gbps` and `LinkSpeedActive: 10.0 Gbps`, while `iblinkinfo` showed `4X 25.78125 Gbps` and `ibstat` `Rate: 100`. The classic PortInfo speed fields stop at QDR's 10 Gbps per lane; FDR and EDR live in the extended-speed fields further down the output (the port advertises `IsExtendedSpeedsSupported` in its CapMask). Read those, or trust `iblinkinfo`/`ibstat`, before concluding that a link trained slowly.
 
 ### Step 3: counters on both ends
 
@@ -186,6 +219,33 @@ PortRcvErrors:...................211
 
 *(Illustrative.)* Notice the 32-bit data counters on the host saturated at 4294967295 — use `perfquery -x` for 64-bit extended counters. On the switch side, port 17 (receiving from node09's HCA) shows symbol errors, link recoveries and receive errors: the transmit path from the HCA's optic to the switch is bad. Clean or replace the cable/optic on that link, then clear and re-measure.
 
+The saturation is easy to hit on a real link. After a few bandwidth tests over the back-to-back EDR pair, the classic and the extended counters of the same port read:
+
+```text real=doca
+$ sudo perfquery -C mlx5_1 -P 1
+# Port counters: Lid 1 port 1 (CapMask: 0x5A00)
+...
+PortXmitDiscards:................11
+...
+PortXmitData:....................4294967295
+PortRcvData:.....................95779411
+PortXmitPkts:....................193443485
+PortRcvPkts:.....................13680303
+PortXmitWait:....................65571
+$ sudo perfquery -x -C mlx5_1 -P 1
+# Port extended counters: Lid 1 port 1 (CapMask: 0x5A00 CapMask2: 0x0000000)
+PortSelect:......................1
+CounterSelect:...................0x0000
+PortXmitData:....................199294892652
+PortRcvData:.....................95779411
+PortXmitPkts:....................193443485
+PortRcvPkts:.....................13680303
+...
+```
+
+> [!VERIFIED]
+> **The 32-bit `PortXmitData` of plain `perfquery` saturated at 4294967295 after a few bandwidth tests on an EDR link; `perfquery -x` showed the real value.** On ConnectX-5 (fw 16.29, DOCA-OFED 3.4) the same port read `PortXmitData:....................4294967295` with `perfquery -C mlx5_1 -P 1` and `199294892652` with `perfquery -x -C mlx5_1 -P 1`. At 100 Gb/s, 2^32 units of 4 bytes are about 17 GB, so the classic counter is full in under two seconds of line-rate traffic. Always use `-x` (or UFM telemetry) for data and packet counters, and read the classic block only for the error counters.
+
 ### Step 4: the whole fabric
 
 ```text
@@ -198,6 +258,23 @@ Errors for 0xfc6a1c0300e50b00 "spine02"
 
 *(Illustrative.)* `ibqueryerrors` scans the fabric and reports ports whose error counters exceed thresholds (and has options to adjust thresholds, include data counters or suppress specific counters; see its man page). Read it with the localisation rule: leaf03 port 7 is the culprit link, spine02 port 3 is a downstream victim. The report ends with a `## Summary:` of the nodes and ports checked, and the exit status is non-zero when ports exceed thresholds. It finds the ports through the SA: with no SM running it prints only a warning such as `ibwarn: [...] sa_get_handle: No SM/SA found on port :1` (with exit status 0 in the version we tested), which is not a clean bill of health.
 
+On the real back-to-back pair, with an SM running, the full report looks like this (exit status 1; counters with a rate threshold also print the rate in brackets):
+
+```text real=doca
+$ sudo ibqueryerrors -C mlx5_1 -P 1
+Errors for "ESXI-2-UbuntuServer-1 mlx5_1"
+   GUID 0x1c34da0300002229 port 1: [PortRcvErrors == 3 (3.000)] [PortRcvSwitchRelayErrors == 3 (3.000)]
+Errors for "ESXI-1-UbuntuServer-1 mlx5_1"
+   GUID 0x248a0703000011ef port 1: [PortXmitDiscards == 11] [PortXmitWait == 65571]
+
+## Summary: 2 nodes checked, 2 bad nodes found
+##          2 ports checked, 2 ports have errors beyond threshold
+## Thresholds:
+## Suppressed:
+```
+
+A single snapshot like this cannot tell you whether those counts are old or still growing, which is exactly why you compare deltas rather than totals.
+
 ### Step 5: the path and the SM
 
 ```text
@@ -209,6 +286,24 @@ $ diff <(sort expected.topo) <(sort fabric.topo)   # compare with the cabling pl
 
 `ibnetdiscover` output lists every switch and HCA and every cable between them, with GUIDs, node descriptions and link speed/width. Comparing it with an expected topology (generated from the cabling plan, after normalising formats) is the most reliable way to catch miscabling, which silently ruins ftree balance and rail alignment.
 
+On the real back-to-back pair (no switch, OpenSM on the first host) the path is a single hop and the SM is the local port:
+
+```text real=doca
+$ sudo sminfo -C mlx5_1 -P 1
+sminfo: sm lid 1 sm guid 0x248a0703000011ef, activity count 48 priority 0 state 3 SMINFO_MASTER
+$ sudo ibtracert -C mlx5_1 -P 1 1 2
+From ca {0x248a0703000011ef} portnum 1 lid 1-1 "ESXI-1-UbuntuServer-1 mlx5_1"
+[1] -> ca port {0x1c34da0300002229}[1] lid 2-2 "ESXI-2-UbuntuServer-1 mlx5_1"
+To ca {0x1c34da0300002229} portnum 1 lid 2-2 "ESXI-2-UbuntuServer-1 mlx5_1"
+$ sudo ibaddr -C mlx5_1 -P 1
+GID fe80::248a:703:0:11ef LID start 0x1 end 0x1
+```
+
+Without an SM, the LID-addressed tools fail (`sminfo: iberror: failed: query`, `ibtracert: iberror: failed: Failed to get route information`, `perfquery: iberror: failed: classportinfo query`), while the directed-route tools (`ibnetdiscover`, `ibhosts`, `iblinkinfo`) still map the fabric. One tool answers misleadingly:
+
+> [!VERIFIED]
+> **Before an SM runs, `ibaddr` answers with the peer's GID, not the local one.** On the back-to-back ConnectX-5 EDR pair (DOCA-OFED 3.4) with no subnet manager, `sudo ibaddr -C mlx5_1 -P 1` on the first host printed `GID fe80::1c34:da03:0:2229 LID start 0xffff end 0xffff`: the GUID of the far host's port. Its own port GUID is `0x248a0703000011ef`, and once OpenSM had run the same command printed `GID fe80::248a:703:0:11ef LID start 0x1 end 0x1`. The unassigned LID 0xffff is also the permissive LID, which a port accepts as "whoever is at the other end of this link", so the query is answered by the neighbour. Treat any LID 0xffff answer as "no SM yet" and read local identity from `ibstat` or sysfs instead.
+
 ### Step 6: ibping for reachability
 
 ```text
@@ -218,6 +313,21 @@ Pong from node77.(none) (Lid 88): time 0.012 ms
 ```
 
 *(Illustrative.)* `ibping` checks MAD-level reachability between two ports using the IB path, independent of IP and of the application. If ibping works but RDMA fails, look at partitions, QP configuration or the application.
+
+Back to back on real EDR hardware, with the responder (`sudo ibping -S -C mlx5_1 -P 1`) on the peer:
+
+```text real=doca
+$ sudo ibping -C mlx5_1 -P 1 -c 3 -L 2
+Pong from ESXI-2-UbuntuServer-1.(none) (Lid 2): time 0.048 ms
+Pong from ESXI-2-UbuntuServer-1.(none) (Lid 2): time 0.045 ms
+Pong from ESXI-2-UbuntuServer-1.(none) (Lid 2): time 0.052 ms
+
+--- ESXI-2-UbuntuServer-1.(none) (Lid 2) ibping statistics ---
+3 packets transmitted, 3 received, 0% packet loss, time 3000 ms
+rtt min/avg/max = 0.045/0.048/0.052 ms
+```
+
+Without an SM the peer's LID is still 0xffff and the client fails (exit status 255): `ibping: iberror: failed: can't resolve destination port 65535`.
 
 ### A troubleshooting checklist
 

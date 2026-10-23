@@ -43,10 +43,17 @@ required sections and keys, quiz option rules, cross-references between lessons,
 writes:
 
 * `index.json`: metadata for everything (modules, lessons with table of contents, labs, exams,
-  commands, glossary). Loaded once.
+  commands, glossary, and `verifiedNotes`: every `> [!VERIFIED]` callout with the section it sits in, shown on
+  the "Verified on hardware" page `#/verified`). Loaded once.
 * `lessons/<id>.json`, `quizzes/<id>.json`, `exams/<id>.json`, `labs/<id>.json`: bodies, loaded on demand.
 * `search.json`: the site-wide search index, built by `scripts/search-index.mjs` and fetched the first time
   the search dialog opens (see Search below). The build prints its size.
+
+Driver-stack variants (fences tagged `stack=inbox` / `stack=doca`, `real` capture labels; syntax in
+[AUTHORING.md](AUTHORING.md)) are parsed by `scripts/stack-variants.mjs`, shared by the validator and the app:
+`src/stackMarkdown.ts` is a remark plugin that groups adjacent tagged fences into one block, `Markdown.tsx`
+renders it with a `StackToggle` bound to `progress.settings.stack`, and the command reference resolves an
+entry's `stacks:` variants with `commandForStack`.
 
 Labs declare which lessons they practise; the compiler derives each lesson's lab list from that, so the
 relationship is maintained in one place.
@@ -103,7 +110,11 @@ its output. The learner's **lab profile** (`aina.hw.v1` in localStorage, separat
 an `aina.hw.report/1` JSON file; `aina-hw check <lab>` saves an `aina.hw.check/1` result. The Connect page
 imports both, either as files or from `aina-hw serve`, a read-only HTTP agent bound to 127.0.0.1 with an
 origin allow-list, reached through an SSH tunnel. `src/hw/report.ts` runs the health review; a passing check
-marks the lab solved with evidence (host, time). `labs/hw-toolkit/tests/make_demo_report.py` generates the
+marks the lab solved with evidence (host, time). Check scripts mark the lab's tasks (`task N "title"` in
+`lib.sh`, `TASK:` lines); `src/hw/checks.ts` folds full and `--task N` runs into per-task progress
+(`aina.hw.v1` `tasks`) for the lab page's "Resume at Task N". The Live view (`/hw/live`, and a sidebar card
+on hardware lab pages) polls `GET /api/live` (`aina.hw.live/1` counter snapshots, host B/C over one SSH
+session with `serve --live-remote`); `src/hw/live.ts` turns deltas into rates. `labs/hw-toolkit/tests/make_demo_report.py` generates the
 app's demo report from the same fake hosts the Python tests use.
 
 ## Progress

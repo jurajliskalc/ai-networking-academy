@@ -1,4 +1,4 @@
-// Drives the controls of 13 widgets across topics and checks the visible result moves the way the
+// Drives the controls of 14 widgets across topics and checks the visible result moves the way the
 // widget's own math says it should. Expected values come from the pure functions each widget exports
 // (the same ones the unit tests in tests/widgets-g*.test.ts cover), never from snapshots.
 import { readFileSync } from 'node:fs';
@@ -20,6 +20,8 @@ const { workersForProb } = math.straggler;
 const { busbwFactor, sentPerRank } = math.collective;
 const { PORTS, PRESETS, canTalk, tenantsIsolated } = math.pkey;
 const { buildFrame } = math.frame;
+const { compareSweep, deviationPct } = math.perftest;
+const { CX5_MODEL } = math.baselines;
 
 const src = readFileSync(new URL('../src/widgets/registry.tsx', import.meta.url), 'utf8');
 const titles = new Map([...src.matchAll(/\{ id: '([a-z0-9-]+)', title: '((?:[^'\\]|\\.)*)'/g)].map((m) => [m[1], m[2].replace(/\\'/g, "'")]));
@@ -403,4 +405,39 @@ test('Ethernet frame builder: payload, VLAN tag and transport change the frame s
   await expect(f.getByRole('group', { name: 'Frame segments' })).not.toContainText('BTH');
   await seg(f, 'Payload presets', '1460').click();
   await expect(frame).toHaveText(size({ vlan: true, l3: 'ipv4', l4: 'tcp', roce: false, payload: 1460 }));
+});
+
+test('perftest explorer: the real ConnectX-5 overlay and the matching model setup', async ({ page }) => {
+  const f = await openWidget(page, 'perftest-explorer');
+  const overlay = f.getByRole('button', { name: 'Overlay the measurement', exact: true });
+  const match = f.getByRole('button', { name: 'Set the model to this setup', exact: true });
+  const measured = f.locator('[data-series="measured"]');
+  // Off by default: the setup is described, nothing is drawn.
+  await expect(overlay).toHaveAttribute('aria-pressed', 'false');
+  await expect(f.getByText(/One pair, one setup, measured on 2026-10-23/)).toBeVisible();
+  await expect(measured).toHaveCount(0);
+  // Keyboard: Space toggles the overlay on both charts.
+  await overlay.focus();
+  await page.keyboard.press('Space');
+  await expect(overlay).toHaveAttribute('aria-pressed', 'true');
+  await expect(measured).toHaveCount(2);
+  // The default model (400G) is not the measured setup: the widget says so.
+  await expect(f.getByText(/the measurement is 100G RoCEv2 \/ IPv4/)).toBeVisible();
+  // Match the model to the measured setup; at 64 KiB compare the tiles with the widget's own math.
+  await match.click();
+  await expect(match).toHaveAttribute('aria-pressed', 'true');
+  await expect(f.getByText(/the measurement is 100G RoCEv2 \/ IPv4/)).toHaveCount(0);
+  await expect(seg(f, 'Link data rate', '100G')).toHaveAttribute('aria-pressed', 'true');
+  const row = compareSweep(CX5_MODEL).find((r) => r.size === 65536)!;
+  await expect(out(f, 'Measured BW at 64 KiB')).toHaveText(`${row.realGbps.toFixed(1)} Gb/s`);
+  const dev = deviationPct(row.modelGbps, row.realGbps);
+  await expect(f.getByText(`model ${row.modelGbps.toFixed(1)} Gb/s (${dev >= 0 ? '+' : ''}${dev.toFixed(0)} %)`)).toBeVisible();
+  await expect(f.getByRole('table', { name: /measured vs this model/ })).toContainText('97.1 Gb/s');
+  await expect(f.getByRole('table', { name: /Other runs on the same pair/ })).toContainText('InfiniBand, 4X EDR');
+  // Changing a model control leaves the measurement in place but breaks the like-for-like match.
+  await seg(f, 'Path MTU (bytes; perftest -m)', '1024').click();
+  await expect(match).toHaveAttribute('aria-pressed', 'false');
+  await expect(out(f, 'Measured BW at 64 KiB')).toHaveText(`${row.realGbps.toFixed(1)} Gb/s`);
+  await overlay.click();
+  await expect(measured).toHaveCount(0);
 });

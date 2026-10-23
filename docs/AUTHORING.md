@@ -74,6 +74,78 @@ prerequisites but must still be self-contained enough to follow.
 
 > [!INTERVIEW]
 > A question an interviewer could ask about this topic, and the shape of a strong answer.
+
+> [!VERIFIED]
+> **What was observed, in one sentence.** Details: the exact message or counter, the stack and the
+> hardware, and how to work with it.
+```
+
+`[!VERIFIED]` (badge "Verified on real hardware") is only for behaviour that was observed on the reference
+hardware and recorded in [HARDWARE_VERIFICATION.md](HARDWARE_VERIFICATION.md). It must start with a bold
+title; the validator collects every one (lessons, labs, guides) into the **Verified on hardware** page
+(`#/verified`), linked to the section it sits in. A single observation stays an observation: write "on
+ConnectX-5 with firmware 16.29 we saw ...", not "mlx5 always ...".
+
+### Driver-stack variants and real captures
+
+Host commands and their output often differ between the distribution's **inbox** stack (kernel `mlx5_core`,
+rdma-core, iproute2 `dcb`/`rdma`; devices named like `rocep3s0f0`) and NVIDIA's **DOCA-OFED / MLNX_OFED**
+(`mlnx_qos`, `show_gids`, `ibdev2netdev`, `cma_roce_tos`, `/sys/class/net/<if>/ecn/`; devices named `mlx5_0`).
+Write both as consecutive fences tagged with `stack=`; the app shows them as one block with a stack switch,
+and the learner's choice (Settings, or any switch) applies everywhere:
+
+````markdown
+```bash stack=inbox
+dcb pfc show dev ens64f0np0
+```
+
+```text stack=inbox real
+pfc-cap 8 macsec-bypass off delay 7
+prio-pfc 0:off 1:off 2:off 3:on 4:off 5:off 6:off 7:off
+```
+
+```bash stack=doca
+mlnx_qos -i ens64f0np0
+```
+
+```text stack=doca real
+DCBX mode: OS controlled
+Priority trust state: pcp
+...
+```
+````
+
+Rules (the validator enforces them):
+
+- A **group** is a run of `stack=`-tagged fences separated only by blank lines, at the same indentation.
+  Every group has at least one `stack=inbox` and one `stack=doca` block, and the blocks of one stack are
+  contiguous (all inbox, then all doca, or the other way round). Prose between fences ends a group.
+- Allowed values: `stack=inbox`, `stack=doca`. Untagged fences are shown for both stacks: only tag what differs.
+- `real` marks a block as a **real capture** on the reference hardware of the block's stack; the app adds the
+  label "Real capture · ConnectX-5, fw 16.29, Ubuntu 26.04, inbox mlx5 + rdma-core 61" or "... DOCA-OFED 3.4".
+  On a fence outside a group write `real=inbox` or `real=doca` (InfiniBand captures were taken with DOCA).
+  Use it only for output copied from the captures (trim long output and mark the cut with `...`); never for
+  illustrative output, for edited values, or for other hardware (400G, NDR, switches, GPUs stay illustrative).
+- Never copy adapter or cable serial numbers from captures into content.
+- A difference that is a few words long belongs in prose ("`mlx5_0` with DOCA-OFED, `rocep3s0f0` with the
+  distro stack"); there is no inline variant syntax.
+
+In the command reference an entry can carry the same information:
+
+```yaml
+  - cmd: show_gids
+    summary: List the GID table with type, IPv4 address and netdev.
+    stacks:                    # both keys required; each may set cmd, example, notes and real: true
+      inbox:
+        cmd: grep -H . /sys/class/infiniband/rocep3s0f0/ports/1/gid_attrs/types/*
+        example: |
+          ...
+        real: true
+      doca:
+        example: |
+          ...
+        real: true
+    real: doca                 # optional, for an entry without stacks: its example is a real DOCA capture
 ```
 
 ### Diagrams and widgets
@@ -155,6 +227,8 @@ commands:
                       state:          PORT_ACTIVE (4)
     notes: What to look at in the output. Optional.
     tags: [rdma, verify]
+    real: doca                 # optional: the example is a real capture (see "Driver-stack variants")
+    stacks: { inbox: {...}, doca: {...} }   # optional per-stack cmd/example/notes (see above)
 ```
 
 ## Glossary: `content/glossary.yaml`

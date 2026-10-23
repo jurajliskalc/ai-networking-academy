@@ -13,12 +13,12 @@ class of experiment; you can stop at any rung and still get real value.
 | Tier | You add | What it unlocks | Labs |
 |---|---|---|---|
 | 0 · Virtual | One Linux VM (two for the capture lab) | Kernel networking, Soft-RoCE, containerlab fabrics, ECN on Linux qdiscs | All `hol-*` labs |
-| 1 · Two RDMA hosts | Two servers, one RDMA NIC each, one cable | Real RoCEv2 (or InfiniBand) traffic, GIDs, perftest, host QoS, PFC between two NICs, link health, break/fix | hw-01, hw-02, hw-03, hw-04, hw-05, hw-09 (InfiniBand) |
+| 1 · Two RDMA hosts | Two servers, one RDMA NIC each, one cable | Real RoCEv2 (or InfiniBand) traffic, GIDs, perftest, host QoS, PFC between two NICs, link health, break/fix | hw-01, hw-02, hw-03, hw-04, hw-05, hw-14, hw-15 (MPI over RDMA), hw-09 to hw-13 (InfiniBand) |
 | 2 · Lossless switched fabric | A third host and a configurable data-center switch | Real incast, switch PFC and ECN, buffer behaviour, congestion control in action | hw-06 |
 | 3 · GPU nodes | An NVIDIA GPU in each of two RDMA hosts | GPUDirect RDMA, PCIe/NUMA affinity, multi-node NCCL tests | hw-07, hw-08 |
 
 Tier 3 does not require Tier 2: two GPU hosts cabled back to back are enough for both GPU labs. The
-InfiniBand lab (hw-09) is a Tier 1 lab with InfiniBand adapters instead of Ethernet ones.
+InfiniBand labs (hw-09 to hw-13) are Tier 1 labs with InfiniBand adapters instead of Ethernet ones.
 
 > [!TIP]
 > Buy for Tier 1 first, and make sure the NICs you choose can also do what you want later
@@ -38,6 +38,12 @@ InfiniBand lab (hw-09) is a Tier 1 lab with InfiniBand adapters instead of Ether
 | hw-07 GPUDirect and NUMA | yes | | | yes | either fabric | yes | yes |
 | hw-08 NCCL across two nodes | yes | | | yes | either fabric | yes | yes |
 | hw-09 InfiniBand bring-up | yes | | | | yes | yes | yes |
+| hw-10 SM failover | yes | | | | yes | yes | yes |
+| hw-11 IPoIB | yes | | | | yes | yes | yes |
+| hw-12 P_Key partitions | yes | | | | yes | yes | yes |
+| hw-13 ibdiagnet triage | yes | | | | yes | yes | yes |
+| hw-14 MPI over UCX on RDMA | yes | | | | either fabric | yes | yes |
+| hw-15 Allreduce on CPUs | yes | | | | either fabric | | yes |
 
 The exact requirement keys of each lab are shown on its card in [the lab list](#/hw/labs); the
 [Connect page](#/hw/connect) checks them against your profile and your imported inventory.

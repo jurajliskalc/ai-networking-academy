@@ -61,6 +61,9 @@ Every switch and HCA also runs a **Subnet Management Agent (SMA)** that answers 
 - **LMC** (LID Mask Control) lets the SM assign 2^LMC consecutive LIDs to a port. The SM can route each LID over a different path, giving applications a way to choose among multiple paths to the same port. LMC is 0 (one LID per port) unless configured otherwise.
 - **GIDs**: the default GID of a port is the 64-bit subnet prefix (default `fe80:0000:0000:0000`) concatenated with the port GUID.
 
+> [!VERIFIED]
+> **An InfiniBand port without an assigned LID reports 65535 (0xffff), not 0.** On two ConnectX-5 ports in InfiniBand mode (fw 16.29, DOCA-OFED 3.4, back to back, no subnet manager), `ibstat` showed `Base lid: 65535`, sysfs `lid` and `ibstatus` showed `0xffff`, `rdma link` showed `lid 65535 sm_lid 0`, and `iblinkinfo`/`ibnetdiscover` listed both ends with LID 65535. `SM lid` stayed 0. A LID of 0 is what a **RoCE** port reports (`Base lid: 0` on the Ethernet port of the same card), so in scripts test for 65535 or 0xffff to detect "no SM yet", never for 0.
+
 > [!ANALOGY]
 > GUIDs are like MAC addresses (burned in, globally unique), LIDs are like IP addresses handed out by DHCP — except the "DHCP server" (the SM) also computes every switch's forwarding table, which in Ethernet/IP would be the job of distributed routing protocols. The analogy breaks down because a LID is used for layer-2 style forwarding inside the subnet and is never learned by switches: if the SM did not write an entry for a DLID, the switch simply has no route to it.
 
@@ -83,7 +86,19 @@ A port's **physical state** describes the link training; its **logical state** d
 | Armed | SM configured the port and is about to activate it |
 | Active | Ready for data traffic |
 
-"Physical `LinkUp`, logical `Init`" is the most common InfiniBand bring-up symptom: the cable is fine, but no SM has assigned a LID and activated the port.
+"Physical `LinkUp`, logical `Init`" is the most common InfiniBand bring-up symptom: the cable is fine, but no SM has assigned a LID and activated the port. This is what it looks like on a real EDR link before any SM has run (`ibstat` calls the logical state `Initializing`, sysfs and `ibstatus` `2: INIT`):
+
+```text real=doca
+$ ibstatus mlx5_1
+Infiniband device 'mlx5_1' port 1 status:
+	default gid:	 fe80:0000:0000:0000:248a:0703:0000:11ef
+	base lid:	 0xffff
+	sm lid:		 0x0
+	state:		 2: INIT
+	phys state:	 5: LinkUp
+	rate:		 100 Gb/sec (4X EDR)
+	link_layer:	 InfiniBand
+```
 
 ## How it works
 
@@ -182,6 +197,31 @@ CA 'mlx5_0'
 
 *(Illustrative.)* Read it as: the logical state is Active and the physical state LinkUp; the port runs at 400 Gb/s (NDR 4x); the SM gave it LID 12 with LMC 0; the master SM is reachable at LID 1; the port GUID never changes, the LID can change if the SM restarts without a persistent GUID-to-LID mapping (OpenSM normally keeps one in its cache files).
 
+On real hardware (a ConnectX-5 VPI port in InfiniBand mode, EDR, back to back, with OpenSM running on this host) the same command prints:
+
+```text real=doca
+$ ibstat mlx5_1
+CA 'mlx5_1'
+	CA type: MT4119
+	Number of ports: 1
+	Firmware version: 16.29.1016
+	Hardware version: 0
+	Node GUID: 0x248a0703000011ef
+	System image GUID: 0x248a0703000011ee
+	Port 1:
+		State: Active
+		Physical state: LinkUp
+		Rate: 100
+		Base lid: 1
+		LMC: 0
+		SM lid: 1
+		Capability mask: 0x2651e84a
+		Port GUID: 0x248a0703000011ef
+		Link layer: InfiniBand
+```
+
+`Rate: 100` is EDR 4x. `Base lid` and `SM lid` are both 1 because this host runs the SM itself; its capability mask (`0x2651e84a`) has the IsSM bit (0x2) set; the same port reported `0x2651e848` before OpenSM started on it.
+
 ### The default GID and the P_Key table
 
 ```text
@@ -192,6 +232,17 @@ $ cat /sys/class/infiniband/mlx5_0/ports/1/pkeys/0
 ```
 
 *(Illustrative.)* GID 0 is the default subnet prefix plus the port GUID; P_Key index 0 holds the default full-membership key. An InfiniBand port has a whole P_Key table (`pkeys/1`, `pkeys/2`, ... exist and read `0x0000` while unused; `ibv_devinfo -v` shows its size as `max_pkeys`), whereas a RoCE port exposes only index 0.
+
+On the real ConnectX-5 InfiniBand port the GID ends in the port GUID from `ibstat` (`0x248a0703000011ef`), and the unused P_Key entries read zero:
+
+```text real=doca
+$ cat /sys/class/infiniband/mlx5_1/ports/1/gids/0
+fe80:0000:0000:0000:248a:0703:0000:11ef
+$ for i in 0 1 2; do printf 'pkey %s: ' $i; cat /sys/class/infiniband/mlx5_1/ports/1/pkeys/$i 2>&1; done
+pkey 0: 0xffff
+pkey 1: 0x0000
+pkey 2: 0x0000
+```
 
 ### Seeing the subnet
 
@@ -204,6 +255,17 @@ Switch  : 0xfc6a1c0300e4f200 ports 65 "Quantum-2 leaf02" enhanced port 0 lid 3 l
 ```
 
 *(Illustrative; node descriptions are whatever the switch reports.)* `sminfo` confirms there is a master SM and where. `ibswitches` and `ibhosts` list switches and HCAs found by a fabric discovery; the port count includes management port 0. These and other tools are covered in depth in `ib-tools-diagnostics`.
+
+On real hardware (two hosts back to back, OpenSM on the first one) there is no switch, so `ibswitches` prints nothing and `ibhosts` lists the two HCAs by node description (`<hostname> <device>`). On a host that also has a RoCE device, name the InfiniBand port with `-C <ca> -P <port>`:
+
+```text real=doca
+$ sudo sminfo -C mlx5_1 -P 1
+sminfo: sm lid 1 sm guid 0x248a0703000011ef, activity count 48 priority 0 state 3 SMINFO_MASTER
+$ sudo ibhosts -C mlx5_1 -P 1
+Ca	: 0x1c34da0300002229 ports 1 "ESXI-2-UbuntuServer-1 mlx5_1"
+Ca	: 0x248a0703000011ef ports 1 "ESXI-1-UbuntuServer-1 mlx5_1"
+$ sudo ibswitches -C mlx5_1 -P 1
+```
 
 ## Common pitfalls
 

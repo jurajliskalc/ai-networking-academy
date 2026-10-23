@@ -1,0 +1,12 @@
+### cmd: sudo ibqueryerrors -C mlx5_1 -P 1
+### ----
+Errors for "ESXI-2-UbuntuServer-1 mlx5_1"
+   GUID 0x1c34da0300002229 port 1: [PortRcvErrors == 3 (3.000)] [PortRcvSwitchRelayErrors == 3 (3.000)]
+Errors for "ESXI-1-UbuntuServer-1 mlx5_1"
+   GUID 0x248a0703000011ef port 1: [PortXmitDiscards == 11] [PortXmitWait == 65571]
+
+## Summary: 2 nodes checked, 2 bad nodes found
+##          2 ports checked, 2 ports have errors beyond threshold
+## Thresholds: 
+## Suppressed:
+### rc=1

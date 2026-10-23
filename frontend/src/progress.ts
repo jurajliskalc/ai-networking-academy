@@ -13,6 +13,9 @@ export type Theme = 'system' | 'light' | 'dark';
 /** Colour scheme: each one has a light and a dark variant (index.css); the theme picks the variant. */
 export const SCHEMES = ['noc', 'ocean', 'violet', 'sepia', 'contrast'] as const;
 export type Scheme = (typeof SCHEMES)[number];
+/** Driver stack whose commands and output the learner wants to see where content has variants. */
+export const STACK_CHOICES = ['inbox', 'doca'] as const;
+export type StackChoice = (typeof STACK_CHOICES)[number];
 
 export interface Progress {
   version: 1;
@@ -22,11 +25,11 @@ export interface Progress {
   exams: ExamAttempt[];
   cards: Record<string, Card>; // glossary term -> SM-2 state
   activity: Record<string, number>; // YYYY-MM-DD -> actions that day
-  settings: { theme: Theme; scheme: Scheme };
+  settings: { theme: Theme; scheme: Scheme; stack: StackChoice };
 }
 
 export const emptyProgress = (): Progress => ({
-  version: 1, lessons: {}, quizzes: {}, labs: {}, exams: [], cards: {}, activity: {}, settings: { theme: 'system', scheme: 'noc' },
+  version: 1, lessons: {}, quizzes: {}, labs: {}, exams: [], cards: {}, activity: {}, settings: { theme: 'system', scheme: 'noc', stack: 'doca' },
 });
 
 export function sanitize(raw: unknown): Progress {
@@ -45,6 +48,7 @@ export function sanitize(raw: unknown): Progress {
     settings: {
       theme: ['system', 'light', 'dark'].includes(r.settings?.theme as string) ? (r.settings!.theme as Theme) : 'system',
       scheme: (SCHEMES as readonly string[]).includes(r.settings?.scheme as string) ? (r.settings!.scheme as Scheme) : 'noc',
+      stack: (STACK_CHOICES as readonly string[]).includes(r.settings?.stack as string) ? (r.settings!.stack as StackChoice) : 'doca',
     },
   };
 }

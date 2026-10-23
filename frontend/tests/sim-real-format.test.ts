@@ -26,7 +26,8 @@ describe('host tools match the real output format', () => {
     expect(out).toMatch(/ PCIe relax order: ON\t\tLock-free {6}: OFF\n/);
     expect(out.match(/^ local address: LID 0000 QPN 0x[0-9a-f]{4} PSN 0x[0-9a-f]+ RKey 0x[0-9a-f]+ VAddr 0x[0-9a-f]{14}\n GID: (\d+:){15}\d+\n/gm)).toHaveLength(2);
     expect(out.match(/^ remote address: /gm)).toHaveLength(2);
-    expect(out).toMatch(/\n 65536 {6}5000 {13}\d+\.\d\d {12,13}\d+\.\d\d {1,2}\t\t {5}\d\.\d{6}\n-{87}\n$/);
+    // perftest runs the 5000 iterations per QP: -q 2 reports 10000 (verified with -q 8: 40000).
+    expect(out).toMatch(/\n 65536 {6}10000 {12}\d+\.\d\d {12,13}\d+\.\d\d {1,2}\t\t {5}\d\.\d{6}\n-{87}\n$/);
     const d = sh(s, 'node01', 'ib_write_bw -d mlx5_0 -x 3 -D 5 -F --report_gbits node02');
     expect(d).toMatch(/^ WARNING: BW peak won't be measured in this run\.\n/);
     expect(d).toMatch(/\n 65536 {6}\d+ +0\.00 {15}\d+\.\d\d/);

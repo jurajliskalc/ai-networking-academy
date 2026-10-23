@@ -1,0 +1,5 @@
+### cmd: rdma link show
+### ----
+link rocep3s0f0/1 state ACTIVE physical_state LINK_UP netdev ens64f0np0 
+link rocep3s0f1/1 state ACTIVE physical_state LINK_UP netdev ens64f1np1 
+### rc=0

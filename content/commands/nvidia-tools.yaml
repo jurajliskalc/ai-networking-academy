@@ -1,6 +1,6 @@
 id: nvidia-tools
 title: NVIDIA GPU and NIC tools (nvidia-smi, MFT, mlnx_qos, DCGM)
-description: Host-side NVIDIA tools for GPU topology, NVLink, ConnectX/BlueField firmware, link diagnostics, NIC QoS and GPU health checks; all example output is illustrative and trimmed.
+description: Host-side NVIDIA tools for GPU topology, NVLink, ConnectX/BlueField firmware, link diagnostics, NIC QoS and GPU health checks. Example output is illustrative and trimmed unless marked as a real capture (ConnectX-5 test hosts).
 commands:
   - cmd: nvidia-smi
     platform: nvidia
@@ -163,47 +163,93 @@ commands:
     notes: flint is also the low-level burning tool; never run burn operations on production nodes without the vendor-approved image for your exact PSID. For routine checks mlxfwmanager --query is friendlier.
     tags: [mft, firmware]
 
-  - cmd: mlnx_qos -i ens1f0np0
+  - cmd: mlnx_qos -i ens64f0np0
     platform: nvidia
     summary: Show the NIC's QoS state for one interface - trust mode (pcp or dscp), PFC enabled per priority, ETS/TSA per traffic class, priority-to-TC mapping and DSCP-to-priority mapping.
+    real: doca
     example: |
-      # illustrative output (DSCP trust, DSCP 26 on priority 3, PFC on priority 3; trimmed)
       DCBX mode: OS controlled
       Priority trust state: dscp
       dscp2prio mapping:
-              prio:0 dscp:07,06,05,04,03,02,01,00,
-              prio:1 dscp:15,14,13,12,11,10,09,08,
-              prio:2 dscp:23,22,21,20,19,18,17,16,
-              prio:3 dscp:26,31,30,29,28,27,25,24,
-              ...
-              prio:7 dscp:63,62,61,60,59,58,57,56,
+      	prio:0 dscp:07,06,05,04,03,02,01,00,
+      	prio:1 dscp:15,14,13,12,11,10,09,08,
+      	prio:2 dscp:23,22,21,20,19,18,17,16,
+      	prio:3 dscp:26,31,30,29,28,27,25,24,
+      ...
+      	prio:7 dscp:63,62,61,60,59,58,57,56,
       Receive buffer size (bytes): 130944,130944,0,0,0,0,0,0,max_buffer_size=262016
       Cable len: 7
       PFC configuration:
-              priority    0   1   2   3   4   5   6   7
-              enabled     0   0   0   1   0   0   0   0
-              buffer      0   0   0   1   0   0   0   0
+      	priority    0   1   2   3   4   5   6   7
+      	enabled     0   0   0   1   0   0   0   0
+      	buffer      0   0   0   1   0   0   0   0
       tc: 0 ratelimit: unlimited, tsa: vendor
-               priority:  1
+      	 priority:  1
       tc: 1 ratelimit: unlimited, tsa: vendor
-               priority:  0
+      	 priority:  0
       tc: 2 ratelimit: unlimited, tsa: vendor
-               priority:  2
+      	 priority:  2
       ...
-    notes: "The tool is mlnx_qos (NVIDIA's mlnx-tools, shipped with MLNX_OFED / DOCA host packages, not in distribution archives); 'mlx_qos' is a common misspelling. The default is 'Priority trust state: pcp' with no dscp2prio block and PFC off. Note the mlx5 default TC mapping: priority 1 is in TC 0 and priority 0 in TC 1. Its output must agree with the switch - same trust mode, same lossless priority. With the inbox stack use dcb instead (dcb pfc show, dcb app show, dcb ets show, dcb buffer show). Output is illustrative and its layout differs between releases."
-    tags: [roce, qos, pfc, verify]
+    notes: "The tool is mlnx_qos (NVIDIA's mlnx-tools, shipped with MLNX_OFED / DOCA host packages, not in distribution archives); 'mlx_qos' is a common misspelling. The capture shows DSCP trust, DSCP 26 mapped to priority 3 and PFC on priority 3. The default is 'Priority trust state: pcp' with no dscp2prio block, PFC off and 'Receive buffer size (bytes): 262016,0,0,0,0,0,0,0'; there is no 'default priority:' line. Note the mlx5 default TC mapping: priority 1 is in TC 0 and priority 0 in TC 1. Its output must agree with the switch - same trust mode, same lossless priority. The layout differs between releases."
+    stacks:
+      inbox:
+        cmd: dcb pfc show dev ens64f0np0; dcb ets show dev ens64f0np0; dcb buffer show dev ens64f0np0
+        real: true
+        example: |
+          pfc-cap 8 macsec-bypass off delay 7
+          prio-pfc 0:off 1:off 2:off 3:on 4:off 5:off 6:off 7:off
+          willing off ets-cap 8 cbs off
+          tc-bw 0:0 1:0 2:0 3:0 4:0 5:0 6:0 7:0
+          pg-bw 0:0 1:0 2:0 3:0 4:0 5:0 6:0 7:0
+          tc-tsa 0:vendor 1:vendor 2:vendor 3:vendor 4:vendor 5:vendor 6:vendor 7:vendor
+          prio-tc 0:1 1:0 2:2 3:3 4:4 5:5 6:6 7:7
+          ...
+          prio-buffer 0:0 1:0 2:0 3:1 4:0 5:0 6:0 7:0
+          buffer-size 0:130944b 1:130944b 2:0b 3:0b 4:0b 5:0b 6:0b 7:0b
+          total-size 262016b
+        notes: "mlnx_qos is not part of the distribution (inbox) stack; iproute2's dcb shows the same NIC state: dcb pfc (PFC per priority), dcb ets (prio-tc 0:1 1:0 is the same non-identity default map), dcb buffer (the receive buffer split after PFC on priority 3) and dcb app (DSCP map; 'dcb -N app show' prints numbers instead of names such as AF31). dcb apptrust is not supported by mlx5 ('Attribute not found: Success'). dcb also works under DOCA, and the two tools share the state."
+      doca:
+        cmd: mlnx_qos -i ens64f0np0
 
-  - cmd: mlnx_qos -i ens1f0np0 --trust dscp
+  - cmd: mlnx_qos -i ens64f0np0 --trust dscp
     platform: nvidia
     summary: Set the NIC to classify received traffic by DSCP rather than by the VLAN PCP bits.
-    notes: "L3 (routed) RoCEv2 fabrics normally use DSCP trust because there is no VLAN tag on routed links. Like every mlnx_qos set option it prints the full status afterwards; an invalid value prints 'Invalid trust state command. Refer to the help.'. Map a DSCP to a priority with --dscp2prio set,26,3. Not persistent across reboot on its own; apply it from your node configuration management or the vendor's recommended persistence mechanism. Inbox equivalent on mlx5: 'dcb app replace dev <if> dscp-prio 26:3' maps the DSCP and switches the port to DSCP trust (dcb apptrust is not supported by mlx5)."
-    tags: [roce, qos, dscp]
+    notes: "L3 (routed) RoCEv2 fabrics normally use DSCP trust because there is no VLAN tag on routed links. Like every mlnx_qos set option it prints the full status afterwards (with a 'dscp2prio mapping:' block); an invalid value prints 'Invalid trust state command. Refer to the help.'. Map a DSCP to a priority with --dscp2prio set,26,3. Not persistent across reboot on its own; apply it from your node configuration management or the vendor's recommended persistence mechanism."
+    stacks:
+      inbox:
+        cmd: sudo dcb app replace dev ens64f0np0 dscp-prio 26:3
+        notes: "There is no trust command for mlx5 in dcb (dcb apptrust prints 'Attribute not found: Success', exit 1). Adding a DSCP entry maps the DSCP and switches the port to DSCP trust; deleting it again ('dcb app del dev <if> dscp-prio 26:3') switched it back to PCP, after which DSCP-marked RoCE lands in priority 0. Check with 'dcb -N app show dev <if>' (plain 'dcb app show' prints 'dscp-prio AF31:3'). Not persistent across reboot."
+      doca:
+        cmd: sudo mlnx_qos -i ens64f0np0 --trust dscp
 
-  - cmd: mlnx_qos -i ens1f0np0 --pfc 0,0,0,1,0,0,0,0
+  - cmd: mlnx_qos -i ens64f0np0 --pfc 0,0,0,1,0,0,0,0
     platform: nvidia
     summary: Enable PFC on priority 3 only (one comma-separated flag per priority 0..7).
-    notes: Priority 3 is a common RoCE convention, not a rule - use whatever priority your switch fabric treats as lossless, and make both ends agree. Enabling PFC on a priority the switch does not honour gives you a NIC that pauses a link that never pauses back. The list must have exactly 8 values ('pfc list must have 8 items' otherwise). On mlx5 enabling PFC switches global 802.3x pause off, and a later 'ethtool -A <if> rx on tx on' silently clears PFC again. Not persistent across reboot by itself. Inbox equivalent is 'dcb pfc set dev <if> prio-pfc all:off 3:on'.
-    tags: [roce, pfc, lossless, config]
+    notes: Priority 3 is a common RoCE convention, not a rule - use whatever priority your switch fabric treats as lossless, and make both ends agree. Enabling PFC on a priority the switch does not honour gives you a NIC that pauses a link that never pauses back. The list must have exactly 8 values ('pfc list must have 8 items' otherwise). On mlx5 enabling PFC switches global 802.3x pause off, and a later 'ethtool -A <if> rx on tx on' silently clears PFC again (rc 0). Not persistent across reboot by itself.
+    stacks:
+      inbox:
+        cmd: sudo dcb pfc set dev ens64f0np0 prio-pfc all:off 3:on
+        notes: "The inbox equivalent; check with 'dcb pfc show dev <if> prio-pfc' (prints 'prio-pfc 0:off 1:off 2:off 3:on 4:off 5:off 6:off 7:off'). As with mlnx_qos, enabling PFC switches global pause off, and 'ethtool -A <if> rx on tx on' silently turns PFC off on every priority. Not persistent across reboot."
+      doca:
+        cmd: sudo mlnx_qos -i ens64f0np0 --pfc 0,0,0,1,0,0,0,0
+
+  - cmd: cat /sys/class/net/ens64f0np0/ecn/roce_np/enable/3 /sys/class/net/ens64f0np0/ecn/roce_rp/enable/3
+    platform: nvidia
+    summary: Show whether DCQCN notification point (NP, sends CNPs) and reaction point (RP, reacts to CNPs) are enabled for priority 3.
+    real: doca
+    example: |
+      1
+      1
+    notes: "This per-netdev ecn/ tree exists only with NVIDIA's stack (MLNX_OFED / DOCA-OFED). On a ConnectX-5 with DOCA-OFED 3.4 NP and RP were enabled on all eight priorities by default; roce_np/cnp_dscp read 48 and roce_np/cnp_802p_prio 6, and roce_rp/ holds the RP parameters (rpg_ai_rate, rpg_hai_rate, rpg_time_reset, ...). Write as root, for example 'echo 0 | sudo tee .../roce_rp/enable/3'. Whether DCQCN is acting shows in the RDMA counters on both stacks: np_ecn_marked_roce_packets, np_cnp_sent, rp_cnp_handled (rdma statistic show link <dev>/1 or /sys/class/infiniband/<dev>/ports/1/hw_counters/)."
+    stacks:
+      inbox:
+        real: true
+        example: |
+          cat: /sys/class/net/ens64f0np0/ecn/roce_np/enable/3: No such file or directory
+          cat: /sys/class/net/ens64f0np0/ecn/roce_rp/enable/3: No such file or directory
+        notes: "The inbox mlx5 driver has no ecn/ directory. It exposes the DCQCN parameters in debugfs, /sys/kernel/debug/mlx5/<pci-address>/cc_params/ (np_cnp_dscp, np_cnp_prio, rp_ai_rate, ...), and with Secure Boot on kernel lockdown blocks reading them even as root ('cat: rp_ai_rate: Operation not permitted'; dmesg 'Lockdown: cat: debugfs access is restricted'). The RoCE CC counters in rdma statistic and hw_counters are available on both stacks."
+      doca:
+        cmd: cat /sys/class/net/ens64f0np0/ecn/roce_np/enable/3 /sys/class/net/ens64f0np0/ecn/roce_rp/enable/3
 
   - cmd: dcgmi discovery -l
     platform: nvidia

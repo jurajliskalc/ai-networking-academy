@@ -1,0 +1,37 @@
+### cmd: sudo mlxlink -d /dev/fwctl/fwctl0
+### ----
+
+Operational Info
+----------------
+State                              : Active 
+Physical state                     : LinkUp 
+Speed                              : 100GbE 
+Width                              : 4x 
+FEC                                : Standard RS-FEC - RS(528,514) 
+Loopback Mode                      : No Loopback 
+Auto Negotiation                   : ON 
+Tx Precoding Status                : N/A
+Rx Precoding Status                : N/A
+
+Port Info
+---------
+Label Port                         : 1
+Local Port                         : 1
+
+Supported Info
+--------------
+Enabled Link Speed                 : 0xf8f1f0d3 (100G,50G,40G,25G,10G,1G) 
+Supported Cable Speed              : 0x48101165 (100G,56G,50G,40G,25G,20G,10G,1G) 
+
+Troubleshooting Info
+--------------------
+Status Opcode                      : 0 
+Group Opcode                       : N/A 
+Recommendation                     : No issue was observed 
+
+Tool Information
+----------------
+Firmware Version                   : 16.29.1016 
+MFT Version                        : 4.37.0-154 
+
+### rc=0

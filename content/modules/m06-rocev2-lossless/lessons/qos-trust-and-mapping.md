@@ -171,8 +171,8 @@ ECN bits: when DCQCN is enabled for the priority, the NIC marks RoCE data as ECN
 it overrides the ECN bits you passed in the traffic class is implementation-specific. Passing
 106 (ECT(0)) rather than 104 is a common belt-and-braces choice. Verify on the wire. On ConnectX,
 `tcpdump` on the netdev does not see RoCE (the NIC handles it in hardware), so capture on the
-RDMA device with libpcap's RDMA sniffer (`tcpdump -i mlx5_0`, where your distro's tcpdump and
-security profile allow it) or mirror the traffic at the switch.
+RDMA device with libpcap's RDMA sniffer (`tcpdump -i mlx5_0`, or `-i rocep3s0f0` with the inbox
+stack, where your distro's tcpdump and security profile allow it) or mirror the traffic at the switch.
 
 ### How CNPs are classified
 
@@ -199,17 +199,25 @@ can be a receiver.
 
 ### Host: set and verify trust and mapping
 
-```bash
-# trust DSCP on the RoCE port, PFC on priority 3 only
-mlnx_qos -i ens1f0np0 --trust dscp
-mlnx_qos -i ens1f0np0 --pfc 0,0,0,1,0,0,0,0
+Trust DSCP on the RoCE port and map DSCP 26 to priority 3 (PFC on priority 3 is set as in the PFC
+lesson). The tools differ by driver stack: iproute2's `dcb app` with the inbox driver (see
+`man dcb-app`), `mlnx_qos` with NVIDIA's stack (`dcb` also works there; the two share the NIC state).
 
-# show the full state, including the DSCP-to-priority table
-mlnx_qos -i ens1f0np0
+```bash stack=inbox
+sudo dcb app replace dev ens64f0np0 dscp-prio 26:3   # on mlx5 this also switches trust to DSCP
+dcb app show dev ens64f0np0
 ```
 
-```text
-# illustrative, trimmed
+```text stack=inbox real
+dscp-prio AF31:3
+```
+
+```bash stack=doca
+sudo mlnx_qos -i ens64f0np0 --trust dscp
+mlnx_qos -i ens64f0np0                                # full state, including the DSCP-to-priority table
+```
+
+```text stack=doca real
 DCBX mode: OS controlled
 Priority trust state: dscp
 dscp2prio mapping:
@@ -221,49 +229,123 @@ dscp2prio mapping:
 	prio:5 dscp:47,46,45,44,43,42,41,40,
 	prio:6 dscp:55,54,53,52,51,50,49,48,
 	prio:7 dscp:63,62,61,60,59,58,57,56,
-Receive buffer size (bytes): 130944,130944,0,0,0,0,0,0,max_buffer_size=262016
+Receive buffer size (bytes): 262016,0,0,0,0,0,0,0,max_buffer_size=262016
 ...
 ```
 
 Every `mlnx_qos` command that sets something prints this full status afterwards. The default table
 shown is the class-selector map: DSCP 24-31 (including 26) → priority 3, and DSCP 48-55 → priority
 6. Individual entries can be changed (`mlnx_qos --dscp2prio set,<dscp>,<prio>`; after
-`set,26,3` the prio 3 line lists 26 first).
+`set,26,3` the prio 3 line reads `dscp:26,31,30,29,28,27,25,24,`). There is no `default priority:`
+line in this output, and a typo in the trust mode fails loudly (`--trust foo` prints
+`Invalid trust state command. Refer to the help.`).
 
-`mlnx_qos` exists only with NVIDIA's stack. The upstream iproute2 equivalent is `dcb app` with
-`dscp-prio` entries. See `man dcb-app`. On mlx5, `dcb apptrust` is not supported (it prints
-`Attribute not found: Success`); adding a DSCP entry is what switches the port to DSCP trust:
+With `dcb`, an empty APP table prints nothing, and well-known DSCP values print by **name**:
+
+> [!VERIFIED]
+> **`dcb app show` printed `AF31` for DSCP 26; `dcb -N app show` printed the number.**
+> With iproute2 6.19 on both stacks (ConnectX-5, inbox and DOCA-OFED 3.4), `dcb app show dev ens64f0np0` after
+> `dcb app replace ... dscp-prio 26:3` printed `dscp-prio AF31:3`. Scripts that grep for `26:3` miss it; use
+> `dcb -N app show`, which printed `dscp-prio 26:3`.
 
 ```bash
-dcb app replace dev ens1f0np0 dscp-prio 26:3
-dcb app show dev ens1f0np0                      # dscp-prio AF31:3   (well-known DSCPs print by name)
-dcb -N app show dev ens1f0np0                   # dscp-prio 26:3     (-N: numeric)
+dcb -N app show dev ens64f0np0 dscp-prio              # -N: numeric DSCP values
 ```
 
-An empty APP table prints nothing. The two tools share the NIC state: after
-`mlnx_qos --trust dscp`, `dcb -N app show` lists the DSCP map entries (`dscp-prio 0:0 1:0 ... 24:3 25:3 ...`).
+```text real=doca
+dscp-prio 26:3
+```
 
-Set the default ToS for rdma_cm connections, and the traffic class for NCCL:
+On mlx5 there is no explicit trust command in `dcb`: `dcb apptrust` is not supported and the APP
+table itself sets the trust mode:
+
+> [!VERIFIED]
+> **Adding a DSCP app entry switched mlx5 to DSCP trust; deleting it switched back to PCP and moved the traffic from priority 3 to priority 0.**
+> On ConnectX-5 (fw 16.29), with `dcb app add dev ens64f0np0 dscp-prio 26:3` on both hosts, `mlnx_qos` reported
+> `Priority trust state: dscp` and `ib_write_bw --tclass=106` traffic was counted in the receiver's
+> `rx_prio3_bytes` (+36.9 GB, `rx_prio0_bytes` +20 KB). After `dcb app del` the trust read `pcp` and the same
+> traffic landed in `rx_prio0_bytes` (+37.0 GB, priority 3 +0), a lossy class. `dcb apptrust show` printed
+> `Attribute not found: Success` (exit 1) on both stacks, and `dcb app add` of an existing entry still
+> returned rc 0. Do not "clean up" the APP table on a RoCE host without re-checking trust and the
+> per-priority counters.
+
+The two tools share the NIC state. After `mlnx_qos --trust dscp`, `dcb -N app show` lists the whole
+DSCP map (cut at 200 characters here):
 
 ```bash
-cma_roce_tos -d mlx5_0 -t 106          # rdma_cm default: DSCP 26, ECT(0) (NVIDIA stack)
+dcb -N app show dev ens64f0np0 dscp-prio | cut -c1-200
+```
+
+```text real=doca
+dscp-prio 0:0 1:0 2:0 3:0 4:0 5:0 6:0 7:0 8:1 9:1 10:1 11:1 12:1 13:1 14:1 15:1 16:2 17:2 18:2 19:2 20:2 21:2 22:2 23:2 24:3 25:3 26:3 27:3 28:3 29:3 30:3 31:3 32:4 33:4 34:4 35:4 36:4 37:4 38:4 39:4
+```
+
+Set the default ToS for rdma_cm connections. With the inbox stack, create the rdma_cm configfs entry
+for the RDMA device and write the file; NVIDIA's `cma_roce_tos` script writes exactly this file:
+
+```bash stack=inbox
+sudo modprobe configfs
+sudo mkdir -p /sys/kernel/config/rdma_cm/rocep3s0f0
+ls /sys/kernel/config/rdma_cm/rocep3s0f0/ports/1/
+cat /sys/kernel/config/rdma_cm/rocep3s0f0/ports/1/default_roce_tos /sys/kernel/config/rdma_cm/rocep3s0f0/ports/1/default_roce_mode
+```
+
+```text stack=inbox real
+default_roce_mode
+default_roce_tos
+0
+RoCE v2
+```
+
+```bash stack=inbox
+echo 106 | sudo tee /sys/kernel/config/rdma_cm/rocep3s0f0/ports/1/default_roce_tos   # DSCP 26, ECT(0)
+```
+
+```bash stack=doca
+sudo cma_roce_tos -d mlx5_0 -t 106; echo rc=$?        # rdma_cm default: DSCP 26, ECT(0)
+sudo cma_roce_tos -d mlx5_0
+```
+
+```text stack=doca real
+106
+rc=0
+106
+```
+
+```bash stack=doca
+cat /sys/kernel/config/rdma_cm/mlx5_0/ports/1/default_roce_tos /sys/kernel/config/rdma_cm/mlx5_0/ports/1/default_roce_mode
+```
+
+```text stack=doca real
+106
+RoCE v2
+```
+
+Writing the configfs file directly also works under DOCA (`cma_roce_tos -d mlx5_0` then reads 106), and
+`rmdir /sys/kernel/config/rdma_cm/<dev>` removes the entry. The RDMA device name follows the stack
+(`mlx5_0` with NVIDIA's, names like `rocep3s0f0` with distro rdma-core): take it from `rdma link`.
+For NCCL, which does not use rdma_cm, set the traffic class itself:
+
+```bash
 export NCCL_IB_TC=106                   # NCCL QPs: same DSCP 26
 ```
 
-Without `cma_roce_tos`, write 106 into the configfs file described above. The RDMA device name
-follows the stack (`mlx5_0` with NVIDIA's, names like `rocep3s0f0` with distro rdma-core): take it
-from `rdma link`.
-
 Confirm by sending traffic and watching the per-priority counters, which count bytes the NIC
 transmitted and received per priority (not every RDMA path may be reflected the same way on every
-driver version):
+driver version). The capture is from a host that had run both tagged (`--tclass=106`) and untagged tests:
 
 ```bash
-ethtool -S ens1f0np0 | grep -E 'tx_prio3_bytes|rx_prio3_bytes|tx_prio0_bytes'
+ethtool -S ens64f0np0 | grep -E 'tx_prio3_bytes|rx_prio3_bytes|tx_prio0_bytes'
 ```
 
-If an NCCL job's traffic shows up under `tx_prio0_bytes` instead of `tx_prio3_bytes`, the job is
-not marking DSCP 26.
+```text real=inbox
+     tx_prio0_bytes: 304352834939
+     rx_prio3_bytes: 155986842
+     tx_prio3_bytes: 124422973040
+```
+
+Read deltas, not totals: sample before and after a run. If an NCCL job's traffic shows up under
+`tx_prio0_bytes` instead of `tx_prio3_bytes`, the job is not marking DSCP 26.
 
 ### Switch: trust and maps
 

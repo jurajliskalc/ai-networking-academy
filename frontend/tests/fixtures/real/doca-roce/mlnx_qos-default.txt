@@ -1,0 +1,27 @@
+### cmd: mlnx_qos -i $N
+### ----
+DCBX mode: OS controlled
+Priority trust state: pcp
+Receive buffer size (bytes): 262016,0,0,0,0,0,0,0,max_buffer_size=262016
+Cable len: 7
+PFC configuration:
+	priority    0   1   2   3   4   5   6   7
+	enabled     0   0   0   0   0   0   0   0   
+	buffer      0   0   0   0   0   0   0   0   
+tc: 0 ratelimit: unlimited, tsa: vendor
+	 priority:  1
+tc: 1 ratelimit: unlimited, tsa: vendor
+	 priority:  0
+tc: 2 ratelimit: unlimited, tsa: vendor
+	 priority:  2
+tc: 3 ratelimit: unlimited, tsa: vendor
+	 priority:  3
+tc: 4 ratelimit: unlimited, tsa: vendor
+	 priority:  4
+tc: 5 ratelimit: unlimited, tsa: vendor
+	 priority:  5
+tc: 6 ratelimit: unlimited, tsa: vendor
+	 priority:  6
+tc: 7 ratelimit: unlimited, tsa: vendor
+	 priority:  7
+### rc=0

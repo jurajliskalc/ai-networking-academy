@@ -18,3 +18,7 @@ Thumbs.db
 
 # Personal notes, never pushed
 private/
+
+# Python bytecode
+__pycache__/
+*.pyc

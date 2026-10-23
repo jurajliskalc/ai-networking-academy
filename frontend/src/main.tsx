@@ -20,6 +20,7 @@ const Exams = lazy(() => import('./pages/Exams'));
 const ExamSession = lazy(() => import('./pages/ExamSession'));
 const Flashcards = lazy(() => import('./pages/Flashcards'));
 const Reference = lazy(() => import('./pages/Reference'));
+const Verified = lazy(() => import('./pages/Verified'));
 const ProgressPage = lazy(() => import('./pages/ProgressPage'));
 const Settings = lazy(() => import('./pages/Settings'));
 const NotFound = lazy(() => import('./pages/NotFound'));
@@ -27,6 +28,7 @@ const HwGuide = lazy(() => import('./pages/hw/HwGuide'));
 const HwConnect = lazy(() => import('./pages/hw/HwConnect'));
 const HwLabs = lazy(() => import('./pages/hw/HwLabs'));
 const HwLabPage = lazy(() => import('./pages/hw/HwLabPage'));
+const HwLive = lazy(() => import('./pages/hw/HwLive'));
 
 function Guarded({ children }: { children: ReactNode }) {
   const { pathname } = useLocation();
@@ -51,6 +53,7 @@ createRoot(document.getElementById('root')!).render(
               <Route path="/simulator" element={<Simulator />} />
               <Route path="/hw" element={<HwGuide />} />
               <Route path="/hw/connect" element={<HwConnect />} />
+              <Route path="/hw/live" element={<HwLive />} />
               <Route path="/hw/labs" element={<HwLabs />} />
               <Route path="/hw/labs/:id" element={<HwLabPage />} />
               <Route path="/hw/:section" element={<HwGuide />} />
@@ -60,6 +63,7 @@ createRoot(document.getElementById('root')!).render(
               <Route path="/exams/:id" element={<ExamSession />} />
               <Route path="/flashcards" element={<Flashcards />} />
               <Route path="/reference" element={<Reference />} />
+              <Route path="/verified" element={<Verified />} />
               <Route path="/progress" element={<ProgressPage />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="*" element={<NotFound />} />

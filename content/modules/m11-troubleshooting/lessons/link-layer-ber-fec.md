@@ -214,6 +214,19 @@ Supported/Configured FEC encodings: Auto RS
 Active FEC encoding: RS
 ```
 
+On real hardware (100G ConnectX-5, 1 m DAC, as a regular user) the same commands print:
+
+```text real=inbox
+$ ethtool ens64f0np0 | grep -E 'Speed|Link detected'
+netlink error: Operation not permitted
+	Speed: 100000Mb/s
+	Link detected: yes
+$ ethtool --show-fec ens64f0np0
+FEC parameters for ens64f0np0:
+Supported/Configured FEC encodings: Auto
+Active FEC encoding: RS
+```
+
 If the speed is lower than the design (for example 200000Mb/s on a 400G port), the link retrained
 down: treat it as a fault even if it carries traffic.
 
@@ -271,6 +284,57 @@ Annotation:
 - `Link Down Counter : 0`: no flaps. Combined with the lane imbalance this link is a candidate for
   a scheduled clean-and-inspect, not an emergency.
 
+For comparison, a clean 100G link on the reference hardware (ConnectX-5 port 1, 1 m DAC, MFT 4.37 over
+the fwctl device, 12 minutes after the counters were cleared). The 25G NRZ lanes use RS(528,514) here,
+and both BER lines read `15E-255`, which is how `mlxlink` shows "no errors at all":
+
+```text real=doca
+$ sudo mlxlink -d /dev/fwctl/fwctl0 -c
+
+Operational Info
+----------------
+State                              : Active
+Physical state                     : LinkUp
+Speed                              : 100GbE
+Width                              : 4x
+FEC                                : Standard RS-FEC - RS(528,514)
+Loopback Mode                      : No Loopback
+Auto Negotiation                   : ON
+...
+Troubleshooting Info
+--------------------
+Status Opcode                      : 0
+Group Opcode                       : N/A
+Recommendation                     : No issue was observed
+...
+Physical Counters and BER Info
+------------------------------
+Time Since Last Clear [Min]        : 12.6
+Effective Physical Errors          : 0
+Raw Physical Errors Per Lane       : 0,0,0,0
+Effective Physical BER             : 15E-255
+Raw Physical BER                   : 15E-255
+Link Down Counter                  : 0
+Link Error Recovery Counter        : 0
+```
+
+> [!VERIFIED]
+> **Under Secure Boot lockdown, debugfs and MFT's NV/flash access were blocked, but `mlxlink` worked over `/dev/fwctl/fwctl0`.**
+> On Ubuntu 26.04 (kernel 7.0, Secure Boot on, lockdown `integrity`) with ConnectX-5 fw 16.29 and MFT 4.37,
+> `sudo mst status -v` listed `/dev/fwctl/fwctl0` and `/dev/fwctl/fwctl1` in its FWCTL column and
+> `mlxlink -d /dev/fwctl/fwctl0` (also `-c` and `-m`) worked, while `mlxlink -d mlx5_0` failed with
+> `-E- Failed to open device: "mlx5_0", No such file or directory`. Firmware configuration and flash
+> access did not work by any path: `mlxconfig -d /dev/fwctl/fwctl0 q` -> `-E- Cannot access NV register.
+> Either FW does not support NV access register, or HW access is disabled. rc=(265)`, `flint -d
+> /dev/fwctl/fwctl0 q` -> `-E- Cannot open Device: /dev/fwctl/fwctl0. Operation not supported.
+> MFE_BAD_PARAMS`, and `mlxconfig -d mlx5_0 q` -> `-E- Failed to open the device`. Debugfs was blocked
+> for root too: reading the mlx5 DCQCN parameters (`/sys/kernel/debug/mlx5/0000:03:00.0/cc_params/rp_ai_rate`)
+> gave `Operation not permitted`, with dmesg `Lockdown: cat: debugfs access is restricted; see man
+> kernel_lockdown.7`. With Secure Boot off, `mlxconfig q` and `flint q` worked on the same hosts. So on a
+> locked-down host you can still read link health with `mlxlink` over fwctl, but changing firmware
+> settings (such as the port type) needs Secure Boot off or a signed MFT kernel module; check your MFT
+> release notes for what your version supports.
+
 ### Step 3: optics digital diagnostics (DDM)
 
 ```bash
@@ -296,7 +360,31 @@ module type). A 5 dB deficit on one lane almost always means a dirty or damaged 
 fibre, not a bad receiver. Compare against the module's warning and alarm thresholds, which `ethtool
 -m` also prints for most modules. Field names and units vary with module type and ethtool version.
 A passive DAC has no optical power or bias lines at all (and may report a module temperature of 0.00 degrees C);
-there you rely on BER and error counters alone.
+there you rely on BER and error counters alone. This is the 1 m DAC on the reference hardware:
+
+```text real=inbox
+$ sudo ethtool -m ens64f0np0
+	Identifier                                : 0x0d (QSFP+)
+	...
+	Transceiver type                          : 100G Ethernet: 100G Base-CR4 or 25G Base-CR CA-L
+	...
+	Length (Copper or Active cable)           : 1m
+	Transmitter technology                    : 0xa0 (Copper cable, unequalized)
+	...
+	Vendor name                               : Mellanox
+	Vendor PN                                 : MCP1600-E00AE30
+	...
+	Module temperature                        : 0.00 degrees C / 32.00 degrees F
+	Module voltage                            : 0.0000 V
+```
+
+> [!VERIFIED]
+> **`ethtool -m` needs root: as a regular user it printed only `netlink error: Operation not permitted`.**
+> On Ubuntu 26.04 (ethtool 6.19, kernel 7.0) with ConnectX-5 and both driver stacks, `ethtool -m
+> ens64f0np0` without sudo printed that single line and exited 1; `sudo ethtool -m` printed the module
+> data. Plain `ethtool <if>` prints the same `netlink error` line first and then the link settings, so
+> the message is easy to dismiss as noise; with `-m` it is the whole output. Run module (DDM) reads with
+> sudo, and make sure monitoring agents that collect them have the privileges to do so.
 
 ### Step 4: InfiniBand port counters
 
@@ -322,6 +410,32 @@ Reading it: symbol errors and receive errors on the same port, plus retrains and
 is a physical-layer problem on the link **arriving at** this port. `PortXmitWait` is about congestion
 (time the port had data but no credits to send) and is not a physical-layer indicator; do not mix
 them up. Take a second reading after a known interval to get rates before acting.
+
+For comparison, a healthy EDR port on the reference hardware after bandwidth tests (back to back,
+DOCA-OFED 3.4, OpenSM running; on a host with several RDMA devices pass `-C <ca> -P <port>`):
+
+```text real=doca
+$ sudo perfquery -C mlx5_1 -P 1
+# Port counters: Lid 1 port 1 (CapMask: 0x5A00)
+PortSelect:......................1
+CounterSelect:...................0x0000
+SymbolErrorCounter:..............0
+LinkErrorRecoveryCounter:........0
+LinkDownedCounter:...............0
+PortRcvErrors:...................0
+PortRcvRemotePhysicalErrors:.....0
+...
+PortXmitDiscards:................11
+...
+PortXmitData:....................4294967295
+...
+PortXmitWait:....................65571
+```
+
+All physical-layer counters are zero. `PortXmitWait` and the few `PortXmitDiscards` (packets dropped on
+transmit, typically because of congestion or a port that was not ready) are not physical-layer
+indicators. `PortXmitData` reads 4294967295: the 32-bit counter has saturated, so use `perfquery -x`
+(64-bit extended counters) for data volumes.
 
 ### Step 5: soak and accept
 

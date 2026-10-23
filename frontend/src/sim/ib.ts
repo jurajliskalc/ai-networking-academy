@@ -298,6 +298,8 @@ const ERR_FIELDS = IB_PC_FIELDS.map(([k]) => k).filter((k) => !/^Port(Xmit|Rcv)(
 export function ibqueryerrors(s: FabricState, h: Host, a: string[]): string {
   const d = discover(s, h);
   if (!d) return 'ibwarn: [41007] mad_rpc_open_port: can\'t open UMAD port ((null):0)\n';
+  // ibqueryerrors starts with an SA query for the node list; without a master SM there is no SA (verified, exit 0).
+  if (!masterSm(s)) return 'ibwarn: [41019] sa_get_handle: No SM/SA found on port :1\n';
   const suppressed: string[] = [];
   for (let i = 0; i < a.length; i++) {
     if (a[i] === '-s' || a[i] === '--suppress') suppressed.push(...(a[++i] ?? '').split(','));

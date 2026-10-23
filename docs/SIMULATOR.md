@@ -110,8 +110,10 @@ so that failover can be explored: `systemctl stop opensm` on node01, `sminfo`, `
 ## Commands
 
 GPU nodes: `ssh`, `ip`, `ibdev2netdev`, `ibv_devices`, `ibv_devinfo`, `show_gids`, `rdma link|statistic`,
-`ethtool [-S|-m|-a]`, `mlnx_qos`, `lspci [-vv -s]`, `nvidia-smi topo -m`, `dmesg`, `mlxlink [-c]`, `ping`,
-`ib_write_bw`, `all_reduce_perf` (directly or via `mpirun`), `cat`, `sed -i 's/…/…/'`, `sed -i '/…/d'`,
+`ethtool [-S|-m|-a]`, `ethtool -A <if> rx on|off tx on|off` (global pause on clears PFC on every priority and
+enabling PFC turns global pause off, as verified on mlx5), `mlnx_qos [--trust] [--pfc] [--tsa … --tcbw …]` (ETS
+bandwidths must add up to 100 over the `ets` classes), `lspci [-vv -s]`, `nvidia-smi topo -m`, `dmesg`, `mlxlink [-c]`,
+`ping [-c] [-s] [-M do] [-I <if>|<addr>]`, `ib_write_bw [-q N] [-D s] [-m <mtu>]`, `all_reduce_perf` (directly or via `mpirun`), `cat`, `sed -i 's/…/…/'`, `sed -i '/…/d'`,
 `echo … >> /etc/nccl.conf`, with pipes to `grep`, `head`, `tail`, `wc -l`, `sort`. With
 `NCCL_DEBUG=INFO`, `all_reduce_perf` also prints where the first rings enter and leave node01
 (`[receive]`/`[send] via NET/IB/<n>/GDRDMA`; a rail-aligned send from a GPU that is not next to NIC *n*
@@ -218,6 +220,38 @@ nothing crosses the spines),
 `sm_enabled` (optional `node`; without it every SM instance), `sm_count` (`value`: running SMs),
 `sm_master` (`node`), `ib_switch_reachable` (`switch`: the master SM's sweep reaches it), `ib_ports_active`
 (`node`, optional `rail`).
+
+## Golden-format tests (simulator vs real captures)
+
+`frontend/tests/sim-golden.test.ts` runs a simulator command next to the real output of the same tool and requires
+both to have the same *line skeleton*. The captures are in `frontend/tests/fixtures/real/<stack>/<cmd>.txt` (two
+ConnectX-5 hosts, DOCA-OFED and inbox stacks, RoCE and InfiniBand with and without an SM; provenance in the README
+there). Hand-written regex pins for a few details remain in `frontend/tests/sim-real-format.test.ts`.
+
+* **Masking** (`mask()`): dates, GIDs (colon-hex groups and perftest's 16 decimal bytes), `0x` hex and bare GUIDs,
+  IPv4 addresses, RDMA device names (`mlx5_N`, `rocep…`), netdev names (`en…npN`, `ib[ps]…`), host names, board IDs
+  (`MT_…`), CA types (`MTxxxx`) and every remaining number become placeholders. Tabs and single spaces are kept, runs
+  of two or more spaces become two, and padding between a value and a tab is dropped (its width depends on the value).
+  Field names, their order, separators, headers, footers, blank lines and trailing spaces are compared exactly.
+* **Modes**: `exact` (default) compares line by line; `subset` (counter lists such as `rdma statistic`) requires every
+  simulated line to appear in the capture in the same order, because the simulator models fewer counters;
+  `collapse` folds a block repeated per device or GID to one copy, so 2 real devices compare with 8 simulated ones;
+  `pick` selects the comparable part of the simulated output (the first CA blocks of `iblinkinfo`, one `rdma link`
+  line); `setup` runs commands first (for example `mlnx_qos --trust pcp` and `ethtool -A … rx on tx on` to recreate
+  the factory state of the "default" captures).
+* **Intentional differences** go in the case's `allow` list as `{ re, to, why }`: `re` is replaced by `to` in both
+  masked outputs. Keep the list short and specific: today it covers 400G vs 100G names (`Speed`, `(Ext.)` speed
+  labels in `mlxlink`, `NDR` vs `EDR` in `ibstatus`), the back-to-back peer in `iblinkinfo` (a leaf switch in the
+  simulator) and the unmodelled `(3.000)` suffix of `ibqueryerrors`. A test fails if an entry matches nothing, if a
+  fixture is not used by any case, or if a fixture contains a serial number. Not compared at all, because the
+  simulator does not model them: the perftest server side, umad tools on a host whose first device is RoCE
+  (`Failed to open '(null)' port '0'`), `mlxlink -m`, and `ib_write_bw -D` iteration counts (real runs counted fewer
+  iterations than duration × message rate).
+* **Adding a capture**: save the raw output (stdout and stderr) as `### cmd: <command>`, `### ----`, the output,
+  `### rc=<exit status>`; remove serial numbers (or leave such commands out); add a `CASES` entry with the
+  equivalent simulator command; run `npx vitest run tests/sim-golden.test.ts`. A mismatch prints the first differing
+  masked line of both sides: fix the simulator, or add an `allow` entry with its reason if the difference is
+  intended. Then note the verified format in `docs/HARDWARE_VERIFICATION.md`.
 
 `frontend/tests/sim-labs.test.ts` requires every lab to fail its checks before the fix and pass all of
 them after replaying `fix`. A lab that does not pass this test cannot be merged.

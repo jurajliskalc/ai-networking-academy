@@ -4,6 +4,7 @@ import { useProgress } from '../store';
 import { emptyProgress, sanitize } from '../progress';
 import { REPO_URL } from '../components/Layout';
 import { Button, Card, PageHeader } from '../components/ui';
+import StackToggle from '../components/StackToggle';
 
 export default function Settings() {
   const { progress, replace } = useProgress();
@@ -31,6 +32,16 @@ export default function Settings() {
   return (
     <div className="max-w-2xl space-y-6">
       <PageHeader eyebrow="Settings" title="Settings" />
+      <Card className="p-5">
+        <h2 className="font-semibold">Driver stack</h2>
+        <p className="mt-1 text-sm text-muted">
+          Commands and output differ between the Linux distribution's own RDMA stack (kernel mlx5 driver, rdma-core, iproute2 <code>dcb</code>;
+          devices named like <code>rocep3s0f0</code>) and NVIDIA DOCA-OFED / MLNX_OFED (<code>mlnx_qos</code>, <code>show_gids</code>,
+          <code>ibdev2netdev</code>; devices named <code>mlx5_0</code>). Lessons, labs and the command reference show the variant for the stack
+          you pick here; every variant block has the same switch.
+        </p>
+        <StackToggle size="md" className="mt-4" />
+      </Card>
       <Card className="p-5">
         <h2 className="font-semibold">Your data</h2>
         <p className="mt-1 text-sm text-muted">Progress is stored only in this browser (localStorage). Nothing is sent anywhere. Export it to move between machines or keep a backup.</p>

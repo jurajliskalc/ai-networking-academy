@@ -1,0 +1,10 @@
+### cmd: ethtool -S $N | grep -E 'prio3_pause|pause_storm|global_pause'
+### ----
+     rx_prio3_pause: 696
+     rx_prio3_pause_duration: 608
+     tx_prio3_pause: 26
+     tx_prio3_pause_duration: 114
+     rx_prio3_pause_transition: 348
+     tx_pause_storm_warning_events: 0
+     tx_pause_storm_error_events: 0
+### rc=0

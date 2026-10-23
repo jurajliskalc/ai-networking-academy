@@ -1,13 +1,13 @@
 {
  "schema": "aina.hw.report/1",
- "toolkit": "1.0.0",
+ "toolkit": "1.1.0",
  "generated": "2026-10-22T09:00:00+00:00",
  "lab": "demo-lab (illustrative)",
  "fabric": "roce",
  "hosts": [
   {
    "schema": "aina.hw.host/1",
-   "toolkit": "1.0.0",
+   "toolkit": "1.1.0",
    "collected": "2026-10-22T09:00:00+00:00",
    "role": "A",
    "host": {
@@ -22,7 +22,9 @@
      "iommu=pt"
     ],
     "governor": "performance",
-    "memlock": "unlimited"
+    "memlock": "unlimited",
+    "secure_boot": null,
+    "lockdown": null
    },
    "software": {
     "rdma_core": "50.0-2build2",
@@ -132,14 +134,17 @@
         "out_of_sequence": 0,
         "packet_seq_err": 0,
         "rp_cnp_handled": 0
-       }
+       },
+       "rdma_cm": null
       }
      ]
     }
    ],
+   "umad": [],
    "netdevs": [
     {
      "name": "ens1f0np0",
+     "ipoib": false,
      "mtu": 9000,
      "operstate": "up",
      "speed_mbps": 100000,
@@ -149,8 +154,8 @@
      ],
      "pause": {
       "autonegotiate": false,
-      "rx": true,
-      "tx": true
+      "rx": false,
+      "tx": false
      },
      "qos": {
       "trust": "dscp",
@@ -211,7 +216,7 @@
   },
   {
    "schema": "aina.hw.host/1",
-   "toolkit": "1.0.0",
+   "toolkit": "1.1.0",
    "collected": "2026-10-22T09:00:00+00:00",
    "role": "B",
    "host": {
@@ -226,7 +231,9 @@
      "iommu=pt"
     ],
     "governor": "powersave",
-    "memlock": "8192"
+    "memlock": "8192",
+    "secure_boot": null,
+    "lockdown": null
    },
    "software": {
     "rdma_core": "50.0-2build2",
@@ -336,14 +343,17 @@
         "out_of_sequence": 42,
         "packet_seq_err": 0,
         "rp_cnp_handled": 0
-       }
+       },
+       "rdma_cm": null
       }
      ]
     }
    ],
+   "umad": [],
    "netdevs": [
     {
      "name": "ens1f0np0",
+     "ipoib": false,
      "mtu": 1500,
      "operstate": "up",
      "speed_mbps": 100000,

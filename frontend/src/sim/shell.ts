@@ -113,12 +113,12 @@ const HELP_HOST = `Fabric Simulator - GPU node commands (simulated; see the Help
   ip -br link | ip -br addr | ip link show <if> | ip link set dev <if> mtu <n> | ip link set dev <if> up|down
   ibdev2netdev | ibv_devices | ibv_devinfo [-d <dev>] | rdma link | show_gids [<dev>]
   rdma statistic show link <dev>/1
-  ethtool <if> | ethtool -S <if> | ethtool -m <if>
-  mlnx_qos -i <if> [--trust dscp|pcp] [--pfc 0,0,0,1,0,0,0,0]
+  ethtool <if> | ethtool -S <if> | ethtool -m <if> | ethtool -a <if> | ethtool -A <if> rx on|off tx on|off
+  mlnx_qos -i <if> [--trust dscp|pcp] [--pfc 0,0,0,1,0,0,0,0] [--tsa ets,...,strict --tcbw 10,...,0]
   lspci | lspci -vv -s <bdf> | nvidia-smi topo -m | dmesg | mlxlink -d <dev> [-c]
   cat <file> | echo "K=V" >> /etc/nccl.conf | sed -i 's/old/new/' /etc/nccl.conf
-  ping [-c N] [-M do] [-s size] [-I <if>] <ip>
-  ib_write_bw -d <dev> [-x <gid>] [--report_gbits] <peer-host>[:<dev>]
+  ping [-c N] [-M do] [-s size] [-I <if>|<addr>] <ip>
+  ib_write_bw -d <dev> [-x <gid>] [-q <qps>] [-D <s>] [-m <mtu>] [--report_gbits] <peer-host>[:<dev>]
   all_reduce_perf -b 8 -e 8G -f 2 -g 1    (also via mpirun ... all_reduce_perf ...)
   Pipes: | grep [-i -v -E -c] | head | tail | wc -l
 Lab actions (physical work, simulated): replace-cable <switch> <port> | reseat-nic <node> <dev>`;
@@ -251,6 +251,7 @@ function operUp(s: FabricState, node: string, nic: Nic) {
 
 const IB_ONLY = new Set(['ibstat', 'ibstatus', 'iblinkinfo', 'perfquery', 'sminfo', 'ibqueryerrors', 'ibnetdiscover', 'ibdiagnet', 'opensm']);
 const ROCE_ONLY = new Set(['ethtool', 'mlnx_qos', 'mlxlink', 'show_gids', 'ping']);
+const RoCE_CC_COUNTERS = ['rp_cnp_ignored', 'rp_cnp_handled', 'np_ecn_marked_roce_packets', 'np_cnp_sent'];
 
 function hostCmd(ctx: ShellCtx, h: Host, t: string[]): ExecResult {
   const s = ctx.state;
@@ -336,7 +337,7 @@ function hostCmd(ctx: ShellCtx, h: Host, t: string[]): ExecResult {
       const di = a.indexOf('-d');
       const sel = di >= 0 ? h.nics.filter((n) => n.dev === a[di + 1]) : h.nics;
       if (di >= 0 && !sel.length) return { out: `IB device '${a[di + 1]}' wasn't found\n` };
-      return { out: sel.map((n) => devinfo(s, node, n)).join('\n') };
+      return { out: sel.map((n) => devinfo(s, node, n) + '\n').join('') }; // a blank line after every device, as ibv_devinfo prints
     }
     case 'show_gids': {
       const sel = a[0] ? h.nics.filter((n) => n.dev === a[0]) : h.nics;
@@ -361,13 +362,16 @@ function hostCmd(ctx: ShellCtx, h: Host, t: string[]): ExecResult {
           return `link ${n.dev}/1 subnet_prefix fe80:0000:0000:0000 lid ${v.lid} sm_lid ${v.state === 'Active' ? ibSmLid(s) : 0} lmc 0 state ${st} physical_state ${ph} `; // IB-mode rdma link prints no netdev
         }).join('\n') + '\n' };
       }
-      if (a[0] === 'link') return { out: h.nics.map((n) => `link ${n.dev}/1 state ${operUp(s, node, n) ? 'ACTIVE' : 'DOWN'} physical_state ${operUp(s, node, n) ? 'LINK_UP' : 'DISABLED'} netdev ${n.netdev}`).join('\n') + '\n' };
+      // iproute2 ends every rdma link line with a space.
+      if (a[0] === 'link') return { out: h.nics.map((n) => `link ${n.dev}/1 state ${operUp(s, node, n) ? 'ACTIVE' : 'DOWN'} physical_state ${operUp(s, node, n) ? 'LINK_UP' : 'DISABLED'} netdev ${n.netdev} `).join('\n') + '\n' };
       if (a[0] === 'statistic' || a[0] === 'stat') {
         const target = a.find((x) => x.includes('/')) ?? '';
         const nic = findNic(h, target.split('/')[0]);
         const sel = nic ? [nic] : h.nics;
-        // iproute2 6.x prints one counter per indented line (older releases put them all on one line).
-        return { out: sel.map((n) => `link ${n.dev}/1 \n` + Object.entries(n.hw).map(([k, v]) => `    ${k} ${v} `).join('\n')).join('\n') + '\n' };
+        // iproute2 6.x prints one counter per indented line (older releases put them all on one line). An IB port has
+        // no RoCE congestion-control counters (verified on a ConnectX-5 in IB mode).
+        const shown = (n: Nic) => Object.entries(n.hw).filter(([k]) => !ib || !RoCE_CC_COUNTERS.includes(k));
+        return { out: sel.map((n) => `link ${n.dev}/1 \n` + shown(n).map(([k, v]) => `    ${k} ${v} `).join('\n')).join('\n') + '\n' };
       }
       return { out: 'usage: rdma link | rdma statistic show link <dev>/1\n' };
     }
@@ -506,13 +510,16 @@ function ethtool(s: FabricState, h: Host, a: string[]): ExecResult {
 \tLink detected: ${up ? 'yes' : 'no'}
 ` };
   }
-  if (flag === '-S') {
-    // mlx5 exposes rx/tx_prio<p>_pause* only for priorities with PFC enabled (kernel mlx5 counters.rst).
-    const shown = Object.entries(nic.counters).filter(([k]) => {
-      const m = k.match(/^[rt]x_prio(\d)_pause/);
-      return !m || nic.pfc[Number(m[1])];
-    });
-    return { out: 'NIC statistics:\n' + shown.map(([k, v]) => `     ${k}: ${fmtNum(v)}`).join('\n') + '\n' };
+  if (flag === '-S') return { out: 'NIC statistics:\n' + ethtoolStats(nic).map(([k, v]) => `     ${k}: ${fmtNum(v)}`).join('\n') + '\n' };
+  if (flag === '-A' || flag === '--pause') {
+    // mlx5 (verified on ConnectX-5, both stacks): global pause and PFC exclude each other; turning global pause on
+    // while PFC is enabled silently clears PFC on every priority (rc 0, no warning).
+    const rx = a[a.indexOf('rx') + 1], tx = a[a.indexOf('tx') + 1];
+    if (!a.includes('rx') && !a.includes('tx')) return { out: 'ethtool: no pause parameters changed\n' };
+    const on = rx === 'on' || tx === 'on';
+    nic.pause = on;
+    if (on) nic.pfc = nic.pfc.map(() => false);
+    return { out: '', changed: true };
   }
   if (flag === '-m') {
     const bad = port.ber > 1e-8;
@@ -530,14 +537,55 @@ function ethtool(s: FabricState, h: Host, a: string[]): ExecResult {
 \tLaser rx power low warning threshold      : 0.1122 mW / -9.50 dBm
 ` };
   }
-  if (flag === '-a' || flag === '--show-pause') return { out: `Pause parameters for ${nic.netdev}:\nAutonegotiate:\toff\nRX:\t\toff\nTX:\t\toff\n(simulator note: global 802.3x pause is off; PFC is configured per priority, see mlnx_qos)\n` };
-  return { out: `ethtool: the simulator supports ethtool <if>, -S, -m, -a\n` };
+  if (flag === '-a' || flag === '--show-pause') {
+    const g = globalPause(nic) ? 'on' : 'off';
+    return { out: `Pause parameters for ${nic.netdev}:\nAutonegotiate:\toff\nRX:\t\t${g}\nTX:\t\t${g}\n\n` };
+  }
+  return { out: `ethtool: the simulator supports ethtool <if>, -S, -m, -a, -A\n` };
+}
+
+/** mlx5: enabling PFC on any priority turns global 802.3x pause off (verified); otherwise it is on unless ethtool -A cleared it. */
+const globalPause = (nic: Nic) => !nic.pfc.some(Boolean) && nic.pause !== false;
+
+/** The modelled subset of `ethtool -S` on mlx5, in the order the driver prints it (checked against a ConnectX-5 with
+ *  kernel 7.0 / DOCA 3.4: tests/fixtures/real). Per-priority pause counters exist only for PFC-enabled priorities and the
+ *  global pause counters only while global pause is on. Byte counts and pause durations are derived for illustration. */
+export function ethtoolStats(nic: Nic): [string, number][] {
+  const c = nic.counters;
+  const rows: [string, number][] = [
+    ['rx_out_of_buffer', c.rx_out_of_buffer],
+    // Every packet the simulator moves is RDMA, so the vport RDMA counters follow the PHY ones.
+    ['rx_vport_rdma_unicast_packets', c.rx_packets_phy], ['rx_vport_rdma_unicast_bytes', c.rx_bytes_phy],
+    ['tx_vport_rdma_unicast_packets', c.tx_packets_phy], ['tx_vport_rdma_unicast_bytes', c.tx_bytes_phy],
+    ['tx_packets_phy', c.tx_packets_phy], ['rx_packets_phy', c.rx_packets_phy], ['rx_crc_errors_phy', c.rx_crc_errors_phy],
+    ['tx_bytes_phy', c.tx_bytes_phy], ['rx_bytes_phy', c.rx_bytes_phy], ['rx_symbol_err_phy', c.rx_symbol_err_phy],
+    // MAC control frames with the 802.3x pause opcode (kernel mlx5 counters.rst); PFC frames use another opcode and the
+    // model sends no global pause frames.
+    ['rx_pause_ctrl_phy', 0], ['tx_pause_ctrl_phy', 0],
+    ['rx_discards_phy', c.rx_discards_phy], ['tx_discards_phy', c.tx_discards_phy], ['link_down_events_phy', c.link_down_events_phy],
+    ['rx_pcs_symbol_err_phy', c.rx_pcs_symbol_err_phy], ['rx_corrected_bits_phy', c.rx_corrected_bits_phy],
+  ];
+  for (let p = 0; p < 8; p++) {
+    const rx = c[`rx_prio${p}_packets`], tx = c[`tx_prio${p}_packets`];
+    rows.push([`rx_prio${p}_bytes`, rx * 4154], [`rx_prio${p}_packets`, rx], [`rx_prio${p}_discards`, 0], [`tx_prio${p}_bytes`, tx * 4154], [`tx_prio${p}_packets`, tx]);
+  }
+  if (globalPause(nic)) {
+    rows.push(['rx_global_pause', 0], ['rx_global_pause_duration', 0], ['tx_global_pause', 0], ['tx_global_pause_duration', 0], ['rx_global_pause_transition', 0]);
+  }
+  for (let p = 0; p < 8; p++) {
+    if (!nic.pfc[p]) continue;
+    const rx = c[`rx_prio${p}_pause`], tx = c[`tx_prio${p}_pause`];
+    rows.push([`rx_prio${p}_pause`, rx], [`rx_prio${p}_pause_duration`, Math.round(rx * 0.87)], [`tx_prio${p}_pause`, tx],
+      [`tx_prio${p}_pause_duration`, Math.round(tx * 0.87)], [`rx_prio${p}_pause_transition`, Math.floor(rx / 2)]);
+  }
+  rows.push(['tx_pause_storm_warning_events', 0], ['tx_pause_storm_error_events', 0]);
+  return rows;
 }
 
 function mlnxQos(h: Host, a: string[]): ExecResult {
   const ii = a.indexOf('-i');
   const nic = findNic(h, ii >= 0 ? a[ii + 1] : undefined);
-  if (!nic) return { out: 'usage: mlnx_qos -i <interface> [--trust dscp|pcp] [--pfc 0,0,0,1,0,0,0,0]\n' };
+  if (!nic) return { out: 'usage: mlnx_qos -i <interface> [--trust dscp|pcp] [--pfc 0,0,0,1,0,0,0,0] [--tsa ets,...,strict --tcbw 10,...,0]\n' };
   let changed = false;
   // Error texts and layout follow mlnx_qos from mlnx-tools 2604 (DOCA 3.4) on a ConnectX-5.
   const ti = a.findIndex((x) => x === '--trust' || x.startsWith('--trust='));
@@ -554,6 +602,24 @@ function mlnxQos(h: Host, a: string[]): ExecResult {
     if (bits.length !== 8) return { out: 'pfc list must have 8 items\n' };
     if (bits.some((b) => b !== 0 && b !== 1)) return { out: '(simulator: each PFC value must be 0 or 1)\n' };
     nic.pfc = bits.map((b) => b === 1);
+    // Enabling PFC turns global pause off (verified). Whether it returns by itself once PFC is off again was not
+    // verified, so the model keeps it off until `ethtool -A <if> rx on tx on`.
+    if (nic.pfc.some(Boolean)) nic.pause = false;
+    changed = true;
+  }
+  const tsaI = a.findIndex((x) => x === '--tsa' || x.startsWith('--tsa='));
+  const bwI = a.findIndex((x) => x === '--tcbw' || x.startsWith('--tcbw='));
+  if (tsaI >= 0 || bwI >= 0) {
+    const val = (i: number) => (a[i].includes('=') ? a[i].split('=')[1] : a[i + 1]) ?? '';
+    const cur = nic.ets ?? { tsa: Array(8).fill('vendor'), bw: Array(8).fill(0) };
+    const tsa = tsaI >= 0 ? val(tsaI).split(',') : cur.tsa;
+    const bw = bwI >= 0 ? val(bwI).split(',').map(Number) : cur.bw;
+    if (tsa.length !== 8 || tsa.some((x) => x !== 'vendor' && x !== 'ets' && x !== 'strict') || bw.length !== 8 || bw.some((x) => !(x >= 0 && x <= 100)))
+      return { out: '(simulator: --tsa takes 8 of vendor|ets|strict and --tcbw 8 percentages, one per traffic class)\n' };
+    // The kernel rejects ETS bandwidths that do not add up to 100 % over the ETS classes (verified: 8 x 10 %).
+    if (tsa.includes('ets') && tsa.reduce((sum, x, i) => sum + (x === 'ets' ? bw[i] : 0), 0) !== 100)
+      return { out: 'Netlink error: Bad value. see dmesg.\n' };
+    nic.ets = { tsa: tsa as ('vendor' | 'ets' | 'strict')[], bw };
     changed = true;
   }
   const dscpRows = Array.from({ length: 8 }, (_, p) => `\tprio:${p} dscp:${Array.from({ length: 8 }, (_, j) => String(p * 8 + 7 - j).padStart(2, '0')).join(',')},`).join('\n');
@@ -567,13 +633,16 @@ PFC configuration:
 \tpriority    0   1   2   3   4   5   6   7
 \tenabled     ${nic.pfc.map((b) => (b ? 1 : 0)).join('   ')}${'   '}
 \tbuffer      ${nic.pfc.map((b) => (b ? 1 : 0)).join('   ')}${'   '}
-tc: 0 ratelimit: unlimited, tsa: vendor
-\t priority:  1
-tc: 1 ratelimit: unlimited, tsa: vendor
-\t priority:  0
-${[2, 3, 4, 5, 6, 7].map((p) => `tc: ${p} ratelimit: unlimited, tsa: vendor\n\t priority:  ${p}`).join('\n')}
+${[0, 1, 2, 3, 4, 5, 6, 7].map((tc) => `tc: ${tc} ratelimit: unlimited, tsa: ${tsaText(nic, tc)}\n\t priority:  ${PRIO_OF_TC[tc]}`).join('\n')}
 `;
   return { out, changed };
+}
+
+/** mlx5's default priority-to-TC map puts priority 1 in TC 0 and priority 0 in TC 1 (verified with dcb ets / mlnx_qos). */
+const PRIO_OF_TC = [1, 0, 2, 3, 4, 5, 6, 7];
+function tsaText(nic: Nic, tc: number) {
+  const t = nic.ets?.tsa[tc] ?? 'vendor';
+  return t === 'ets' ? `ets, bw: ${nic.ets!.bw[tc]}%` : t;
 }
 
 function lspci(h: Host, a: string[]): ExecResult {
@@ -627,31 +696,43 @@ function mlxlink(s: FabricState, h: Host, a: string[]): ExecResult {
   // Layout of MFT 4.3x mlxlink (labels padded to 35 columns), verified on a 100G ConnectX-5. For 400G, Speed uses
   // the extended-speed form (a published ConnectX-6 sample shows "200G") and FEC follows the verified 100G
   // pattern ("Standard RS-FEC - RS(528,514)"); neither 400G string has been captured on hardware yet.
+  // Values that mlxlink prints in colour on a TTY carry a trailing space once the colour codes are stripped (as in
+  // the captured output); `g` marks those lines. "(Ext.)" labels are what mlxlink prints for extended-speed devices.
   const f = (label: string, value: string | number) => `${pad(label, 35)}: ${value}`;
+  const g = (label: string, value: string | number) => `${f(label, value)} `;
   return { out: `
 Operational Info
 ----------------
-${f('State', up ? 'Active' : 'Polling')}
-${f('Physical state', up ? 'LinkUp' : 'ETH_AN_FSM_ENABLE')}
-${f('Speed', up ? '400G' : 'N/A')}
-${f('Width', up ? '4x' : 'N/A')}
-${f('FEC', up ? 'Standard RS-FEC - RS(544,514)' : 'N/A')}
-${f('Loopback Mode', 'No Loopback')}
-${f('Auto Negotiation', 'ON')}
+${g('State', up ? 'Active' : 'Polling')}
+${g('Physical state', up ? 'LinkUp' : 'ETH_AN_FSM_ENABLE')}
+${g('Speed', up ? '400G' : 'N/A')}
+${g('Width', up ? '4x' : 'N/A')}
+${g('FEC', up ? 'Standard RS-FEC - RS(544,514)' : 'N/A')}
+${g('Loopback Mode', 'No Loopback')}
+${g('Auto Negotiation', 'ON')}
+${f('Tx Precoding Status', 'N/A')}
+${f('Rx Precoding Status', 'N/A')}
+
+Port Info
+---------
+${f('Label Port', 1)}
+${f('Local Port', 1)}
 
 Supported Info
 --------------
-${f('Enabled Link Speed (Ext.)', '0x00010000 (400G_4X)')}
+${g('Enabled Link Speed (Ext.)', '0x00010000 (400G_4X)')}
+${g('Supported Cable Speed (Ext.)', '0x00010000 (400G_4X)')}
 
 Troubleshooting Info
 --------------------
-${f('Status Opcode', 0)}
-${f('Group Opcode', 'N/A')}
-${f('Recommendation', 'No issue was observed')}
+${g('Status Opcode', 0)}
+${g('Group Opcode', 'N/A')}
+${g('Recommendation', 'No issue was observed')}
 
 Tool Information
 ----------------
-${f('Firmware Version', '28.43.1014')}
+${g('Firmware Version', '28.43.1014')}
+${g('MFT Version', '4.37.0-154')}
 
 ${a.includes('-c') ? `Physical Counters and BER Info
 ------------------------------
@@ -662,7 +743,8 @@ ${f('Effective Physical BER', effBer)}
 ${f('Raw Physical BER', rawBer)}
 ${f('Link Down Counter', nic.counters.link_down_events_phy)}
 ${f('Link Error Recovery Counter', bad ? 41 : 0)}
-` : '(simulator: add -c for the BER counters)\n'}` };
+
+` : ''}` };
 }
 
 function ping(s: FabricState, h: Host, a: string[]): ExecResult {
@@ -672,52 +754,67 @@ function ping(s: FabricState, h: Host, a: string[]): ExecResult {
     else if (a[i] === '-s') size = Number(a[++i]);
     else if (a[i] === '-M') df = a[++i] === 'do';
     else if (a[i] === '-I') iface = a[++i];
+    else if (a[i] === '-W' || a[i] === '-i' || a[i] === '-w') i++;
     else if (!a[i].startsWith('-')) target = a[i];
   }
-  if (!target) return { out: 'usage: ping [-c N] [-M do] [-s size] [-I if] <ip>\n' };
+  if (!target) return { out: 'usage: ping [-c N] [-M do] [-s size] [-I if|addr] <ip>\n' };
   const m = target.match(/^10\.(\d)\.(\d)\.([01])$/);
   if (!m) return { out: `ping: ${target}: the simulator routes 10.<rail>.<node>.<0|1> fabric addresses only\n` };
   const rail = Number(m[1]);
   const dstNode = NODES[Number(m[2]) - 1];
   if (!dstNode || rail >= RAILS) return { out: `ping: connect: Network is unreachable\n` };
-  const src = iface ? findNic(h, iface) : h.nics[rail];
+  // -I takes an interface or a source address (iputils); the header then names the source.
+  const byAddr = iface ? h.nics.find((n) => hostIp(h.name, n.rail) === iface) : undefined;
+  if (iface && /^\d+\.\d+\.\d+\.\d+$/.test(iface) && !byAddr) return { out: `ping: bind: Cannot assign requested address\n` };
+  const src = byAddr ?? (iface ? findNic(h, iface) : h.nics[rail]);
   if (!src) return { out: `ping: SO_BINDTODEVICE ${iface}: No such device\n` };
   const toLeaf = m[3] === '0';
-  const lines = [`PING ${target} (${target}) ${size}(${size + 28}) bytes of data.`];
+  // iputils prints "from <addr> <device>: " with -I; the device part is empty when -I named an address.
+  const from = iface ? `from ${hostIp(h.name, src.rail)} ${byAddr ? '' : src.netdev}: ` : '';
+  const lines = [`PING ${target} (${target}) ${from}${size}(${size + 28}) bytes of data.`];
   const ipLen = size + 28;
-  const fail = (msg: string) => ({ out: lines.concat(msg.split('\n')).join('\n') + '\n' });
+  const time = `time ${count * 1000 - 1000}ms`;
+  // Every unanswered run ends with an empty line after the statistics, as iputils prints it.
+  const fail = (msg: string) => ({ out: lines.concat(msg.split('\n')).join('\n') + '\n\n' });
+  const lost = `\n--- ${target} ping statistics ---\n${count} packets transmitted, 0 received, 100% packet loss, ${time}`;
   // iputils: a DF packet larger than the local interface MTU fails in sendmsg(), once per attempt.
-  if (df && ipLen > src.mtu) return fail(`${'ping: sendmsg: Message too long\n'.repeat(count)}\n--- ${target} ping statistics ---\n${count} packets transmitted, 0 received, +${count} errors, 100% packet loss, time ${count * 1000 - 1000}ms\n`);
+  if (df && ipLen > src.mtu) return fail(`${'ping: sendmsg: Message too long\n'.repeat(count)}\n--- ${target} ping statistics ---\n${count} packets transmitted, 0 received, +${count} errors, 100% packet loss, ${time}`);
+  const unreach = `From ${hostIp(h.name, src.rail)} icmp_seq=1 Destination Host Unreachable\n\n--- ${target} ping statistics ---\n${count} packets transmitted, 0 received, +${count} errors, 100% packet loss, ${time}`;
   const issues = nicIssues(s, h.name, src.rail).filter((i) => i.fatal);
   const path = [s.switches[LEAVES[src.rail]].ports[leafPortFor(h.name)]];
   if (!toLeaf) {
     if (dstNode === h.name && rail === src.rail) return fail('(pinging your own address)');
     if (rail !== src.rail) {
       const pr = evaluatePair(s, h.name, src.rail, dstNode, rail);
-      if (pr.error === 'no route to host') return fail(`From ${hostIp(h.name, src.rail)} icmp_seq=1 Destination Host Unreachable`);
+      if (pr.error === 'no route to host') return fail(unreach);
     }
     path.push(s.switches[LEAVES[rail]].ports[leafPortFor(dstNode)]);
     issues.push(...nicIssues(s, dstNode, rail).filter((i) => i.fatal));
     const dn = s.hosts[dstNode].nics[rail];
-    if (ipLen > dn.mtu) return fail(`\n--- ${target} ping statistics ---\n${count} packets transmitted, 0 received, 100% packet loss, time ${count * 1000 - 1000}ms`);
+    if (ipLen > dn.mtu) return fail(lost);
   }
-  if (issues.length) return fail(`From ${hostIp(h.name, src.rail)} icmp_seq=1 Destination Host Unreachable\n\n--- ${target} ping statistics ---\n${count} packets transmitted, 0 received, +${count} errors, 100% packet loss`);
+  if (issues.length) return fail(unreach);
   const small = path.find((p) => ipLen > p.mtu);
-  if (small) return fail(`\n--- ${target} ping statistics ---\n${count} packets transmitted, 0 received, 100% packet loss, time ${count * 1000 - 1000}ms`);
-  for (let i = 1; i <= count; i++) lines.push(`${size + 8} bytes from ${target}: icmp_seq=${i} ttl=${toLeaf ? 64 : 63} time=0.0${(17 + i * 3) % 40 + 10} ms`);
-  lines.push('', `--- ${target} ping statistics ---`, `${count} packets transmitted, ${count} received, 0% packet loss, time ${count * 1000 - 1000}ms`);
+  if (small) return fail(lost);
+  const rtt = Array.from({ length: count }, (_, i) => ((17 + (i + 1) * 3) % 40 + 10) / 1000);
+  for (let i = 1; i <= count; i++) lines.push(`${size + 8} bytes from ${target}: icmp_seq=${i} ttl=${toLeaf ? 64 : 63} time=${rtt[i - 1].toFixed(3)} ms`);
+  const avg = rtt.reduce((x, y) => x + y, 0) / count;
+  const mdev = Math.sqrt(rtt.reduce((x, y) => x + (y - avg) ** 2, 0) / count);
+  lines.push('', `--- ${target} ping statistics ---`, `${count} packets transmitted, ${count} received, 0% packet loss, ${time}`,
+    `rtt min/avg/max/mdev = ${Math.min(...rtt).toFixed(3)}/${avg.toFixed(3)}/${Math.max(...rtt).toFixed(3)}/${mdev.toFixed(3)} ms`);
   return { out: lines.join('\n') + '\n' };
 }
 
 function ibWriteBw(s: FabricState, h: Host, a: string[]): ExecResult {
-  let dev = 'mlx5_0', gid: number | null = null, qps = 1, gbits = false, peer: string | undefined, dur = 0;
+  let dev = 'mlx5_0', gid: number | null = null, qps = 1, gbits = false, peer: string | undefined, dur = 0, mtuOpt = 0;
   for (let i = 0; i < a.length; i++) {
     if (a[i] === '-d') dev = a[++i];
     else if (a[i] === '-x') gid = Number(a[++i]);
     else if (a[i] === '-q') qps = Math.min(16, Number(a[++i]) || 1);
     else if (a[i] === '-D') dur = Number(a[++i]) || 0;
+    else if (a[i] === '-m') mtuOpt = Number(a[++i]) || 0;
     else if (a[i] === '--report_gbits') gbits = true;
-    else if (['-s', '-n', '-p', '-m', '-i', '-c'].includes(a[i])) i++;
+    else if (['-s', '-n', '-p', '-i', '-c'].includes(a[i])) i++;
     else if (!a[i].startsWith('-')) peer = a[i];
   }
   const nic = findNic(h, dev);
@@ -743,6 +840,10 @@ function ibWriteBw(s: FabricState, h: Host, a: string[]): ExecResult {
   if (peerHost === h.name && peerRail === nic.rail) return { out: 'Use a different host or device as the server.\n' };
   const g = gid ?? 3;
   const r = evaluatePair(s, h.name, nic.rail, peerHost, peerRail, g);
+  // -m asks for a smaller path MTU than the port's (perftest takes the smaller of the two); same factors as fabric.ts.
+  const mtuF = (x: number) => (x >= 4096 ? 1 : x >= 2048 ? 0.93 : 0.82);
+  const pathMtu = [256, 512, 1024, 2048, 4096].includes(mtuOpt) && mtuOpt < r.mtu ? mtuOpt : r.mtu;
+  if (pathMtu < r.mtu) r.gbps *= mtuF(pathMtu) / mtuF(r.mtu);
   const lidHex = (n: number) => `0x${n.toString(16).padStart(2, '0')}`;
   const gidOf = (host: string, rail: number) => ` GID: 00:00:00:00:00:00:00:00:00:00:255:255:${hostIp(host, rail).split('.').map((o) => o.padStart(2, '0')).join(':')}\n`;
   // One local and one remote address line per QP, like perftest; QPNs count up per QP.
@@ -765,7 +866,7 @@ function ibWriteBw(s: FabricState, h: Host, a: string[]): ExecResult {
  TX depth        : 128
  CQ Moderation   : 1
  CQE Poll Batch  : Dynamic
- Mtu             : ${r.mtu}[B]
+ Mtu             : ${pathMtu}[B]
  Link type       : ${ib ? 'IB' : 'Ethernet'}
 ${ib ? '' : ` GID index       : ${g}\n`} Max inline data : 0[B]
  rdma_cm QPs\t : OFF
@@ -788,7 +889,7 @@ ${addr}-------------------------------------------------------------------------
   const mpps = (bw * 1e9) / 8 / 65536 / 1e6;
   // perftest REPORT_FMT (" %-7lu    %-10lu       %-7.2lf            %-7.2lf\t\t     %-7.6lf", same as the
   // PerftestExplorer widget), checked against real output; -D runs do not measure the peak.
-  const iters = dur ? Math.round(mpps * 1e6 * dur) : 5000;
+  const iters = dur ? Math.round(mpps * 1e6 * dur) : 5000 * qps; // perftest runs -n iterations per QP (verified: -q 8 -> 40000)
   const peak = dur ? '0.00' : (v * 1.0006).toFixed(2);
   return {
     out: head + cols + ` ${pad(65536, 7)}    ${pad(iters, 10)}       ${pad(peak, 7)}            ${pad(v.toFixed(2), 7)}\t\t     ${mpps.toFixed(6)}\n---------------------------------------------------------------------------------------\n`,
