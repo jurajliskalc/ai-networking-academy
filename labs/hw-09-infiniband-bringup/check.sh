@@ -44,7 +44,7 @@ if timeout 40 ib_write_bw -d "$A_RDMA_DEV" -i "$RDMA_PORT" -D 5 -F --report_gbit
   pass "ib_write_bw over InfiniBand A -> B: $(bw_average "$out") Gb/s average (port rate $(port_attr A rate))"
 else
   kill_server
-  fail "ib_write_bw A -> B failed (TCP 18609 to $HOST_B open? server said: $(tr '\n' ' ' <"$log" | cut -c1-160)) $(tail -2 "$out" | tr '\n' ' ' | cut -c1-160)"
+  fail "ib_write_bw A -> B failed (TCP 18609 to $HOST_B open? server said: $(excerpt "$log")) $(tail -2 "$out" | tr '\n' ' ' | cut -c1-160)"
 fi
 rm -f "$log" "$out"
 

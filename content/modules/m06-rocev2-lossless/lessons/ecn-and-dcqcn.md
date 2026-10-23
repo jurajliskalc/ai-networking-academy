@@ -300,8 +300,11 @@ grep . /sys/class/infiniband/mlx5_0/ports/1/hw_counters/{np_ecn_marked_roce_pack
 ```
 
 Older iproute2 releases print all counters of a link on one line, so adjust any parsing to your
-version. With two hosts cabled back to back, all four counters stay at 0 even at line rate: no
-switch is there to mark.
+version. With two hosts cabled back to back, `np_ecn_marked_roce_packets` stays at 0 even at line rate: no
+switch is there to mark. The CNP counters stay at 0 too as long as nothing is dropped, but on a
+ConnectX-5 pair the receiver's `np_cnp_sent` (and the sender's `rp_cnp_handled`) rose together with
+`out_of_sequence` when lossy traffic was dropped, with no ECN-marked packet at all: a CNP without an
+ECN mark points at loss, not at switch marking.
 
 How to read the pair:
 

@@ -56,7 +56,7 @@ commands:
   - cmd: mst start
     platform: nvidia
     summary: Load the NVIDIA Firmware Tools (MFT) kernel modules and create the /dev/mst device nodes used by mlxconfig, mlxlink, flint and friends.
-    notes: "Part of the MFT package (also bundled with DOCA/OFED installs). Many MFT tools also accept a PCI address or an RDMA device name directly, so mst start is not always required on recent MFT versions; check the MFT user manual for your release. With UEFI Secure Boot on (kernel lockdown), the MST modules cannot be used: mst start prints 'Create devices' and then 'Unloading MST PCI module (unused) - Success' with exit code 0, and no usable /dev/mst devices exist. Recent kernels with recent MFT offer the fwctl path instead (see mst status -v)."
+    notes: "Part of the MFT package (also bundled with DOCA/OFED installs). Many MFT tools also accept a PCI address or an RDMA device name directly, so mst start is not always required on recent MFT versions; check the MFT user manual for your release. On recent MFT (4.3x) mst start may print 'Create devices' and then 'Unloading MST PCI module (unused) - Success' with exit code 0 and create no /dev/mst devices; that is normal when the tools reach the adapter directly (mst status -v then shows NA in the MST column), so use the PCI address (03:00.0) or the RDMA device name with mlxlink, mlxconfig and flint. With UEFI Secure Boot on (kernel lockdown) those direct paths fail; recent kernels with recent MFT then offer only the fwctl path (/dev/fwctl/fwctlN in mst status -v), which serves mlxlink but not mlxconfig or flint."
     tags: [mft, firmware, setup]
 
   - cmd: mst status

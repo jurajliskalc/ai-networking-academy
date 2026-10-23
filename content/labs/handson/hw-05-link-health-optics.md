@@ -11,9 +11,15 @@ requires: [two-rdma-hosts, ssh-mesh]
 changes_config: false
 lessons: [link-layer-ber-fec, optics-cabling-power, telemetry-counters, fabric-validation-burn-in]
 files: labs/hw-05-link-health-optics
-verified: false
+verified: true
 summary: "Read the physical layer of a real link: speed and autonegotiation, transceiver DOM, FEC mode, and the error counters that reveal a dirty connector or a failing optic before NCCL does."
 ---
+
+> [!NOTE]
+> Verified end to end (every task, the check and the restore step) on 2026-10-23 on two ConnectX-5
+> hosts cabled back to back (100GbE DAC; ESXi VMs with PCI passthrough; Ubuntu 26.04.1, kernel
+> 7.0.0-38, NVIDIA DOCA-OFED 3.4); see `labs/README.md` for the exact versions. Your device names,
+> numbers and some output lines will differ with other NICs, firmware or the distribution's inbox stack.
 
 ## Goal
 
@@ -228,13 +234,12 @@ sudo mlxlink -d <your device> -c       # add physical counters: raw and effectiv
 sudo mlxlink -d <your device> -m       # module info: vendor, part, cable length, temperature, per-lane power
 ```
 
-Take the device name from `mst status -v` (for example `/dev/mst/mt4129_pciconf0`). On a host with
-**Secure Boot** (kernel lockdown) the MST modules cannot provide devices: `mst start` ends with
-`Unloading MST PCI module (unused)` and `mlxlink -d mlx5_0` or `-d <pci-address>` fails with
-`-E- Failed to open device`. With a recent kernel and MFT, `mst status -v` then lists a
+For `<your device>` use the PCI address from `mst status -v` (`03:00.0`), the RDMA device name
+({{A_RDMA_DEV}}) or a `/dev/mst/...` device if `mst status -v` lists one. Recent MFT (4.3x) needs no
+`/dev/mst` device: `mst start` may end with `Unloading MST PCI module (unused)` and the `MST` column
+shows `NA`, which is normal. On a host with **Secure Boot** (kernel lockdown) the PCI and RDMA-name
+paths fail with `-E- Failed to open device`; with a recent kernel and MFT, `mst status -v` then lists a
 `/dev/fwctl/fwctl0` device in its `FWCTL` column, and `sudo mlxlink -d /dev/fwctl/fwctl0` works.
-Without Secure Boot, recent MFT versions may also accept a PCI address; check the
-MFT user manual for your release.
 
 Illustrative excerpt (values start in a fixed column; on a terminal some are coloured):
 

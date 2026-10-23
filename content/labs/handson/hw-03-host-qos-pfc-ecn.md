@@ -11,9 +11,15 @@ requires: [two-rdma-hosts, root, ssh-mesh]
 changes_config: true
 lessons: [qos-trust-and-mapping, pfc-priority-flow-control, ecn-and-dcqcn, rocev2-configuration-end-to-end, lossless-misconfigurations]
 files: labs/hw-03-host-qos-pfc-ecn
-verified: false
+verified: true
 summary: "Configure the host half of a lossless RoCE fabric on both NICs, prove that RoCE traffic lands in the lossless priority with counters, and restore the original state afterwards."
 ---
+
+> [!NOTE]
+> Verified end to end (every task, the check and the restore step) on 2026-10-23 on two ConnectX-5
+> hosts cabled back to back (100GbE DAC; ESXi VMs with PCI passthrough; Ubuntu 26.04.1, kernel
+> 7.0.0-38, NVIDIA DOCA-OFED 3.4); see `labs/README.md` for the exact versions. Your device names,
+> numbers and some output lines will differ with other NICs, firmware or the distribution's inbox stack.
 
 ## Goal
 
@@ -271,6 +277,11 @@ run the same test **without** `--tclass`: the packets carry DSCP 0, so they land
 lossy class, even though everything "works". That is the most common silent misconfiguration in RoCE
 fabrics: the lossless queue is configured perfectly and nothing uses it.
 
+It even gets slightly worse than before the lab. Enabling PFC switched 802.3x global pause off, so
+priority 0 now has no flow control at all: rerun the hw-02 check (untagged traffic) and host B may count
+a few dozen sequence errors per run (out-of-sequence packets: drops that RDMA recovered by retransmitting),
+where it counted none with global pause on. `restore-qos.sh` puts the saved global pause setting back.
+
 The `--tclass` option exists on recent perftest releases (check `ib_write_bw --help`). For NCCL,
 the equivalent is `NCCL_IB_TC={{TCLASS}}`. For RDMA CM applications, NVIDIA's OFED/DOCA packages
 include a `cma_roce_tos` script that sets a default traffic class per device (`sudo cma_roce_tos -d
@@ -290,8 +301,8 @@ echo {{TCLASS}} | sudo tee /sys/kernel/config/rdma_cm/{{A_RDMA_DEV}}/ports/{{RDM
 > receiving NIC briefly fills its priority buffer and pauses the sender (one 100G back-to-back pair showed several hundred in
 > 10 seconds; look at `tx_prio3_pause` on host B and `rx_prio3_pause` on host
 > A). What would be wrong is pauses on a priority that should be lossy, a steadily climbing
-> `tx_pause_storm_warning_events`, or pauses with the throughput collapsing. Seeing ECN and CNPs fire
-> needs a switch that marks: two senders into one receiver, which is the switch lab.
+> `tx_pause_storm_warning_events`, or pauses with the throughput collapsing. Seeing ECN marks needs a switch that marks (`np_ecn_marked_roce_packets` stays at 0 back to
+> back; a few CNPs can still show up together with `out_of_sequence` when lossy traffic is dropped): two senders into one receiver, which is the switch lab.
 
 ### Task 5: ECN and DCQCN on the host
 
@@ -370,8 +381,9 @@ sudo ./restore-qos.sh
 ```
 
 It restores the saved trust mode, the PFC-enabled priorities, the saved mapping for DSCP
-{{ROCE_DSCP}} (or removes the entry the lab added, with `dcb`) and the ECN switches, then moves the
-saved state aside. It does not touch DSCP entries other than {{ROCE_DSCP}}: if you changed others by
+{{ROCE_DSCP}} (or removes the entry the lab added, with `dcb`), the ECN switches, the 802.3x global
+pause setting (enabling PFC had switched it off) and the rdma_cm default ToS from Task 4 (it removes
+the configfs entry if there was none before), then moves the saved state aside. It does not touch DSCP entries other than {{ROCE_DSCP}}: if you changed others by
 hand, the saved `mlnx_qos.txt` / `dcb-app.txt` in the `.restored.*` directory shows what they were.
 With `mlnx_qos`, the DSCP table may only be printed (and so saved) while trust is DSCP: if the host
 trusted PCP before the lab, the DSCP {{ROCE_DSCP}} mapping the lab set can stay behind. It has no

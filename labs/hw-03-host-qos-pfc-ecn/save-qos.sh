@@ -36,6 +36,13 @@ case "$TOOL" in
     dcb app show dev "$NETDEV" dscp-prio >"$DIR/dcb-app.txt" 2>&1 || true ;;
   *) echo "WARNING: neither mlnx_qos nor dcb is installed; only MTU and ECN state are saved." ;;
 esac
+# 802.3x global pause: enabling PFC switches it off on mlx5, so restore-qos.sh needs the original setting.
+ethtool -a "$NETDEV" >"$DIR/pause.txt" 2>&1 || true
+# rdma_cm default ToS (Task 4 sets it through configfs or cma_roce_tos): the value, or "absent" if the
+# device has no configfs entry yet (restore then removes the entry, which resets the default).
+RDEV=$(rdma_of "$ROLE"); echo "$RDEV" >"$DIR/rdma_dev"
+TOS=/sys/kernel/config/rdma_cm/$RDEV/ports/$RDMA_PORT/default_roce_tos
+if [[ -r $TOS ]]; then cat "$TOS" >"$DIR/roce_tos"; else echo absent >"$DIR/roce_tos"; fi
 : >"$DIR/ecn.txt"
 for side in roce_np roce_rp; do
   for p in 0 1 2 3 4 5 6 7; do

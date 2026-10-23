@@ -51,6 +51,10 @@ ip_of() { local v="$1_IP"; echo "${!v}"; }
 netdev_of() { local v="$1_NETDEV"; echo "${!v}"; }
 rdma_of() { local v="$1_RDMA_DEV"; echo "${!v}"; }
 
+# excerpt FILE [N] : one-line excerpt of a tool log for a FAIL message, without libibverbs provider warnings
+# (DOCA's rdma-core prints "libibverbs: Warning: couldn't load driver ..." for absent providers).
+excerpt() { grep -v '^libibverbs: Warning' "$1" 2>/dev/null | tr '\n' ' ' | cut -c1-"${2:-160}"; }
+
 need_root() { [[ $EUID -eq 0 ]] || die "run as root: sudo $0 $*"; }
 
 # need_cmd tool... : PASS/FAIL per tool; returns non-zero if any is missing.
@@ -88,13 +92,21 @@ on_host_sh() {
 
 # check_ssh ROLE... : PASS/FAIL whether each role is reachable non-interactively.
 check_ssh() {
-  local r rc=0
+  local r rc=0 err
   for r in "$@"; do
     [[ "$r" == "A" ]] && continue
-    if on_host "$r" true 2>/dev/null; then
+    if err=$(on_host "$r" true 2>&1); then
       pass "SSH to host $r ($(host_of "$r")) works without a password"
     else
-      fail "cannot SSH to host $r ($(_ssh_target "$r")) non-interactively (set up keys: ssh-copy-id $(_ssh_target "$r"))"
+      err=$(tr '\n' ' ' <<<"$err" | cut -c1-160)
+      case "$err" in
+        *"Permission denied"*|*"Host key verification failed"*)
+          fail "cannot SSH to host $r ($(_ssh_target "$r")) non-interactively: ${err% } (set up keys: ssh-copy-id $(_ssh_target "$r"))" ;;
+        *)
+          # Unreachable rather than refused: if HOST_$r is a data-network address, a fault on the data
+          # interface also cuts the checks off. HOST_* should be management addresses.
+          fail "cannot reach host $r ($(_ssh_target "$r")) over SSH: ${err% } (is HOST_$r on the management network and the host up?)" ;;
+      esac
       rc=1
     fi
   done

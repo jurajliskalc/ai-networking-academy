@@ -62,8 +62,9 @@ By the end you can:
   > support it; confirm the parameter name and values with `mlxconfig ... query` and your firmware
   > release notes. Switch back with `LINK_TYPE_P1=2` when you return to the RoCE labs.
 
-  On a host with **Secure Boot** (kernel lockdown), MFT cannot reach the adapter's configuration:
-  `mst start` ends with `Unloading MST PCI module (unused)` and creates no `/dev/mst` devices,
+  Recent MFT addresses the adapter by PCI address or RDMA name (`mlxconfig -d 03:00.0 q`); `mst start`
+  ending with `Unloading MST PCI module (unused)` is normal. On a host with **Secure Boot** (kernel
+  lockdown), MFT cannot reach the adapter's configuration:
   `mlxconfig -d mlx5_0 q` or `-d <pci-address> q` prints `-E- Failed to open the device`, and even
   the `/dev/fwctl/fwctl0` path of recent kernels and MFT refuses NV configuration
   (`HW access is disabled`). Disable Secure Boot for the change (or use a signed MFT kernel module),

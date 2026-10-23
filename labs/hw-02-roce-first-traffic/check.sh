@@ -55,7 +55,7 @@ if timeout 25 ibv_rc_pingpong -d "$A_RDMA_DEV" -i "$RDMA_PORT" -g "$GA" -p 18600
   pass "ibv_rc_pingpong: 100 iterations A -> B"
   stop_server
 else
-  fail "ibv_rc_pingpong A -> B failed (firewall on TCP 18600? GID? server said: $(tr '\n' ' ' <"$log" | cut -c1-160))"
+  fail "ibv_rc_pingpong A -> B failed (firewall on TCP 18600? GID? server said: $(excerpt "$log"))"
   kill_server
 fi
 rm -f "$log"

@@ -11,9 +11,17 @@ requires: [two-rdma-hosts, root, ssh-mesh]
 changes_config: true
 lessons: [troubleshooting-methodology, rdma-connection-failures, lossless-misconfigurations, mtu-jumbo-frames, qos-trust-and-mapping]
 files: labs/hw-04-break-fix-roce
-verified: false
+verified: true
 summary: "A script on host B injects one hidden, reversible fault. Work the incident from host A with real tools, commit a diagnosis, fix it and prove the fabric is healthy again."
 ---
+
+> [!NOTE]
+> Verified end to end (every task, the check and the restore step) on 2026-10-23 on two ConnectX-5
+> hosts cabled back to back (100GbE DAC; ESXi VMs with PCI passthrough; Ubuntu 26.04.1, kernel
+> 7.0.0-38, NVIDIA DOCA-OFED 3.4); see `labs/README.md` for the exact versions. Your device names,
+> numbers and some output lines will differ with other NICs, firmware or the distribution's inbox stack.
+> All five faults were injected, diagnosed and restored; one random fault was diagnosed from the
+> lab's own commands alone.
 
 ## Goal
 
@@ -44,6 +52,9 @@ By the end you can:
   (`dcb apptrust` is not supported on mlx5) it removes the port's DSCP app entries, which switches
   mlx5 back to PCP trust, and the restore adds them again.
 - **A healthy baseline:** `./hw-toolkit/aina-hw check hw-02-roce-first-traffic` passes on host A.
+- **Host names on the management network:** `HOST_B` in your profile must be a management name or
+  address, not host B's data IP. The `ip-missing` and `port-down` faults take the data interface away,
+  and the checks still have to reach host B over SSH.
   Do not start an incident on a fabric that is already broken.
 - **Root** on host B (the injector) and **SSH** from A to B (the check).
 - **Profile on host B:** `inject.sh` reads `{{AINA_DIR}}/labs/hw-toolkit/lab.env` on host B to find

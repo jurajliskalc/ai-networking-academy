@@ -163,8 +163,9 @@ Content is written for engineers who will act on it, so accuracy comes first:
   and a recomputation of every number in the newer material. Details in
   [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md). The hands-on and hardware labs are
   syntax-checked (`bash -n`; the original Tier 0 labs also with ShellCheck) and are marked `verified: false`
-  until they have been run end to end on a reference VM or reference hardware. Five Tier 0 labs have been
-  run end to end and are marked verified (see `labs/README.md`).
+  until they have been run end to end on a reference VM or reference hardware. Ten labs have been run end to end
+  and are marked verified: five Tier 0 labs on a VM and the five Tier 1 labs (`hw-01` to `hw-05`) on real
+  ConnectX-5 hardware (see `labs/README.md`).
 * **Checked on real hardware.** Every host command and sample output in the lessons, labs, guides,
   command reference, quizzes, exams and the Fabric Simulator was compared with what the tools print on
   two ConnectX-5 hosts (100GbE back to back, Ubuntu 26.04, kernel 7.0), on both the inbox stack

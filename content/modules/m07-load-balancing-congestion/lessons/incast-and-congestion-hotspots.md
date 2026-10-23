@@ -195,7 +195,9 @@ for priorities that have PFC enabled, while CNP and ECN counters (`np_cnp_sent`,
 `np_ecn_marked_roce_packets`, `rp_cnp_handled`, `rp_cnp_ignored`) are RDMA hardware counters, not
 in `ethtool -S`; `rdma statistic show link <dev>/1` shows the same set. Take `<dev>` from
 `rdma link`: NVIDIA's driver stack names it `mlx5_0`, distro rdma-core names it like `rocep3s0f0`.
-On a back-to-back link or any path where nothing ECN-marks, the CNP counters stay at 0.
+On a back-to-back link or any path where nothing ECN-marks, `np_ecn_marked_roce_packets` stays at 0, and
+so do the CNP counters while nothing is dropped; ConnectX receivers were also seen sending CNPs on
+out-of-sequence packets (loss) with no ECN mark, so read `np_cnp_sent` next to `out_of_sequence`.
 
 Reading the output: the NIC is **receiving** many pauses for priority 3 (it is being told to stop, so the
 network in front of it is congested), but sending almost none (it is not the bottleneck itself). As

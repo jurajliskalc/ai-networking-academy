@@ -14,10 +14,9 @@ Ordered by value. See IMPLEMENTATION_STATUS.md for what is done and how it was v
    on Dell R640, PCI passthrough, Ubuntu 26.04, DOCA-OFED 3.4; `ssh r640-a` / `r640-b`). Done: every command
    form and sample output in the content checked against these hosts on the inbox and DOCA stacks
    (`docs/HARDWARE_VERIFICATION.md`), `setup-rdma-host.sh` and `aina-hw collect-all` run, parsers tested
-   against real captures. Next: run each `hw-*` check (hw-01 to hw-05 on this pair), flip `verified: true`
-   per lab and record versions. Then switch the ConnectX-5 ports to InfiniBand (`mlxconfig LINK_TYPE_P1/2=1`)
+   against real captures. hw-01 to hw-05 are run end to end and verified (see `labs/README.md`). Next: switch the ConnectX-5 ports to InfiniBand (`mlxconfig LINK_TYPE_P1/2=1`)
    to verify the IB-mode output (ibstat on IB, sminfo, iblinkinfo, perfquery, opensm, ibnetdiscover) and
-   hw-09: this needs Secure Boot off in both VMs, because kernel lockdown blocks MFT's NV-config access.
+   hw-09 (Secure Boot is now off in both VMs, so `mlxconfig -d 03:00.0` works; both ports report `ETH(2)`).
    Still open: ShellCheck on `labs/hw-*`; checks verify tools only on host A; 400G-specific strings
    (mlxlink Speed/FEC), optical-module `ethtool -m` lines; Tier 2 needs a Cumulus or SONiC switch, Tier 3
    GPU nodes.

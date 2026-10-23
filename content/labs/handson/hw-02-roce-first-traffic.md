@@ -11,9 +11,15 @@ requires: [two-rdma-hosts, root, ssh-mesh]
 changes_config: false
 lessons: [rdma-on-linux, perftest-benchmarking, rocev2-encapsulation, pcie-numa-topology, rdma-connection-failures]
 files: labs/hw-02-roce-first-traffic
-verified: false
+verified: true
 summary: "Bring up RDMA between two hosts with real NICs: pick the right GID, run RC ping-pong and rping, then measure bandwidth and latency the way fabric engineers do."
 ---
+
+> [!NOTE]
+> Verified end to end (every task, the check and the restore step) on 2026-10-23 on two ConnectX-5
+> hosts cabled back to back (100GbE DAC; ESXi VMs with PCI passthrough; Ubuntu 26.04.1, kernel
+> 7.0.0-38, NVIDIA DOCA-OFED 3.4); see `labs/README.md` for the exact versions. Your device names,
+> numbers and some output lines will differ with other NICs, firmware or the distribution's inbox stack.
 
 ## Goal
 
@@ -323,7 +329,11 @@ done; done
 
 **Observe:** at large messages the difference is the header overhead per packet (four times as many
 packets at 1024). At high message rates the NIC's per-packet work matters too. This is why "MTU 1500
-on one host" quietly costs performance even when everything works.
+on one host" quietly costs performance even when everything works. On one 100G ConnectX-5 pair,
+1 MiB and 64 KiB messages ran about 6% faster at path MTU 4096 (96 against 90.5 Gb/s at 64 KiB),
+while at 4 KiB messages both settings landed within run-to-run noise of each other (82-88 Gb/s): the
+message rate, not the header overhead, limits small messages. Repeat each run a few times before
+drawing conclusions from a difference of a few percent.
 
 ### Task 8: Watch the counters while traffic runs
 

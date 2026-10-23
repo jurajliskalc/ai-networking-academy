@@ -109,7 +109,7 @@ commands:
           np_ecn_marked_roce_packets 88412
           np_cnp_sent 88019
           rx_icrc_encapsulated 0
-    notes: "Recent iproute2 prints one counter per line as above; older versions printed them all on the link line, so scripts should not depend on the layout (-j gives JSON). Counter names are driver-specific (these are mlx5). Read as deltas. np_* counters are the receiver ('notification point') side of DCQCN, rp_* the sender ('reaction point'). Rising out_of_sequence or local_ack_timeout_err on RoCE usually means packet loss in the fabric; rising CNP counters mean ECN congestion control is active. Back to back without a switch nothing marks ECN, so the CNP counters stay at 0."
+    notes: "Recent iproute2 prints one counter per line as above; older versions printed them all on the link line, so scripts should not depend on the layout (-j gives JSON). Counter names are driver-specific (these are mlx5). Read as deltas. np_* counters are the receiver ('notification point') side of DCQCN, rp_* the sender ('reaction point'). Rising out_of_sequence or local_ack_timeout_err on RoCE usually means packet loss in the fabric; rising CNP counters mean ECN congestion control is active. Back to back without a switch nothing marks ECN, so np_ecn_marked_roce_packets stays at 0; np_cnp_sent can still rise together with out_of_sequence when packets are dropped (seen on ConnectX-5)."
     tags: [iproute2, counters, dcqcn, roce, troubleshooting]
 
   - cmd: ls /sys/class/infiniband/mlx5_0/ports/1/hw_counters/

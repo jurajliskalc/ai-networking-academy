@@ -51,6 +51,32 @@ case "$TOOL" in
   *) echo "No QoS tool was present when the state was saved; nothing to restore on the QoS side." ;;
 esac
 
+# Global pause last: on mlx5 enabling it clears PFC, and enabling PFC had switched it off. Restore it only
+# when the saved state had no PFC priority (with PFC on, global pause is off by definition).
+if [[ -f $DIR/pause.txt ]]; then
+  rx=$(awk '/^RX:/ {print $2}' "$DIR/pause.txt"); tx=$(awk '/^TX:/ {print $2}' "$DIR/pause.txt")
+  case "$TOOL" in
+    mlnx_qos) had_pfc=$([[ -n "$pfc" && "$pfc" != none ]] && echo 1) ;;
+    dcb) had_pfc=$(grep -q ':on' "$DIR/dcb-pfc.txt" 2>/dev/null && echo 1) ;;
+    *) had_pfc="" ;;
+  esac
+  if [[ -z "$had_pfc" && "$rx" =~ ^(on|off)$ && "$tx" =~ ^(on|off)$ ]]; then
+    run ethtool -A "$NETDEV" rx "$rx" tx "$tx" || echo "WARNING: could not restore global pause (rx $rx tx $tx)"
+  fi
+else
+  echo "NOTE: this state was saved by an older save-qos.sh without the global pause setting; check 'ethtool -a $NETDEV' (the mlx5 default is RX on, TX on)."
+fi
+
+if [[ -f $DIR/roce_tos && -f $DIR/rdma_dev ]]; then
+  RDEV=$(cat "$DIR/rdma_dev"); CFG=/sys/kernel/config/rdma_cm/$RDEV
+  tos=$(cat "$DIR/roce_tos")
+  if [[ "$tos" == absent ]]; then
+    [[ -d $CFG ]] && run rmdir "$CFG"
+  elif [[ -d $CFG ]]; then
+    echo "+ echo $tos > $CFG/ports/$RDMA_PORT/default_roce_tos"; echo "$tos" >"$CFG/ports/$RDMA_PORT/default_roce_tos"
+  fi
+fi
+
 while read -r side p v; do
   f=/sys/class/net/$NETDEV/ecn/$side/enable/$p
   [[ -w $f ]] && { echo "+ echo $v > $f"; echo "$v" >"$f"; }

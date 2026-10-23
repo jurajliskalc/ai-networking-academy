@@ -61,7 +61,10 @@ mlnx-ofed-kernel-utils). Not in Ubuntu's archive. INBOX equivalents:
   `/sys/class/infiniband/<dev>/ports/1/hw_counters/`: `np_cnp_sent`, `np_ecn_marked_roce_packets`, `rp_cnp_handled`,
   `rp_cnp_ignored`, plus `roce_adp_retrans`, `roce_slow_restart*`, `out_of_sequence`, `packet_seq_err`,
   `local_ack_timeout_err`, `req_transport_retries_exceeded`, `rx_icrc_encapsulated`, ... Back to back with no
-  switch, CNP counters stay 0 (nothing marks ECN).
+  switch, `np_ecn_marked_roce_packets` stays 0 (nothing marks ECN) and so do the CNP counters while
+  nothing is dropped. But CNPs WITHOUT ECN marks were seen: with untagged traffic in lossy priority 0 and
+  global pause off (PFC on priority 3), B's `np_cnp_sent` rose +17 with `out_of_sequence` +30 in a 10 s run,
+  `np_ecn_marked_roce_packets` +0, and A's `rp_cnp_handled` counted them; runs without drops sent no CNPs.
 
 ### PFC and global pause (mlx5, both stacks)
 - Default: global 802.3x pause ON (`ethtool -a`: RX on, TX on), PFC off on all priorities, trust pcp.
@@ -224,8 +227,14 @@ mlnx-ofed-kernel-utils). Not in Ubuntu's archive. INBOX equivalents:
 ### Secure Boot / kernel lockdown (Ubuntu with Secure Boot on)
 - debugfs blocked (see cc_params above).
 - MFT `mst start` prints `Loading MST PCI module - Success`, `Loading MST PCI configuration module -
-  Success`, `Create devices`, then `Unloading MST PCI module (unused) - Success` (rc 0): it creates no usable
-  /dev/mst devices. `mstconfig -d 03:00.0 q` (mstflint) fails with `FATAL - crspace read (0xf0014) failed: Bad file
+  Success`, `Create devices`, then `Unloading MST PCI module (unused) - Success` (rc 0) and creates no
+  /dev/mst devices. This happens WITH AND WITHOUT Secure Boot (MFT 4.37 reaches the device directly;
+  `mst status -v` shows `NA` in the MST column), so it is not a lockdown symptom. With Secure Boot OFF
+  (verified): `mlxlink`, `mlxconfig q` (`Device type: ConnectX5`, `LINK_TYPE_P1 ETH(2)`) and `flint q`
+  (`FW Version: 16.29.1016`, `PSID: MT_0000000008`) work with `-d 03:00.0` or `-d mlx5_0`; `mstconfig -d 03:00.0
+  q` works; `mlxfwmanager --query` lists `Part Number: MCX556A-ECA_Ax`; debugfs `cc_params/rp_ai_rate` reads 5;
+  over `/dev/fwctl/fwctl0` mlxconfig and flint still fail the same way as with Secure Boot on. With Secure
+  Boot ON: `mstconfig -d 03:00.0 q` (mstflint) fails with `FATAL - crspace read (0xf0014) failed: Bad file
   descriptor` / `-E- Failed to identify the device`; MFT `mlxconfig -d mlx5_0 q` and `-d 03:00.0 q` print
   `-E- Failed to open the device`; `mlxfwmanager --query` prints `-E- No devices found or specified, mst might be
   stopped, run 'mst start' to load MST modules`.

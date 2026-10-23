@@ -11,9 +11,15 @@ requires: [two-rdma-hosts, ssh-mesh]
 changes_config: false
 lessons: [rdma-on-linux, pcie-numa-topology, reading-server-topology, nics-dpus-supernics]
 files: labs/hw-01-inventory-baseline
-verified: false
+verified: true
 summary: "Record exactly what you have before you test anything: NIC model and firmware, PCIe link, NUMA placement, RDMA-to-netdev mapping, GIDs and software versions, then run the academy's fabric health review."
 ---
+
+> [!NOTE]
+> Verified end to end (every task, the check and the restore step) on 2026-10-23 on two ConnectX-5
+> hosts cabled back to back (100GbE DAC; ESXi VMs with PCI passthrough; Ubuntu 26.04.1, kernel
+> 7.0.0-38, NVIDIA DOCA-OFED 3.4); see `labs/README.md` for the exact versions. Your device names,
+> numbers and some output lines will differ with other NICs, firmware or the distribution's inbox stack.
 
 ## Goal
 
@@ -157,10 +163,10 @@ vendor's driver exposes `hca_type` and `board_id`; that is why the command toler
 "one node is slower" or "only this pair fails" incidents, because firmware changes congestion
 control defaults, link training and bug fixes. Record both versions. If NVIDIA's firmware tools
 (MFT) are installed, `sudo mlxfwmanager --query` lists every adapter with its PSID and firmware in one
-go. MFT reaches the NIC through its own kernel modules (`sudo mst start`). On a host with Secure Boot
-and kernel lockdown they cannot provide usable devices (`mst start` ends with `Unloading MST PCI
-module (unused)`), `mlxfwmanager` reports `-E- No devices found or specified, mst might be stopped,
-...`, and sysfs plus `ethtool -i` are your inventory.
+go. Recent MFT reaches the NIC directly by PCI address (`sudo mst start` may end with `Unloading MST
+PCI module (unused)`, which is normal). On a host with Secure Boot and kernel lockdown that access is
+blocked: `mlxfwmanager` reports `-E- No devices found or specified, mst might be stopped, ...`, and
+sysfs plus `ethtool -i` are your inventory.
 
 ### Task 4: The PCIe link: capability versus reality
 

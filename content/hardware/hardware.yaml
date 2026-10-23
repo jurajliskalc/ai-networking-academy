@@ -58,8 +58,8 @@ variables:
 
   - { name: HOST_COUNT, group: hosts, label: Number of hosts, default: "2", choices: ["2", "3"], help: Tier 1 and 3 labs use two hosts; Tier 2 labs use three. }
   - { name: HOST_A, group: hosts, label: Host A name, default: node-a, help: Hostname or management IP reachable over SSH. Host A runs the check scripts and the servers of client/server tests. }
-  - { name: HOST_B, group: hosts, label: Host B name, default: node-b }
-  - { name: HOST_C, group: hosts, label: Host C name, default: node-c, help: Only Tier 2 labs use a third host. }
+  - { name: HOST_B, group: hosts, label: Host B name, default: node-b, help: "Hostname or management IP reachable over SSH from host A. Use the management network, not the data IP: the break/fix labs take the data interface down, and the checks still need to reach host B." }
+  - { name: HOST_C, group: hosts, label: Host C name, default: node-c, help: Only Tier 2 labs use a third host. Like host B, reach it over the management network. }
   - { name: A_IP, group: hosts, label: Host A data IP, default: 192.168.50.11, help: IPv4 address on the RDMA interface (not the management network). }
   - { name: B_IP, group: hosts, label: Host B data IP, default: 192.168.50.12 }
   - { name: C_IP, group: hosts, label: Host C data IP, default: 192.168.50.13 }

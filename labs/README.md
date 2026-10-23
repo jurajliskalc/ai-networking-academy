@@ -13,12 +13,14 @@ themselves live in `content/labs/handson/<lab-id>.md` (and in the web app); each
 directory here with its scripts, topologies and a `check.sh` that prints `PASS:`/`FAIL:` lines and
 exits non-zero if any check fails.
 
-> **Status:** five Tier 0 labs are `verified: true` (see [Verification record](#verification-record)
-> below): `hol-linux-net-basics`, `hol-ecmp-entropy`, `hol-ecn-congestion`,
-> `hol-clos-bgp-unnumbered` and `hol-evpn-vxlan`. `hol-rocev2-wireshark` (only its synthetic-capture
-> path was run) and `hol-soft-roce-perftest` (not run: no `rdma_rxe` in the test kernel) stay
-> `verified: false`, as do all `hw-*` labs. Every shell script has been syntax-checked with `bash -n`
-> and every YAML file parsed. Please report anything that behaves differently on your system.
+> **Status:** ten labs are `verified: true` (see [Verification record](#verification-record) and
+> [Hardware verification record](#hardware-verification-record) below). Tier 0:
+> `hol-linux-net-basics`, `hol-ecmp-entropy`, `hol-ecn-congestion`, `hol-clos-bgp-unnumbered` and
+> `hol-evpn-vxlan`. Tier 1 on real ConnectX-5 hardware: `hw-01` to `hw-05`.
+> `hol-rocev2-wireshark` (only its synthetic-capture path was run), `hol-soft-roce-perftest` (not run:
+> no `rdma_rxe` in the test kernel), `hw-06` (needs a lossless switch), `hw-07`/`hw-08` (need GPU nodes)
+> and `hw-09` (InfiniBand) stay `verified: false`. Every shell script has been syntax-checked with
+> `bash -n` and every YAML file parsed. Please report anything that behaves differently on your system.
 
 ## The labs
 
@@ -155,3 +157,34 @@ that, but without their links, so redeploy in that case). Nothing in the five ve
 behaviour as far as could be told: both fixes address standard Linux/Docker behaviour that applies
 equally to a regular Ubuntu 24.04 VM with Docker installed. A run on a clean Ubuntu 24.04 VM with
 the generic kernel is still worthwhile, and is required before the two RDMA labs can be verified.
+
+## Hardware verification record
+
+Run on **2026-10-23** on two hosts cabled back to back, following each lab's instructions literally
+(every command block of every task with the lab profile's values filled in, host B commands in a second
+session, then `aina-hw check` and the restore step; QoS, global pause and rdma_cm state confirmed back at
+their original values afterwards). The commands and sample output of every lab, lesson and the command
+reference were also compared with this hardware on both driver stacks: see
+[docs/HARDWARE_VERIFICATION.md](../docs/HARDWARE_VERIFICATION.md).
+
+| Component | Version |
+|---|---|
+| Hosts | 2x Dell PowerEdge R640, ESXi VMs with PCI passthrough of the NIC |
+| NIC | ConnectX-5 VPI MCX556A-ECA (dual-port, EDR IB / 100GbE), Ethernet mode, firmware 16.29.1016 (A) and 16.34.1002 (B) |
+| Cabling | 1 m passive DAC (MCP1600-E00AE30) port 1 to port 1, port 2 to port 2; no switch |
+| OS | Ubuntu 26.04.1 LTS, kernel 7.0.0-38-generic; Secure Boot on for the format checks, off for MFT checks |
+| Driver stack | NVIDIA DOCA-OFED 3.4.0 (`OFED-internal-26.04-0.8.6`; Canonical-signed `linux-modules-doca-ofed-3.4`), rdma-core 2604.0.7, perftest 26.04.16, mlnx-tools 2604.0.13, MFT 4.36/4.37. Format checks also on the inbox stack (rdma-core 61.0, perftest 25.01) |
+| Tools | iproute2 6.19, ethtool 6.19, Python 3 (Ubuntu 26.04) |
+
+| Lab | Result |
+|---|---|
+| `setup-rdma-host.sh` | Ran clean on both hosts; `--set-memlock` fixed the 8192 KiB default. |
+| `aina-hw collect-all` | Passed after a fix: host A was treated as remote when `HOST_A` was a data-network name or IP. |
+| `hw-01-inventory-baseline` | Passed (warning for the mixed firmware, as designed). Inside a VM the PCIe values describe the virtual root port. |
+| `hw-02-roce-first-traffic` | Passed: 95-98 Gb/s RDMA write, 181 Gb/s bidirectional, 0.87 us minimum write latency. Text refined: path MTU effect measured per message size. |
+| `hw-03-host-qos-pfc-ecn` | Passed after fixes: `restore-qos.sh` now also restores 802.3x global pause (enabling PFC had switched it off) and the rdma_cm default ToS; `apply-qos.sh` shows the global pause state. |
+| `hw-04-break-fix-roce` | Passed: every fault injected, diagnosed and restored, and one random fault diagnosed from the lab's commands alone. Fixed: `trust-pcp` on the inbox stack; checks now say when host B is unreachable rather than suggesting `ssh-copy-id`; `HOST_*` must be management addresses (the data-path faults cut the checks off otherwise). |
+| `hw-05-link-health-optics` | Passed after a fix: the module check now uses `sudo -n ethtool -m` and matches tab-indented fields. |
+
+**Caveats:** one NIC model, back to back, inside VMs, and the DOCA stack for the lab runs. The inbox-stack
+paths of the labs (`dcb` instead of `mlnx_qos`) were exercised command by command but not run end to end.

@@ -227,8 +227,9 @@ sudo mlxlink -d <mst-device> -m       # add transceiver (module) information
 ```
 
 `<mst-device>` is whatever `mst status -v` lists for the port: an `/dev/mst/...` device after `mst start`,
-or the PCI address or RDMA device name (`mlx5_3`) where MFT accepts them. On a host with Secure Boot and
-kernel lockdown, `mst start` loads and immediately unloads its modules as "(unused)", leaving no usable `/dev/mst` devices, and `mlxlink -d mlx5_3` fails with
+or the PCI address or RDMA device name (`mlx5_3`) where MFT accepts them. Recent MFT often needs no `/dev/mst`
+device at all (`mst start` then unloads its modules as "(unused)" and the tools use the PCI address or
+RDMA name directly). On a host with Secure Boot and kernel lockdown those direct paths fail: `mlxlink -d mlx5_3` fails with
 `-E- Failed to open device: "mlx5_3", No such file or directory`; with a recent kernel and MFT (for example
 kernel 7.0 with MFT 4.37), `mst status -v` instead lists a `/dev/fwctl/fwctlN` device and
 `mlxlink -d /dev/fwctl/fwctl0` works. Check your MFT release notes.

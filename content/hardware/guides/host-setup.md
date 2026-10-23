@@ -118,9 +118,10 @@ with the PSID in brackets), `devlink dev info` (`fw.psid`, `fw.version`) and
 `cat /sys/class/infiniband/{{A_RDMA_DEV}}/fw_ver`. hw-01 compares it across hosts.
 
 > [!NOTE]
-> With **UEFI Secure Boot** on, the kernel's lockdown mode blocks the access MFT needs: `mst start`
-> loads and immediately unloads its modules ("(unused)") without creating usable `/dev/mst` devices,
-> `mlxfwmanager --query` finds no devices, `mlxconfig` fails with `-E- Failed to open the device` and
+> Recent MFT reaches the adapter without its kernel modules: `mst start` may load and immediately
+> unload them ("(unused)") without creating `/dev/mst` devices, and the tools take the PCI address
+> (`-d 03:00.0`) or the RDMA device name instead. With **UEFI Secure Boot** on, the kernel's lockdown
+> mode blocks that access: `mlxfwmanager --query` finds no devices, `mlxconfig` fails with `-E- Failed to open the device` and
 > `flint` with `-E- Cannot open Device: mlx5_0.`. Recent kernels with recent MFT list a
 > `/dev/fwctl/fwctlN` device in `mst status -v`, and `mlxlink -d /dev/fwctl/fwctl0` works through it,
 > but `mlxconfig` still cannot read NV configuration (`... or HW access is disabled`) and `flint`
