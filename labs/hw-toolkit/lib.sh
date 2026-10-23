@@ -15,10 +15,18 @@
 #     count for that task, results before the first one are the "Before you start" prerequisites.
 #     Guard each task block with `if task N "title"; then ... fi`: with AINA_TASK=N in the environment
 #     (`aina-hw check LAB --task N`) only that task's block runs, so a learner can resume a lab.
+#   - `require TASK KEY "what"` declares a measurement the lab is not complete without (prints
+#     "REQUIRE: TASK KEY what"); declare them all at the top, before any check can stop the script.
+#     `met KEY` (or `pass_met KEY "..."`) records that it was made. `perf_ok KEY "..."` /
+#     `perf_low KEY "..."` record a measurement and whether it reached the lab's performance target
+#     ("PERF: KEY ok|low"). A run is PASSED only with no failure, every requirement met, no declared
+#     task left unrun and no measurement below target; otherwise FAILED, INCONCLUSIVE or BELOW_TARGET.
 
 AINA_TOOLKIT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 AINA_FAILS=0
 AINA_WARNS=0
+AINA_PERF_LOW=0
+declare -A AINA_REQ_TASK=() AINA_MET=()
 
 pass() { echo "PASS: $*"; }
 fail() { echo "FAIL: $*"; AINA_FAILS=$((AINA_FAILS + 1)); }
@@ -26,6 +34,14 @@ warn() { echo "WARN: $*"; AINA_WARNS=$((AINA_WARNS + 1)); }
 skip() { echo "SKIP: $*"; }
 info() { echo "INFO: $*"; }
 die() { echo "FAIL: $*"; exit 1; }
+
+# require TASK KEY WHAT : the lab is not complete until `met KEY` (task 0 = the prerequisites).
+require() { AINA_REQ_TASK[$2]=$1; echo "REQUIRE: $1 $2 ${*:3}"; }
+met() { AINA_MET[$1]=1; echo "MET: $1"; }
+pass_met() { local k=$1; shift; pass "$@"; met "$k"; }
+# A measurement with a performance target: made (met) either way; below target is a warning, not a pass.
+perf_ok() { local k=$1; shift; pass "$@"; met "$k"; echo "PERF: $k ok"; }
+perf_low() { local k=$1; shift; warn "$@"; met "$k"; echo "PERF: $k low"; AINA_PERF_LOW=$((AINA_PERF_LOW + 1)); }
 
 # aina_tasks N... : declare which of the lab's tasks this check covers (prints "TASKS: N ..."), so a run that
 # stops early (failed prerequisites) reports the others as not run rather than not covered.
@@ -215,12 +231,23 @@ bw_average() {
 # path whether a script runs under sudo or not; override with AINA_STATE).
 aina_state_dir() { echo "${AINA_STATE:-/var/lib/aina/state}/$1"; }
 
+# Prints the verdict. Exit status: 1 if a check failed, else 0 (aina-hw check grades the run from the
+# output: an exit status of 0 alone does not mean the lab is verified).
 aina_finish() {
+  local k missing=()
   echo
-  if [[ $AINA_FAILS -eq 0 ]]; then
-    if [[ $AINA_WARNS -gt 0 ]]; then echo "All checks passed ($AINA_WARNS warning(s))."; else echo "All checks passed."; fi
-    exit 0
+  if [[ $AINA_FAILS -gt 0 ]]; then echo "$AINA_FAILS check(s) failed."; exit 1; fi
+  for k in "${!AINA_REQ_TASK[@]}"; do
+    # A single-task run (AINA_TASK) only owes that task's requirements and the prerequisites'.
+    if [[ -n "${AINA_TASK:-}" && "${AINA_REQ_TASK[$k]}" != "$AINA_TASK" && "${AINA_REQ_TASK[$k]}" != 0 ]]; then continue; fi
+    [[ -n "${AINA_MET[$k]:-}" ]] || missing+=("$k")
+  done
+  if [[ ${#missing[@]} -gt 0 ]]; then
+    echo "Inconclusive: nothing failed, but required measurement(s) were not made: $(printf '%s\n' "${missing[@]}" | sort | tr '\n' ' ')"
+  elif [[ $AINA_PERF_LOW -gt 0 ]]; then
+    echo "Functional checks passed, but $AINA_PERF_LOW measurement(s) are below the performance target."
+  elif [[ $AINA_WARNS -gt 0 ]]; then echo "All checks passed ($AINA_WARNS warning(s))."
+  else echo "All checks passed."
   fi
-  echo "$AINA_FAILS check(s) failed."
-  exit 1
+  exit 0
 }

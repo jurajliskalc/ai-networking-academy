@@ -9,6 +9,9 @@ set -uo pipefail
 . "$(dirname "$0")/../hw-toolkit/lib.sh"
 aina_load_env
 aina_tasks 1 3 4 5 6 7 8
+require 7 diagnosis "the root cause diagnosed correctly"
+require 8 restored "the injected fault restored"
+require 8 rdma-back "RDMA works again A -> B after the fix"
 STATE=${AINA_STATE:-/var/lib/aina/state}/hw-04-break-fix-roce
 
 need_cmd ibv_rc_pingpong rdma || aina_finish
@@ -62,7 +65,7 @@ fi
 
 if task 7 "Commit your diagnosis"; then
   diag=$(on_host_sh B "cut -d' ' -f1,4 $STATE/diagnosed 2>/dev/null")
-  if [[ "$diag" == correct* ]]; then pass "root cause diagnosed correctly (${diag#correct })"
+  if [[ "$diag" == correct* ]]; then pass_met diagnosis "root cause diagnosed correctly (${diag#correct })"
   else fail "no correct diagnosis recorded yet: on host B run 'sudo ./inject.sh --answer <fault-id>'"; fi
 fi
 
@@ -70,16 +73,21 @@ if task 8 "Fix it and close the incident"; then
   case "$status" in
     "") fail "nothing to close yet: start the incident first (Task 1)" ;;
     injected) fail "the fault on host B is still active: fix it, then run 'sudo ./inject.sh --restore' on host B" ;;
-    restored) pass "the injected fault on host B was restored" ;;
+    restored) pass_met restored "the injected fault on host B was restored" ;;
     *) fail "unexpected incident status '$status' on host B" ;;
   esac
-  log=$(mktemp)
-  start_server B "$log" timeout 25 ibv_rc_pingpong -d "$B_RDMA_DEV" -i "$RDMA_PORT" -g "$GB" -p 18603 -n 100
-  if timeout 25 ibv_rc_pingpong -d "$A_RDMA_DEV" -i "$RDMA_PORT" -g "$GA" -p 18603 -n 100 "$B_IP" >/dev/null 2>&1; then
-    pass "ibv_rc_pingpong A -> B works again"; stop_server
-  else
-    fail "ibv_rc_pingpong A -> B fails: $(tr '\n' ' ' <"$log" | cut -c1-160)"; kill_server
-  fi
+  # Right after --restore the RoCE GID and the neighbour entry can still be coming back: try three times.
+  log=$(mktemp); ok=0
+  for attempt in 1 2 3; do
+    start_server B "$log" timeout 25 ibv_rc_pingpong -d "$B_RDMA_DEV" -i "$RDMA_PORT" -g "$GB" -p 18603 -n 100
+    if timeout 25 ibv_rc_pingpong -d "$A_RDMA_DEV" -i "$RDMA_PORT" -g "$GA" -p 18603 -n 100 "$B_IP" >/dev/null 2>&1; then
+      ok=1; stop_server; break
+    fi
+    kill_server
+    (( attempt < 3 )) && sleep 3
+  done
+  if (( ok )); then pass_met rdma-back "ibv_rc_pingpong A -> B works again$( (( attempt > 1 )) && echo " (attempt $attempt)")"
+  else fail "ibv_rc_pingpong A -> B fails after 3 attempts: $(excerpt "$log")"; fi
   rm -f "$log"
 fi
 

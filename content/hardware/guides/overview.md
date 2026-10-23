@@ -49,8 +49,8 @@ flowchart TB
    academy pulls the report and check results live), or copy the JSON files and import them.
    Nothing is ever sent anywhere else: the academy is a static site and keeps everything in your
    browser.
-4. **Evidence.** A lab whose `check.sh` passes, imported through either route, is marked
-   **verified** with the host and time. That is stronger than "I clicked done", and it is what you
+4. **Evidence.** A lab whose `check.sh` grades **PASSED** (nothing failed, every required measurement
+   made, every target reached), imported through either route, is marked **verified** with the host and time. That is stronger than "I clicked done", and it is what you
    show when someone asks how you know your fabric works.
 
 ## The tiers

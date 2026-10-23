@@ -9,6 +9,9 @@ set -uo pipefail
 . "$(dirname "$0")/../hw-toolkit/lib.sh"
 aina_load_env
 aina_tasks 2 3 4 7 8
+require 2 ports "port state of both hosts read"
+require 4 pcie "negotiated PCIe link read on both hosts"
+require 8 report "a recent inventory report covering both hosts"
 
 need_cmd rdma ibv_devinfo ethtool python3 || aina_finish
 check_ssh B || aina_finish
@@ -23,7 +26,7 @@ done
 if task 2 "Port state, link layer and rate"; then
   for r in "${HOSTS[@]}"; do
     dev=$(rdma_of "$r"); state=$(port_attr "$r" state)
-    if [[ "$state" == *ACTIVE* ]]; then pass "host $r: $dev/$RDMA_PORT is ACTIVE ($(port_attr "$r" link_layer), $(port_attr "$r" rate))"
+    if [[ "$state" == *ACTIVE* ]]; then pass_met ports "host $r: $dev/$RDMA_PORT is ACTIVE ($(port_attr "$r" link_layer), $(port_attr "$r" rate))"
     else fail "host $r: $dev/$RDMA_PORT state is '$state'"; fi
   done
 fi
@@ -58,9 +61,9 @@ if task 4 "The PCIe link: capability versus reality"; then
     if [[ -z "${mw:-}" ]]; then
       skip "host $r: PCIe link attributes not readable for $dev"
     elif [[ "$cs" == "$ms" && "$cw" == "$mw" ]]; then
-      pass "host $r: PCIe link at maximum ($cs GT/s x$cw)"
+      pass_met pcie "host $r: PCIe link at maximum ($cs GT/s x$cw)"
     else
-      warn "host $r: PCIe link downgraded: $cs GT/s x$cw, device supports $ms GT/s x$mw (slot, riser or BIOS bifurcation?)"
+      warn "host $r: PCIe link downgraded: $cs GT/s x$cw, device supports $ms GT/s x$mw (slot, riser or BIOS bifurcation?)"; met pcie
     fi
   done
 fi
@@ -81,7 +84,7 @@ if task 8 "Collect everything automatically and run the health review"; then
     fail "inventory report $REPORT is older than 7 days: rerun ./hw-toolkit/aina-hw collect-all"
   else
     n=$(python3 -c 'import json,sys; print(len(json.load(open(sys.argv[1])).get("hosts", [])))' "$REPORT" 2>/dev/null || echo 0)
-    if (( n >= 2 )); then pass "inventory report is recent and covers $n hosts"
+    if (( n >= 2 )); then pass_met report "inventory report is recent and covers $n hosts"
     elif (( n == 1 )); then warn "inventory report covers only 1 host: use collect-all, not collect"; pass "inventory report is recent"
     else fail "inventory report $REPORT is not a valid aina-hw report"; fi
   fi

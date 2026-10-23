@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { Activity, CheckCircle2, ClipboardPaste, FileUp, FlaskConical, HardDrive, Link2, Loader2, RefreshCw, RotateCcw, Sparkles, Trash2, Unplug, Upload, Wand2, XCircle } from 'lucide-react';
+import { Activity, AlertTriangle, CheckCircle2, ClipboardPaste, FileUp, FlaskConical, HardDrive, Link2, Loader2, RefreshCw, RotateCcw, Sparkles, Trash2, Unplug, Upload, Wand2, XCircle } from 'lucide-react';
 import { useIndex } from '../../content';
 import { useProgress } from '../../store';
 import { recordHwCheck } from '../../progress';
@@ -8,7 +8,7 @@ import {
   defaults, derive, hostQos, hostsFile, netplan, nmcli, parseEnv, quickStart, rolesOf, sanitizeProfile, switchConfig, toEnv, validateProfile, type Profile,
 } from '../../hw/profile';
 import { dataPort, detectedProfile, hostLabel, isRoceV2Ipv4, parseReport, review, type HostFacts, type Report } from '../../hw/report';
-import { fromPastedText, mergeChecks, mergeTasks, parseCheckJson, type CheckRecord } from '../../hw/checks';
+import { fromPastedText, mergeChecks, mergeTasks, parseCheckJson, VERDICT_LABEL, verdictDetail, type CheckRecord } from '../../hw/checks';
 import { Button, Card, Loading, Pill } from '../../components/ui';
 import type { ContentIndex, HandsOnLab, HwVariable } from '../../types';
 import demoReport from '../../hw/demo-report.json';
@@ -252,7 +252,7 @@ function ImportCard({ ix }: { ix: ContentIndex }) {
     try {
       const rec = fromPastedText(pasteLab, paste);
       applyChecks([rec]);
-      setMsgs([{ ok: true, text: `Recorded ${rec.counts.PASS} PASS, ${rec.counts.FAIL} FAIL for ${pasteLab}${rec.passed ? ': lab verified' : ''}.` }]);
+      setMsgs([{ ok: true, text: `Recorded ${rec.counts.PASS} PASS, ${rec.counts.FAIL} FAIL for ${pasteLab}: ${rec.passed ? 'lab verified.' : `${VERDICT_LABEL[rec.verdict].toLowerCase()}. ${verdictDetail(rec)}`}` }]);
       setPaste('');
     } catch (e) {
       setMsgs([{ ok: false, text: (e as Error).message }]);
@@ -433,7 +433,9 @@ function Checks({ ix }: { ix: ContentIndex }) {
         <details key={r.lab} className="group p-4">
           <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-2">
             <span className="flex items-center gap-2 text-sm font-medium">
-              {r.passed ? <CheckCircle2 size={16} className="text-accent" aria-label="Passed" /> : <XCircle size={16} className="text-danger" aria-label="Not passed" />}
+              {r.passed ? <CheckCircle2 size={16} className="text-accent" aria-label="Passed" />
+                : r.verdict === 'FAILED' ? <XCircle size={16} className="text-danger" aria-label={VERDICT_LABEL.FAILED} />
+                : <AlertTriangle size={16} className="text-warn" aria-label={VERDICT_LABEL[r.verdict]} />}
               <Link to={`/hw/labs/${r.lab}`} className="hover:text-accent" onClick={(e) => e.stopPropagation()}>{title(r.lab)}</Link>
             </span>
             <span className="font-mono text-[11px] text-muted">{(r.tasks ?? []).length > 0 && `${r.tasks.filter((t) => t.n > 0 && t.status !== 'FAIL').length}/${r.tasks.filter((t) => t.n > 0).length} tasks ok · `}{r.counts.PASS} pass · {r.counts.FAIL} fail · {r.counts.WARN} warn · {r.host ?? 'pasted'} · {r.finished.slice(0, 16).replace('T', ' ')}</span>

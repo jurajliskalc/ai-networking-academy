@@ -34,7 +34,9 @@ Ordered by value. See IMPLEMENTATION_STATUS.md for what is done and how it was v
    a browser test for the sandbox's fabric switch.
 7. **InfiniBand without hardware**: the IB track (hw-09 to hw-13) needs two IB-capable adapters; for
    learners without them, consider an `ibsim`-based lab for the diagnostic tools. Also open: run the IPoIB
-   and UCX labs on the inbox stack, and Live Lab over `--live-remote` through a jump host.
+   and UCX labs on the inbox stack, and Live Lab over `--live-remote` through a jump host. The seven Tier 0
+   checks do not use `lib.sh` yet, so they are graded by the functional rule only (no `REQUIRE:` lines):
+   port them to `require`/`met` too.
 8. **Content depth**: storage-fabric labs (NVMe-oF over RDMA), more design reviews, and a "read this
    real capture" series once real captures (with permission) are available.
 9. **Periodic refresh**: re-run the link check and review vendor-specific lessons (m07 Spectrum-X and

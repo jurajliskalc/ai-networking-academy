@@ -9,6 +9,8 @@ set -uo pipefail
 . "$(dirname "$0")/../hw-toolkit/lib.sh"
 aina_load_env
 aina_tasks 1 2 3 6
+require 1 link "physical link state and rate read on both hosts"
+require 6 load "a load test ran while the error counters were read"
 DURATION=${AINA_LOAD_SECONDS:-20}
 
 # Physical-layer error counters (mlx5 ethtool names, generic RDMA sysfs names). Missing ones are ignored.
@@ -35,7 +37,7 @@ if task 1 "What did the link negotiate?"; then
   declare -A RATE
   for r in A B; do
     state=$(port_attr "$r" phys_state); RATE[$r]=$(port_attr "$r" rate)
-    if [[ "$state" == *LinkUp* ]]; then pass "host $r: $(rdma_of "$r")/$RDMA_PORT physical link is up (${RATE[$r]})"
+    if [[ "$state" == *LinkUp* ]]; then pass_met link "host $r: $(rdma_of "$r")/$RDMA_PORT physical link is up (${RATE[$r]})"
     else fail "host $r: $(rdma_of "$r")/$RDMA_PORT physical state is '${state:-unknown}'"; fi
   done
   if [[ -n "${RATE[A]}" && "${RATE[A]}" == "${RATE[B]}" ]]; then pass "both ends report the same rate (${RATE[A]})"
@@ -84,7 +86,7 @@ if task 6 "Watch the counters under load"; then
   start_server B "$log" timeout $((DURATION + 30)) ib_write_bw -d "$B_RDMA_DEV" -i "$RDMA_PORT" "${XB[@]}" -q 4 -D "$DURATION" -F --report_gbits -p 18605
   if timeout $((DURATION + 30)) ib_write_bw -d "$A_RDMA_DEV" -i "$RDMA_PORT" "${XA[@]}" -q 4 -D "$DURATION" -F --report_gbits -p 18605 "$B_IP" >"$out" 2>&1; then
     stop_server
-    pass "${DURATION}s ib_write_bw load A -> B completed ($(bw_average "$out") Gb/s average)"
+    pass_met load "${DURATION}s ib_write_bw load A -> B completed ($(bw_average "$out") Gb/s average)"
   else
     kill_server
     fail "ib_write_bw A -> B failed: $(tail -3 "$out" | tr '\n' ' ' | cut -c1-200)"

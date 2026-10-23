@@ -74,9 +74,29 @@ Prints the summary of an existing report again.
 
 Runs `labs/LAB_ID/check.sh`, streams its output, and saves
 `results/check-LAB_ID-<timestamp>.json` with every `PASS:`, `FAIL:`, `WARN:` and `SKIP:` line, the
-counts, the exit code, the host and the timings. A result **passes** when there is at least one
-PASS, no FAIL, and the script exited with 0. The academy recomputes that from the lines when it
-imports a result, so editing `"passed": true` into a file does not count.
+counts, the exit code, the host and the timings. "Nothing failed" is not enough to verify a lab, so a
+run is graded on three separate axes:
+
+| Axis | Meaning |
+|---|---|
+| Functional | at least one PASS, no FAIL, and the script exited with 0 |
+| Complete | every **required measurement** of the lab was made, and no task the check covers was left unrun |
+| Performance | every measurement with a target reached it (`ok`), one missed it (`low`), or the lab has no targets |
+
+Each check declares its required measurements up front (`REQUIRE: 5 bw RDMA write bandwidth ...`) and
+reports them as they are made (`MET: bw`, and `PERF: bw ok` or `PERF: bw low` for a target). The verdict is
+then one of:
+
+- **PASSED**: functional, complete and on target. Only this marks the lab verified.
+- **FAILED**: a check failed.
+- **INCONCLUSIVE**: nothing failed, but a required measurement was not made (a SKIP: perftest built
+  without CUDA, iperf3 missing, a counter the driver does not expose) or a covered task did not run. The
+  terminal and the lab page name what is missing.
+- **BELOW_TARGET**: everything ran and passed, but a measurement missed its target (for example
+  hw-02's bandwidth below `AINA_MIN_BW_PCT`, default 60% of the port rate).
+
+The academy recomputes all of this from the lines when it imports a result, so editing `"passed": true`
+or `"verdict"` into a file does not count.
 
 It works for the Tier 0 labs too (`sudo ./aina-hw check hol-soft-roce-perftest`): their check
 scripts print the same line format.
@@ -91,8 +111,9 @@ lab page shows which tasks are done and where to resume. To recheck only the tas
 ./hw-toolkit/aina-hw check hw-03-host-qos-pfc-ecn --task 3
 ```
 
-The prerequisites always run. A single-task result (`"only_task": 3`) updates that task on the lab
-page but never marks the whole lab verified: run the full check for that.
+The prerequisites always run. A single-task result (`"only_task": 3`) is graded on that task's required
+measurements and the prerequisites' only. It updates that task on the lab page but never marks the whole
+lab verified: run the full check for that.
 
 ### `aina-hw live`
 

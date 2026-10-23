@@ -5,7 +5,7 @@ import { slug, useIndex, useLabBody } from '../../content';
 import { useProgress } from '../../store';
 import { bump, recordHwCheck } from '../../progress';
 import { fill, placeholders } from '../../hw/profile';
-import { mergeChecks, mergeTasks, parseCheckJson, taskView, type TaskViewStatus } from '../../hw/checks';
+import { mergeChecks, mergeTasks, parseCheckJson, taskView, VERDICT_LABEL, verdictDetail, type TaskViewStatus } from '../../hw/checks';
 import Markdown, { goToSection, useSectionParam } from '../../components/Markdown';
 import { Button, Card, LevelBadge, Loading, Pill } from '../../components/ui';
 import type { ContentIndex, HandsOnLab } from '../../types';
@@ -27,12 +27,14 @@ function VerifyCard({ lab, ix }: { lab: HandsOnLab; ix: ContentIndex }) {
       if (r.lab !== lab.id) throw new Error(`That result is for ${r.lab}, not this lab.`);
       setHw((s) => ({ ...s, checks: mergeChecks(s.checks, [r]), tasks: mergeTasks(s.tasks ?? {}, [r]) }));
       if (r.only_task !== null) {
-        const ok = r.counts.FAIL === 0 && r.counts.PASS > 0;
-        setMsg({ ok, text: `Task ${r.only_task} ${ok ? 'passes' : `not passed yet (${r.counts.FAIL} FAIL)`}. A single-task run updates the task progress; run the whole check to verify the lab.` });
+        const ok = r.verdict === 'PASSED';
+        const how = ok ? 'passes.' : r.verdict === 'FAILED' ? `not passed yet (${r.counts.FAIL} FAIL).` : `${VERDICT_LABEL[r.verdict].toLowerCase()}: ${verdictDetail(r)}`;
+        setMsg({ ok, text: `Task ${r.only_task} ${how} A single-task run updates the task progress; run the whole check to verify the lab.` });
         return;
       }
       update((p) => recordHwCheck(p, lab.id, r));
-      setMsg({ ok: r.passed, text: r.passed ? 'Check passed: lab verified on your hardware.' : `Check not passed yet (${r.counts.FAIL} FAIL).` });
+      setMsg({ ok: r.passed, text: r.passed ? 'Check passed: lab verified on your hardware.'
+        : r.verdict === 'FAILED' ? `Check not passed yet (${r.counts.FAIL} FAIL).` : `${VERDICT_LABEL[r.verdict]}: ${verdictDetail(r)} The lab is not verified yet.` });
     } catch (e) {
       setMsg({ ok: false, text: (e as Error).message });
     }
@@ -45,10 +47,11 @@ function VerifyCard({ lab, ix }: { lab: HandsOnLab; ix: ContentIndex }) {
       <CodeBox code={cmd} title={lab.tier > 0 ? 'on host A' : 'on the VM'} />
       {lab.tier === 0 && <p className="mt-2 text-xs text-muted">Or run it through the toolkit for an importable result: <code>sudo labs/hw-toolkit/aina-hw check {lab.id}</code></p>}
       {check && (
-        <div className={`mt-4 rounded-lg border p-3 text-xs ${check.passed ? 'border-accent/40 bg-accent-soft' : 'border-danger/40 bg-danger/10'}`}>
-          <div className={`mb-1.5 flex items-center gap-1.5 font-medium ${check.passed ? 'text-accent' : 'text-danger'}`}>
-            {check.passed ? <CheckCircle2 size={14} aria-hidden /> : <XCircle size={14} aria-hidden />}{check.passed ? 'Passed' : 'Not passed'} · {check.counts.PASS} pass, {check.counts.FAIL} fail, {check.counts.WARN} warn
+        <div className={`mt-4 rounded-lg border p-3 text-xs ${check.passed ? 'border-accent/40 bg-accent-soft' : check.verdict === 'FAILED' ? 'border-danger/40 bg-danger/10' : 'border-warn/40 bg-warn/10'}`}>
+          <div className={`mb-1.5 flex items-center gap-1.5 font-medium ${check.passed ? 'text-accent' : check.verdict === 'FAILED' ? 'text-danger' : 'text-warn'}`}>
+            {check.passed ? <CheckCircle2 size={14} aria-hidden /> : check.verdict === 'FAILED' ? <XCircle size={14} aria-hidden /> : <AlertTriangle size={14} aria-hidden />}{VERDICT_LABEL[check.verdict]} · {check.counts.PASS} pass, {check.counts.FAIL} fail, {check.counts.WARN} warn
           </div>
+          {!check.passed && <p className="mb-1 text-fg">{verdictDetail(check)}</p>}
           <div className="text-muted">{check.host ?? 'pasted output'} · {check.finished.slice(0, 16).replace('T', ' ')}</div>
           <details className="mt-2"><summary className="cursor-pointer text-muted hover:text-fg">Show lines</summary>
             <ul className="mt-2 space-y-0.5 font-mono">{check.results.map((x, i) => <li key={i} className={x.status === 'FAIL' ? 'text-danger' : x.status === 'WARN' ? 'text-warn' : x.status === 'PASS' ? 'text-accent' : 'text-muted'}>{x.status} <span className="text-fg">{x.text}</span></li>)}</ul>

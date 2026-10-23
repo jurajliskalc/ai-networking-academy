@@ -33,7 +33,7 @@ import tempfile
 import threading
 import time
 
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 REPORT_SCHEMA = "aina.hw.report/1"
 HOST_SCHEMA = "aina.hw.host/1"
 CHECK_SCHEMA = "aina.hw.check/1"
@@ -338,6 +338,60 @@ def summarize_tasks(results, markers, declared=()):
         started = n == 0 or n in titles or bool(mine)
         tasks.append({"n": n, "title": titles.get(n, ""), "status": task_status(counts) if started else "NOTRUN", "counts": counts})
     return tasks
+
+
+def parse_requirements(text):
+    """'REQUIRE: <task> <key> <what>' (lib.sh require) -> [{"task", "key", "text"}], first per key wins."""
+    out, seen = [], set()
+    for line in (text or "").splitlines():
+        m = re.match(r"\s*REQUIRE:\s*(\d+)\s+([A-Za-z0-9_.-]+)\s*(.*)$", line)
+        if m and m.group(2) not in seen:
+            seen.add(m.group(2))
+            out.append({"task": int(m.group(1)), "key": m.group(2), "text": m.group(3).strip()})
+    return out
+
+
+def parse_met(text):
+    """'MET: <key>' lines (lib.sh met) -> sorted keys."""
+    return sorted({m.group(1) for m in (re.match(r"\s*MET:\s*([A-Za-z0-9_.-]+)\s*$", l) for l in (text or "").splitlines()) if m})
+
+
+def parse_perf(text):
+    """'PERF: <key> ok|low' lines -> {key: "ok"|"low"}; one low result for a key makes it low."""
+    out = {}
+    for line in (text or "").splitlines():
+        m = re.match(r"\s*PERF:\s*([A-Za-z0-9_.-]+)\s+(ok|low)\s*$", line)
+        if m and out.get(m.group(1)) != "low":
+            out[m.group(1)] = m.group(2)
+    return out
+
+
+def grade_check(counts, code, tasks, required, met, perf, only=None):
+    """Grade a run on three separate axes, then one verdict.
+
+    functional: no FAIL, at least one PASS, exit status 0 (or unknown).
+    complete:   every required measurement was made (for a single-task run: that task's and the
+                prerequisites') and, for a full run, no declared task was left NOTRUN.
+    performance: "low" if any measurement missed its target, "ok" if all met it, None without targets.
+    verdict: FAILED (not functional), INCONCLUSIVE (not complete), BELOW_TARGET, or PASSED."""
+    functional = counts["FAIL"] == 0 and counts["PASS"] > 0 and code in (0, None)
+    owed = [r for r in required if only is None or r["task"] in (0, only)]
+    missing = [r["key"] for r in owed if r["key"] not in set(met)]
+    notrun = [t["n"] for t in tasks if t["status"] == "NOTRUN"] if only is None else []
+    complete = functional and not missing and not notrun
+    performance = ("low" if "low" in perf.values() else "ok") if perf else None
+    verdict = ("FAILED" if not functional else "INCONCLUSIVE" if not complete
+               else "BELOW_TARGET" if performance == "low" else "PASSED")
+    return {"functional": functional, "complete": complete, "performance": performance,
+            "missing": missing, "notrun": notrun, "verdict": verdict}
+
+
+VERDICT_TEXT = {
+    "PASSED": "PASSED",
+    "FAILED": "NOT PASSED",
+    "INCONCLUSIVE": "INCONCLUSIVE (nothing failed, but the lab's required measurements were not all made)",
+    "BELOW_TARGET": "BELOW TARGET (functional checks passed; a measurement missed its performance target)",
+}
 
 
 # ---------------------------------------------------------------- collection
@@ -901,29 +955,39 @@ def cmd_check(a):
                 print("Fix the prerequisites (Before you start) first; the tasks did not run.")
             elif bad:
                 print("Resume at Task %d; rerun just that part with: aina-hw check %s --task %d" % (bad[0]["n"], a.lab, bad[0]["n"]))
+    if record["missing"]:
+        print("Required measurement(s) not made: %s" % ", ".join(
+            "%s (Task %d: %s)" % (r["key"], r["task"], r["text"]) for r in record["required"] if r["key"] in record["missing"]))
+    if record["notrun"]:
+        print("Declared task(s) not run: %s" % ", ".join(str(n) for n in record["notrun"]))
+    verdict = VERDICT_TEXT[record["verdict"]]
     if only is not None:
-        verdict = "TASK %d %s" % (only, "PASSED" if counts["FAIL"] == 0 and counts["PASS"] > 0 and code == 0 else "NOT PASSED")
-        print("\nResult: %s (a single-task run never marks the whole lab verified)  saved to %s" % (verdict, out))
-        return 0 if counts["FAIL"] == 0 and counts["PASS"] > 0 and code == 0 else 1
+        print("\nResult: TASK %d %s (a single-task run never marks the whole lab verified)  saved to %s" % (only, verdict, out))
+        return 0 if record["verdict"] == "PASSED" else 1
     print("\nResult: %s  (%d pass, %d fail, %d warn, %d skip)  saved to %s" % (
-        "PASSED" if record["passed"] else "NOT PASSED", counts["PASS"], counts["FAIL"], counts["WARN"], counts["SKIP"], out))
+        verdict, counts["PASS"], counts["FAIL"], counts["WARN"], counts["SKIP"], out))
     return 0 if record["passed"] else 1
 
 
 def build_check_record(lab, output, code, started, duration, labenv, only=None, host=None, finished=None):
     """The aina.hw.check/1 record for one run. `tasks` and `only_task` are additions: readers that do not know
     them still see the same results/counts/passed fields as before. A single-task run (only_task) is never
-    `passed`, because it did not check the whole lab."""
+    `passed`, because it did not check the whole lab. `passed` means verdict PASSED (see grade_check)."""
     results = parse_check_output(output)
     counts = {s: sum(1 for r in results if r["status"] == s) for s in ("PASS", "FAIL", "WARN", "SKIP")}
+    # A single-task run says nothing about the tasks it skipped: leave them out instead of NOTRUN.
+    tasks = summarize_tasks(results, parse_task_markers(output), parse_declared_tasks(output) if only is None else ())
+    required, met, perf = parse_requirements(output), parse_met(output), parse_perf(output)
+    grade = grade_check(counts, code, tasks, required, met, perf, only)
     return {
         "schema": CHECK_SCHEMA, "toolkit": VERSION, "lab": lab, "host": host or socket.gethostname(),
         "lab_name": labenv.get("LAB_NAME"), "fabric": labenv.get("FABRIC"),
         "started": started, "finished": finished or now(), "duration_s": duration,
-        "exit_code": code, "passed": only is None and code == 0 and counts["FAIL"] == 0 and counts["PASS"] > 0,
-        "only_task": only, "counts": counts, "results": results,
-        # A single-task run says nothing about the tasks it skipped: leave them out instead of NOTRUN.
-        "tasks": summarize_tasks(results, parse_task_markers(output), parse_declared_tasks(output) if only is None else ()),
+        "exit_code": code, "passed": only is None and grade["verdict"] == "PASSED",
+        "verdict": grade["verdict"], "functional": grade["functional"], "complete": grade["complete"],
+        "performance": grade["performance"], "missing": grade["missing"], "notrun": grade["notrun"],
+        "required": required, "met": met, "perf": perf,
+        "only_task": only, "counts": counts, "results": results, "tasks": tasks,
     }
 
 

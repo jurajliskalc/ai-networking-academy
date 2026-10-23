@@ -150,3 +150,20 @@ test('Connect: pasted check.sh output is recorded as a pasted result', async ({ 
   await page.goto(`#/hw/labs/${LAB}`);
   await expect(page.getByText(/^Verified \d{4}-\d\d-\d\d \(2 checks, pasted\)$/)).toBeVisible();
 });
+
+test('Connect: a run that skipped a required measurement is inconclusive, not verified', async ({ page }) => {
+  await page.goto('#/hw/connect');
+  await page.getByText('Or paste the output of a check.sh').click();
+  await page.getByLabel('Lab the pasted output belongs to').selectOption(LAB);
+  await page.getByLabel('check.sh output').fill(
+    'TASKS: 5\nREQUIRE: 5 bw RDMA write bandwidth A -> B\nPASS: tools installed\nTASK: 5 Bandwidth\nSKIP: perftest missing\n');
+  await page.getByRole('button', { name: 'Record result', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Imported:' }))
+    .toContainText(`for ${LAB}: inconclusive. Nothing failed, but the run is incomplete (not measured: RDMA write bandwidth A -> B).`);
+  const row = page.locator('details').filter({ has: page.getByRole('link', { name: title(LAB), exact: true }) });
+  await expect(row.locator('[aria-label="Inconclusive"]')).toBeVisible();
+  expect((await progressOf(page)).labs[LAB]?.solved ?? false).toBe(false);
+  await page.goto(`#/hw/labs/${LAB}`);
+  await expect(page.getByText(/^Inconclusive · 1 pass, 0 fail, 0 warn$/)).toBeVisible();
+  await expect(page.getByText('Nothing failed, but the run is incomplete (not measured: RDMA write bandwidth A -> B).')).toBeVisible();
+});

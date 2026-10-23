@@ -112,7 +112,10 @@ imports both, either as files or from `aina-hw serve`, a read-only HTTP agent bo
 origin allow-list, reached through an SSH tunnel. `src/hw/report.ts` runs the health review; a passing check
 marks the lab solved with evidence (host, time). Check scripts mark the lab's tasks (`task N "title"` in
 `lib.sh`, `TASK:` lines); `src/hw/checks.ts` folds full and `--task N` runs into per-task progress
-(`aina.hw.v1` `tasks`) for the lab page's "Resume at Task N". The Live view (`/hw/live`, and a sidebar card
+(`aina.hw.v1` `tasks`) for the lab page's "Resume at Task N". Checks also declare required measurements
+(`require` / `met` / `perf_ok` / `perf_low` in `lib.sh`; `REQUIRE:`, `MET:`, `PERF:` lines), and
+`aina_hw.grade_check` and its twin `gradeCheck` in `checks.ts` grade a run as PASSED, FAILED, INCONCLUSIVE
+(a required measurement or covered task missing) or BELOW_TARGET; only PASSED verifies a lab. The Live view (`/hw/live`, and a sidebar card
 on hardware lab pages) polls `GET /api/live` (`aina.hw.live/1` counter snapshots, host B/C over one SSH
 session with `serve --live-remote`); `src/hw/live.ts` turns deltas into rates. `labs/hw-toolkit/tests/make_demo_report.py` generates the
 app's demo report from the same fake hosts the Python tests use.

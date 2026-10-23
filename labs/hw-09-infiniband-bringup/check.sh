@@ -11,6 +11,8 @@ set -uo pipefail
 . "$(dirname "$0")/../hw-toolkit/lib.sh"
 aina_load_env
 aina_tasks 1 2 6
+require 2 sm "a master subnet manager found with sminfo"
+require 6 ib-bw "RDMA write bandwidth over InfiniBand A -> B"
 
 need_cmd ibstat sminfo ib_write_bw || aina_finish
 check_ssh B || aina_finish
@@ -49,7 +51,7 @@ if task 2 "Start a subnet manager"; then
     fail "SM LID A='${SMLID[A]:-}' B='${SMLID[B]:-}': hosts must see the same non-zero SM LID"
   fi
   SMINFO=(sminfo -C "$A_RDMA_DEV" -P "$RDMA_PORT"); [[ $EUID -eq 0 ]] || SMINFO=(sudo -n "${SMINFO[@]}")
-  if s=$("${SMINFO[@]}" 2>/dev/null) && [[ "$s" == *MASTER* ]]; then pass "$s"
+  if s=$("${SMINFO[@]}" 2>/dev/null) && [[ "$s" == *MASTER* ]]; then pass_met sm "$s"
   else fail "sminfo finds no master subnet manager (or could not run it as root: run 'sudo -v' first)"; fi
 fi
 
@@ -58,7 +60,7 @@ if task 6 "RDMA bandwidth over InfiniBand"; then
   start_server B "$log" timeout 40 ib_write_bw -d "$B_RDMA_DEV" -i "$RDMA_PORT" -D 5 -F --report_gbits -p 18609
   if timeout 40 ib_write_bw -d "$A_RDMA_DEV" -i "$RDMA_PORT" -D 5 -F --report_gbits -p 18609 "$HOST_B" >"$out" 2>&1; then
     stop_server
-    pass "ib_write_bw over InfiniBand A -> B: $(bw_average "$out") Gb/s average (port rate $(port_attr A rate))"
+    pass_met ib-bw "ib_write_bw over InfiniBand A -> B: $(bw_average "$out") Gb/s average (port rate $(port_attr A rate))"
   else
     kill_server
     fail "ib_write_bw A -> B failed (TCP 18609 to $HOST_B open? server said: $(excerpt "$log")) $(tail -2 "$out" | tr '\n' ' ' | cut -c1-160)"

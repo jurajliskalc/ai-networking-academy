@@ -5,6 +5,10 @@
 // Task n, result lines carry `task`, and records carry a `tasks` summary. `aina-hw check LAB --task N`
 // writes a single-task record (`only_task: N`) that never verifies the whole lab. Older records without
 // any of this still parse; they just have no per-task view.
+//
+// Grading (toolkit 1.2+): scripts declare required measurements (`REQUIRE: <task> <key> <what>`), report them
+// made (`MET: <key>`) and report performance targets (`PERF: <key> ok|low`). `passed` (the lab is verified)
+// needs the verdict PASSED: no failure, every requirement met, no declared task left unrun, nothing below target.
 import type { TocEntry } from '../types';
 
 export type CheckStatus = 'PASS' | 'FAIL' | 'WARN' | 'SKIP';
@@ -13,6 +17,9 @@ export interface CheckLine { status: CheckStatus; text: string; task?: number }
  *  task (`TASKS: 1 2 3`) but stopped before it, usually at failed prerequisites. */
 export type TaskStatus = CheckStatus | 'NONE' | 'NOTRUN';
 export interface TaskResult { n: number; title: string; status: TaskStatus; counts: Record<CheckStatus, number> }
+export interface Requirement { task: number; key: string; text: string }
+export type Verdict = 'PASSED' | 'FAILED' | 'INCONCLUSIVE' | 'BELOW_TARGET';
+export interface Grade { functional: boolean; complete: boolean; performance: 'ok' | 'low' | null; missing: string[]; notrun: number[]; verdict: Verdict }
 export interface CheckRecord {
   schema: string; toolkit?: string; lab: string; host: string | null; lab_name?: string | null; fabric?: string | null;
   started?: string; finished: string; duration_s?: number; exit_code?: number | null; passed: boolean;
@@ -23,6 +30,9 @@ export interface CheckRecord {
   only_task: number | null;
   /** 'toolkit' when produced by aina-hw, 'pasted' when parsed from text in the browser. */
   source: 'toolkit' | 'pasted';
+  required: Requirement[]; met: string[]; perf: Record<string, 'ok' | 'low'>;
+  /** Recomputed by gradeCheck, never read from the file. */
+  verdict: Verdict; functional: boolean; complete: boolean; performance: 'ok' | 'low' | null; missing: string[]; notrun: number[];
 }
 
 export const CHECK_SCHEMA = 'aina.hw.check/1';
@@ -88,8 +98,77 @@ export function summarizeTasks(results: CheckLine[], titles: Map<number, string>
   });
 }
 
-/** Same rule as aina_hw.py: passed = at least one PASS, no FAIL (and a zero exit code when known). */
+/** The functional rule: at least one PASS, no FAIL, and a zero exit code when known. Not enough to verify a lab. */
 export const isPassed = (c: Record<CheckStatus, number>, exit?: number | null) => c.FAIL === 0 && c.PASS > 0 && (exit === undefined || exit === null || exit === 0);
+
+const KEY = '[A-Za-z0-9_.-]+';
+const REQ_RE = new RegExp(`^\\s*REQUIRE:\\s*(\\d+)\\s+(${KEY})\\s*(.*)$`);
+const MET_RE = new RegExp(`^\\s*MET:\\s*(${KEY})\\s*$`);
+const PERF_RE = new RegExp(`^\\s*PERF:\\s*(${KEY})\\s+(ok|low)\\s*$`);
+const KEY_RE = new RegExp(`^${KEY}$`);
+
+/** `REQUIRE: 4 bw RDMA bandwidth measured` lines (lib.sh require), first per key. */
+export function parseRequirements(text: string): Requirement[] {
+  const out: Requirement[] = [];
+  for (const line of text.split(/\r?\n/)) {
+    const m = line.match(REQ_RE);
+    if (m && !out.some((r) => r.key === m[2])) out.push({ task: Number(m[1]), key: m[2], text: m[3].trim() });
+  }
+  return out;
+}
+
+/** `MET: bw` lines (lib.sh met), sorted and unique. */
+export const parseMet = (text: string) =>
+  [...new Set(text.split(/\r?\n/).map((l) => l.match(MET_RE)?.[1]).filter((k): k is string => !!k))].sort();
+
+/** `PERF: bw ok|low` lines; one low result makes the key low. */
+export function parsePerf(text: string): Record<string, 'ok' | 'low'> {
+  const out: Record<string, 'ok' | 'low'> = {};
+  for (const line of text.split(/\r?\n/)) {
+    const m = line.match(PERF_RE);
+    if (m && out[m[1]] !== 'low') out[m[1]] = m[2] as 'ok' | 'low';
+  }
+  return out;
+}
+
+/** Same as aina_hw.grade_check: functional, complete (requirements met, no declared task unrun), performance,
+ *  then one verdict. A single-task run owes only its own task's and the prerequisites' requirements. */
+export function gradeCheck(counts: Record<CheckStatus, number>, exit: number | null | undefined, tasks: TaskResult[],
+  required: Requirement[], met: string[], perf: Record<string, 'ok' | 'low'>, only: number | null = null): Grade {
+  const functional = isPassed(counts, exit);
+  const missing = required.filter((r) => only === null || r.task === 0 || r.task === only).map((r) => r.key).filter((k) => !met.includes(k));
+  const notrun = only === null ? tasks.filter((t) => t.status === 'NOTRUN').map((t) => t.n) : [];
+  const complete = functional && !missing.length && !notrun.length;
+  const vals = Object.values(perf);
+  const performance = vals.length ? (vals.includes('low') ? 'low' : 'ok') : null;
+  const verdict: Verdict = !functional ? 'FAILED' : !complete ? 'INCONCLUSIVE' : performance === 'low' ? 'BELOW_TARGET' : 'PASSED';
+  return { functional, complete, performance, missing, notrun, verdict };
+}
+
+export const VERDICT_LABEL: Record<Verdict, string> = { PASSED: 'Passed', FAILED: 'Not passed', INCONCLUSIVE: 'Inconclusive', BELOW_TARGET: 'Below target' };
+
+/** Why a record is not verified, in one sentence (empty when it passed). */
+export function verdictDetail(r: CheckRecord): string {
+  if (r.verdict === 'FAILED') return r.counts.FAIL ? `${r.counts.FAIL} check(s) failed.` : 'No check passed.';
+  if (r.verdict === 'INCONCLUSIVE') {
+    const parts: string[] = [];
+    if (r.missing.length) parts.push(`not measured: ${r.missing.map((k) => r.required.find((q) => q.key === k)?.text || k).join('; ')}`);
+    if (r.notrun.length) parts.push(`task${r.notrun.length > 1 ? 's' : ''} ${r.notrun.join(', ')} not run`);
+    return `Nothing failed, but the run is incomplete (${parts.join('; ')}).`;
+  }
+  if (r.verdict === 'BELOW_TARGET') return `Functional checks passed, but below the performance target: ${Object.keys(r.perf).filter((k) => r.perf[k] === 'low').join(', ')}.`;
+  return '';
+}
+
+/** Re-grade a stored record (older ones have no requirements, tasks or verdict fields). */
+export function regrade(r: CheckRecord): CheckRecord {
+  return graded({ ...r, tasks: r.tasks ?? [], only_task: r.only_task ?? null, required: r.required ?? [], met: r.met ?? [], perf: r.perf ?? {} });
+}
+
+function graded(base: Omit<CheckRecord, 'passed' | keyof Grade>): CheckRecord {
+  const g = gradeCheck(base.counts, base.exit_code, base.tasks, base.required, base.met, base.perf, base.only_task);
+  return { ...base, ...g, passed: base.only_task === null && g.verdict === 'PASSED' };
+}
 
 export function parseCheckJson(json: unknown): CheckRecord {
   if (!json || typeof json !== 'object') throw new Error('Not a JSON object');
@@ -110,21 +189,32 @@ export function parseCheckJson(json: unknown): CheckRecord {
     else titles.set(t.n as number, typeof t.title === 'string' ? t.title : '');
   }
   const only = Number.isInteger(o.only_task) && (o.only_task as number) >= 0 ? (o.only_task as number) : null;
-  return {
+  const required = Array.isArray(o.required)
+    ? (o.required as Partial<Requirement>[]).filter((r) => !!r && Number.isInteger(r.task) && typeof r.key === 'string' && KEY_RE.test(r.key))
+      .map((r) => ({ task: r.task!, key: r.key!, text: typeof r.text === 'string' ? r.text : '' }))
+    : [];
+  const met = Array.isArray(o.met) ? (o.met as unknown[]).filter((k): k is string => typeof k === 'string') : [];
+  const perf: Record<string, 'ok' | 'low'> = {};
+  if (o.perf && typeof o.perf === 'object') for (const [k, v] of Object.entries(o.perf as Record<string, unknown>)) if (v === 'ok' || v === 'low') perf[k] = v;
+  return graded({
     schema: CHECK_SCHEMA, toolkit: typeof o.toolkit === 'string' ? o.toolkit : undefined, lab: o.lab, host: typeof o.host === 'string' ? o.host : null,
     lab_name: typeof o.lab_name === 'string' ? o.lab_name : null, fabric: typeof o.fabric === 'string' ? o.fabric : null,
     started: typeof o.started === 'string' ? o.started : undefined, finished: typeof o.finished === 'string' ? o.finished : new Date().toISOString(),
     duration_s: typeof o.duration_s === 'number' ? o.duration_s : undefined, exit_code: exit,
-    // Recomputed rather than trusted, so a hand-edited "passed": true does not count; one task never verifies a lab.
-    passed: only === null && isPassed(counts, exit), counts, results, tasks: summarizeTasks(results, titles, declared), only_task: only, source: 'toolkit',
-  };
+    // passed and the verdict are recomputed rather than trusted; one task never verifies a lab.
+    counts, results, tasks: summarizeTasks(results, titles, declared), only_task: only, source: 'toolkit', required, met, perf,
+  });
 }
 
 export function fromPastedText(lab: string, text: string, now = new Date()): CheckRecord {
   const results = parseCheckLines(text);
   if (!results.length) throw new Error('No PASS:/FAIL:/WARN:/SKIP: lines found in the pasted text');
   const counts = countLines(results);
-  return { schema: CHECK_SCHEMA, lab, host: null, finished: now.toISOString(), passed: isPassed(counts), counts, results, tasks: summarizeTasks(results, parseTaskMarkers(text), parseDeclaredTasks(text)), only_task: null, source: 'pasted' };
+  return graded({
+    schema: CHECK_SCHEMA, lab, host: null, finished: now.toISOString(), counts, results,
+    tasks: summarizeTasks(results, parseTaskMarkers(text), parseDeclaredTasks(text)), only_task: null, source: 'pasted',
+    required: parseRequirements(text), met: parseMet(text), perf: parsePerf(text),
+  });
 }
 
 /** Newest full run per lab. Single-task runs never replace a full run here (they go to mergeTasks). */

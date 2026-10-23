@@ -361,6 +361,15 @@ mlnx-ofed-kernel-utils). Not in Ubuntu's archive. INBOX equivalents:
   (hw-02: 98.0 Gb/s, hw-05: 89.1 Gb/s under 20 s load); hw-03 fails Tasks 2-4 as expected with the default QoS
   (trust pcp, PFC off) and passes Task 5 (DOCA ECN switches on for priority 3). hw-01 `--task 8` reran only the
   report task.
+- Graded checks (toolkit 1.2, `REQUIRE:`/`MET:`/`PERF:`), rerun on both hosts: hw-01, 02, 03 (QoS applied),
+  04 (fault `ip-missing` injected, diagnosed, restored), 05, 09, 10 (two SMs), 11 (SM with the 4 KiB
+  broadcast group), 12 (lab partitions), 13, 14 and 15 grade PASSED. hw-02 with `AINA_MIN_BW_PCT=99` grades
+  BELOW_TARGET (98.02 Gb/s = 98%). hw-06 to hw-08 stop at the prerequisites (2 hosts, no nvidia-smi) with
+  their tasks NOTRUN and their required measurements listed. hw-10 `--task 2` passes on its own.
+- Found while rerunning: right after `inject.sh --restore` (ip-missing) one `ibv_rc_pingpong` failed and the
+  next, 5 s later, worked (the check now tries three times, 3 s apart). With the parent `ibs64f1` down, the
+  P_Key child interfaces show `M-DOWN`, every partition ping fails, and so the limited/limited "ping is
+  blocked" result passed for the wrong reason; the hw-12 check now fails first on a parent that is not up.
 
 ## InfiniBand mode (verified 2026-10-23)
 

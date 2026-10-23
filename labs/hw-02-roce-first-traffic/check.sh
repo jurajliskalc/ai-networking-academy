@@ -9,6 +9,8 @@ set -uo pipefail
 . "$(dirname "$0")/../hw-toolkit/lib.sh"
 aina_load_env
 aina_tasks 1 2 3 5 8
+require 3 pingpong "an RC ping-pong A -> B"
+require 5 bw "RDMA write bandwidth A -> B, at least AINA_MIN_BW_PCT (default 60) % of the port rate"
 MIN_PCT=${AINA_MIN_BW_PCT:-60}
 
 need_cmd rdma ibv_devinfo ibv_rc_pingpong ib_write_bw ping || aina_finish
@@ -56,7 +58,7 @@ if task 3 "An RC ping-pong across the wire"; then
   log=$(mktemp)
   start_server B "$log" timeout 25 ibv_rc_pingpong -d "$B_RDMA_DEV" -i "$RDMA_PORT" -g "$GB" -p 18600 -n 100
   if timeout 25 ibv_rc_pingpong -d "$A_RDMA_DEV" -i "$RDMA_PORT" -g "$GA" -p 18600 -n 100 "$B_IP" >/dev/null 2>&1; then
-    pass "ibv_rc_pingpong: 100 iterations A -> B"
+    pass_met pingpong "ibv_rc_pingpong: 100 iterations A -> B"
     stop_server
   else
     fail "ibv_rc_pingpong A -> B failed (firewall on TCP 18600? GID? server said: $(excerpt "$log"))"
@@ -87,10 +89,10 @@ if task_selected 5 8; then
       rate=$(port_attr A rate | awk '{print $1}')
       if [[ -n "$bw" && -n "$rate" ]]; then
         pct=$(awk -v b="$bw" -v r="$rate" 'BEGIN {printf "%d", 100 * b / r}')
-        if (( pct >= MIN_PCT )); then pass "ib_write_bw: $bw Gb/s average = $pct% of the $rate Gb/s port rate"
-        else warn "ib_write_bw: $bw Gb/s is only $pct% of the $rate Gb/s port rate (check PCIe width/speed, NUMA, CPU governor)"; fi
+        if (( pct >= MIN_PCT )); then perf_ok bw "ib_write_bw: $bw Gb/s average = $pct% of the $rate Gb/s port rate"
+        else perf_low bw "ib_write_bw: $bw Gb/s is only $pct% of the $rate Gb/s port rate, below the $MIN_PCT% target (check PCIe width/speed, NUMA, CPU governor)"; fi
       else
-        pass "ib_write_bw completed"
+        pass_met bw "ib_write_bw completed (port rate or average not readable, so no target applied)"
       fi
     else
       fail "ib_write_bw A -> B failed: ${BW_ERR:-}"

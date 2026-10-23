@@ -10,6 +10,9 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 . "$HERE/../hw-toolkit/lib.sh"
 aina_load_env
 aina_tasks 2 3 4 5
+require 2 dscp-map "DSCP mapped to the lossless priority on both hosts"
+require 3 pfc "PFC on exactly the lossless priority on both hosts"
+require 4 lossless-traffic "RoCE test traffic counted on the lossless priority at host B"
 . "$HERE/qos-lib.sh"
 
 need_cmd ib_write_bw ethtool || aina_finish
@@ -39,7 +42,7 @@ if task 2 "Trust DSCP and map $ROCE_DSCP to priority $ROCE_PRIO"; then
       info "host $r: dcb has no portable trust read-out; on mlx5 a DSCP APP entry implies DSCP trust"
     fi
     prio=$(parse_dscp_prio "$ROCE_DSCP" <<<"${RAW[$r]}")
-    if [[ "$prio" == "$ROCE_PRIO" ]]; then pass "host $r: DSCP $ROCE_DSCP maps to priority $ROCE_PRIO"
+    if [[ "$prio" == "$ROCE_PRIO" ]]; then pass_met dscp-map "host $r: DSCP $ROCE_DSCP maps to priority $ROCE_PRIO"
     elif [[ -n "$prio" ]]; then fail "host $r: DSCP $ROCE_DSCP maps to priority $prio, expected $ROCE_PRIO"
     else fail "host $r: no DSCP $ROCE_DSCP -> priority mapping shown by $tool"; fi
   done
@@ -48,7 +51,7 @@ fi
 if task 3 "PFC on priority $ROCE_PRIO, and only there"; then
   for r in "${QHOSTS[@]}"; do
     pfc=$(parse_pfc <<<"${RAW[$r]}")
-    if [[ "$pfc" == "$ROCE_PRIO" ]]; then pass "host $r: PFC enabled on priority $ROCE_PRIO only"
+    if [[ "$pfc" == "$ROCE_PRIO" ]]; then pass_met pfc "host $r: PFC enabled on priority $ROCE_PRIO only"
     elif [[ -z "$pfc" ]]; then fail "host $r: could not read PFC state with ${TOOL[$r]}"
     else fail "host $r: PFC enabled on [$pfc], expected exactly [$ROCE_PRIO]"; fi
   done
@@ -76,7 +79,7 @@ if task 4 "Prove RoCE traffic uses the lossless priority"; then
     skip "this driver has no $k_rx counter in ethtool -S; check the priority counters your NIC exposes"
   else
     d=$(( rx1 - rx0 ))
-    if (( d > 100000000 )); then pass "host B received $((d / 1000000)) MB on priority $ROCE_PRIO during the test"
+    if (( d > 100000000 )); then pass_met lossless-traffic "host B received $((d / 1000000)) MB on priority $ROCE_PRIO during the test"
     else fail "host B counted only $d bytes on priority $ROCE_PRIO: the test traffic is not classified into the lossless priority"; fi
   fi
   if [[ -n "$tx0" && -n "$tx1" ]]; then

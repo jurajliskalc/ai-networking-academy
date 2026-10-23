@@ -2,11 +2,19 @@
 // check result per lab. Separate from learner progress (aina.progress.v1) because it describes a lab, not a
 // learner, and it can hold host names and IPs; nothing leaves the browser.
 import { useCallback, useSyncExternalStore } from 'react';
-import type { CheckRecord, LabTasks } from './checks';
+import { regrade, type CheckRecord, type LabTasks } from './checks';
 import type { Profile } from './profile';
 import type { Report } from './report';
 
 export const HW_KEY = 'aina.hw.v1';
+
+function regradeAll(checks: Record<string, CheckRecord>): Record<string, CheckRecord> {
+  const out: Record<string, CheckRecord> = {};
+  for (const [lab, r] of Object.entries(checks)) {
+    try { if (r && Array.isArray(r.results) && r.counts) out[lab] = regrade(r); } catch { /* drop a damaged record */ }
+  }
+  return out;
+}
 
 export interface HwState {
   profile: Profile | null; // raw saved values; sanitize with the variable list before use
@@ -31,7 +39,8 @@ function load(): HwState {
       profile: raw.profile && typeof raw.profile === 'object' ? raw.profile : null,
       report: raw.report && typeof raw.report === 'object' && Array.isArray(raw.report.hosts) ? raw.report : null,
       reportSource: typeof raw.reportSource === 'string' ? raw.reportSource : null,
-      checks: raw.checks && typeof raw.checks === 'object' ? raw.checks : {},
+      // Re-graded on load: records saved by an older version have no verdict.
+      checks: raw.checks && typeof raw.checks === 'object' ? regradeAll(raw.checks as Record<string, CheckRecord>) : {},
       tasks: raw.tasks && typeof raw.tasks === 'object' && !Array.isArray(raw.tasks) ? raw.tasks : {},
       agentUrl: typeof raw.agentUrl === 'string' ? raw.agentUrl : empty().agentUrl,
       agentAt: typeof raw.agentAt === 'string' ? raw.agentAt : null,
