@@ -2,7 +2,7 @@
 
 # AI Networking Academy
 
-**A hands-on training and validation platform for AI cluster networking.**
+**A hands-on training and validation platform for AI cluster networking.**<br />
 RDMA · RoCEv2 · InfiniBand · NCCL · lossless Ethernet · AI-fabric design · troubleshooting
 
 [![CI](https://github.com/jurajliskalc/ai-networking-academy/actions/workflows/ci.yml/badge.svg)](https://github.com/jurajliskalc/ai-networking-academy/actions/workflows/ci.yml)
@@ -15,10 +15,10 @@ RDMA · RoCEv2 · InfiniBand · NCCL · lossless Ethernet · AI-fabric design ·
 
 **[Live Academy](https://jurajliskalc.github.io/ai-networking-academy/)** ·
 **[Try the 5-minute PFC incident](https://jurajliskalc.github.io/ai-networking-academy/#/labs/sim-03-pfc-priority-mismatch)** ·
-**[Real hardware labs](https://jurajliskalc.github.io/ai-networking-academy/#/hw/labs)** ·
+**[Hardware labs](https://jurajliskalc.github.io/ai-networking-academy/#/hw/labs)** ·
 **[Hardware verification](docs/HARDWARE_VERIFICATION.md)** ·
 **[Architecture](docs/ARCHITECTURE.md)** ·
-**[5-minute tour](docs/PORTFOLIO_TOUR.md)**
+**[Tour](docs/PORTFOLIO_TOUR.md)**
 
 <a href="https://jurajliskalc.github.io/ai-networking-academy/#/labs/sim-03-pfc-priority-mismatch"><img src="docs/screenshots/incident-tour.gif" alt="A fault-injection lab solved in six steps: reproduce a slow all-reduce, read PFC pause counters on the leaf and on the NIC, find PFC enabled on the wrong priority, fix it, and have the lab grade the fabric" width="1000" /></a>
 
