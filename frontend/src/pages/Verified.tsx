@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { BadgeCheck } from 'lucide-react';
 import { labPath, useIndex } from '../content';
+import { REPO_URL } from '../components/Layout';
 import Markdown from '../components/Markdown';
 import { Card, Loading, PageHeader } from '../components/ui';
 import type { ContentIndex, VerifiedNote } from '../types';
@@ -41,6 +42,11 @@ export default function Verified() {
         with the distribution's inbox stack and with NVIDIA DOCA-OFED 3.4, Ethernet back to back and InfiniBand. Each note is an observation
         on that hardware and those versions, not a promise for every NIC, firmware or switch: check yours. {ix.verifiedNotes.length} notes,
         each linked to the lesson or lab where it is explained.
+        <span className="mt-2 block text-sm">
+          Observed on 2026-10-23. What was run and what the tools printed on each driver stack is recorded in the{' '}
+          <a href={`${REPO_URL}/blob/main/docs/HARDWARE_VERIFICATION.md`} target="_blank" rel="noreferrer" className="text-data underline underline-offset-2">hardware verification reference<span className="sr-only"> (opens in a new tab)</span></a>;
+          anything not listed there is source-backed or illustrative, and labelled as such.
+        </span>
       </PageHeader>
       {gs.length === 0 && <p className="text-muted" role="status">No notes yet.</p>}
       <div className="space-y-10">

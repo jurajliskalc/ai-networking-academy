@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { RotateCcw } from 'lucide-react';
 import { createFabric, LEAVES, NODES, SPINES, type FabricMode, type FabricState } from '../sim/fabric';
 import { labState } from '../sim/lab';
+import { REPO_URL } from '../components/Layout';
 import Terminal from '../components/Terminal';
 import { Button, Card, PageHeader } from '../components/ui';
 
@@ -58,7 +59,8 @@ export default function Simulator() {
       <PageHeader eyebrow="Sandbox" title="Fabric simulator">
         A healthy 32-GPU cluster to explore freely: 4 nodes × 8 H100-class GPUs, 8 × 400G {variant === 'ib' ? 'NDR InfiniBand HCAs' : 'RoCE NICs'} per node, 8 rail leaves and 2 spines.
         Break things on purpose and watch the counters. Share a session by link: <code>#/simulator?run=ibdev2netdev&amp;run=nvidia-smi%20topo%20-m</code> (add <code>fabric=ib</code> for the InfiniBand variant). For guided incidents, open a <Link to="/labs" className="text-data underline underline-offset-2">simulator lab</Link>.
-        The model and its limits are described in <code>docs/SIMULATOR.md</code>.
+        It is a deterministic teaching model, not an emulator: what it models and where it stops is described in{' '}
+        <a href={`${REPO_URL}/blob/main/docs/SIMULATOR.md`} target="_blank" rel="noreferrer" className="text-data underline underline-offset-2"><code>docs/SIMULATOR.md</code><span className="sr-only"> (opens in a new tab)</span></a>.
       </PageHeader>
       <Card className="mb-6 p-4"><Topology /></Card>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">

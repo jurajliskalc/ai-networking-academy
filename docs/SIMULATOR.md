@@ -8,6 +8,16 @@ owning a GPU cluster. Code: `frontend/src/sim/` (`fabric.ts` model, `shell.ts` c
 > *roughly how much* bandwidth is lost for each fault class. Absolute numbers, counter magnitudes and
 > exact output formats of real products differ by hardware generation, firmware and software version.
 
+## What the model is, and is not
+
+| | |
+|---|---|
+| **Modelled** | The topology and its configuration state (MTU, PFC, trust, switch QoS, GIDs, PCIe, NCCL settings, link state); which counters each fault class moves and in which direction; which tests fail and with what message; per-flow ECMP hashing for cross-rail traffic; subnet manager election and port state in the InfiniBand variant |
+| **Approximated** | Performance: a nominal bus bandwidth per healthy rail multiplied by a fixed factor per fault class ([How performance is computed](#how-performance-is-computed)). Counter magnitudes. Switch CLI output, which follows vendor documentation and has not been compared with a switch |
+| **Deterministic** | The same commands on the same lab always print the same output, and counters advance by fixed amounts each time a test runs. That is what lets the test suite replay and grade every lab |
+| **Pinned to real hardware** | The format of host-tool output (line order, field names, units), compared with captures from ConnectX-5 hosts by the [golden-format tests](#golden-format-tests-simulator-vs-real-captures). The values are the model's |
+| **Not a performance model** | No packets, queues or buffers are simulated. Do not read the absolute numbers as predictions for real hardware, and do not use the simulator to size or tune a fabric |
+
 ## The cluster
 
 | Item | Model |
