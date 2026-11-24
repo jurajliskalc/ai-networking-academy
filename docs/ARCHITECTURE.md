@@ -17,7 +17,9 @@ flowchart LR
 ## Design decisions
 
 - **Static site, no backend.** The same build runs from GitHub Pages or from a laptop, progress stays in the
-  browser, and there is no service to operate or to leak learner data.
+  browser, and there is no service to operate or to leak learner data. The published site counts visits
+  through an outside service, which is told nothing about the learner's progress
+  ([Outside requests](#outside-requests)).
 - **A deterministic teaching model, not an emulator.** The simulator reproduces which counters move, which
   tests fail and roughly how much bandwidth each fault class costs. Performance comes from a fixed factor
   per fault class; no packets or queues are simulated. Being deterministic is what lets a test replay every
@@ -156,6 +158,36 @@ Target: WCAG 2.2 AA, checked with axe-core in headless Chrome on every route in 
   live region, colour-coded states a text equivalent, scrollable areas a tab stop, and targets at least
   24 px. Do not use headings inside widgets. New widgets follow the same checklist.
 
+### Outside requests
+
+The app makes requests to two other parties, and to no others.
+
+* **Google Fonts.** `index.html` loads the Inter and JetBrains Mono stylesheet and font files from
+  `fonts.googleapis.com` and `fonts.gstatic.com`, wherever the app runs. Without them the font stacks in
+  `src/index.css` fall back to system fonts.
+* **The visit counter** (`src/visitors.ts`, `src/components/VisitorCount.tsx`). On the published site
+  only (`PUBLISHED_URL`), each page load sends one request to the `/count` endpoint of
+  [GoatCounter](https://www.goatcounter.com), and a second request reads the number of visits shown in
+  the sidebar. The ping carries one fixed path for the whole app (`/ai-networking-academy`), a flag for
+  WebDriver-driven browsers and a cache buster. It does not carry the route, the page title, the
+  referrer, the screen size or anything from `localStorage`, and no cookie is set. GoatCounter's script
+  is not loaded; the two endpoints are called directly, as its documentation allows.
+
+  What GoatCounter learns beyond that is what any web request shows: the IP address and the browser's
+  request headers, from which it derives, depending on the account's settings, the browser, the system,
+  the language and the country. Its documentation (read on 2026-11-24) says the IP address and user
+  agent are held in memory for 8 hours to tell one visit from the next and are never stored. The number
+  in the sidebar is therefore visits, not people: by that documentation, loads from the same browser and
+  address within about 8 hours count once.
+
+  Run from a laptop, from `vite preview`, from a fork or from any other host, neither request is made,
+  and an empty `GOATCOUNTER_CODE` switches the counter off everywhere. When GoatCounter cannot be
+  reached (offline, a content blocker) the line in the sidebar is absent and nothing else changes.
+  `tests/visitors.test.ts` pins the URLs and the host rule. `e2e/visitors.spec.ts` serves the build to
+  Chrome under the published URL with GoatCounter stubbed and checks one ping per page load, what the
+  ping carries, where the count is shown and four ways of failing; it also checks that a locally served
+  build contacts nothing but Google Fonts.
+
 ## Real hardware track
 
 The browser cannot reach the learner's servers, so the toolkit does the work on the hosts and the app reads
@@ -179,8 +211,8 @@ app's demo report from the same fake hosts the Python tests use.
 
 `src/progress.ts` holds pure, unit-tested functions (scoring, SM-2 scheduling, streaks); `src/store.tsx`
 binds them to React and `localStorage` (`aina.progress.v1`), syncing across tabs. Simulator lab state is
-stored per lab (`aina.sim.<lab id>`). Settings offers JSON export/import and reset. No data leaves the
-browser.
+stored per lab (`aina.sim.<lab id>`). Settings offers JSON export/import and reset. None of it leaves the
+browser (the only requests to other parties are listed under [Outside requests](#outside-requests)).
 
 A lesson counts as **mastered** only when it is read *and* its quiz is passed; a simulator lab counts as
 solved only when the diagnosis is right *and* the fabric passes every check.

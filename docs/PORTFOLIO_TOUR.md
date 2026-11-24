@@ -5,7 +5,7 @@ watching it move, breaking it and fixing it. This page is the short version, in 
 below is the real app, captured from the current build.
 
 **[Open the live academy](https://jurajliskalc.github.io/ai-networking-academy/)** · no account, nothing to
-install, nothing leaves your browser.
+install, your progress stays in your browser.
 
 ## Break a cluster. Then fix it.
 

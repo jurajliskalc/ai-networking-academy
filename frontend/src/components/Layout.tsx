@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import Search from './Search';
 import AppearanceMenu from './AppearanceMenu';
+import VisitorCount from './VisitorCount';
 
 const NAV = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
@@ -117,6 +118,7 @@ export default function Layout({ children }: { children: ReactNode }) {
         {nav}
         <div className="mt-auto space-y-2 px-2 pt-6 text-xs text-muted">
           <div className="flex items-center gap-2"><GraduationCap size={14} aria-hidden />Beginner → Master · 13 modules</div>
+          <VisitorCount />
           <a href={REPO_URL} target="_blank" rel="noreferrer" className="flex items-center gap-2 hover:text-fg"><Github size={14} aria-hidden />Source on GitHub<span className="sr-only"> (opens in a new tab)</span></a>
         </div>
       </aside>

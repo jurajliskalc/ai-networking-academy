@@ -5,6 +5,18 @@ Notable changes to AI Networking Academy. The format follows
 Lesson, quiz, lab and widget IDs are a compatibility promise: learner progress is keyed by them, so
 renaming or removing one is a breaking change.
 
+## [Unreleased]
+
+### Added
+- A visit counter in the sidebar, above "Source on GitHub". The published site reports each page load to
+  GoatCounter (one fixed path, no cookie, no third-party script) and shows the number of visits. A copy
+  run from a laptop or from a fork makes neither request.
+
+### Changed
+- The docs no longer say that nothing leaves the browser. Progress and lab data stay there;
+  docs/ARCHITECTURE.md ("Outside requests") lists the two requests the app makes to other parties:
+  Google Fonts, which it has loaded since 1.0.0, and the visit counter.
+
 ## [1.1.0] - 2026-11-24
 
 Full notes: [docs/releases/v1.1.0.md](docs/releases/v1.1.0.md).

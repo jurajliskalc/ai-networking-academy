@@ -178,7 +178,7 @@ For people who want to study on their own gear, from one VM up to GPU nodes behi
    `aina-hw check <lab>` runs a lab's `check.sh`.
 3. `aina-hw serve` exposes the results read-only on `127.0.0.1:8765`. Reach it through an SSH tunnel, or
    import the JSON files instead. The academy reviews the fabric's health in the browser and marks labs
-   whose check passed as verified. Nothing leaves your browser.
+   whose check passed as verified. The results stay in your browser.
 
 Labs that change NIC or kernel settings save the original state and ship restore scripts. The labs are
 written for NVIDIA ConnectX NICs, with notes on the generic Linux equivalents.
@@ -228,6 +228,11 @@ A static single-page app (React 19, TypeScript, Vite, Tailwind CSS v4) with no b
 content is plain Markdown and YAML under [`content/`](content), validated and compiled to JSON at build
 time. GitHub Actions validates, tests, builds and browser-tests every push, and deploys `main` to GitHub
 Pages. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+Your progress never leaves the browser. The published site counts visits with
+[GoatCounter](https://www.goatcounter.com): one request per page load, without a cookie, a third-party
+script or anything about what you do in the academy. A copy you run yourself does not count anything
+([what is sent](docs/ARCHITECTURE.md#outside-requests)).
 
 ```
 content/      lessons, quizzes, labs, exams, commands, glossary (Markdown + YAML)
