@@ -1,6 +1,6 @@
 ---
 id: interview-preparation
-title: "Interview preparation: how AI networking interviews work and how to answer"
+title: "Technical interviews and design reviews: how AI networking interviews work and how to answer"
 module: m12-capstone
 level: 4
 estimated_minutes: 90

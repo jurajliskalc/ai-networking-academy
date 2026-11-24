@@ -139,7 +139,7 @@ agents follow are in [CLAUDE.md](CLAUDE.md).
 | 9 | AI cluster design: rail-optimized topologies, SuperPOD, sizing, optics, NVL72 | Master |
 | 10 | Operations: telemetry, gNMI, burn-in, automation, UFM/NetQ | Master |
 | 11 | Troubleshooting mastery: methodology, BER/FEC, lossless misconfigs, stragglers, case studies | Master |
-| 12 | Capstone (a 1,024-GPU fabric design), interview prep, exam strategy | Master |
+| 12 | Capstone (a 1,024-GPU fabric design), technical interviews and design reviews, exam strategy | Master |
 
 The full lesson map is in [docs/CURRICULUM_PLAN.md](docs/CURRICULUM_PLAN.md).
 
