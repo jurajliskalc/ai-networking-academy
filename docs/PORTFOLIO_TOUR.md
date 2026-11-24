@@ -120,8 +120,8 @@ Built with AI coding agents working under my direction; how their output is veri
 - **Lab checks as executable evidence.** A lab counts as verified only when its `check.sh` passed with
   every required measurement made. A run whose main measurement was skipped is INCONCLUSIVE, not a pass.
 - **A local-only hardware agent.** The browser cannot reach a learner's servers, so `aina-hw serve` binds to
-  127.0.0.1, is read-only, checks the Host header and an origin allow-list, and is reached through an SSH
-  tunnel. Importing JSON files works without it.
+  127.0.0.1 by default, answers only read requests, checks the Host header and an origin allow-list, and is
+  reached through an SSH tunnel. Importing JSON files works without it.
 
 ## What is verified, and what is not
 
