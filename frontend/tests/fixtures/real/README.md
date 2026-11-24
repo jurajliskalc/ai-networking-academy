@@ -22,5 +22,6 @@ line was removed. Where the command line ended in `; echo rc=$?` or a second com
 those lines were removed; the tool's own output is unchanged. The `mlxlink` files are the first two runs of a
 separate `mlxlink -d /dev/fwctl/fwctl0` capture (the `-m` run, which lists the cable serial number, is not included).
 
-The values (GUIDs, MACs, IPs, counters, rates) are those of this lab and this run; the tests mask them and compare
-only the format. No adapter or cable serial numbers are included: keep it that way when adding captures.
+The counters, rates and RFC 1918 data addresses are those of this lab and this run; GUID and MAC bytes are
+placeholders (`...00:11:ee`/`ef` on host A, `...00:22:28`/`29` on host B). The tests mask all of them and compare only the
+format. No adapter or cable serial numbers are included: keep it that way when adding captures.

@@ -19,6 +19,10 @@ Thumbs.db
 # Personal notes, never pushed
 private/
 
+# Packet captures taken while working through labs (they can carry addresses and identifiers)
+*.pcap
+*.pcapng
+
 # Python bytecode
 __pycache__/
 *.pyc
