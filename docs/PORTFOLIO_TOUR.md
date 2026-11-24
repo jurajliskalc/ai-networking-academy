@@ -108,8 +108,9 @@ Built with AI coding agents working under my direction; how their output is veri
 - **Static site, no backend.** The same build runs from GitHub Pages or from a laptop, progress stays in the
   browser, and there is no service to operate or to leak learner data.
 - **A deterministic teaching model, not an emulator.** The simulator reproduces which counters move, which
-  tests fail and roughly how much bandwidth each fault class costs. It does not pretend to model queue
-  dynamics or timing. Being deterministic is what lets a test replay every lab and grade state, not typing.
+  tests fail and roughly how much bandwidth each fault class costs. Performance comes from a fixed factor
+  per fault class; no packets or queues are simulated. Being deterministic is what lets a test replay every
+  lab and grade the state of the fabric.
 - **Verified versus illustrative is part of the data model.** Output blocks are tagged as real captures per
   driver stack, hardware observations are `[!VERIFIED]` callouts collected onto one page, and a lab carries
   `verified: false` until it has been run end to end. The validator rejects a capture tagged with the
@@ -127,8 +128,8 @@ Built with AI coding agents working under my direction; how their output is veri
 
 - **Run on real hardware:** 19 of the 22 hands-on labs, end to end. Host commands and their output in the
   content and the simulator were compared with two ConnectX-5 VPI hosts (100GbE RoCE and EDR InfiniBand,
-  back to back): RoCE on both driver stacks, InfiniBand on DOCA-OFED. The record is [HARDWARE_VERIFICATION.md](HARDWARE_VERIFICATION.md)
-  and [labs/README.md](../labs/README.md).
+  back to back): RoCE on both driver stacks, InfiniBand on DOCA-OFED. The record is
+  [HARDWARE_VERIFICATION.md](HARDWARE_VERIFICATION.md) and [labs/README.md](../labs/README.md).
 - **Not verified on hardware:** the three labs that need a lossless switch or GPU nodes (`hw-06`, `hw-07`,
   `hw-08`, all `verified: false`), switch CLIs, switched-fabric behaviour, 400G-specific and optical-module
   output, and GPU or NCCL output. These follow primary sources and are labelled illustrative.
@@ -140,8 +141,8 @@ The open items are listed in [ROADMAP.md](../ROADMAP.md).
 ## AI-assisted engineering
 
 The code, content and labs were produced with AI coding agents (Anthropic's Claude Code) working under my
-direction; every commit carries a `Co-Authored-By` trailer. The interesting part is not that agents wrote
-text, it is what has to be true before any of it is kept:
+direction; every commit carries a `Co-Authored-By` trailer. Nothing an agent produces is kept until it has
+survived a check that fits the kind of claim:
 
 | Kind of claim | What it must survive |
 |---|---|
@@ -149,7 +150,7 @@ text, it is what has to be true before any of it is kept:
 | A number in a lesson, quiz or lab | Recomputation in a separate pass |
 | A quiz or exam answer key | Blind re-answering with shuffled options by an AI solver that cannot see the key |
 | Host-tool output and behaviour | Comparison with captures from the reference hardware, then pinned by golden tests |
-| A simulator lab | Unit tests: broken before the documented fix, clean after it, and the symptom its ticket describes |
+| A simulator lab | Unit tests: broken before the documented fix, clean after it |
 | A hands-on lab | An end-to-end run on a reference VM or reference hardware, graded by its own `check.sh` |
 | The app | Type checking, unit tests and browser tests on every push |
 
