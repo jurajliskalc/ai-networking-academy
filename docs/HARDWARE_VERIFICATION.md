@@ -345,7 +345,7 @@ mlnx-ofed-kernel-utils). Not in Ubuntu's archive. INBOX equivalents:
 ### Toolkit (labs/hw-toolkit)
 - `setup-rdma-host.sh` ran clean on both hosts (installs rdmacm-utils, lldpd, ...); flags memlock 8192 KiB;
   `--set-memlock` fixes it after re-login.
-- `ethtool -m` needs sudo (closes the hw-05 open question in NEXT_STEPS).
+- `ethtool -m` needs sudo (this closed an open question in hw-05).
 - Live counters (`aina-hw serve --live-remote`, `GET /api/live`, toolkit 1.1, DOCA, default QoS: global pause on,
   PFC off): during a 15 s `ib_write_bw -q 4` A -> B, A's `tx_vport_rdma_unicast_bytes` rate read 81-83 Gb/s per 1 s
   sample (perftest reported 80.12 Gb/s average) and B's `rx_vport_rdma_unicast_bytes` 81-82 Gb/s; `rx_prio3_bytes`

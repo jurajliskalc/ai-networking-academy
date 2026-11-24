@@ -23,12 +23,13 @@ flowchart LR
 | `content/labs/handson/` | Hands-on Linux labs (Markdown), with files in `labs/<id>/` |
 | `content/exams/` | Mock exams |
 | `content/commands/`, `content/glossary.yaml` | Command reference and glossary (also the flashcards) |
-| `frontend/scripts/build-content.mjs` | The content validator and compiler |
+| `frontend/scripts/build-content.mjs` | The content validator and compiler (`--stats` prints the repository counts) |
+| `frontend/scripts/doc-stats.mjs` | Checks the counts the docs advertise against the compiler's |
 | `frontend/src/pages/` | One component per route |
 | `frontend/src/components/` | Markdown renderer (callouts, mermaid, widgets), quiz card, terminal, layout |
 | `frontend/src/widgets/` | Interactive visualizations, registered in `registry.tsx` |
 | `frontend/src/sim/` | Fabric Simulator: model, shell, grading |
-| `frontend/tests/` | Vitest: progress logic and every simulator lab |
+| `frontend/tests/` | Vitest: progress logic, every simulator lab, widget math, golden-format tests against real captures, doc counts |
 | `frontend/e2e/` | Playwright browser tests: quiz, mock exam and timer, every sim lab solved through the UI, progress export/import/reset, Real HW Connect, flashcards, reference, theme, lessons, keyboard-only quiz |
 | `content/hardware/` | Real HW track: `hardware.yaml` (tiers, requirements, lab-profile variables) and `guides/*.md` |
 | `labs/` | Files for hands-on and hardware labs (topologies, scripts, `check.sh`) |
@@ -134,8 +135,14 @@ solved only when the diagnosis is right *and* the fabric passes every check.
 
 `npm run validate` (content rules), `npm test` (progress logic plus every simulator lab: broken before
 the fix, clean after it), `npm run build` (type check and bundle), `npm run e2e` (browser interaction
-tests) and `bash -n` on every lab script. CI runs all of them on each push and pull request; the Pages
-workflow deploys `main` once it is enabled (it is disabled while the repository is private).
+tests) and `bash -n` on every lab script. CI runs all of them on each push and pull request, plus the Python
+toolkit tests; the Pages workflow builds `main` and deploys it to GitHub Pages.
+
+Two tests guard the documentation itself. `tests/doc-stats.test.ts` compares every count the docs advertise
+(README badges, "76 lessons", the status tables) with `build-content.mjs --stats`, the same compiler that
+builds the site; `npm run stats` prints the counts and the phrases are listed in `scripts/doc-stats.mjs`.
+`tests/portfolio-tour.test.ts` replays the command walkthrough in [PORTFOLIO_TOUR.md](PORTFOLIO_TOUR.md)
+against the simulator. The README screenshots are generated from the build by `npm run screenshots`.
 
 `npm run e2e` runs Playwright against `vite preview` of `dist/` (run `npm run build` first) on a free
 port. It drives the installed Google Chrome (`channel: 'chrome'`; set `CHROME_PATH` to use another
