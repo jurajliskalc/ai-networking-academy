@@ -13,11 +13,12 @@ RDMA · RoCEv2 · InfiniBand · NCCL · lossless Ethernet · AI-fabric design ·
 ![Verified](https://img.shields.io/badge/verified%20on-real%20ConnectX%20hardware-76b900)
 ![License](https://img.shields.io/badge/code-PolyForm%20Noncommercial-blue) ![License](https://img.shields.io/badge/content-CC%20BY--NC--SA%204.0-lightgrey)
 
-**[Live Academy](https://jurajliskalc.github.io/ai-networking-academy/)** ·
+<a href="https://jurajliskalc.github.io/ai-networking-academy/"><img src="docs/screenshots/live-academy.svg" alt="Live Academy" height="44" /></a>
+
 **[Try the 5-minute PFC incident](https://jurajliskalc.github.io/ai-networking-academy/#/labs/sim-03-pfc-priority-mismatch)** ·
 **[Hardware labs](https://jurajliskalc.github.io/ai-networking-academy/#/hw/labs)** ·
 **[Hardware verification](docs/HARDWARE_VERIFICATION.md)** ·
-**[Architecture](docs/ARCHITECTURE.md)** ·
+**[Visualizations](https://jurajliskalc.github.io/ai-networking-academy/#/visualize)** ·
 **[Tour](docs/PORTFOLIO_TOUR.md)**
 
 <a href="https://jurajliskalc.github.io/ai-networking-academy/#/labs/sim-03-pfc-priority-mismatch"><img src="docs/screenshots/incident-tour.gif" alt="A fault-injection lab solved in six steps: reproduce a slow all-reduce, read PFC pause counters on the leaf and on the NIC, find PFC enabled on the wrong priority, fix it, and have the lab grade the fabric" width="1000" /></a>

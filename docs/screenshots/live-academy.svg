@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="250" height="44" viewBox="0 0 250 44" role="img" aria-label="Live Academy">
+  <title>Live Academy</title>
+  <!-- GitHub removes colour from Markdown text, so the README's main link is this image: bold, red, underlined. -->
+  <text x="125" y="31" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="30" font-weight="800" fill="#e5252a" text-decoration="underline">Live Academy</text>
+</svg>
