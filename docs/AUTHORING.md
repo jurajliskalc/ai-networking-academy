@@ -154,8 +154,26 @@ In the command reference an entry can carry the same information:
 
 ### Diagrams and widgets
 
-- Mermaid diagrams: a fenced block with language `mermaid`. Keep them small (≤ 15 nodes) and quote
-  labels that contain punctuation: `A["Leaf 1 (rail 0)"]`.
+- Figures: a fenced block with language `mermaid`. You write what the figure contains; the build lays it
+  out and the app draws it in the current colour scheme (`frontend/scripts/figures.mjs`, see
+  [ARCHITECTURE.md](ARCHITECTURE.md#figures)). Keep them small (≤ 15 boxes) and quote labels that contain
+  punctuation: `A["Leaf 1 (rail 0)"]`. The supported syntax is a deliberate subset, and the validator
+  rejects anything else with the line number:
+
+  | Kind | Syntax |
+  |---|---|
+  | Flowchart | `flowchart TB` (or `TD`), `LR`, `RL`; `graph` works as well |
+  | Boxes | `A["text"]` box, `A{"text"}` decision, `A[("text")]` store; `<br/>` breaks a line |
+  | Connections | `A --> B` arrow, `A --- B` plain line, `A -.-> B` dotted arrow; chains `A --> B --> C` |
+  | Labels on connections | `A -->\|"text"\| B`, `A -- "text" --> B`, `A -. "text" .-> B` |
+  | Groups | `subgraph ID["Title"]` ... `end`, may be nested; an arrow may point at a group's ID |
+  | Sequence diagram | `sequenceDiagram`, `participant A as Label`, `A->>B: text`, `A-->>B: text` (a reply), `Note over A: text`, `Note over A,B: text` |
+
+  How a figure is drawn follows from what it contains, never from styling in the source: a decision box and
+  the boxes a decision tree ends in are tinted, a figure in which every connection has a direction and
+  nothing is a decision shows that direction as motion for a few seconds, and a sequence diagram can be
+  played step by step. A left-to-right figure that would be too wide for the lesson column is drawn top to
+  bottom. Do not rely on a particular arrangement; write the boxes in the order a reader should meet them.
 - Embed an interactive widget with a fenced block with language `widget` containing only its ID:
 
   ````markdown
@@ -164,8 +182,9 @@ In the command reference an entry can carry the same information:
   ```
   ````
 - ASCII diagrams in a plain fenced block are fine for packet layouts.
-- Diagrams get an accessible name generated from their labels; for a better one add a line
-  `accTitle: <one-line description>` right after the diagram type (`flowchart LR`).
+- A figure's text alternative is generated from its boxes and connections ("Sender 1 to Leaf queue; ...").
+  To put a sentence of your own in front of it, add a line `accTitle: <one-line description>` right after
+  the first line (`flowchart LR`).
 - Section headings become search results and deep-link anchors (`?s=<slug>`): keep them descriptive and
   unique within a lesson.
 

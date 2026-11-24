@@ -64,6 +64,7 @@ export const CLAIMS = [
   { stat: 'stackVariantGroups', re: /\b(\d+) variant groups\b/g },
   { stat: 'realCaptures', re: /\b(\d+) output blocks are real captures\b/g },
   { stat: 'verifiedNotes', re: /\b(\d+) (?:`\[!VERIFIED\]` callouts|verified-on-hardware notes)/g },
+  { stat: 'figures', re: /\b(\d+) figures\b/g },
   { stat: 'references', re: /\b(\d+) references\b/g, required: ['README.md'] },
   { stat: 'referenceUrls', re: /\b(\d+) distinct documents\b/g, required: ['README.md'] },
   { stat: 'referenceUrls', re: /\| Further-reading links \| (\d+) external links/g },

@@ -11,6 +11,7 @@ import yaml from 'js-yaml';
 import { buildSearchIndex, parseWidgetRegistry, slug } from './search-index.mjs';
 import { checkCommandStacks, extractVerified, scanStackFences } from './stack-variants.mjs';
 import { hostOf, SOURCE_KINDS, sourceKind } from './source-kinds.mjs';
+import { compileFigures, figureSources, parseFigure } from './figures.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const CONTENT = path.join(ROOT, 'content');
@@ -138,6 +139,15 @@ function checkStacks(file, body, page) {
   for (const it of v.items) verified.push({ ...page, title: it.title, text: it.text, heading: it.heading, anchor: it.heading ? slug(it.heading.replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')) : '' });
 }
 
+/** Figures are ```mermaid fences. Their syntax is checked here; the geometry is compiled when the bodies are written. */
+let figureCount = 0;
+function checkFigures(file, body) {
+  for (const src of figureSources(body)) {
+    figureCount++;
+    try { parseFigure(src); } catch (e) { err(file, e.message); }
+  }
+}
+
 /** GFM splits table cells on every unescaped "|", even inside code spans; flag rows that do not match the header. */
 function checkTables(file, body) {
   const cells = (l) => {
@@ -204,6 +214,7 @@ for (const dir of moduleDirs) {
     }
     if ((body.match(/```/g) ?? []).length % 2) err(lfile, 'unbalanced code fences');
     checkTables(lfile, body);
+    checkFigures(lfile, body);
     checkStacks(lfile, body, { kind: 'lesson', id: lid, page: meta.title, module: mod.id });
     // An unquoted ": " inside a YAML list item silently becomes a mapping; catch it here, not in the browser.
     if (typeof meta.title !== 'string') err(lfile, 'title must be a string (quote it if it contains ": ")');
@@ -280,6 +291,7 @@ for (const f of list(GUIDE_DIR, '.md')) {
   if (typeof meta.title !== 'string' || typeof meta.summary !== 'string') err(file, 'title and summary must be strings');
   if ((body.match(/```/g) ?? []).length % 2) err(file, 'unbalanced code fences');
   checkTables(file, body);
+  checkFigures(file, body);
   checkPlaceholders(file, body);
   checkStacks(file, body, { kind: 'guide', id: meta.id, page: meta.title });
   for (const [, w] of body.matchAll(/```widget\n([\s\S]*?)\n```/g))
@@ -344,6 +356,7 @@ for (const f of list(HOL_DIR, '.md')) {
     toc: [...body.matchAll(/^(##|###) (.+)$/gm)].map((m) => ({ depth: m[1].length, text: m[2].trim() })),
   });
   checkTables(file, body);
+  checkFigures(file, body);
   checkPlaceholders(file, body);
   checkStacks(file, body, { kind: 'lab', id: meta.id, page: meta.title });
   labBodies.set(meta.id, body);
@@ -448,6 +461,7 @@ if (STATS_ONLY) {
     stackVariantGroups: stackStats.groups,
     realCaptures: stackStats.real,
     verifiedNotes: verified.length,
+    figures: figureCount,
     references: refs.length,
     referenceUrls: new Set(refs.map((r) => r.url)).size,
     standardReferences: refsOf('standard'),
@@ -471,11 +485,14 @@ write('index.json', {
   hardware: { tiers, requirements, variables, guides },
   quizzes: [...quizzes.values()].map((q) => ({ id: q.id, title: q.title, lesson: q.lesson, count: q.questions.length })),
 });
-for (const [id, body] of lessonBodies) write(`lessons/${id}.json`, { id, body, minutes: minutes(body) });
+// Figures are laid out now (scripts/figures.mjs); {{VAR}} placeholders are sized with the profile defaults.
+const figureVars = Object.fromEntries(variables.filter((v) => typeof v.default === 'string').map((v) => [v.name, v.default]));
+const drawn = (body) => compileFigures(body, figureVars);
+for (const [id, body] of lessonBodies) write(`lessons/${id}.json`, { id, body: await drawn(body), minutes: minutes(body) });
 for (const [id, q] of quizzes) write(`quizzes/${id}.json`, q);
 for (const [id, ex] of examBodies) write(`exams/${id}.json`, ex);
-for (const [id, body] of labBodies) write(`labs/${id}.json`, { id, body });
-for (const [id, body] of guideBodies) write(`hardware/${id}.json`, { id, body });
+for (const [id, body] of labBodies) write(`labs/${id}.json`, { id, body: await drawn(body) });
+for (const [id, body] of guideBodies) write(`hardware/${id}.json`, { id, body: await drawn(body) });
 
 // Site-wide search index, fetched lazily the first time the search dialog opens.
 const widgetMeta = parseWidgetRegistry(read(path.join(ROOT, 'frontend', 'src', 'widgets', 'registry.tsx')));

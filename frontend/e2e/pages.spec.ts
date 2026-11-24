@@ -80,12 +80,13 @@ test('appearance menu: light and dark mode switch and persist', async ({ page })
   expect((await progressOf(page)).settings.theme).toBe('system');
 });
 
-test('lesson with widgets and a mermaid diagram renders and the widget responds', async ({ page }) => {
+test('lesson with widgets and a figure renders and the widget responds', async ({ page }) => {
   await page.goto('#/lesson/mtu-jumbo-frames');
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-  // Mermaid rendered an SVG (no error fallback).
-  await expect(page.locator('main svg[id^="m"]').first()).toBeVisible();
-  await expect(page.locator('[data-mermaid-error]')).toHaveCount(0);
+  // The figure is drawn (no fallback text, no leftover source).
+  await expect(page.locator('main figure.figure svg.fig').first()).toBeVisible();
+  await expect(page.getByText('This figure could not be drawn.')).toHaveCount(0);
+  await expect(page.locator('main pre code.language-mermaid, main pre code.language-figure')).toHaveCount(0);
   // Both widgets are on the page.
   await expect(page.getByText('RoCEv2 packet anatomy', { exact: true })).toBeVisible();
   await expect(page.getByText('End-to-end MTU checker', { exact: true })).toBeVisible();
@@ -102,11 +103,12 @@ test('lesson with widgets and a mermaid diagram renders and the widget responds'
   await expect(active).toContainText('1024');
   await netdev.fill('9000');
   await expect(active).toContainText('4096');
-  // Diagrams follow the theme.
-  const diagram = page.locator('main svg[id^="m"]').first();
-  const before = await diagram.innerHTML();
+  // Figures follow the theme: their colours are the app's design tokens.
+  const label = page.locator('main figure.figure svg.fig text').first();
+  const colour = () => label.evaluate((el) => getComputedStyle(el).fill);
+  const before = await colour();
   await chooseMode(page, 'Dark');
-  await expect.poll(() => diagram.innerHTML()).not.toBe(before);
+  await expect.poll(colour).not.toBe(before);
   await expect(netdev).toHaveValue('9000');
   // Mark as read is stored.
   await page.getByRole('button', { name: 'Mark as read' }).click();

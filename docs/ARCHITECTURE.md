@@ -49,7 +49,8 @@ flowchart LR
 | `frontend/scripts/build-content.mjs` | The content validator and compiler (`--stats` prints the repository counts) |
 | `frontend/scripts/doc-stats.mjs` | Checks the counts the docs advertise against the compiler's |
 | `frontend/src/pages/` | One component per route |
-| `frontend/src/components/` | Markdown renderer (callouts, mermaid, widgets), quiz card, terminal, layout |
+| `frontend/scripts/figures.mjs` | The figure compiler: parses a figure's source and lays it out at build time |
+| `frontend/src/components/` | Markdown renderer (callouts, figures, widgets), quiz card, terminal, layout |
 | `frontend/src/widgets/` | Interactive visualizations, registered in `registry.tsx` |
 | `frontend/src/sim/` | Fabric Simulator: model, shell, grading |
 | `frontend/tests/` | Vitest: progress logic, every simulator lab, widget math, golden-format tests against real captures, doc counts |
@@ -90,11 +91,34 @@ shows the label next to each reference.
 ## Front end
 
 React 19, TypeScript (strict), Vite, Tailwind CSS v4, `react-markdown` with GFM and highlight.js,
-Mermaid (lazy-loaded), lucide icons. A `HashRouter` keeps deep links working on static hosts without
-rewrite rules. Routes and widgets are code-split.
+lucide icons. A `HashRouter` keeps deep links working on static hosts without rewrite rules. Routes and
+widgets are code-split.
 
 Design tokens live in `src/index.css` as CSS variables with a light and a dark palette; SVG widgets use
 the same variables so they follow the theme.
+
+### Figures
+
+A lesson describes a figure in Mermaid syntax; the app does not ship Mermaid. `scripts/figures.mjs` compiles
+each ` ```mermaid ` fence at build time:
+
+1. **Parse.** A strict parser for the subset the content uses (flowcharts with boxes, decisions, stores,
+   groups and labelled connections; sequence diagrams with participants, messages, replies and notes).
+   Anything else fails `npm run validate` with the file and line.
+2. **Measure.** Text is measured with the glyph widths of the app's own fonts (`figure-metrics.json`,
+   recorded once from the browser), so no DOM is needed.
+3. **Lay out.** Flowcharts go through ELK's layered algorithm with orthogonal routing (`elkjs`, a build
+   dependency only). The compiler keeps the author's order where it can, breaks loops at the arrow that
+   points back, puts labels on their connections, and redraws a figure that would be too wide: tighter
+   first, then top to bottom. Sequence diagrams have a small layout of their own.
+4. **Emit.** The fence in the compiled body becomes a ` ```figure ` fence holding the geometry and a text
+   alternative as JSON. `src/components/Figure.tsx` draws it as inline SVG with the design tokens, so it
+   follows the colour scheme, costs no layout work in the browser and never shifts while a page loads.
+
+The source in the lesson is the content, and the compiler may not add, drop or reword any of it.
+`tests/figures.test.ts` checks that for every figure: the labels drawn equal the labels written, boxes do
+not overlap, text fits its box, connections reach their boxes. `tests/fixtures/figures-baseline.json` holds
+what Mermaid itself read from each figure before it was replaced, and the parser must read the same.
 
 ### Search
 
@@ -123,7 +147,9 @@ Target: WCAG 2.2 AA, checked with axe-core in headless Chrome on every route in 
 * Quiz options are an ARIA radio group (roving tab stop, arrow keys) or checkboxes; the verdict is stated
   in text and announced (`role="status"`); focus moves to the next question and to the result.
 * The simulator terminal is a `log`; Tab completes, Escape then Tab leaves it (no keyboard trap).
-* Mermaid diagrams get `role="img"` with a generated name (diagram kind plus its labels, or `accTitle`).
+* Figures are `role="img"` with a text alternative written at build time from their boxes and connections
+  (plus the author's `accTitle`). Their motion lasts under five seconds or starts on a button, and none of it
+  runs with reduced motion. A figure wider than the page scrolls inside a focusable frame.
 * Widgets: toggles expose `aria-pressed`, steppers `aria-current="step"`, SVGs a `role="img"` label that
   describes the current state (or `role="group"` when they contain controls, which are focusable and
   operable with Enter/Space), sliders an `aria-valuetext` with units, the main result readout a polite

@@ -1,0 +1,2313 @@
+{
+ "note": "What Mermaid 11.17 itself read from every figure in the content on 2026-11-24, taken from its rendered SVG just before the figure renderer was replaced: labels, connections, groups and which box sits in which group. tests/figures.test.ts requires scripts/figures.mjs to read the same from the same source. `source` is a hash of the figure source; a figure edited since is skipped here and covered by the generic checks.",
+ "figures": [
+  {
+   "page": "hardware/guides/network-setup.md",
+   "index": 0,
+   "source": "6443cc2d3563",
+   "kind": "flow",
+   "nodes": {
+    "A": "Host A node-a ens1f0np0 192.168.50.11",
+    "B": "Host B node-b ens1f0np0 192.168.50.12",
+    "M": "Management switch"
+   },
+   "decisions": [],
+   "edges": [
+    "A > B | line | DAC / AOC",
+    "M > A | dotted | ",
+    "M > B | dotted | "
+   ],
+   "groups": {},
+   "members": {}
+  },
+  {
+   "page": "hardware/guides/network-setup.md",
+   "index": 1,
+   "source": "1b9889b4bb32",
+   "kind": "flow",
+   "nodes": {
+    "A": "Host A 192.168.50.11",
+    "B": "Host B 192.168.50.12",
+    "C": "Host C 192.168.50.13",
+    "S": "Switch leaf1"
+   },
+   "decisions": [],
+   "edges": [
+    "A > S | line | swp1",
+    "B > S | line | swp2",
+    "C > S | line | swp3"
+   ],
+   "groups": {},
+   "members": {}
+  },
+  {
+   "page": "hardware/guides/overview.md",
+   "index": 0,
+   "source": "b9b5fb3d6451",
+   "kind": "flow",
+   "nodes": {
+    "A": "read-only agent or file import",
+    "C": "check result JSON",
+    "E": "lab.env on every host",
+    "L": "Lab and guide commands",
+    "P": "Connect page: lab profile",
+    "R": "aina-report.json",
+    "T": "aina-hw toolkit on host A",
+    "V": "Health review and verified labs"
+   },
+   "decisions": [],
+   "edges": [
+    "A > V | arrow | ",
+    "C > A | arrow | ",
+    "E > T | arrow | ",
+    "P > E | arrow | download",
+    "P > L | arrow | personalises",
+    "R > A | arrow | ",
+    "T > C | arrow | check LAB",
+    "T > R | arrow | collect-all over SSH"
+   ],
+   "groups": {},
+   "members": {}
+  },
+  {
+   "page": "hardware/guides/troubleshooting.md",
+   "index": 0,
+   "source": "f4e054d981c1",
+   "kind": "flow",
+   "nodes": {
+    "A": "7 Application: perftest, NCCL, logs",
+    "I": "3 IP and MTU: addresses, full-size DF ping",
+    "L": "2 Link: port up, speed, FEC, errors",
+    "P": "1 Physical: cable, optics, slot, power",
+    "Q": "5 QoS: trust, DSCP map, PFC, ECN on both sides",
+    "R": "4 RDMA port: ACTIVE, active_mtu, GID",
+    "T": "6 Transport counters: sequence errors, retries, CNPs"
+   },
+   "decisions": [],
+   "edges": [
+    "I > R | arrow | ",
+    "L > I | arrow | ",
+    "P > L | arrow | ",
+    "Q > T | arrow | ",
+    "R > Q | arrow | ",
+    "T > A | arrow | "
+   ],
+   "groups": {},
+   "members": {}
+  },
+  {
+   "page": "modules/m00-foundations/lessons/ip-addressing-routing.md",
+   "index": 0,
+   "source": "ce789bce5494",
+   "kind": "sequence",
+   "actors": [
+    "Host A 10.0.3.11",
+    "Host B 10.0.3.12",
+    "Switch (L2 domain)"
+   ],
+   "steps": [
+    "message: Who has 10.0.3.12? Tell 10.0.3.11 (broadcast)",
+    "message: flooded to every port in the VLAN",
+    "message: 10.0.3.12 is at b8:3f:d2:ab:cd:ef (unicast)",
+    "note: caches the answer in its neighbour table"
+   ],
+   "replies": [
+    false,
+    false,
+    false
+   ]
+  },
+  {
+   "page": "modules/m00-foundations/lessons/linux-networking-toolkit.md",
+   "index": 0,
+   "source": "2d093f72fa3e",
+   "kind": "flow",
+   "nodes": {
+    "A": "1. Link: ethtool speed, Link detected, FEC, optics",
+    "B": "2. Errors: ethtool -S CRC/symbol/discard, ip -s link",
+    "C": "3. Cabling: lldpctl neighbour = expected leaf and port",
+    "D": "4. L2/L3 config: MTU, address, routes, ip rule, neighbour state",
+    "E": "5. Reachability: ping -I src, DF ping at full size",
+    "F": "6. Transport: ss/nstat for TCP, rdma/ibv_devinfo for RDMA",
+    "G": "7. Performance: iperf3 (TCP), perftest (RDMA), nccl-tests"
+   },
+   "decisions": [],
+   "edges": [
+    "A > B | arrow | ",
+    "B > C | arrow | ",
+    "C > D | arrow | ",
+    "D > E | arrow | ",
+    "E > F | arrow | ",
+    "F > G | arrow | "
+   ],
+   "groups": {},
+   "members": {}
+  },
+  {
+   "page": "modules/m00-foundations/lessons/mtu-jumbo-frames.md",
+   "index": 0,
+   "source": "402f7369e6ad",
+   "kind": "sequence",
+   "actors": [
+    "Destination",
+    "Host (MTU 9000)",
+    "Router (next link 1500)"
+   ],
+   "steps": [
+    "message: 9000-byte packet, DF set",
+    "message: ICMP frag needed, MTU 1500",
+    "message: 1500-byte packets",
+    "message: delivered"
+   ],
+   "replies": [
+    false,
+    true,
+    false,
+    false
+   ]
+  },
+  {
+   "page": "modules/m00-foundations/lessons/osi-ethernet-frames.md",
+   "index": 0,
+   "source": "bd690b17dd08",
+   "kind": "flow",
+   "nodes": {
+    "A": "GPU buffer: application data",
+    "B": "+ InfiniBand BTH (transport)",
+    "C": "+ UDP header, dst port 4791",
+    "D": "+ IP header (addresses, DSCP, ECN)",
+    "E": "+ Ethernet header and FCS",
+    "F": "Bits on the wire: preamble, symbols, FEC"
+   },
+   "decisions": [],
+   "edges": [
+    "A > B | arrow | ",
+    "B > C | arrow | ",
+    "C > D | arrow | ",
+    "D > E | arrow | ",
+    "E > F | arrow | "
+   ],
+   "groups": {},
+   "members": {}
+  },
+  {
+   "page": "modules/m00-foundations/lessons/switching-and-queues.md",
+   "index": 0,
+   "source": "95c5b7b26c38",
+   "kind": "flow",
+   "nodes": {
+    "MMU": "Shared packet buffer (MMU)",
+    "O1": "Egress port A wire",
+    "O2": "Egress port B wire",
+    "P1": "Ingress port 1",
+    "P2": "Ingress port 2",
+    "PP": "Ingress pipeline: parse, lookup, classify",
+    "Q1": "Egress port A: queues TC0..TC7",
+    "Q2": "Egress port B: queues TC0..TC7",
+    "S1": "Scheduler",
+    "S2": "Scheduler"
+   },
+   "decisions": [],
+   "edges": [
+    "MMU > Q1 | arrow | ",
+    "MMU > Q2 | arrow | ",
+    "P1 > PP | arrow | ",
+    "P2 > PP | arrow | ",
+    "PP > MMU | arrow | ",
+    "Q1 > S1 | arrow | ",
+    "Q2 > S2 | arrow | ",
+    "S1 > O1 | arrow | ",
+    "S2 > O2 | arrow | "
+   ],
+   "groups": {},
+   "members": {}
+  },
+  {
+   "page": "modules/m01-ai-workloads/lessons/ai-traffic-patterns.md",
+   "index": 0,
+   "source": "9d3afe260f2b",
+   "kind": "flow",
+   "nodes": {
+    "A": "Compute (link idle)",
+    "B": "Collective starts on all GPUs simultaneously",
+    "C": "All links at line rate: queues fill, ECN/PFC fire",
+    "D": "Slowest flow finishes, collective completes"
+   },
+   "decisions": [],
+   "edges": [
+    "A > B | arrow | ",
+    "B > C | arrow | ",
+    "C > D | arrow | ",
+    "D > A | arrow | "
+   ],
+   "groups": {},
+   "members": {}
+  },
+  {
+   "page": "modules/m01-ai-workloads/lessons/ai-training-101.md",
+   "index": 0,
+   "source": "664a3a83933f",
+   "kind": "flow",
+   "nodes": {
+    "B": "Backward pass: compute gradients",
+    "C": "Communicate: combine gradients across GPUs",
+    "D": "Load batch (storage / CPU)",
+    "F": "Forward pass: compute predictions",
+    "L": "Loss: how wrong?",
+    "O": "Optimizer step: update weights"
+   },
+   "decisions": [],
+   "edges": [
+    "B > C | arrow | ",
+    "C > O | arrow | ",
+    "D > F | arrow | ",
+    "F > L | arrow | ",
+    "L > B | arrow | ",
+    "O > D | arrow | "
+   ],
+   "groups": {},
+   "members": {}
+  },
+  {
+   "page": "modules/m01-ai-workloads/lessons/collective-operations.md",
+   "index": 0,
+   "source": "651f254162c5",
+   "kind": "flow",
+   "nodes": {
+    "R0": "Rank 0",
+    "R1": "Rank 1",
+    "R2": "Rank 2",
+    "R3": "Rank 3"
+   },
+   "decisions": [],
+   "edges": [
+    "R0 > R1 | arrow | chunk, S/N per step",
+    "R1 > R2 | arrow | ",
+    "R2 > R3 | arrow | ",
+    "R3 > R0 | arrow | "
+   ],
+   "groups": {},
+   "members": {}
+  },
+  {
+   "page": "modules/m01-ai-workloads/lessons/four-networks-of-an-ai-cluster.md",
+   "index": 0,
+   "source": "1503807a793f",
+   "kind": "flow",
+   "nodes": {
+    "B": "BMC",
+    "C": "CPUs",
+    "CF": "1. Compute fabric (back-end, RDMA)",
+    "FE": "3. In-band management / front-end",
+    "G": "8 GPUs + NVLink/NVSwitch (scale-up)",
+    "OOB": "4. Out-of-band management",
+    "SN": "2. Storage network",
+    "ST": "Parallel file system / object storage",
+    "U": "Users, schedulers, registries, Internet"
+   },
+   "decisions": [],
+   "edges": [
+    "B > OOB | arrow | 1GbE",
+    "C > FE | arrow | front-end NICs",
+    "C > SN | arrow | storage NICs",
+    "FE > U | arrow | ",
+    "G > CF | arrow | 8 x 400-800G NICs",
+    "SN > ST | arrow | "
+   ],
+   "groups": {
+    "Server": "GPU server"
+   },
+   "members": {
+    "G": "Server",
+    "C": "Server",
+    "B": "Server",
+    "CF": null,
+    "SN": null,
+    "FE": null,
+    "OOB": null,
+    "ST": null,
+    "U": null
+   }
+  },
+  {
+   "page": "modules/m01-ai-workloads/lessons/inference-networking.md",
+   "index": 0,
+   "source": "ea04eb025347",
+   "kind": "sequence",
+   "actors": [
+    "Decode GPU pool",
+    "Prefill GPU pool",
+    "Router (front-end)",
+    "User"
+   ],
+   "steps": [
+    "message: prompt (HTTP/gRPC)",
+    "message: schedule prefill",
+    "message: KV cache transfer (RDMA, GB-scale)",
+    "message: streamed tokens (via front-end)"
+   ],
+   "replies": [
+    false,
+    false,
+    false,
+    true
+   ]
+  },
+  {
+   "page": "modules/m01-ai-workloads/lessons/parallelism-strategies.md",
+   "index": 0,
+   "source": "7154da1d31ed",
+   "kind": "flow",
+   "nodes": {
+    "S1": "Stage 1: layers 1-20 (node A)",
+    "S2": "Stage 2: layers 21-40 (node B)",
+    "S3": "Stage 3: layers 41-60 (node C)"
+   },
+   "decisions": [],
+   "edges": [
+    "S1 > S2 | arrow | activations",
+    "S2 > S1 | arrow | gradients",
+    "S2 > S3 | arrow | activations",
+    "S3 > S2 | arrow | gradients"
+   ],
+   "groups": {},
+   "members": {}
+  },
+  {
+   "page": "modules/m02-gpu-server/lessons/gpudirect-rdma-storage.md",
+   "index": 0,
+   "source": "67b7fbf5c73f",
+   "kind": "sequence",
+   "actors": [
+    "GPU HBM",
+    "Host DRAM (pinned)",
+    "NIC"
+   ],
+   "steps": [
+    "message: copy 1 (cudaMemcpy over PCIe)",
+    "message: NIC DMA-reads host buffer (PCIe again)",
+    "message: transmit on the wire"
+   ],
+   "replies": [
+    false,
+    false,
+    false
+   ]
+  },
+  {
+   "page": "modules/m02-gpu-server/lessons/gpudirect-rdma-storage.md",
+   "index": 1,
+   "source": "5d184213ab10",
+   "kind": "sequence",
+   "actors": [
+    "GPU HBM",
+    "NIC"
+   ],
+   "steps": [
+    "message: NIC DMA-reads GPU memory through the GPU BAR",
+    "message: transmit on the wire"
+   ],
+   "replies": [
+    false,
+    false
+   ]
+  },
+  {
+   "page": "modules/m02-gpu-server/lessons/gpudirect-rdma-storage.md",
+   "index": 2,
+   "source": "6bf2f26b2500",
+   "kind": "flow",
+   "nodes": {
+    "D1": "NVMe or network storage",
+    "D2": "NVMe or NVMe-oF / RDMA storage",
+    "G1": "GPU",
+    "G2": "GPU",
+    "P1": "Host page cache / bounce buffer"
+   },
+   "decisions": [],
+   "edges": [
+    "D1 > P1 | arrow | ",
+    "D2 > G2 | arrow | ",
+    "P1 > G1 | arrow | "
+   ],
+   "groups": {
+    "Classic": "Classic path",
+    "GDS": "GPUDirect Storage path"
+   },
+   "members": {
+    "D2": "GDS",
+    "G2": "GDS",
+    "D1": "Classic",
+    "P1": "Classic",
+    "G1": "Classic"
+   }
+  },
+  {
+   "page": "modules/m02-gpu-server/lessons/nics-dpus-supernics.md",
+   "index": 0,
+   "source": "133edd576696",
+   "kind": "flow",
+   "nodes": {
+    "ARM": "Arm cores + DDR (own OS)",
+    "ESW": "Embedded switch + RDMA engine",
+    "HOST": "Host CPU and GPUs",
+    "NET": "Network"
+   },
+   "decisions": [],
+   "edges": [
+    "ARM > ESW | line | ",
+    "ESW > NET | arrow | Ethernet / InfiniBand",
+    "HOST > ESW | arrow | PCIe"
+   ],
+   "groups": {
+    "Card": "DPU card"
+   },
+   "members": {
+    "ARM": "Card",
+    "ESW": "Card",
+    "HOST": null,
+    "NET": null
+   }
+  },
+  {
+   "page": "modules/m02-gpu-server/lessons/nvlink-nvswitch.md",
+   "index": 0,
+   "source": "7d4acae657f2",
+   "kind": "flow",
+   "nodes": {
+    "G0": "GPU0",
+    "G1": "GPU1",
+    "G2": "GPU2",
+    "G7": "GPU7",
+    "S1": "NVSwitch A",
+    "S2": "NVSwitch B"
+   },
+   "decisions": [],
+   "edges": [
+    "G0 > S1 | line | ",
+    "G0 > S2 | line | ",
+    "G1 > S1 | line | ",
+    "G1 > S2 | line | ",
+    "G2 > S1 | line | ",
+    "G2 > S2 | line | ",
+    "G7 > S1 | line | ",
+    "G7 > S2 | line | "
+   ],
+   "groups": {},
+   "members": {}
+  },
+  {
+   "page": "modules/m02-gpu-server/lessons/pcie-numa-topology.md",
+   "index": 0,
+   "source": "0e3556084db6",
+   "kind": "flow",
+   "nodes": {
+    "CPU": "CPU socket 0 (root complex)",
+    "G0": "GPU0",
+    "G1": "GPU1",
+    "MEM": "DRAM (NUMA node 0)",
+    "N0": "NIC0",
+    "N1": "NIC1",
+    "RP1": "Root port",
+    "RP2": "Root port",
+    "SW1": "PCIe switch",
+    "SW2": "PCIe switch"
+   },
+   "decisions": [],
+   "edges": [
+    "CPU > MEM | line | ",
+    "CPU > RP1 | arrow | ",
+    "CPU > RP2 | arrow | ",
+    "RP1 > SW1 | arrow | ",
+    "RP2 > SW2 | arrow | ",
+    "SW1 > G0 | arrow | ",
+    "SW1 > N0 | arrow | ",
+    "SW2 > G1 | arrow | ",
+    "SW2 > N1 | arrow | "
+   ],
+   "groups": {},
+   "members": {}
+  },
+  {
+   "page": "modules/m02-gpu-server/lessons/pcie-numa-topology.md",
+   "index": 1,
+   "source": "b32bc69c6ee8",
+   "kind": "flow",
+   "nodes": {
+    "C0": "CPU0",
+    "C1": "CPU1",
+    "P0": "GPU0 + NIC0",
+    "P1": "GPU1 + NIC1",
+    "P4": "GPU4 + NIC4",
+    "P5": "GPU5 + NIC5",
+    "PS0": "PCIe sw",
+    "PS1": "PCIe sw",
+    "PS4": "PCIe sw",
+    "PS5": "PCIe sw"
+   },
+   "decisions": [],
+   "edges": [
+    "C0 > C1 | line | ",
+    "C0 > PS0 | arrow | ",
+    "C0 > PS1 | arrow | ",
+    "C1 > PS4 | arrow | ",
+    "C1 > PS5 | arrow | ",
+    "PS0 > P0 | arrow | ",
+    "PS1 > P1 | arrow | ",
+    "PS4 > P4 | arrow | ",
+    "PS5 > P5 | arrow | "
+   ],
+   "groups": {
+    "S0": "Socket 0 (NUMA 0)",
+    "S1": "Socket 1 (NUMA 1)"
+   },
+   "members": {
+    "C0": "S0",
+    "C1": "S1",
+    "PS0": null,
+    "P0": null,
+    "PS1": null,
+    "P1": null,
+    "PS4": null,
+    "P4": null,
+    "PS5": null,
+    "P5": null
+   }
+  },
+  {
+   "page": "modules/m02-gpu-server/lessons/reading-server-topology.md",
+   "index": 0,
+   "source": "17affd82f4f5",
+   "kind": "flow",
+   "nodes": {
+    "A": "GPU i",
+    "B": "NIC i (its PIX NIC)",
+    "C": "Rail i leaf",
+    "D": "Same rail on every other server"
+   },
+   "decisions": [],
+   "edges": [
+    "A > B | arrow | PIX",
+    "B > C | arrow | cable",
+    "C > D | arrow | "
+   ],
+   "groups": {},
+   "members": {}
+  },
+  {
+   "page": "modules/m03-dc-fabrics/lessons/bgp-in-the-data-center.md",
+   "index": 0,
+   "source": "53c1979cd6ae",
+   "kind": "flow",
+   "nodes": {
+    "L1": "Leaf 1 (AS 65101)",
+    "L2": "Leaf 2 (AS 65102)",
+    "L3": "Leaf 3 (AS 65103)",
+    "S1": "Spine 1 (AS 65000)",
+    "S2": "Spine 2 (AS 65000)"
+   },
+   "decisions": [],
+   "edges": [
+    "S1 > L1 | line | ",
+    "S1 > L2 | line | ",
+    "S1 > L3 | line | ",
+    "S2 > L1 | line | ",
+    "S2 > L2 | line | ",
+    "S2 > L3 | line | "
+   ],
+   "groups": {},
+   "members": {}
+  },
+  {
+   "page": "modules/m03-dc-fabrics/lessons/clos-leaf-spine.md",
+   "index": 0,
+   "source": "d5f3f7403975",
+   "kind": "flow",
+   "nodes": {
+    "H1": "Servers",
+    "H2": "Servers",
+    "H3": "Servers",
+    "H4": "Servers",
+    "L1": "Leaf 1",
+    "L2": "Leaf 2",
+    "L3": "Leaf 3",
+    "L4": "Leaf 4",
+    "S1": "Spine 1",
+    "S2": "Spine 2"
+   },
+   "decisions": [],
+   "edges": [
+    "L1 > H1 | line | ",
+    "L2 > H2 | line | ",
+    "L3 > H3 | line | ",
+    "L4 > H4 | line | ",
+    "S1 > L1 | line | ",
+    "S1 > L2 | line | ",
+    "S1 > L3 | line | ",
+    "S1 > L4 | line | ",
+    "S2 > L1 | line | ",
+    "S2 > L2 | line | ",
+    "S2 > L3 | line | ",
+    "S2 > L4 | line | "
+   ],
+   "groups": {},
+   "members": {}
+  },
+  {
+   "page": "modules/m03-dc-fabrics/lessons/clos-leaf-spine.md",
+   "index": 1,
+   "source": "30ea3092efd4",
+   "kind": "flow",
+   "nodes": {
+    "P1L": "Pod 1 leaves",
+    "P1S": "Pod 1 spines",
+    "P2L": "Pod 2 leaves",
+    "P2S": "Pod 2 spines",
+    "SS1": "Super-spine",
+    "SS2": "Super-spine"
+   },
+   "decisions": [],
+   "edges": [
+    "P1S > P1L | line | ",
+    "P2S > P2L | line | ",
+    "SS1 > P1S | line | ",
+    "SS1 > P2S | line | ",
+    "SS2 > P1S | line | ",
+    "SS2 > P2S | line | "
+   ],
+   "groups": {},
+   "members": {}
+  },
+  {
+   "page": "modules/m03-dc-fabrics/lessons/ecmp-hashing.md",
+   "index": 0,
+   "source": "95be14bcfa6b",
+   "kind": "flow",
+   "nodes": {
+    "L": "Leaf: flows A-H hashed to 4 spines",
+    "S1": "Spine 1 gets A, E",
+    "S2": "Spine 2 gets B, F",
+    "X1": "Super-spine 1: A, E (same hash bits)",
+    "X2": "Super-spine 2: nothing"
+   },
+   "decisions": [],
+   "edges": [
+    "L > S1 | arrow | ",
+    "L > S2 | arrow | ",
+    "S1 > X1 | arrow | ",
+    "S1 > X2 | dotted | unused"
+   ],
+   "groups": {},
+   "members": {}
+  },
+  {
+   "page": "modules/m03-dc-fabrics/lessons/evpn-vxlan-frontend.md",
+   "index": 0,
+   "source": "46068c3f0d61",
+   "kind": "flow",
+   "nodes": {
+    "B": "Border leaf",
+    "H1": "Host in VLAN/VNI 100",
+    "H2": "Host in VLAN/VNI 200",
+    "L1": "Leaf 1: anycast GW, VRF tenant-A",
+    "L3": "Leaf 3: VRF tenant-A"
+   },
+   "decisions": [],
+   "edges": [
+    "B > L1 | arrow | Type 5: 0.0.0.0/0 in tenant-A",
+    "H1 > L1 | arrow | ",
+    "L1 > L3 | arrow | VXLAN, L3 VNI 5001",
+    "L3 > H2 | arrow | "
+   ],
+   "groups": {},
+   "members": {}
+  },
+  {
+   "page": "modules/m04-rdma/lessons/perftest-benchmarking.md",
+   "index": 0,
+   "source": "20011e60e5d5",
+   "kind": "flow",
+   "nodes": {
+    "CABLE": "Cable / optics",
+    "MEM": "Buffer memory (host DRAM or GPU)",
+    "NIC": "NIC (firmware, link speed)",
+    "NIC2": "Remote NIC",
+    "PCIE": "PCIe slot (Gen4 or Gen5, lane width)",
+    "SW": "Switch port and fabric path"
+   },
+   "decisions": [],
+   "edges": [
+    "CABLE > SW | arrow | ",
+    "MEM > PCIE | arrow | NUMA / PCIe P2P",
+    "NIC > CABLE | arrow | ",
+    "PCIE > NIC | arrow | ",
+    "SW > NIC2 | arrow | "
+   ],
+   "groups": {},
+   "members": {}
+  },
+  {
+   "page": "modules/m04-rdma/lessons/rdma-on-linux.md",
+   "index": 0,
+   "source": "86dbe24412ad",
+   "kind": "flow",
+   "nodes": {
+    "APP": "Applications: NCCL, UCX, MPI, perftest",
+    "CORE": "ib_core (+ rdma_cm, ib_umad)",
+    "DRV": "Vendor RDMA driver: mlx5_ib, rdma_rxe, irdma ...",
+    "HW": "RDMA NIC",
+    "PROV": "Provider library: libmlx5, librxe, libirdma, libbnxt_re ...",
+    "UVERBS": "ib_uverbs (kernel)",
+    "VERBS": "libibverbs + librdmacm (rdma-core)"
+   },
+   "decisions": [],
+   "edges": [
+    "APP > VERBS | arrow | ",
+    "CORE > DRV | arrow | ",
+    "DRV > HW | arrow | ",
+    "PROV > HW | dotted | data path: mapped queues + doorbells",
+    "PROV > UVERBS | arrow | control path: /dev/infiniband/uverbsN",
+    "UVERBS > CORE | arrow | ",
+    "VERBS > PROV | arrow | "
+   ],
+   "groups": {},
+   "members": {}
+  },
+  {
+   "page": "modules/m04-rdma/lessons/transport-types-operations.md",
+   "index": 0,
+   "source": "42f0a3cc4951",
+   "kind": "sequence",
+   "actors": [
+    "Requester (RC)",
+    "Responder (RC)"
+   ],
+   "steps": [
+    "message: PSN 100 (Write first)",
+    "message: PSN 101 (Write middle)",
+    "note: PSN 102 lost in the fabric",
+    "message: PSN 103 (Write last)",
+    "message: NAK sequence error, expected 102",
+    "message: retransmit from PSN 102",
+    "message: PSN 103",
+    "message: ACK 103"
+   ],
+   "replies": [
+    false,
+    false,
+    false,
+    true,
+    false,
+    false,
+    true
+   ]
+  },
+  {
+   "page": "modules/m04-rdma/lessons/verbs-qps-mrs.md",
+   "index": 0,
+   "source": "313ace10e4b3",
+   "kind": "flow",
+   "nodes": {
+    "CQ": "Completion Queue",
+    "CTX": "Device context (mlx5_0)",
+    "MR": "Memory Region (lkey, rkey)",
+    "PD": "Protection Domain",
+    "QP": "Queue Pair",
+    "RQ": "Receive Queue",
+    "SQ": "Send Queue"
+   },
+   "decisions": [],
+   "edges": [
+    "CTX > CQ | arrow | ",
+    "CTX > PD | arrow | ",
+    "PD > MR | arrow | ",
+    "PD > QP | arrow | ",
+    "QP > RQ | arrow | ",
+    "QP > SQ | arrow | ",
+    "RQ > CQ | dotted | completions",
+    "SQ > CQ | dotted | completions"
+   ],
+   "groups": {},
+   "members": {}
+  },
+  {
+   "page": "modules/m04-rdma/lessons/verbs-qps-mrs.md",
+   "index": 1,
+   "source": "946cec8932da",
+   "kind": "sequence",
+   "actors": [
+    "Application",
+    "Local NIC",
+    "Remote NIC"
+   ],
+   "steps": [
+    "message: build WQE in send queue (user memory)",
+    "message: ring doorbell (MMIO write)",
+    "message: DMA read WQE and payload",
+    "message: packets (PSN n..n+k)",
+    "message: check rkey, DMA into remote MR",
+    "message: ACK (PSN n+k)",
+    "message: write CQE into completion queue",
+    "message: ibv_poll_cq returns IBV_WC_SUCCESS"
+   ],
+   "replies": [
+    false,
+    false,
+    false,
+    false,
+    false,
+    true,
+    false,
+    false
+   ]
+  },
+  {
+   "page": "modules/m04-rdma/lessons/why-rdma.md",
+   "index": 0,
+   "source": "c83cc242e0ec",
+   "kind": "flow",
+   "nodes": {
+    "APP_A": "Application buffer (registered)",
+    "MEM_B": "Application buffer (registered)",
+    "NIC_A": "RDMA NIC: transport in hardware",
+    "NIC_B": "RDMA NIC: transport in hardware"
+   },
+   "decisions": [],
+   "edges": [
+    "APP_A > NIC_A | arrow | 1. post work request (doorbell)",
+    "NIC_A > APP_A | arrow | 2. DMA read from buffer",
+    "NIC_A > NIC_B | arrow | 3. packets on the wire",
+    "NIC_B > MEM_B | arrow | 4. DMA write into buffer",
+    "NIC_B > NIC_A | arrow | 5. ACK"
+   ],
+   "groups": {
+    "HostA": "Host A",
+    "HostB": "Host B"
+   },
+   "members": {
+    "APP_A": "HostA",
+    "NIC_A": "HostA",
+    "NIC_B": "HostB",
+    "MEM_B": "HostB"
+   }
+  },
+  {
+   "page": "modules/m05-infiniband/lessons/ib-architecture.md",
+   "index": 0,
+   "source": "6f3b43c86238",
+   "kind": "flow",
+   "nodes": {
+    "APP": "Host app / librdmacm",
+    "PMA": "PMA in each port",
+    "SA": "Subnet Administrator (part of SM)",
+    "SM": "Subnet Manager (OpenSM / UFM)",
+    "SMA1": "SMA in switch",
+    "SMA2": "SMA in HCA",
+    "TOOL": "perfquery, ibdiagnet"
+   },
+   "decisions": [],
+   "edges": [
+    "APP > SA | arrow | SA queries on QP1 (path records)",
+    "SM > SMA1 | arrow | SMPs on QP0, VL15",
+    "SM > SMA2 | arrow | SMPs",
+    "TOOL > PMA | arrow | PMA MADs on QP1"
+   ],
+   "groups": {},
+   "members": {}
+  },
+  {
+   "page": "modules/m05-infiniband/lessons/ib-flow-control-vls.md",
+   "index": 0,
+   "source": "4cf4cb65c957",
+   "kind": "sequence",
+   "actors": [
+    "Receiver buffer (VL0)",
+    "Sender (VL0)"
+   ],
+   "steps": [
+    "message: FCP: credit limit = 512 blocks",
+    "message: packets totalling 300 blocks",
+    "message: packets totalling 212 blocks (limit reached)",
+    "note: stop VL0, other VLs continue",
+    "message: FCP: credit limit = 800 (buffer drained)",
+    "message: resume VL0"
+   ],
+   "replies": [
+    true,
+    false,
+    false,
+    true,
+    false
+   ]
+  },
+  {
+   "page": "modules/m05-infiniband/lessons/ib-tools-diagnostics.md",
+   "index": 0,
+   "source": "7b437fa44a3c",
+   "kind": "flow",
+   "nodes": {
+    "H1": "node01 HCA",
+    "H2": "node77 HCA",
+    "L1": "leaf03 port 7: PortRcvErrors (culprit link)",
+    "L2": "leaf09 port 40: RemotePhysicalErrors (victim)",
+    "S1": "spine02 port 3: RemotePhysicalErrors (victim)"
+   },
+   "decisions": [],
+   "edges": [
+    "H1 > L1 | arrow | link A: dirty optic",
+    "L1 > S1 | arrow | ",
+    "L2 > H2 | arrow | ",
+    "S1 > L2 | arrow | "
+   ],
+   "groups": {},
+   "members": {}
+  },
+  {
+   "page": "modules/m05-infiniband/lessons/sharp-in-network-computing.md",
+   "index": 0,
+   "source": "c58122282bca",
+   "kind": "flow",
+   "nodes": {
+    "A1": "Leaf switch 1: aggregation node",
+    "A2": "Leaf switch 2: aggregation node",
+    "H1": "GPU node 1",
+    "H2": "GPU node 2",
+    "H3": "GPU node 3",
+    "H4": "GPU node 4",
+    "R": "Spine switch: root aggregation node"
+   },
+   "decisions": [],
+   "edges": [
+    "A1 > R | arrow | partial sum",
+    "A2 > R | arrow | partial sum",
+    "H1 > A1 | arrow | S bytes up",
+    "H2 > A1 | arrow | S bytes up",
+    "H3 > A2 | arrow | S bytes up",
+    "H4 > A2 | arrow | S bytes up",
+    "R > A1 | dotted | result down the tree",
+    "R > A2 | dotted | result down the tree"
+   ],
+   "groups": {},
+   "members": {}
+  },
+  {
+   "page": "modules/m05-infiniband/lessons/subnet-manager-routing.md",
+   "index": 0,
+   "source": "2f13dee017bd",
+   "kind": "sequence",
+   "actors": [
+    "HCAs",
+    "Subnet Manager",
+    "Switches"
+   ],
+   "steps": [
+    "message: directed-route SMPs (NodeInfo, PortInfo)",
+    "message: directed-route SMPs",
+    "note: build topology graph, assign LIDs",
+    "note: run routing engine (e.g. ftree)",
+    "message: set LFT blocks, SL2VL, VLArb, P_Keys",
+    "message: set LID, SM LID, P_Keys, SL2VL",
+    "message: set ports Armed then Active",
+    "message: set ports Armed then Active"
+   ],
+   "replies": [
+    false,
+    false,
+    false,
+    false,
+    false,
+    false
+   ]
+  },
+  {
+   "page": "modules/m05-infiniband/lessons/subnet-manager-routing.md",
+   "index": 1,
+   "source": "f3db5890ece6",
+   "kind": "flow",
+   "nodes": {
+    "H1": "Host A (rail 0)",
+    "H2": "Host B (rail 0)",
+    "L1": "Leaf 1",
+    "L2": "Leaf 2",
+    "S1": "Spine 1: routes to dests 1,3,5...",
+    "S2": "Spine 2: routes to dests 2,4,6..."
+   },
+   "decisions": [],
+   "edges": [
+    "H1 > L1 | arrow | ",
+    "H2 > L2 | arrow | ",
+    "L1 > S1 | arrow | ",
+    "L1 > S2 | arrow | ",
+    "L2 > S1 | arrow | ",
+    "L2 > S2 | arrow | "
+   ],
+   "groups": {},
+   "members": {}
+  },
+  {
+   "page": "modules/m06-rocev2-lossless/lessons/buffers-headroom-ets.md",
+   "index": 0,
+   "source": "406bd4e54382",
+   "kind": "flow",
+   "nodes": {
+    "EQ": "Egress port Y, queue 3",
+    "IN": "Ingress port X, PG3",
+    "MEM": "Shared buffer cells",
+    "OUT": "Wire",
+    "SCH": "ETS / strict-priority scheduler"
+   },
+   "decisions": [],
+   "edges": [
+    "EQ > SCH | arrow | ",
+    "IN > MEM | arrow | accounted: XOFF/XON, headroom",
+    "MEM > EQ | arrow | accounted: ECN marking, drop for lossy",
+    "SCH > OUT | arrow | "
+   ],
+   "groups": {},
+   "members": {}
+  },
+  {
+   "page": "modules/m06-rocev2-lossless/lessons/buffers-headroom-ets.md",
+   "index": 1,
+   "source": "fdc7f928e6de",
+   "kind": "sequence",
+   "actors": [
+    "Downstream switch (congested)",
+    "Upstream device (sender)"
+   ],
+   "steps": [
+    "note: PG3 crosses XOFF at t0",
+    "note: (1) PFC frame waits for the frame being sent on this port",
+    "message: (2) PFC frame propagates along the cable",
+    "note: (3) Upstream MAC/PHY processes the PFC frame",
+    "note: (4) Upstream finishes its in-progress frame",
+    "message: (5) Bytes already on the cable still arrive"
+   ],
+   "replies": [
+    false,
+    true
+   ]
+  },
+  {
+   "page": "modules/m06-rocev2-lossless/lessons/ecn-and-dcqcn.md",
+   "index": 0,
+   "source": "1f64f5640225",
+   "kind": "sequence",
+   "actors": [
+    "Receiver NIC (NP)",
+    "Sender NIC (RP)",
+    "Switch queue (CP)"
+   ],
+   "steps": [
+    "message: RoCEv2 data, ECN = ECT",
+    "note: queue above Kmin, mark with probability p",
+    "message: RoCEv2 data, ECN = CE",
+    "message: CNP (BTH opcode 0x81), at most one per flow per interval",
+    "note: cut rate, update alpha"
+   ],
+   "replies": [
+    false,
+    false,
+    false
+   ]
+  },
+  {
+   "page": "modules/m06-rocev2-lossless/lessons/pfc-priority-flow-control.md",
+   "index": 0,
+   "source": "6094b0af1f4e",
+   "kind": "flow",
+   "nodes": {
+    "L1": "Leaf 1",
+    "L2": "Leaf 2",
+    "R": "Receiver NIC (slow)",
+    "S": "Spine",
+    "T": "Sender NIC"
+   },
+   "decisions": [],
+   "edges": [
+    "L1 > T | arrow | PFC prio 3",
+    "L2 > S | arrow | PFC prio 3",
+    "R > L2 | arrow | PFC prio 3",
+    "S > L1 | arrow | PFC prio 3"
+   ],
+   "groups": {},
+   "members": {}
+  },
+  {
+   "page": "modules/m06-rocev2-lossless/lessons/pfc-storms-deadlocks.md",
+   "index": 0,
+   "source": "9b8cf48a766f",
+   "kind": "flow",
+   "nodes": {
+    "H2": "Hosts on Leaf 2 (victims)",
+    "H3": "Hosts on Leaf 3 (victims)",
+    "H7": "H7 NIC (stalled), sends PFC continuously",
+    "L1": "Leaf 1: queue to H7 frozen",
+    "L2": "Leaf 2",
+    "L3": "Leaf 3",
+    "S1": "Spine 1",
+    "S2": "Spine 2"
+   },
+   "decisions": [],
+   "edges": [
+    "H7 > L1 | arrow | ",
+    "L1 > S1 | arrow | ingress PGs fill, PFC upstream",
+    "L1 > S2 | arrow | PFC upstream",
+    "L2 > H2 | arrow | PFC",
+    "L3 > H3 | arrow | PFC",
+    "S1 > L2 | arrow | PFC",
+    "S2 > L3 | arrow | PFC"
+   ],
+   "groups": {},
+   "members": {}
+  },
+  {
+   "page": "modules/m06-rocev2-lossless/lessons/pfc-storms-deadlocks.md",
+   "index": 1,
+   "source": "a70c3217a8f7",
+   "kind": "flow",
+   "nodes": {
+    "A": "Switch A, prio 3 full",
+    "B": "Switch B, prio 3 full",
+    "C": "Switch C, prio 3 full",
+    "D": "Switch D, prio 3 full"
+   },
+   "decisions": [],
+   "edges": [
+    "A > B | arrow | waits on",
+    "B > C | arrow | waits on",
+    "C > D | arrow | waits on",
+    "D > A | arrow | waits on"
+   ],
+   "groups": {},
+   "members": {}
+  },
+  {
+   "page": "modules/m06-rocev2-lossless/lessons/qos-trust-and-mapping.md",
+   "index": 0,
+   "source": "50d9ed7289a7",
+   "kind": "flow",
+   "nodes": {
+    "P": "Packet arrives: DSCP 26",
+    "PG": "Ingress priority group: PFC and headroom",
+    "RM": "Optional egress remark (DSCP or PCP)",
+    "SP": "Internal (switch) priority 3",
+    "T": "Trust mode",
+    "TC": "Egress traffic class / queue 3: ETS and ECN",
+    "W": "Wire"
+   },
+   "decisions": [
+    "T"
+   ],
+   "edges": [
+    "P > T | arrow | ",
+    "RM > W | arrow | ",
+    "SP > PG | arrow | ",
+    "SP > TC | arrow | ",
+    "T > SP | arrow | trust DSCP: DSCP-to-priority map",
+    "TC > RM | arrow | "
+   ],
+   "groups": {},
+   "members": {}
+  },
+  {
+   "page": "modules/m06-rocev2-lossless/lessons/rocev2-configuration-end-to-end.md",
+   "index": 0,
+   "source": "7d5c087e43e2",
+   "kind": "flow",
+   "nodes": {
+    "APP": "Application / library: NCCL_IB_TC, GID index",
+    "CC": "Congestion control: ECN NP/RP, CNP DSCP and prio",
+    "CM": "rdma_cm defaults: cma_roce_mode, cma_roce_tos",
+    "FW": "NIC firmware settings (DCBX ownership, CC algorithm)",
+    "NET": "Netdev: MTU, global pause off",
+    "QOS": "NIC QoS: trust, PFC, ETS, buffers (mlnx_qos or dcb)"
+   },
+   "decisions": [],
+   "edges": [
+    "APP > CM | arrow | ",
+    "CC > FW | arrow | ",
+    "CM > QOS | arrow | ",
+    "QOS > CC | arrow | ",
+    "QOS > NET | arrow | "
+   ],
+   "groups": {},
+   "members": {}
+  },
+  {
+   "page": "modules/m06-rocev2-lossless/lessons/rocev2-encapsulation.md",
+   "index": 0,
+   "source": "14fa8eecd302",
+   "kind": "flow",
+   "nodes": {
+    "A": "Ethernet 14 B (+4 B VLAN)",
+    "B": "IPv4 20 B or IPv6 40 B",
+    "C": "UDP 8 B, dst 4791",
+    "D": "BTH 12 B",
+    "E": "Extended headers 0-28 B (RETH, AETH, ...)",
+    "F": "Payload up to RDMA MTU",
+    "G": "ICRC 4 B",
+    "H": "Ethernet FCS 4 B"
+   },
+   "decisions": [],
+   "edges": [
+    "A > B | arrow | ",
+    "B > C | arrow | ",
+    "C > D | arrow | ",
+    "D > E | arrow | ",
+    "E > F | arrow | ",
+    "F > G | arrow | ",
+    "G > H | arrow | "
+   ],
+   "groups": {},
+   "members": {}
+  },
+  {
+   "page": "modules/m06-rocev2-lossless/lessons/rocev2-encapsulation.md",
+   "index": 1,
+   "source": "3fec60e6c9bd",
+   "kind": "flow",
+   "nodes": {
+    "G0": "GID 0: fe80::..., RoCE v1",
+    "G1": "GID 1: fe80::..., RoCE v2",
+    "G2": "GID 2: ::ffff:10.0.0.11, RoCE v1",
+    "G3": "GID 3: ::ffff:10.0.0.11, RoCE v2",
+    "IP": "IP 10.0.0.11 on ens1f0np0",
+    "LL": "IPv6 link-local fe80::...",
+    "QP": "QP modify to RTR with sgid_index=3"
+   },
+   "decisions": [],
+   "edges": [
+    "G3 > QP | arrow | ",
+    "IP > G2 | arrow | ",
+    "IP > G3 | arrow | ",
+    "LL > G0 | arrow | ",
+    "LL > G1 | arrow | "
+   ],
+   "groups": {},
+   "members": {}
+  },
+  {
+   "page": "modules/m07-load-balancing-congestion/lessons/adaptive-routing-packet-spraying.md",
+   "index": 0,
+   "source": "b453e3e2d072",
+   "kind": "flow",
+   "nodes": {
+    "C": "Least loaded eligible port",
+    "E": "Enqueue on chosen port",
+    "G": "Look up AR group: ports 1-8 all reach D",
+    "P": "Packet arrives for destination D",
+    "Q": "Read current queue depth / load per port"
+   },
+   "decisions": [
+    "C"
+   ],
+   "edges": [
+    "C > E | arrow | ",
+    "G > Q | arrow | ",
+    "P > G | arrow | ",
+    "Q > C | arrow | "
+   ],
+   "groups": {},
+   "members": {}
+  },
+  {
+   "page": "modules/m07-load-balancing-congestion/lessons/congestion-control-algorithms.md",
+   "index": 0,
+   "source": "b79d3977c79c",
+   "kind": "flow",
+   "nodes": {
+    "Q": "Bottleneck queue (switch egress)",
+    "R": "Receiver NIC",
+    "S": "Sender NIC: rate, window or credit state"
+   },
+   "decisions": [],
+   "edges": [
+    "Q > R | arrow | packets (+ ECN mark, telemetry, delay)",
+    "Q > R | dotted | trimmed header",
+    "R > S | arrow | ACK / CNP / telemetry echo",
+    "R > S | dotted | credits or grants (receiver-driven)",
+    "S > Q | arrow | data packets"
+   ],
+   "groups": {},
+   "members": {}
+  },
+  {
+   "page": "modules/m07-load-balancing-congestion/lessons/flow-collisions-entropy.md",
+   "index": 0,
+   "source": "821f6bebdbd6",
+   "kind": "flow",
+   "nodes": {
+    "D": "Spine 1 runs the SAME hash: every flow it receives already has hash mod 4 = 0",
+    "L": "Leaf: hash mod 4 picks uplink",
+    "S1": "Spine 1",
+    "S2": "Spine 2",
+    "S3": "Spine 3",
+    "S4": "Spine 4",
+    "X": "Spine 1 sends all of them to the same downstream member"
+   },
+   "decisions": [],
+   "edges": [
+    "D > X | arrow | ",
+    "L > S1 | arrow | hash mod 4 = 0",
+    "L > S2 | arrow | = 1",
+    "L > S3 | arrow | = 2",
+    "L > S4 | arrow | = 3",
+    "S1 > D | arrow | "
+   ],
+   "groups": {},
+   "members": {}
+  },
+  {
+   "page": "modules/m07-load-balancing-congestion/lessons/incast-and-congestion-hotspots.md",
+   "index": 0,
+   "source": "b4607a578e15",
+   "kind": "flow",
+   "nodes": {
+    "L": "Leaf egress queue to R",
+    "R": "Receiver R",
+    "S1": "Sender 1 (400G)",
+    "S2": "Sender 2 (400G)",
+    "S3": "Sender 3 (400G)",
+    "S4": "Sender 4 (400G)"
+   },
+   "decisions": [],
+   "edges": [
+    "L > R | arrow | 400G drain",
+    "S1 > L | arrow | ",
+    "S2 > L | arrow | ",
+    "S3 > L | arrow | ",
+    "S4 > L | arrow | "
+   ],
+   "groups": {},
+   "members": {}
+  },
+  {
+   "page": "modules/m07-load-balancing-congestion/lessons/incast-and-congestion-hotspots.md",
+   "index": 1,
+   "source": "b0061e4e3de0",
+   "kind": "flow",
+   "nodes": {
+    "H": "Host H on Leaf 2",
+    "L1": "Leaf 1 port to R: queue full",
+    "L2": "Leaf 2 uplink",
+    "Q": "Idle receiver Q",
+    "R": "Hot receiver R",
+    "SP": "Spine A ingress"
+   },
+   "decisions": [],
+   "edges": [
+    "H > Q | dotted | H also sends to Q via same priority: blocked",
+    "L1 > SP | arrow | PFC pause",
+    "L2 > H | arrow | PFC pause",
+    "R > L1 | line | ",
+    "SP > L2 | arrow | PFC pause"
+   ],
+   "groups": {},
+   "members": {}
+  },
+  {
+   "page": "modules/m07-load-balancing-congestion/lessons/spectrum-x-architecture.md",
+   "index": 0,
+   "source": "4c58618eb8fb",
+   "kind": "flow",
+   "nodes": {
+    "G1": "GPU (sender)",
+    "G2": "GPU (receiver)",
+    "L1": "Spectrum-4 leaf: per-packet AR",
+    "L2": "Spectrum-4 leaf",
+    "N1": "SuperNIC: RoCE, CC algorithm",
+    "N2": "SuperNIC: out-of-order placement",
+    "S1": "Spine A",
+    "S2": "Spine B"
+   },
+   "decisions": [],
+   "edges": [
+    "G1 > N1 | arrow | ",
+    "L1 > S1 | arrow | ",
+    "L1 > S2 | arrow | ",
+    "L2 > N1 | dotted | congestion telemetry",
+    "L2 > N2 | arrow | ",
+    "N1 > L1 | arrow | ",
+    "N2 > G2 | arrow | ",
+    "S1 > L2 | arrow | ",
+    "S2 > L2 | arrow | "
+   ],
+   "groups": {},
+   "members": {}
+  },
+  {
+   "page": "modules/m07-load-balancing-congestion/lessons/ultra-ethernet.md",
+   "index": 0,
+   "source": "f4d828f34a9a",
+   "kind": "flow",
+   "nodes": {
+    "A": "Application / collective library (e.g. NCCL or MPI via a libfabric provider)",
+    "CMS": "CMS: Congestion Management sublayer",
+    "ETH": "Ethernet link layer (optional LLR, CBFC)",
+    "IP": "IP network (UDP encapsulation details per the spec)",
+    "PDS": "PDS: Packet Delivery sublayer (ROD, RUD, RUDI, UUD)",
+    "SES": "SES: Semantic sublayer (libfabric-style operations)",
+    "TSS": "TSS: Transport Security sublayer (optional)"
+   },
+   "decisions": [],
+   "edges": [
+    "A > SES | arrow | ",
+    "CMS > IP | arrow | ",
+    "IP > ETH | arrow | ",
+    "PDS > CMS | arrow | ",
+    "PDS > TSS | arrow | ",
+    "SES > PDS | arrow | ",
+    "TSS > IP | arrow | "
+   ],
+   "groups": {},
+   "members": {}
+  },
+  {
+   "page": "modules/m08-nccl-collectives/lessons/collective-algorithms.md",
+   "index": 0,
+   "source": "77168daae986",
+   "kind": "flow",
+   "nodes": {
+    "A0": "GPU0",
+    "A1": "GPU1",
+    "A2": "GPU2",
+    "A3": "GPU3",
+    "B0": "GPU0",
+    "B1": "GPU1",
+    "B2": "GPU2",
+    "B3": "GPU3"
+   },
+   "decisions": [],
+   "edges": [
+    "A0 > A1 | arrow | ",
+    "A1 > A2 | arrow | ",
+    "A2 > A3 | arrow | ",
+    "A3 > B0 | arrow | NIC 3 to NIC 0",
+    "B0 > B1 | arrow | ",
+    "B1 > B2 | arrow | ",
+    "B2 > B3 | arrow | ",
+    "B3 > A0 | arrow | NIC 3 to NIC 0"
+   ],
+   "groups": {
+    "N0": "Node 0",
+    "N1": "Node 1"
+   },
+   "members": {
+    "A0": "N0",
+    "A1": "N0",
+    "A2": "N0",
+    "A3": "N0",
+    "B0": "N1",
+    "B1": "N1",
+    "B2": "N1",
+    "B3": "N1"
+   }
+  },
+  {
+   "page": "modules/m08-nccl-collectives/lessons/nccl-architecture.md",
+   "index": 0,
+   "source": "969da3e3f905",
+   "kind": "flow",
+   "nodes": {
+    "B": "Bootstrap: ranks connect over TCP sockets",
+    "C": "Connect transports per channel (P2P, SHM, NET)",
+    "G": "Graph search: rings, trees, NVLS/CollNet patterns",
+    "R": "Ready: collectives launch as CUDA kernels",
+    "T": "Topology detection: sysfs, NVML, NIC enumeration",
+    "U": "Rank 0 creates unique ID",
+    "X": "Exchange graphs across ranks, pick common channels"
+   },
+   "decisions": [],
+   "edges": [
+    "B > T | arrow | ",
+    "C > R | arrow | ",
+    "G > X | arrow | ",
+    "T > G | arrow | ",
+    "U > B | arrow | ",
+    "X > C | arrow | "
+   ],
+   "groups": {},
+   "members": {}
+  },
+  {
+   "page": "modules/m08-nccl-collectives/lessons/nccl-architecture.md",
+   "index": 1,
+   "source": "d740e0f41de1",
+   "kind": "flow",
+   "nodes": {
+    "A2": "Node A GPU2",
+    "A5": "Node A GPU5",
+    "B5": "Node B GPU5",
+    "R5": "Rail-5 leaf"
+   },
+   "decisions": [],
+   "edges": [
+    "A2 > A5 | arrow | NVLink",
+    "A5 > R5 | arrow | NIC on rail 5",
+    "R5 > B5 | arrow | "
+   ],
+   "groups": {},
+   "members": {}
+  },
+  {
+   "page": "modules/m08-nccl-collectives/lessons/nccl-debugging.md",
+   "index": 0,
+   "source": "60dee2349787",
+   "kind": "flow",
+   "nodes": {
+    "A": "nccl-tests single node OK?",
+    "B": "Pairwise multi-node OK?",
+    "C": "Full-scale all-reduce and all-to-all OK?",
+    "F": "Fabric: ECMP, AR, congestion, oversubscription",
+    "G": "GPU / NVLink / P2P / PCIe issue",
+    "N": "That node: NIC, GDR, optics, config",
+    "S": "Slow job",
+    "W": "Workload: framework, overlap, data loading"
+   },
+   "decisions": [
+    "A",
+    "B",
+    "C"
+   ],
+   "edges": [
+    "A > B | arrow | Yes",
+    "A > G | arrow | No",
+    "B > C | arrow | Yes",
+    "B > N | arrow | No, one node bad",
+    "C > F | arrow | No",
+    "C > W | arrow | Yes",
+    "S > A | arrow | "
+   ],
+   "groups": {},
+   "members": {}
+  },
+  {
+   "page": "modules/m08-nccl-collectives/lessons/nccl-tests-interpretation.md",
+   "index": 0,
+   "source": "5e7fd76667e0",
+   "kind": "flow",
+   "nodes": {
+    "A": "Small sizes: time ~ constant (latency floor)",
+    "B": "Medium sizes: bandwidth rising",
+    "C": "Large sizes: busbw plateau near ceiling"
+   },
+   "decisions": [],
+   "edges": [
+    "A > B | arrow | ",
+    "B > C | arrow | "
+   ],
+   "groups": {},
+   "members": {}
+  },
+  {
+   "page": "modules/m09-cluster-design/lessons/ai-fabric-security.md",
+   "index": 0,
+   "source": "9f8c0b7ccad4",
+   "kind": "flow",
+   "nodes": {
+    "BMC": "BMCs on the OOB network",
+    "D": "DPU / SuperNIC firmware and Arm OS",
+    "H": "Host OS, root, GPUs",
+    "SM": "Subnet manager / UFM / NetQ",
+    "SW": "Switches and NOS"
+   },
+   "decisions": [],
+   "edges": [
+    "D > SW | arrow | fabric links",
+    "H > D | arrow | PCIe",
+    "SM > D | arrow | management packets",
+    "SM > SW | arrow | management packets / APIs"
+   ],
+   "groups": {
+    "Provider": "Provider trust domain",
+    "Tenant": "Tenant trust domain"
+   },
+   "members": {
+    "H": "Tenant",
+    "D": "Provider",
+    "SW": "Provider",
+    "SM": "Provider",
+    "BMC": "Provider"
+   }
+  },
+  {
+   "page": "modules/m09-cluster-design/lessons/fabric-sizing-math.md",
+   "index": 0,
+   "source": "121cdc5fbace",
+   "kind": "flow",
+   "nodes": {
+    "A1": "Agg x k/2",
+    "A2": "Agg x k/2",
+    "C1": "Core group (k^2/4 switches)",
+    "H1": "k^2/4 endpoints",
+    "H2": "k^2/4 endpoints",
+    "L1": "Leaf x k/2",
+    "L2": "Leaf x k/2"
+   },
+   "decisions": [],
+   "edges": [
+    "A1 > L1 | line | ",
+    "A2 > L2 | line | ",
+    "C1 > A1 | line | ",
+    "C1 > A2 | line | ",
+    "L1 > H1 | line | ",
+    "L2 > H2 | line | "
+   ],
+   "groups": {
+    "P1": "Pod 1",
+    "P2": "Pod k"
+   },
+   "members": {
+    "C1": null,
+    "A1": "P1",
+    "L1": "P1",
+    "A2": "P2",
+    "L2": "P2",
+    "H1": null,
+    "H2": null
+   }
+  },
+  {
+   "page": "modules/m09-cluster-design/lessons/inference-cluster-design.md",
+   "index": 0,
+   "source": "8e76009f0621",
+   "kind": "flow",
+   "nodes": {
+    "DC": "Decode pool (wide EP)",
+    "GW": "Gateway + endpoint picker",
+    "PF": "Prefill pool (NVLink domains)",
+    "T": "KV tiers: CPU memory, SSD, remote storage",
+    "U": "Clients"
+   },
+   "decisions": [],
+   "edges": [
+    "DC > GW | arrow | token stream",
+    "GW > DC | arrow | ",
+    "GW > PF | arrow | ",
+    "PF > DC | arrow | KV transfer, RDMA on rails",
+    "PF > T | dotted | KV blocks",
+    "T > PF | dotted | cache hits",
+    "U > GW | arrow | "
+   ],
+   "groups": {},
+   "members": {}
+  },
+  {
+   "page": "modules/m09-cluster-design/lessons/open-scale-up-fabrics.md",
+   "index": 0,
+   "source": "48073acec14c",
+   "kind": "flow",
+   "nodes": {
+    "D": "Data link layer: 640-byte flits, CRC, link-level replay, credits",
+    "P": "Protocol layer (UPLI): read, write, atomics",
+    "PH": "Physical layer: 802.3-based PHY, 212.5 GT/s per lane, FEC",
+    "S": "UALink switch (one port per accelerator, per plane)",
+    "T": "Transaction layer: 64-byte TL flits, compressed addresses"
+   },
+   "decisions": [],
+   "edges": [
+    "D > PH | arrow | ",
+    "P > T | arrow | ",
+    "PH > S | arrow | ",
+    "T > D | arrow | "
+   ],
+   "groups": {},
+   "members": {}
+  },
+  {
+   "page": "modules/m09-cluster-design/lessons/rail-optimized-topology.md",
+   "index": 0,
+   "source": "03c5c0c50a95",
+   "kind": "flow",
+   "nodes": {
+    "A0": "GPU0+NIC0",
+    "A1": "GPU1+NIC1",
+    "A7": "GPU7+NIC7",
+    "B0": "GPU0+NIC0",
+    "B1": "GPU1+NIC1",
+    "B7": "GPU7+NIC7",
+    "L0": "Leaf 0 (rail 0)",
+    "L1": "Leaf 1 (rail 1)",
+    "L7": "Leaf 7 (rail 7)",
+    "SP": "Spine layer"
+   },
+   "decisions": [],
+   "edges": [
+    "A0 > L0 | line | ",
+    "A1 > L1 | line | ",
+    "A7 > L7 | line | ",
+    "B0 > L0 | line | ",
+    "B1 > L1 | line | ",
+    "B7 > L7 | line | ",
+    "L0 > SP | line | ",
+    "L1 > SP | line | ",
+    "L7 > SP | line | "
+   ],
+   "groups": {
+    "S1": "Server A",
+    "S2": "Server B"
+   },
+   "members": {
+    "A0": "S1",
+    "A1": "S1",
+    "A7": "S1",
+    "B0": "S2",
+    "B1": "S2",
+    "B7": "S2",
+    "L0": null,
+    "L1": null,
+    "L7": null,
+    "SP": null
+   }
+  },
+  {
+   "page": "modules/m09-cluster-design/lessons/rail-optimized-topology.md",
+   "index": 1,
+   "source": "d86de424d43c",
+   "kind": "sequence",
+   "actors": [
+    "\"GPU3 server A\"",
+    "\"GPU5 server A\"",
+    "\"GPU5 server B\"",
+    "\"Leaf 5 (rail 5)\""
+   ],
+   "steps": [
+    "message: NVLink copy (intra-node)",
+    "message: RDMA write via NIC5",
+    "message: delivered on rail 5, no spine"
+   ],
+   "replies": [
+    false,
+    false,
+    false
+   ]
+  },
+  {
+   "page": "modules/m09-cluster-design/lessons/scale-up-domains-nvl72.md",
+   "index": 0,
+   "source": "1e3714b96b65",
+   "kind": "flow",
+   "nodes": {
+    "CF": "Scale-out compute fabric (IB or Ethernet)",
+    "CT": "Compute trays: 72 GPUs, 36 CPUs",
+    "NIC": "One scale-out NIC per GPU",
+    "NS": "NVLink Switch trays"
+   },
+   "decisions": [],
+   "edges": [
+    "CT > NIC | line | ",
+    "CT > NS | line | copper NVLink spine",
+    "NIC > CF | line | "
+   ],
+   "groups": {
+    "R": "GB200 NVL72 rack (one NVLink domain)"
+   },
+   "members": {
+    "CT": "R",
+    "NS": "R",
+    "NIC": null,
+    "CF": null
+   }
+  },
+  {
+   "page": "modules/m09-cluster-design/lessons/storage-and-frontend-networks.md",
+   "index": 0,
+   "source": "0925f24a08b4",
+   "kind": "flow",
+   "nodes": {
+    "CF": "Compute fabric (1:1, rail-optimized)",
+    "FE": "Front-end / in-band Ethernet",
+    "G": "GPU nodes",
+    "OOB": "Out-of-band 1GbE",
+    "SF": "Storage fabric (RDMA, oversubscribed OK)",
+    "ST": "Parallel FS / NVMe-oF targets",
+    "U": "Users, registry, object store, Internet"
+   },
+   "decisions": [],
+   "edges": [
+    "FE > U | line | ",
+    "G > CF | line | ",
+    "G > FE | line | ",
+    "G > OOB | dotted | BMC",
+    "G > SF | line | ",
+    "SF > ST | line | "
+   ],
+   "groups": {},
+   "members": {}
+  },
+  {
+   "page": "modules/m09-cluster-design/lessons/superpod-reference-architecture.md",
+   "index": 0,
+   "source": "7e97aab7ae53",
+   "kind": "flow",
+   "nodes": {
+    "C": "Compute fabric (rail-optimized, 8 x 400G)",
+    "I": "In-band management (Ethernet)",
+    "N": "DGX node",
+    "O": "Out-of-band management (1GbE, BMC)",
+    "S": "Storage fabric"
+   },
+   "decisions": [],
+   "edges": [
+    "N > C | arrow | 8 compute NICs",
+    "N > I | arrow | in-band NIC ports",
+    "N > O | arrow | BMC port",
+    "N > S | arrow | storage NIC ports"
+   ],
+   "groups": {},
+   "members": {}
+  },
+  {
+   "page": "modules/m10-operations/lessons/drop-reasons-in-band-telemetry.md",
+   "index": 0,
+   "source": "7c829568c721",
+   "kind": "flow",
+   "nodes": {
+    "AG": "WJH agent (nv-wjh.service in Cumulus 5.18+)",
+    "AGG": "Aggregate buffer (counts per reason and flow)",
+    "ASIC": "Spectrum ASIC: packet dropped, reason code",
+    "CH": "Channels: triggers per category, polling interval, cache",
+    "CLI": "nv show / nv-wjh-cli / PCAP export",
+    "NQ": "NetQ (when the NetQ agent collects WJH)",
+    "RAW": "Per-packet buffer (drops with headers, reason, action)"
+   },
+   "decisions": [],
+   "edges": [
+    "AG > CH | arrow | ",
+    "AG > NQ | dotted | ",
+    "AGG > CLI | arrow | ",
+    "ASIC > AG | arrow | ",
+    "CH > AGG | arrow | ",
+    "CH > RAW | arrow | ",
+    "RAW > CLI | arrow | "
+   ],
+   "groups": {},
+   "members": {}
+  },
+  {
+   "page": "modules/m10-operations/lessons/fabric-validation-burn-in.md",
+   "index": 0,
+   "source": "7427d08f91c6",
+   "kind": "flow",
+   "nodes": {
+    "A": "1. Physical: cabling vs plan, link up, speed, BER",
+    "B": "2. Node: GPU, PCIe, NIC, firmware, DCGM diag",
+    "C": "3. Pairwise: ib_write_bw / latency per NIC pair",
+    "D": "4. Rail and leaf: many-to-many within a rail",
+    "E": "5. Bisection: all-pairs across spines",
+    "F": "6. NCCL: 1 node, 2, 8, 32 ... full scale",
+    "G": "7. Burn-in: sustained HPL / NCCL / training job",
+    "H": "Acceptance report"
+   },
+   "decisions": [],
+   "edges": [
+    "A > B | arrow | ",
+    "B > C | arrow | ",
+    "C > D | arrow | ",
+    "D > E | arrow | ",
+    "E > F | arrow | ",
+    "F > G | arrow | ",
+    "G > H | arrow | "
+   ],
+   "groups": {},
+   "members": {}
+  },
+  {
+   "page": "modules/m10-operations/lessons/kubernetes-network-operator.md",
+   "index": 0,
+   "source": "b7d2c0de4366",
+   "kind": "sequence",
+   "actors": [
+    "Device plugin",
+    "Kubelet + container runtime",
+    "Multus + SR-IOV CNI",
+    "NV-IPAM",
+    "Pod",
+    "Scheduler"
+   ],
+   "steps": [
+    "message: bind pod to a node with free nvidia.com/sriov_resource",
+    "message: Allocate(1 VF)",
+    "message: VF PCI address, /dev/infiniband device specs",
+    "message: CNI ADD (annotation k8s.v1.cni.cncf.io/networks)",
+    "message: move VF netdev into pod netns as net1",
+    "message: request address from IPPool",
+    "message: IP for net1",
+    "message: network-status",
+    "message: start containers (RDMA devices mounted, IPC_LOCK)"
+   ],
+   "replies": [
+    false,
+    false,
+    true,
+    false,
+    false,
+    false,
+    true,
+    true,
+    false
+   ]
+  },
+  {
+   "page": "modules/m10-operations/lessons/network-automation-for-ai.md",
+   "index": 0,
+   "source": "1fab9993e46f",
+   "kind": "flow",
+   "nodes": {
+    "CI": "CI checks (lint, schema, Batfish, invariants)",
+    "D": "Deploy (Ansible / NVUE REST / gNMI Set)",
+    "R": "Render (Jinja2 / Python)",
+    "SOT": "Source of truth (NetBox / Nautobot, Git)",
+    "TEL": "Telemetry and audits",
+    "V": "Verify (state, counters, tests)"
+   },
+   "decisions": [],
+   "edges": [
+    "CI > D | arrow | ",
+    "D > V | arrow | ",
+    "R > CI | arrow | ",
+    "SOT > R | arrow | ",
+    "TEL > V | arrow | ",
+    "V > SOT | arrow | drift or failure"
+   ],
+   "groups": {},
+   "members": {}
+  },
+  {
+   "page": "modules/m10-operations/lessons/streaming-telemetry-gnmi.md",
+   "index": 0,
+   "source": "962c28f7efff",
+   "kind": "flow",
+   "nodes": {
+    "AM": "Alertmanager",
+    "BUS": "Kafka (optional fan-out)",
+    "COL": "Collector (gnmic / Telegraf)",
+    "GRAF": "Grafana dashboards",
+    "HOST": "Hosts: node_exporter, NIC exporter, dcgm-exporter",
+    "LAKE": "Long-term store / analytics",
+    "PROM": "Prometheus (or remote-write TSDB)",
+    "SW": "Switches (gNMI)"
+   },
+   "decisions": [],
+   "edges": [
+    "BUS > LAKE | arrow | ",
+    "COL > BUS | arrow | ",
+    "COL > PROM | arrow | ",
+    "HOST > PROM | arrow | ",
+    "PROM > AM | arrow | ",
+    "PROM > GRAF | arrow | ",
+    "SW > COL | arrow | "
+   ],
+   "groups": {},
+   "members": {}
+  },
+  {
+   "page": "modules/m10-operations/lessons/ufm-netq-management.md",
+   "index": 0,
+   "source": "39dcac3f154e",
+   "kind": "flow",
+   "nodes": {
+    "AUTO": "Automation (CI/CD, Ansible, NVUE API)",
+    "FAB": "Fabric devices and hosts",
+    "INC": "Incident workflow",
+    "NETQ": "NetQ (Ethernet: state, validations, RoCE, WJH)",
+    "OPEN": "Open pipeline (gNMI, exporters, DCGM)",
+    "SCHED": "Scheduler integration (drain unhealthy nodes)",
+    "SOT": "Source of truth (NetBox / Nautobot)",
+    "TSDB": "TSDB / Grafana / alerting",
+    "UFM": "UFM (InfiniBand: SM, health, telemetry)"
+   },
+   "decisions": [],
+   "edges": [
+    "AUTO > FAB | arrow | ",
+    "FAB > NETQ | arrow | ",
+    "FAB > OPEN | arrow | ",
+    "FAB > UFM | arrow | ",
+    "NETQ > TSDB | arrow | ",
+    "OPEN > TSDB | arrow | ",
+    "SOT > AUTO | arrow | ",
+    "TSDB > INC | arrow | ",
+    "UFM > SCHED | arrow | ",
+    "UFM > TSDB | arrow | "
+   ],
+   "groups": {},
+   "members": {}
+  },
+  {
+   "page": "modules/m11-troubleshooting/lessons/case-studies.md",
+   "index": 0,
+   "source": "6f2b3e75fad1",
+   "kind": "flow",
+   "nodes": {
+    "A": "Symptom reported",
+    "B": "Scope: which jobs, nodes, racks, since when?",
+    "C": "Correlate: changes, maintenance, alerts in the window",
+    "D": "Bisect: GPU / host / NIC / link / switch / collective",
+    "E": "Reproducible toggle found?",
+    "F": "Prove mechanism with counters and logs",
+    "G": "Mitigate: drain, reroute, roll back",
+    "H": "Fix permanently and re-baseline",
+    "I": "Prevent: alert, admission check, CI guardrail"
+   },
+   "decisions": [
+    "E"
+   ],
+   "edges": [
+    "A > B | arrow | ",
+    "B > C | arrow | ",
+    "C > D | arrow | ",
+    "D > E | arrow | ",
+    "E > D | arrow | No",
+    "E > F | arrow | Yes",
+    "F > G | arrow | ",
+    "G > H | arrow | ",
+    "H > I | arrow | "
+   ],
+   "groups": {},
+   "members": {}
+  },
+  {
+   "page": "modules/m11-troubleshooting/lessons/link-layer-ber-fec.md",
+   "index": 0,
+   "source": "913932715201",
+   "kind": "flow",
+   "nodes": {
+    "A": "Link with rising raw BER, CRC errors or flaps",
+    "B": "Read both ends: BER, FEC, DDM, lane data",
+    "C": "Rx power low on some lanes?",
+    "D": "Inspect and clean connectors on both ends",
+    "E": "Temperature or Tx bias abnormal?",
+    "F": "Fixed after clean and reseat?",
+    "G": "Soak test, then return to service",
+    "H": "Swap optic at one end, retest",
+    "I": "Errors followed the optic?",
+    "J": "RMA the optic",
+    "K": "Replace the cable or patch path",
+    "L": "Still errors?",
+    "M": "Suspect port or NIC: move to known-good port"
+   },
+   "decisions": [
+    "C",
+    "E",
+    "F",
+    "I",
+    "L"
+   ],
+   "edges": [
+    "A > B | arrow | ",
+    "B > C | arrow | ",
+    "C > D | arrow | Yes",
+    "C > E | arrow | No",
+    "D > F | arrow | ",
+    "E > H | arrow | No",
+    "E > H | arrow | Yes",
+    "F > G | arrow | Yes",
+    "F > H | arrow | No",
+    "H > I | arrow | ",
+    "I > J | arrow | Yes",
+    "I > K | arrow | No",
+    "K > L | arrow | ",
+    "L > G | arrow | No",
+    "L > M | arrow | Yes"
+   ],
+   "groups": {},
+   "members": {}
+  },
+  {
+   "page": "modules/m11-troubleshooting/lessons/lossless-misconfigurations.md",
+   "index": 0,
+   "source": "d9a1b6e02c1d",
+   "kind": "flow",
+   "nodes": {
+    "A": "RoCE retransmits, pause storms or low throughput under load",
+    "B": "RoCE bytes on intended priority? (per-prio counters)",
+    "C": "Classification: DSCP, trust mode, DSCP-to-prio map",
+    "D": "Drops on the RoCE queue anywhere in path?",
+    "E": "PFC enabled on that priority on that hop?",
+    "F": "PFC on wrong priority or missing hop",
+    "G": "Headroom too small or MTU drop: check drop reason",
+    "H": "ECN marks on RoCE queue?",
+    "I": "ECN disabled or on wrong queue",
+    "J": "np_cnp_sent and rp_cnp_handled rising?",
+    "K": "NIC NP/RP disabled or CNP lost: check CNP priority",
+    "L": "Config chain OK: look at incast, routing, ECN thresholds"
+   },
+   "decisions": [
+    "B",
+    "D",
+    "E",
+    "H",
+    "J"
+   ],
+   "edges": [
+    "A > B | arrow | ",
+    "B > C | arrow | No",
+    "B > D | arrow | Yes",
+    "D > E | arrow | Yes",
+    "D > H | arrow | No",
+    "E > F | arrow | No",
+    "E > G | arrow | Yes",
+    "H > I | arrow | No",
+    "H > J | arrow | Yes",
+    "J > K | arrow | No",
+    "J > L | arrow | Yes"
+   ],
+   "groups": {},
+   "members": {}
+  },
+  {
+   "page": "modules/m11-troubleshooting/lessons/rdma-connection-failures.md",
+   "index": 0,
+   "source": "3bbe35f7b2ac",
+   "kind": "flow",
+   "nodes": {
+    "A": "RDMA connection fails",
+    "B": "Fails before any RDMA traffic?",
+    "C": "Check TCP side channel: bootstrap IF, ports, SSH, firewall",
+    "D": "ibv_modify_qp error?",
+    "E": "Check GID index, P_Key index, MTU, port state",
+    "F": "Small messages OK, large fail?",
+    "G": "MTU black hole: check every hop MTU",
+    "H": "Receiver out_of_sequence rising?",
+    "I": "Path drops: lossless config, link BER, congestion",
+    "J": "Packets never arrive: GID type, routing, VLAN, P_Key, ACL"
+   },
+   "decisions": [
+    "B",
+    "D",
+    "F",
+    "H"
+   ],
+   "edges": [
+    "A > B | arrow | ",
+    "B > C | arrow | Yes",
+    "B > D | arrow | No",
+    "D > E | arrow | Yes",
+    "D > F | arrow | No",
+    "F > G | arrow | Yes",
+    "F > H | arrow | No",
+    "H > I | arrow | Yes",
+    "H > J | arrow | No"
+   ],
+   "groups": {},
+   "members": {}
+  },
+  {
+   "page": "modules/m11-troubleshooting/lessons/slow-collectives-stragglers.md",
+   "index": 0,
+   "source": "41979eccf0ed",
+   "kind": "flow",
+   "nodes": {
+    "A": "Job slower than baseline",
+    "B": "nccl-tests at full scale below baseline?",
+    "C": "Look at compute, data loading, storage, checkpointing",
+    "D": "Single-node nccl-tests OK on every node?",
+    "E": "Intra-node: GPU throttling, NVLink, PCIe, ACS",
+    "F": "Bisect node set: run halves, quarters",
+    "G": "Slowdown follows a node?",
+    "H": "Per-node: ib_write_bw per rail, lspci LnkSta, NCCL log transport",
+    "I": "Fabric: congestion, ECMP collisions, PFC/ECN, link BER",
+    "J": "Fix, drain node, rerun baseline"
+   },
+   "decisions": [
+    "B",
+    "D",
+    "G"
+   ],
+   "edges": [
+    "A > B | arrow | ",
+    "B > C | arrow | No",
+    "B > D | arrow | Yes",
+    "D > E | arrow | No, node X low",
+    "D > F | arrow | Yes",
+    "F > G | arrow | ",
+    "G > H | arrow | Yes",
+    "G > I | arrow | No",
+    "H > J | arrow | ",
+    "I > J | arrow | "
+   ],
+   "groups": {},
+   "members": {}
+  },
+  {
+   "page": "modules/m11-troubleshooting/lessons/troubleshooting-methodology.md",
+   "index": 0,
+   "source": "51cff987a589",
+   "kind": "flow",
+   "nodes": {
+    "A": "Symptom: hang, error or slowdown",
+    "B": "Preserve evidence: logs, counters, dmesg",
+    "C": "All jobs or a subset?",
+    "D": "Global: recent change, SM, config push, image",
+    "E": "Map ranks to hosts, rails, leaves",
+    "F": "Follows the host when rescheduled?",
+    "G": "Host: GPU, PCIe, NIC, NUMA, local link",
+    "H": "Fabric: rail, leaf, spine, cabling",
+    "I": "Single-node NCCL, dcgmi diag, ib_write_bw",
+    "J": "Per-rail nccl-tests, switch counter deltas",
+    "K": "Revert or isolate the change",
+    "L": "Hypothesis confirmed? Fix, verify, prevent"
+   },
+   "decisions": [
+    "C",
+    "F"
+   ],
+   "edges": [
+    "A > B | arrow | ",
+    "B > C | arrow | ",
+    "C > D | arrow | All",
+    "C > E | arrow | Subset",
+    "D > K | arrow | ",
+    "E > F | arrow | ",
+    "F > G | arrow | Yes",
+    "F > H | arrow | No",
+    "G > I | arrow | ",
+    "H > J | arrow | ",
+    "I > L | arrow | ",
+    "J > L | arrow | ",
+    "K > L | arrow | "
+   ],
+   "groups": {},
+   "members": {}
+  },
+  {
+   "page": "modules/m12-capstone/lessons/design-review-capstone.md",
+   "index": 0,
+   "source": "63098e924459",
+   "kind": "flow",
+   "nodes": {
+    "L10": "Leaf rail 0",
+    "L17": "Leaf rail 7",
+    "L40": "Leaf rail 0",
+    "L47": "Leaf rail 7",
+    "S1": "Spine 1",
+    "S16": "Spine 16"
+   },
+   "decisions": [],
+   "edges": [
+    "L10 > S1 | line | ",
+    "L10 > S16 | line | ",
+    "L17 > S1 | line | ",
+    "L17 > S16 | line | ",
+    "L40 > S1 | line | ",
+    "L40 > S16 | line | ",
+    "L47 > S1 | line | ",
+    "L47 > S16 | line | "
+   ],
+   "groups": {
+    "SU1": "SU 1: 32 servers",
+    "SU4": "SU 4: 32 servers",
+    "Spine": "Compute spine layer: 16 spines"
+   },
+   "members": {
+    "S1": "Spine",
+    "S16": "Spine",
+    "L10": "SU1",
+    "L17": "SU1",
+    "L40": "SU4",
+    "L47": "SU4"
+   }
+  }
+ ]
+}

@@ -59,7 +59,7 @@ test('phone: dashboard fits and the menu drawer navigates', async ({ page }) => 
 test('phone: a lesson with widgets and a diagram fits', async ({ page }) => {
   await page.goto('#/lesson/mtu-jumbo-frames');
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-  await expect(page.locator('main svg[id^="m"]').first()).toBeVisible();
+  await expect(page.locator('main figure.figure svg.fig').first()).toBeVisible();
   await expect(page.getByText('End-to-end MTU checker', { exact: true })).toBeVisible();
   await expect(page.locator('.animate-pulse')).toHaveCount(0);
   await expectNoHorizontalScroll(page, 'lesson');

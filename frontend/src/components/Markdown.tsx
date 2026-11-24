@@ -1,4 +1,4 @@
-import { Children, isValidElement, lazy, memo, Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
+import { Children, isValidElement, memo, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import ReactMarkdown, { type Components, type Options } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -6,11 +6,11 @@ import rehypeHighlight from 'rehype-highlight';
 import { BadgeCheck, BookOpen, Info, Lightbulb, TriangleAlert, type LucideIcon } from 'lucide-react';
 import { slug } from '../content';
 import { WidgetFrame } from '../widgets/registry';
+import Figure, { type FigureData } from './Figure';
 import { captureLabel, type Stack } from '../../scripts/stack-variants.mjs';
 import { remarkStackVariants, STACK_GROUP_CLASS } from '../stackMarkdown';
 import StackToggle, { useStack } from './StackToggle';
 
-const Mermaid = lazy(() => import('./Mermaid'));
 
 const CALLOUTS: Record<string, { cls: string; title: string; icon: LucideIcon }> = {
   NOTE: { cls: 'callout-note', title: 'Note', icon: Info },
@@ -47,6 +47,13 @@ function text(node: ReactNode): string {
   if (Array.isArray(node)) return node.map(text).join('');
   if (isValidElement(node)) return text((node.props as { children?: ReactNode }).children);
   return '';
+}
+
+/** A figure compiled by scripts/figures.mjs: the fence holds its geometry as JSON. */
+function FigureBlock({ json }: { json: string }) {
+  let data: FigureData | null = null;
+  try { data = JSON.parse(json) as FigureData; } catch { /* a lab-profile value broke the JSON; say so below */ }
+  return data?.v === 1 ? <Figure data={data} /> : <p role="note">This figure could not be drawn.</p>;
 }
 
 /** Strip a leading "[!TYPE]" marker from the first paragraph of a blockquote. */
@@ -188,7 +195,7 @@ const COMPONENTS: Components = {
       const props = child.props as { className?: string; children?: ReactNode };
       const lang = props.className?.match(/language-(\w[\w-]*)/)?.[1];
       const code = text(props.children).replace(/\n$/, '');
-      if (lang === 'mermaid') return <Suspense fallback={<pre>{code}</pre>}><Mermaid chart={code} /></Suspense>;
+      if (lang === 'figure') return <FigureBlock json={code} />;
       if (lang === 'widget') return <div className="not-prose my-6"><WidgetFrame id={code.trim()} /></div>;
     }
     const { real } = codeTags(node);

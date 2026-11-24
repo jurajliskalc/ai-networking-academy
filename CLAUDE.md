@@ -39,6 +39,9 @@ Update `IMPLEMENTATION_STATUS.md`, `ROADMAP.md` and `CHANGELOG.md` when status c
   `WIDGETS` list of `build-content.mjs` (and in `docs/CURRICULUM_PLAN.md`).
 - New sim fault types or checks go in `src/sim/fabric.ts` (`FAULT_TYPES`, `CHECKS`) and `docs/SIMULATOR.md`.
 - `frontend/public/content/` is generated; never edit it.
+- Figures are ` ```mermaid ` fences compiled by `frontend/scripts/figures.mjs`; the app does not load Mermaid.
+  Only the subset in `docs/AUTHORING.md` is accepted. A figure's source is content: improve how figures are
+  drawn in the compiler or in `src/components/Figure.tsx`, never by rewording a figure to suit the layout.
 - Counts in `README.md` and the other docs listed in `frontend/scripts/doc-stats.mjs` must equal
   `npm run stats` (`build-content.mjs --stats`). Adding a lesson, lab, question, widget or command means
   updating those docs; `tests/doc-stats.test.ts` fails otherwise. Never type a count from memory.
