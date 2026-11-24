@@ -254,15 +254,6 @@ kernel update. The network itself did not change.
 > trade a visible failure for a hidden performance loss of several times, and the real fault (a bad
 > link, a GDR problem, an ACS setting) will remain.
 
-> [!INTERVIEW]
-> "A 512-GPU job hangs every few hours. All ranks show watchdog timeouts. How do you approach it?"
-> A strong answer: don't start with the network. Collect per-rank logs and find the first error and
-> any rank with a different SeqNum/OpType (divergence or crash). Check process liveness, GPU Xid
-> errors, NIC and switch link events around the timestamp. If the first error is an IB status 12 on
-> a specific HCA/peer pair, inspect that path's ports, optics, flaps and PFC counters. Reproduce with
-> nccl-tests on the suspect nodes, bisect with pairwise tests, and fix the root cause rather than
-> raising timeouts or disabling transports.
-
 ## Common pitfalls
 
 - **Logging everything everywhere.** Symptom: gigabytes of interleaved logs, nothing findable. Cause:

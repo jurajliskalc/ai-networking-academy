@@ -237,9 +237,6 @@ When full-scale busbw is low, bisect: split the host list in halves and run each
 | Link passes at turn-up, flaps during burn-in | Marginal optic heating up | BER trend vs temperature, `ethtool -m` | Replace optic, retest |
 | HPL fails on one node | GPU/HBM or power issue | DCGM diag, XID errors | RMA GPU or board |
 
-> [!INTERVIEW]
-> "You are handed a newly built 1,024-GPU cluster. How do you accept it?" A strong answer is staged and numeric: cabling diff against the source of truth, link speed/FEC/BER checks, node uniformity (PCIe width, topology, firmware, DCGM diag), structured concurrent perftest pairs, bisection load with zero drops on the lossless class, nccl-tests at increasing scale with expected busbw per step, then a multi-day burn-in (HPL, long NCCL loops, a real job) with telemetry, and written acceptance criteria agreed in advance. Mention that every failed component triggers re-validation of that node and that results become the baseline for later regression checks.
-
 ## Common pitfalls
 
 - **Testing at full scale first.** Symptom: "it's 12 % slow" with no way to localize. Cause: skipping stages. Fix: validate bottom-up and scale NCCL in steps.

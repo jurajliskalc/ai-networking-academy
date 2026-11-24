@@ -167,9 +167,6 @@ ib-addressing
 | Management plane | Built in (SMA, PMA, MADs) | SNMP, gNMI, vendor CLIs |
 | Ecosystem | Primarily NVIDIA today | Many vendors |
 
-> [!INTERVIEW]
-> *"Explain how a packet gets from GPU server A to server B in an InfiniBand fat tree."* Strong answer: at bring-up the SM discovered every node with directed-route SMPs, assigned LIDs, computed paths with its routing engine and wrote each switch's LFT. A's application resolved B's LID (from the SA or from an out-of-band exchange), its RC QP put B's LID in the LRH DLID, with an SL that the SL2VL tables map to a VL. Each switch looked up the DLID in its LFT (or chose among adaptive-routing alternatives), sending the packet only when the next hop had advertised credits for that VL, so nothing was dropped for lack of buffer. B's HCA checked the P_Key, the QP and the PSN and DMA'd the data. Bonus points: VCRC per hop, ICRC end to end.
-
 ## In practice
 
 ### Who am I on the fabric?

@@ -230,14 +230,6 @@ export NCCL_DEBUG_SUBSYS=INIT,GRAPH,NET
 export NCCL_TOPO_DUMP_FILE=/tmp/nccl_topo.xml
 ```
 
-> [!INTERVIEW]
-> "Walk me through what happens from ncclCommInitRank to the first byte on the wire." A strong
-> answer: unique ID distribution, TCP bootstrap over the socket interface, per-node topology
-> detection (PCIe, NVLink, NICs), graph search for rings/trees per channel, transport connection
-> setup (P2P inside the node, IB verbs QPs with memory registration across nodes), then kernel
-> launch where GPU thread blocks fill buffers and the proxy thread posts RDMA writes that the NIC
-> executes with GPUDirect RDMA. Bonus: mention PXN for rail alignment and protocol choice by size.
-
 ## Common pitfalls
 
 - **Socket fallback.** Symptom: inter-node bandwidth of a few GB/s. Cause: IB plugin could not

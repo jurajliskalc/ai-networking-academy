@@ -285,15 +285,6 @@ Remote MACs point to their VTEP (`extern_learn` means installed by the control p
 entries are the ingress replication flood list built from type 3 routes. A MAC present in BGP but not in
 the FDB, or a missing remote VTEP in the flood list, narrows the problem to route import or programming.
 
-> [!INTERVIEW]
-> **"Explain how a host on leaf 1 reaches a host in a different subnet on leaf 3 in a symmetric-IRB
-> EVPN-VXLAN fabric."** A strong answer: the host sends to its anycast gateway on leaf 1; leaf 1 looks up
-> the destination in the tenant VRF, finding a type 2 (host) or type 5 (prefix) route with leaf 3's VTEP
-> as next hop and the tenant's L3 VNI; it encapsulates with the L3 VNI, using a router MAC learned from
-> EVPN as the inner destination MAC; the underlay routes it with ECMP; leaf 3 decapsulates, routes in the
-> VRF into the destination subnet and bridges to the host. Bonus points: 50 bytes of overhead and MTU,
-> ARP suppression, and why the back-end usually stays a plain L3 fabric.
-
 ## Common pitfalls
 
 - **Underlay MTU too small.** Symptom: small pings work, large transfers hang or are slow. Cause: VXLAN

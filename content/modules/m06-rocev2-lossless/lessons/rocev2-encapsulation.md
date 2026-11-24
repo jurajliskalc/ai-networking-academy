@@ -553,15 +553,6 @@ normally see RDMA traffic at all. On switches and any middlebox, it does.
   the UDP wrapper with the transport. *Fix:* remember that reliability lives in the BTH (PSN, ACK/NAK,
   retransmission). UDP is only an envelope.
 
-> [!INTERVIEW]
-> **"Why did RoCE need a version 2, and what exactly changed on the wire?"** A strong answer covers
-> four points. RoCEv1 put the IB GRH directly after the Ethernet header (EtherType 0x8915), so it was
-> confined to one L2 domain. RoCEv2 replaces the GRH with an IPv4/IPv6 header and adds UDP with
-> destination port 4791, so standard routers forward it and ECMP can hash it. The UDP source port
-> carries per-QP entropy. The IP header brings DSCP for classification and ECN for congestion
-> marking, which is what makes DCQCN possible. Bonus points: the ICRC masks the fields that routers
-> change, and the GID index selects v1 or v2 per QP.
-
 ## Key takeaways
 
 - RoCEv2 = Ethernet + IP + **UDP dst 4791** + **BTH (12 B)** + optional extended headers + payload

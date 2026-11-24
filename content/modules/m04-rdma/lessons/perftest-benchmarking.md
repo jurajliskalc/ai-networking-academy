@@ -387,9 +387,6 @@ Record results per NIC and per pair in a table and compare against peers. Outlie
 > [!TIP]
 > Run several tests in parallel between different NIC pairs by giving each a different `-p` port. This is how burn-in scripts exercise all eight rails of a server at once.
 
-> [!INTERVIEW]
-> *"ib_write_bw between two 400G hosts shows 190 Gb/s. How do you narrow it down?"* Strong answer: check that the link negotiated 400G on both ends (`ibstat` or `ethtool`), that the PCIe link is Gen5 x16 (`lspci -vv`), that the process is pinned to the NIC's NUMA node, that you used a large message size and `--report_gbits`, and on RoCE that the GID index is RoCEv2; then try `-q` with more QPs and a different peer to see whether the problem follows the host or the path. Roughly half of line rate often means half the PCIe bandwidth or half the lanes.
-
 ## Common pitfalls
 
 - **Misreading units.** Symptom: "only 46,000 — something is badly wrong". Cause: default output is in 2^20-byte units (labelled `MB/sec` in older perftest releases and `MiB/sec` in current ones), so 46,000 is about 386 Gb/s. Fix: use `--report_gbits`.

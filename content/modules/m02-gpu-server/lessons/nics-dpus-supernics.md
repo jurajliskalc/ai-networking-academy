@@ -289,15 +289,6 @@ use in later lessons include physical-port discard counters, per-priority pause 
 counters under `/sys/class/infiniband/<dev>/ports/<n>/hw_counters/`. Lesson `telemetry-counters`
 covers what each means.
 
-> [!INTERVIEW]
-> **"What is the difference between a DPU and a SuperNIC, and where would you put each in an AI
-> cluster?"** A strong answer: both are RDMA-capable adapters, often on related silicon. A DPU adds a
-> general-purpose Arm complex that runs infrastructure services (virtual switching, storage
-> virtualization, security) in a separate trust domain, which suits the front-end and storage
-> networks, especially in multi-tenant clouds. A SuperNIC is optimized for east-west GPU traffic:
-> one per GPU, highest bandwidth per watt, AI-tuned congestion control and adaptive-routing support,
-> deployed on the compute (back-end) network.
-
 ## Common pitfalls
 
 - **Wrong port protocol.** Symptom: the port never comes up, or comes up as Ethernet when the switch is

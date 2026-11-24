@@ -253,15 +253,6 @@ lspci -tv                           # raw PCIe tree
 nvidia-smi topo -p2p n              # peer-to-peer NVLink capability matrix (see nvidia-smi topo -h)
 ```
 
-> [!INTERVIEW]
-> **"You receive a new server model for an AI cluster. Before it joins the fleet, what do you check in
-> its topology?"** A strong answer: in `nvidia-smi topo -m`, every GPU pair should show the expected
-> `NV#`; every GPU should have exactly one `PIX` (or at worst `PXB`) compute NIC, and the pairing should
-> be one-to-one; no GPU's best NIC should be `SYS`; affinity columns should split GPUs evenly across
-> NUMA nodes; storage NICs should be reachable from each socket. Then check `LnkSta` on every device,
-> NIC NUMA nodes, NCCL's topology dump and LLDP-based cabling, and save the result as the golden
-> reference for future nodes.
-
 ## Common pitfalls
 
 - **Reading the codes as bandwidth.** Symptom: "PIX is faster than NV18". Cause: the codes describe

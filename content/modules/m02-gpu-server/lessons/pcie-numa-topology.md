@@ -331,14 +331,6 @@ For one-off tests such as `ib_write_bw` (see `perftest-benchmarking`), bind the 
 of the NIC under test. Launchers like Slurm and container runtimes have their own CPU and GPU binding
 options; the goal is the same.
 
-> [!INTERVIEW]
-> **"A single node in the cluster shows 40 % lower all-reduce bandwidth than its peers. Switch counters
-> are clean. Where do you look?"** A strong answer works inside-out: check `LnkSta` of every GPU and
-> NIC for downgraded speed or width, compare `nvidia-smi topo -m` against a known-good node, verify ACS
-> and IOMMU settings match the fleet baseline, confirm the NIC's port speed and firmware, and only then
-> move to cables and switch ports. Mention that a Gen5 x16 link that trained as x8 caps a 400G NIC to
-> roughly half rate, which matches the symptom.
-
 ## Common pitfalls
 
 - **Ignoring a downgraded link.** Symptom: one node is consistently slow in `nccl-tests`, nothing on

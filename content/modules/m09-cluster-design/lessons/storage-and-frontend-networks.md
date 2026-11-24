@@ -194,13 +194,6 @@ OOB connects every BMC, switch management port, PDU, storage controller and appl
 It must keep working when everything else is broken, so keep it simple: no dependencies on cluster
 DNS or authentication that live on the cluster itself.
 
-> [!INTERVIEW]
-> **"Should storage share the compute fabric?"** Strong answer: quantify first (a 1T-parameter
-> checkpoint in 60 s is about 1.9 Tb/s, under 1% of a 1,024-GPU fabric), then explain that the issue
-> is not average bandwidth but synchronized bursts and the many-to-few pattern, which interfere with
-> collectives and cross rails. Recommend a separate storage fabric sized to the backend, or, if
-> converged, explicit traffic classes, guarantees and validation under combined load.
-
 ## In practice
 
 ### Verifying the GDS path

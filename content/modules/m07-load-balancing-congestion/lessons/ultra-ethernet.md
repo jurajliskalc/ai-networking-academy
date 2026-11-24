@@ -241,17 +241,6 @@ nobody) **What signals congestion and how fast?** (ECN, delay, telemetry, credit
 **What happens on loss?** (go-back-N, selective retransmit, link-level retry). A design with good
 answers to all four will behave well on AI traffic, whatever brand it is.
 
-> [!INTERVIEW]
-> "What problem is Ultra Ethernet trying to solve, and why not just keep improving RoCE?" A strong
-> answer: RoCEv2 inherits InfiniBand's in-order, single-path, connection-heavy transport and relies
-> on PFC; at AI scale this causes ECMP collisions, makes spraying unsafe and creates PFC congestion
-> trees. UET (UEC Spec 1.0, June 2025) defines a new libfabric-aligned transport with
-> unordered reliable delivery (RUD/RUDI) so the sender can spray via entropy values over standard
-> ECMP, selective retransmission, ephemeral delivery contexts, and congestion control designed for
-> multipath (sender-based plus optional receiver credits), with optional packet trimming and
-> link-level retry. Then add realism: it is not wire-compatible with RoCE, products and software
-> ecosystems are still maturing, and validation matters.
-
 ## Common pitfalls
 
 - **Treating UEC as "RoCE v3".** Symptom: expecting existing RoCE NICs or verbs applications to

@@ -254,15 +254,6 @@ examples above are per direction.
 > gap with enhancements. The analogy breaks on timescale: scale-up accesses are hundreds of
 > nanoseconds, so header bytes and switch pipeline depth matter far more than they did for storage.
 
-> [!INTERVIEW]
-> **"Should our next accelerator cluster use UALink, scale-up Ethernet or NVLink?"** A strong
-> answer starts from requirements (domain size for TP/EP, per-accelerator bandwidth, latency) and
-> from what ships: NVLink is the shipping reference with the most mature software; UALink is an
-> open, memory-semantic stack on an Ethernet PHY with published specs and products arriving; scale-up
-> Ethernet (SUE, ESUN) keeps Ethernet switching and adds compact headers, LLR and CBFC. Then show
-> the arithmetic (per-direction bandwidth, switch planes, domain size), name the software question
-> (which collective library, which release), and close with failure domains and maturity risk.
-
 ## Common pitfalls
 
 - **Treating a specification as a product.** Symptom: a design depends on a 1,024-accelerator pod

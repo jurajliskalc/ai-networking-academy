@@ -249,14 +249,6 @@ To check the physical shape, LLDP on each switch should show every uplink landin
 lldpcli show neighbors summary      # lldpd; switch NOSes have their own LLDP show commands
 ```
 
-> [!INTERVIEW]
-> **"How many 400G GPUs can you connect non-blocking in two tiers with 64-port 800G switches, and how
-> would you go bigger?"** A strong answer: at 800G the radix is 64, so 64²/2 = 2,048 endpoints; split
-> each port into 2 × 400G and the radix becomes 128, giving 8,192 400G endpoints in two tiers. Beyond
-> that: add a third tier (*k*³/4), use multiple parallel planes, or accept oversubscription where the
-> traffic pattern allows (rarely on the back-end). Mention that each tier adds optics, power, latency
-> and another ECMP stage.
-
 ## Common pitfalls
 
 - **Unequal links per spine.** Symptom: some spines run hotter than others. Cause: a leaf has two links

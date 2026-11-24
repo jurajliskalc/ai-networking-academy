@@ -225,9 +225,6 @@ To see only VLAN-tagged frames and their priority, `tcpdump -e -n vlan` prints t
 - **Forgetting the 20 hidden bytes.** Symptom: a benchmark tops out "below line rate" and someone opens a ticket. Cause: preamble, SFD and IPG consume wire time but are invisible in captures. Fix: compute expected goodput including all overheads before declaring a problem.
 - **Treating InfiniBand as "fast Ethernet".** Symptom: trying to use Ethernet tools (MAC tables, VLANs, `tcpdump` on IB ports) to debug an IB fabric. Cause: IB has its own addressing (LIDs, GUIDs) and management (Subnet Manager). Fix: use the IB toolset introduced in `ib-tools-diagnostics`.
 
-> [!INTERVIEW]
-> "Walk me through the headers of a RoCEv2 packet and tell me which ones a spine switch looks at." A strong answer lists Ethernet (MACs, optional VLAN tag, EtherType 0x0800/0x86DD), IP (addresses, DSCP, ECN, TTL), UDP (source port used for ECMP entropy, destination 4791), the IB BTH (opcode, destination QP, packet sequence number), payload, ICRC and FCS. Then it says that a spine routes on IP, hashes on the 5-tuple including the UDP source port, classifies on DSCP and may mark ECN, but does not interpret the BTH. Bonus points for mentioning the 20 bytes of preamble and IPG when computing efficiency.
-
 ## Key takeaways
 
 - Networks are layered so that each layer solves one problem; "L2" is Ethernet, "L3" is IP, "L4" is TCP/UDP or the IB transport.

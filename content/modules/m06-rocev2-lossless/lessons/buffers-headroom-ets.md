@@ -393,15 +393,6 @@ setting (`mlnx_qos` reports "DCBX mode"). Pick one owner and document it.
   match. *Fix:* choose static host configuration or switch-driven DCBX deliberately, and verify after
   every change.
 
-> [!INTERVIEW]
-> **"Estimate the PFC headroom for a 400G port with a 100 m cable, and tell me what changes at 2 km."**
-> Walk through the components: the PFC frame waiting behind an in-progress frame, propagation of the
-> pause, upstream response delay, the upstream's in-progress frame, and the bytes in flight. Give
-> the order of magnitude: round-trip cable time of about 1 µs at 400 Gb/s is about 50 KB, plus two
-> MTUs, plus response delays, so roughly 100 KB per lossless PG per port. At 2 km the cable term
-> alone is about 1 MB per PG per port, which multiplied by ports exceeds a realistic budget. Say
-> that you would use the vendor's calculator and the switch's automatic headroom logic in production.
-
 ## Key takeaways
 
 - Switches use a shared, cell-based buffer with **ingress PG accounting** (PFC) and **egress

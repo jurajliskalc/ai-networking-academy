@@ -212,9 +212,6 @@ For IPv6 the header is 40 bytes, so the equivalent payload is 9000 - 40 - 8 = 89
 - **Inconsistent MTU between peers.** Symptom: one direction works better than the other, or some host pairs fail. Cause: hosts with different MTUs negotiating different RDMA MTUs; the queue pair uses a path MTU that one side cannot carry. Fix: one MTU policy for the whole back-end, enforced by automation.
 - **Testing with the wrong source interface.** Symptom: "the DF ping passed" but the rail is broken. Cause: the ping left via the front-end network. Fix: use `-I <back-end address>`.
 
-> [!INTERVIEW]
-> "Your RoCE fabric is configured for jumbo frames, yet `ibv_devinfo` on one host shows `active_mtu 1024`. What do you check?" A strong answer: the RoCE active MTU follows the netdev MTU, so check that host's interface MTU (it was probably reset to 1500 by a configuration that did not persist); confirm the switch port MTU; then verify end to end with `ping -M do -s 8972 -I <src>`. Explain the impact: about 5 % lower goodput and roughly four times the packet rate, and the risk that peers with 4096 queue pairs cannot talk to this host correctly.
-
 ## Key takeaways
 
 - Distinguish frame size, IP MTU, TCP MSS and RDMA MTU; each layer subtracts its own headers.

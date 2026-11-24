@@ -187,14 +187,6 @@ flowchart TD
   J -->|"Yes"| L["Config chain OK: look at incast, routing, ECN thresholds"]
 ```
 
-> [!INTERVIEW]
-> "PFC is enabled everywhere and you still see drops on RoCE. Name three possible causes and how
-> you'd tell them apart." Strong answer: RoCE is not on the PFC-enabled priority (check per-priority
-> byte counters and DSCP-to-priority maps); headroom is insufficient on a hop (ingress drops on the
-> lossless priority while pause is being sent; drop-reason telemetry such as WJH may say buffer);
-> MTU mismatch (only large packets dropped, oversize/MTU counters on one hop). Also: drops caused by
-> link errors, which are not buffer drops at all (CRC counters).
-
 ## In practice
 
 ### Host side: check trust, PFC and the DSCP map

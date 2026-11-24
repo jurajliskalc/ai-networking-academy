@@ -251,14 +251,6 @@ Error handling and timeouts for NCCL collectives in PyTorch are **PyTorch** sett
 > production image "because it fixed a hang once". They mask the real fault and can cost a large
 > fraction of performance. Record such settings as temporary workarounds with an owner and an expiry.
 
-> [!INTERVIEW]
-> "Your RoCE cluster shows PFC pauses on a priority that should carry no NCCL traffic, and NCCL
-> traffic arrives in the default queue. What do you check?" A strong answer: confirm what DSCP is on
-> the wire (capture or per-queue counters), check `NCCL_IB_TC` reaches every rank (DSCP × 4, e.g.
-> 104 for DSCP 26) and the NIC's trust/DSCP settings, verify the GID index is a RoCEv2 entry, and
-> confirm switch DSCP-to-priority mapping. Emphasise verifying on the wire rather than trusting
-> config files, and fixing it in the site profile, not per job.
-
 ## Common pitfalls
 
 - **Prefix surprise in NCCL_IB_HCA.** Symptom: NCCL uses storage NICs `mlx5_10`/`mlx5_11`. Cause:

@@ -256,14 +256,6 @@ registration completed successfully; check what your driver version shows.
 your platform (`nccl-tests-interpretation`). Always test a single node first: if intra-node is broken,
 multi-node results are meaningless.
 
-> [!INTERVIEW]
-> **"Why not just run tensor parallelism across the InfiniBand or Ethernet fabric?"** A strong answer
-> quantifies it: on H100 a GPU has about 450 GB/s of NVLink bandwidth each way versus about 50 GB/s on
-> a 400G NIC, roughly 9x less, plus higher latency and RDMA protocol overhead. Tensor parallelism
-> exchanges activations inside every layer, so it would be network-bound. Hence TP groups are sized to
-> fit the NVLink domain (8 GPUs on HGX, up to 72 on NVL72), and the scale-out fabric carries data and
-> pipeline parallelism, whose traffic is larger-grained and more overlap-friendly.
-
 ## Common pitfalls
 
 - **Comparing bidirectional NVLink to unidirectional NIC numbers.** Symptom: wrong design conclusions

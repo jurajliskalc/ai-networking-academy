@@ -219,9 +219,6 @@ The default run is 1000 iterations of 4 KiB, so the Mbit/sec figure is a connect
 - In NCCL debug output, the IB transport reports how many QPs it uses per connection and which devices; all of them are RC.
 - `rdma resource show qp` lists each QP's `type` (RC, UC, UD, XRC_INI, XRC_TGT and, on NVIDIA adapters, driver-specific types for DC).
 
-> [!INTERVIEW]
-> *"Why does NCCL use RC instead of UD, and when would you choose DC?"* A strong answer: NCCL needs large messages and one-sided RDMA Write into GPU buffers with hardware reliability; only connected reliable transports give that, and collective algorithms keep the peer count per rank small, so RC's per-peer QP cost is acceptable. DC (NVIDIA-specific) is attractive when each process talks to very many peers — all-to-all MPI, some expert-parallel or key-value patterns — because a few DC initiators replace thousands of RC QPs while keeping reliability. Mention the trade-off: DC adds connect/disconnect overhead per destination switch and is vendor-specific.
-
 ## Common pitfalls
 
 - **Expecting RDMA Read on UC or UD.** Symptom: QP creation or WR post fails, or perftest refuses the combination. Cause: Read and atomics require a reliable transport. Fix: use RC, XRC or DC.

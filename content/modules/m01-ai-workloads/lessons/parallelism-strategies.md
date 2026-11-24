@@ -181,9 +181,6 @@ Notice the DP all-reduce only covers the gradients of one pipeline stage's slice
 - **Ignoring FSDP's latency sensitivity.** Symptom: FSDP job scales poorly despite plenty of bandwidth. Cause: many smaller all-gathers and reduce-scatters per step expose latency. Fix: tune sharding granularity, prefetching and group sizes (often hybrid sharding: shard within a node or group, replicate across).
 - **Forgetting pipeline bubbles.** Symptom: GPUs show idle gaps at the start and end of every step. Cause: too few micro-batches for the number of stages. Fix: an ML-side tuning issue; recognise it so the network is not blamed.
 
-> [!INTERVIEW]
-> "A team runs a 1,024-GPU job with TP 8, PP 8, DP 16 on 8-GPU servers. Which traffic goes over NVLink and which over the back-end fabric, and with what pattern?" A strong answer: TP 8 maps to one server, so per-layer all-reduces (or reduce-scatter/all-gather with sequence parallelism) stay on NVLink. PP 8 spans eight servers; activations and gradients flow point-to-point between neighbouring stages over the scale-out fabric, usually on the same rail. DP 16 all-reduces (or reduce-scatters) gradients of each GPU's shard across 16 replicas, again rail-aligned, overlapped with the backward pass. Bonus: if the model is MoE with EP across nodes, add all-to-all on the fabric, the most demanding pattern.
-
 ## Key takeaways
 
 - DP replicates the model and all-reduces gradients; ZeRO/FSDP shard model state and use all-gather plus reduce-scatter.

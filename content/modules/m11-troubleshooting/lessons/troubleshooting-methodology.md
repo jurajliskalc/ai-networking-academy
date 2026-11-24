@@ -190,14 +190,6 @@ the completion time of the whole operation.
 allreduce-sim
 ```
 
-> [!INTERVIEW]
-> "Training step time jumped 30% overnight on a 512-GPU job. Walk me through your first hour."
-> A strong answer: confirm the metric and the start time; check what changed overnight; ask whether
-> other jobs are affected; preserve logs and counters before anyone reboots; map slow ranks to hosts
-> and rails; run nccl-tests on a known-good set as a control and on the suspect set; bisect by rail
-> and by host; use counter deltas, not totals; prove the cause by reverting or isolating it. Weak
-> answers jump straight to "I'd check PFC" or "I'd increase the NCCL timeout".
-
 ## In practice
 
 ### Capturing counter deltas on a host

@@ -220,15 +220,6 @@ AR + SuperNIC mode        mean 365                  4                      low
 
 The pattern to look for is the shrinking standard deviation, not only the higher mean.
 
-> [!INTERVIEW]
-> "What is Spectrum-X, and how is it different from just buying a fast Ethernet switch?" A strong
-> answer: it is NVIDIA's end-to-end Ethernet AI platform combining Spectrum-4-class switches with
-> BlueField-3 or ConnectX-8 SuperNICs and software. Its key features need both ends: per-packet
-> adaptive routing works because the SuperNIC places out-of-order packets directly; congestion
-> control runs on the NIC with switch telemetry; isolation comes from both. Then show judgement:
-> the protocol is still RoCEv2, the advanced features do not apply to third-party NICs, and vendor
-> performance numbers should be validated on your workload.
-
 ## Common pitfalls
 
 - **Assuming any NIC works with Spectrum-X AR.** Symptom: AR enabled, some servers show sequence

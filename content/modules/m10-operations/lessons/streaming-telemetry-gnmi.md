@@ -280,9 +280,6 @@ pfc-ecn-sim
 
 Use the simulator to see why sampling interval matters: a burst that crosses XOFF and drains within a few milliseconds would be invisible to an instantaneous sample every 10 seconds, but shows up clearly in a pause counter delta and in a peak-occupancy watermark.
 
-> [!INTERVIEW]
-> "Design the telemetry for a 4,000-GPU RoCE cluster." A strong answer covers sources (switch gNMI, host NIC and RDMA counters, DCGM), modes (sample counters at 1-10 s, on-change for state), buffer watermarks rather than instantaneous occupancy, a collector tier (gnmic/Telegraf or vendor platform) feeding a scalable TSDB, cardinality estimates, labels that join ports to hosts, rails and jobs via the cabling source of truth, peer-outlier alerting, change annotations, and on-demand high-frequency telemetry for microburst investigations. Mention alerting on the telemetry pipeline itself (a silent collector looks like a healthy fabric).
-
 ## Common pitfalls
 
 - **Instantaneous buffer samples.** Symptom: buffer graphs always near zero while pauses rise. Cause: sampling occupancy at 10 s misses microsecond bursts. Fix: export watermarks or histograms; use high-frequency telemetry for investigations.

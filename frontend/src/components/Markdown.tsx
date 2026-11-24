@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import ReactMarkdown, { type Components, type Options } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
-import { BadgeCheck, BookOpen, Briefcase, Info, Lightbulb, TriangleAlert, type LucideIcon } from 'lucide-react';
+import { BadgeCheck, BookOpen, Info, Lightbulb, TriangleAlert, type LucideIcon } from 'lucide-react';
 import { slug } from '../content';
 import { WidgetFrame } from '../widgets/registry';
 import { captureLabel, type Stack } from '../../scripts/stack-variants.mjs';
@@ -17,7 +17,6 @@ const CALLOUTS: Record<string, { cls: string; title: string; icon: LucideIcon }>
   TIP: { cls: 'callout-tip', title: 'Tip', icon: Lightbulb },
   WARNING: { cls: 'callout-warning', title: 'Warning', icon: TriangleAlert },
   ANALOGY: { cls: 'callout-analogy', title: 'For network engineers', icon: BookOpen },
-  INTERVIEW: { cls: 'callout-interview', title: 'Interview angle', icon: Briefcase },
   VERIFIED: { cls: 'callout-verified', title: 'Verified on real hardware', icon: BadgeCheck },
 };
 

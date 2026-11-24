@@ -183,9 +183,6 @@ PortXmitWait:....................4120394822
 
 *(Illustrative.)* Sample twice, a few seconds apart, during the workload. If `PortXmitWait` grows quickly on one spine port while its `PortXmitData` rate is high, that link is a congestion point: look at what is downstream (an incast target, an under-provisioned path, or routing imbalance). If the rate is low and wait is high, a downstream device may be stalling.
 
-> [!INTERVIEW]
-> *"InfiniBand is lossless, so why can't it suffer from congestion?"* Strong answer: it can. Credit-based flow control guarantees no drops due to buffer overflow by only sending into advertised space, per VL. But when a destination is oversubscribed, credits stop flowing, buffers upstream fill and back-pressure spreads hop by hop (head-of-line blocking, congestion trees), slowing flows that do not even go to the hot destination. Remedies are balanced and adaptive routing, VL separation of traffic classes, and end-to-end congestion control (FECN/BECN or vendor algorithms) that throttles the sources. PortXmitWait is the counter that shows it.
-
 ## Common pitfalls
 
 - **Equating "lossless" with "no congestion".** Symptom: surprise at slow collectives on a fabric with zero errors. Cause: congestion spreading through back-pressure. Fix: monitor PortXmitWait, rebalance routing, enable congestion control and adaptive routing where supported.

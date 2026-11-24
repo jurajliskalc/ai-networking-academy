@@ -188,13 +188,6 @@ ConnectX adapters and NVIDIA switches: operational state, speed, FEC mode, raw a
 per-lane information, and module (transceiver) data. Section and field names vary between MFT
 releases, so read the output rather than scripting against exact strings without checking.
 
-> [!INTERVIEW]
-> "A link shows millions of corrected FEC errors. Do you replace it?" A strong answer: not on that
-> alone. Corrected errors are expected on PAM4. Look at the raw BER relative to vendor thresholds,
-> the trend over days, per-lane balance, uncorrectable blocks and CRC errors, and compare to sibling
-> links with the same optic type. Replace or clean when the margin is poor or degrading, or when any
-> errors escape FEC. Bonus: mention checking both ends and DDM Rx power per lane.
-
 ## In practice
 
 ### Step 1: link state, speed and FEC mode

@@ -162,9 +162,6 @@ For MPI jobs using HPC-X, SHARP is enabled through the HPC-X collective componen
 > [!TIP]
 > Make "SHARP on/off" a standard A/B test in cluster acceptance. If enabling it makes no difference at all, it is almost certainly not active — investigate the AM, plugin and resource allocation before concluding that SHARP does not help your workload.
 
-> [!INTERVIEW]
-> *"How does SHARP speed up all-reduce, and when would it not help?"* Strong answer: with ring all-reduce each NIC sends and receives about 2S bytes; with SHARP each host sends S up the tree and receives S down, the switches doing the reduction, so bandwidth-bound all-reduces can approach a 2x improvement and small-message latency scales with tree depth rather than rank count. It helps less when most reduction happens inside the NVLink domain (large NVLink domains leave little inter-node traffic), when messages are small and latency is dominated by software, when the collective is not an all-reduce (for example all-to-all in expert parallelism), or when switch resources are exhausted and the library falls back.
-
 ## Common pitfalls
 
 - **Silent fallback.** Symptom: no performance change with `NCCL_COLLNET_ENABLE=1`. Cause: plugin not loaded, AM not running, or tree allocation failed. Fix: read NCCL INFO logs for CollNet/SHARP messages, check the AM, and check plugin installation inside the container.

@@ -346,9 +346,6 @@ Without an SM the peer's LID is still 0xffff and the client fails (exit status 2
 > [!TIP]
 > Always identify ports by **switch node description + port number** or by GUID in tickets, never by LID alone. LIDs can change; "leaf03 port 7" means the same physical cable tomorrow.
 
-> [!INTERVIEW]
-> *"ibqueryerrors shows PortRcvRemotePhysicalErrors on eight spine ports and PortRcvErrors on one leaf port. Which cable do you replace?"* Strong answer: the cable into the leaf port with PortRcvErrors (and probably symbol errors). Because switches forward cut-through, a packet corrupted on that link is already being forwarded when the error is detected, so downstream switches count it as a remote physical error — the eight spine ports are victims. Then clear counters and verify the rate drops to zero after the replacement, and check the other end's transmit side (optics) as well.
-
 ## Common pitfalls
 
 - **Replacing the victim, not the culprit.** Symptom: errors continue after replacing spine cables. Cause: replaced links that only showed `PortRcvRemotePhysicalErrors`. Fix: find the port with local `PortRcvErrors`/symbol errors.

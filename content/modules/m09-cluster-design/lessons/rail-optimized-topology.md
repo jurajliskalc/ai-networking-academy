@@ -230,14 +230,6 @@ DP/PP/FSDP, and it shows how much of a spine layer is underused in rail-optimize
 reference architectures (such as DGX SuperPOD) still ship with full spines because they must serve
 arbitrary jobs, arbitrary placements and MoE models.
 
-> [!INTERVIEW]
-> **"Why does a rail-optimized fabric connect GPU *i* of every server to leaf *i*?"** A strong
-> answer: inter-node collective traffic (DP, FSDP, PP) flows between corresponding GPU indices
-> because TP stays inside NVLink and NCCL builds channels NIC-local; putting each index on its own
-> leaf makes that traffic one switch hop for a whole scalable unit, keeps it off the spines, and
-> reduces ECMP collisions. Then add the caveat: cross-rail all-to-all needs either the spine or PXN
-> over NVLink, and that is why rail-only designs are attractive for some workloads and risky for MoE.
-
 ## In practice
 
 ### Step 1: confirm GPU-to-NIC affinity on the host

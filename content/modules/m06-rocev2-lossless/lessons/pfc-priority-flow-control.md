@@ -428,16 +428,6 @@ Patterns to look for:
   receiver" at the sender. *Cause:* PFC is hop by hop. Each device regenerates pauses based on its
   own buffers. *Fix:* correlate counters hop by hop along the path.
 
-> [!INTERVIEW]
-> **"A colleague says PFC makes Ethernet lossless, so we don't need congestion control. Respond."**
-> A strong answer: PFC is a link-level, per-priority back-pressure mechanism that prevents
-> *congestion* drops, but it is coarse. It pauses every flow in the class on that link, causing
-> head-of-line blocking and congestion spreading to victim flows. It can also produce storms and,
-> with cyclic buffer dependencies, deadlock. Congestion control (ECN marking plus DCQCN, or an
-> RTT-based algorithm) acts end to end on the specific flows causing congestion and keeps queues
-> below the XOFF threshold. Production RoCE fabrics use both: ECN for the steady state and PFC as the
-> safety net, with a PFC watchdog as protection against the safety net itself failing.
-
 ## Key takeaways
 
 - RoCE uses a lossless class because many RDMA transports recover from loss with go-back-N, which is

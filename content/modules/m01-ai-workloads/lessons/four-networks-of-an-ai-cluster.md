@@ -187,9 +187,6 @@ The ratio (roughly 32:4:1 here) shows where the money and the optics go, and als
 - **Mixing up "front-end" and "back-end".** Symptom: confused tickets and misrouted changes. Cause: different teams use different labels. Fix: agree on names per role (compute, storage, in-band, OOB) and label ports and cables accordingly.
 - **Routing the compute fabric to the outside.** Symptom: security findings, or unexpected traffic on the back-end. Cause: a default route or gateway that connects the RDMA fabric to other networks. Fix: keep the compute fabric closed unless there is a deliberate, controlled design reason.
 
-> [!INTERVIEW]
-> "Describe the networks in a large GPU training cluster and why they are separate." A strong answer lists the scale-up NVLink domain inside servers or racks; the compute fabric (one 400-800G NIC per GPU, InfiniBand or RoCEv2, rail-optimized, non-blocking, closed); the storage network (dataset reads, checkpoint bursts, many-to-few incast); in-band management/front-end (schedulers, images, users, conventional EVPN-VXLAN Ethernet); and OOB (BMCs via Redfish/IPMI, switch management, independent 1GbE). Then justify separation with failure isolation, traffic isolation, different design rules, security and cost, and acknowledge that converged designs exist with QoS trade-offs.
-
 ## Key takeaways
 
 - An AI cluster usually has four networks (compute, storage, in-band/front-end, out-of-band) plus the NVLink scale-up domain inside servers or racks.

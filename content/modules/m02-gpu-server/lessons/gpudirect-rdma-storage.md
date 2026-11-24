@@ -269,14 +269,6 @@ driver (or the alternative P2P mechanism) is reported as available, and which fi
 devices are listed as supported. Benchmark both the GDS and the compatibility path with `gdsio` to
 see what you are gaining.
 
-> [!INTERVIEW]
-> **"How would you prove that GPUDirect RDMA is working on a cluster, and what happens if it is
-> not?"** A strong answer: check that the registration mechanism is present (`nvidia-peermem` loaded
-> or DMA-BUF prerequisites met), run an NCCL test with `NCCL_DEBUG=INFO` and confirm `GDRDMA` on the
-> network channels, and compare perftest bandwidth with `--use_cuda` against host memory. Without GDR,
-> NCCL stages data through pinned host buffers: the job still runs, but every byte crosses PCIe twice
-> and host memory becomes a shared bottleneck, so bus bandwidth drops and CPU memory pressure rises.
-
 ## Common pitfalls
 
 - **Silent fallback to host staging.** Symptom: all-reduce bus bandwidth well below expectations, no

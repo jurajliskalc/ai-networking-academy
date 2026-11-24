@@ -252,9 +252,6 @@ Now go the other way, from counters to cause: mark which counters are rising or 
 counter-decoder
 ```
 
-> [!INTERVIEW]
-> "Your dashboard shows PFC pause frames on every leaf. Is the fabric broken?" A strong answer: not necessarily. Pauses are expected in moderation under incast. I would look at the rate and the distribution: are pauses concentrated on a few ports, are they propagating to spines, and are ECN marks and CNPs rising with them? If CNPs are near zero while pauses rise, ECN is not working and PFC is doing congestion control by itself, which risks head-of-line blocking and spreading. I would also check for drops on the lossless priority and transport counters like `out_of_sequence`, because those show real harm to jobs.
-
 ## Common pitfalls
 
 - **Alerting on absolute values.** Symptom: an alert fires on every node forever. Cause: cumulative counter compared to a threshold. Fix: alert on `rate()` or `increase()` over a window, and on deviation from peers.

@@ -191,9 +191,6 @@ If the compute part of the step takes about one second, more than half of it wou
 - **Forgetting the storage burst.** Symptom: training periodically stalls for minutes. Cause: synchronous checkpoint writes saturating storage or the storage network. Fix: size the storage network for checkpoints, use asynchronous or sharded checkpointing.
 - **Confusing training and inference needs.** Symptom: an inference cluster is designed like a training cluster, or vice versa. Cause: they have very different traffic patterns (`inference-networking`). Fix: start design from the workload.
 
-> [!INTERVIEW]
-> "Why is the network on the critical path of distributed training?" A strong answer: training is synchronous, so each step ends with a collective (for example gradient all-reduce) that every GPU must finish before the next step; step time is set by the slowest participant; communication that cannot be overlapped with compute adds directly to step time; and as GPUs get faster, the exposed share grows. Add numbers: a 7B model in pure data parallelism moves roughly 28 GB per GPU per step, about half a second at 400 Gb/s. Mention MFU as the metric that captures the loss.
-
 ## Key takeaways
 
 - Training repeats a step: forward pass, loss, backward pass (gradients), gradient exchange, optimizer update.

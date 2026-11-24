@@ -251,15 +251,6 @@ Total load is roughly half of capacity, yet three links are saturated and two ar
 hash collisions with a small number of large flows. Compare this with a missing link (one link at 0 %,
 others evenly high) or oversubscription (all uplinks evenly saturated).
 
-> [!INTERVIEW]
-> **"Our 1:1 RoCE fabric delivers only about 60 % of expected all-reduce bandwidth across leaves, but
-> full bandwidth within a leaf. Why, and what would you do?"** A strong answer: within a leaf no
-> hashing is involved; across leaves each QP is hashed onto a spine uplink, and with few elephant flows
-> about a third of uplinks stay idle while others carry two or more flows. Verify with per-uplink
-> utilization (uneven) and check that L4 ports are in the hash and seeds differ per tier. Mitigate with
-> more QPs per connection for more entropy, rail-optimized placement, and ultimately adaptive routing or
-> packet spraying with NIC reordering support.
-
 ## Common pitfalls
 
 - **Hashing on L3 only.** Symptom: all traffic between two nodes on one uplink. Cause: hash fields exclude

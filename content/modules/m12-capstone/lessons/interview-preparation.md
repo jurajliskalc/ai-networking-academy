@@ -329,11 +329,6 @@ Prepare three stories using situation, action, result, and what you learned:
 - A time you disagreed with a design or a vendor and how it resolved.
 - A test or automation you built that caught a problem before production.
 
-> [!INTERVIEW]
-> "Tell me about a time you were wrong." Strong answers name the specific wrong belief, how evidence
-> changed your mind, and what process you changed so it would not happen again. Weak answers pick a
-> fake weakness.
-
 ## Common pitfalls
 
 - **Monologuing.** Symptom: the interviewer cannot steer and runs out of time. Cause: trying to show

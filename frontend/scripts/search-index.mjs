@@ -47,7 +47,7 @@ export function stripMarkdown(md) {
     .replace(/^\s*\|?\s*:?-{2,}.*$/gm, ' ') // table separator rows
     .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
     .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
-    .replace(/\[!(NOTE|TIP|WARNING|ANALOGY|INTERVIEW|VERIFIED)\]/gi, ' ')
+    .replace(/\[!(NOTE|TIP|WARNING|ANALOGY|VERIFIED)\]/gi, ' ')
     .replace(/^\s{0,3}#{1,6}\s+/gm, '')
     .replace(/^\s*>+\s?/gm, '')
     .replace(/^\s*(?:[-*+]|\d+[.)])\s+/gm, '')

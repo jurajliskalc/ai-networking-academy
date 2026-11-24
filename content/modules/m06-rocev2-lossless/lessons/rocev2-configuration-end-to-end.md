@@ -495,16 +495,6 @@ default QoS config, a firmware upgrade resets a setting.
 - **Tuning ECN before validating classification.** *Symptom:* weeks spent adjusting Kmin/Kmax with
   no effect. *Cause:* RoCE is not in the queue being tuned. *Fix:* stage 0 and stage 1 first, always.
 
-> [!INTERVIEW]
-> **"You're handed a new 512-GPU RoCE cluster. How do you bring the network up and know it's right?"**
-> Start with the contract: MTU, trust DSCP, the DSCP and priority plan (for example 26 → 3 lossless,
-> 48 → 6 strict for CNP), PFC on one priority, ECN on the RoCE queue, watchdog, ETS shares.
-> Apply it with automation to every NIC (all rails) and every switch, using the vendor RoCE profile
-> on switches and making the host configuration persistent. Then validate in stages: static audit,
-> pairwise perftest across leaves on the correct GID and traffic class, incast (watching ECN marks,
-> CNPs and PFC), all-to-all at scale with nccl-tests, and failure tests. Name the golden counters,
-> and say you would keep the audit running to catch drift.
-
 ## Key takeaways
 
 - Write a **QoS contract** first: MTU, trust, DSCP/priority plan, PFC, ECN, CNP, ETS, watchdog,

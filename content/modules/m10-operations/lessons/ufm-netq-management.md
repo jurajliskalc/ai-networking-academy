@@ -205,9 +205,6 @@ Historical queries are often the fastest way to answer "what changed?". Many `ne
 | Intermittent loss for some flows | `netq check mtu`, `netq trace` paths | Fix the mismatched link found on the path |
 | "Nothing changed" but performance dropped | NetQ state history around the time; UFM event history | Correlate with config or topology changes |
 
-> [!INTERVIEW]
-> "Do we need UFM if we already have Prometheus and Grafana?" A strong answer separates control from observation. On InfiniBand, something must run the subnet manager with high availability, partitions and routing; UFM is NVIDIA's managed way to do it, alongside health checks, topology validation and vendor-maintained thresholds. Prometheus and Grafana remain the place where network, host and GPU metrics meet. The right architecture integrates the two: export UFM telemetry and events into the common stack, reconcile its topology with the source of truth and drive actions through reviewed automation. For Ethernet the same reasoning applies to NetQ, minus the SM role.
-
 ## Common pitfalls
 
 - **Rogue subnet manager.** Symptom: IB fabric reprograms unexpectedly, jobs fail. Cause: OpenSM started on a compute node or test server with a higher priority. Fix: check `sminfo`, disable stray SMs, set priorities deliberately, monitor master GUID.

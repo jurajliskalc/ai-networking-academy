@@ -305,16 +305,6 @@ latency at the target EP size with the library's test programs, and watch percen
 averages. Correlate TTFT spikes with fabric counters on the rails between the pools
 (`telemetry-counters`).
 
-> [!INTERVIEW]
-> "You are designing the network for a disaggregated serving cluster for a large MoE model. Where do
-> you start?" A strong answer separates the traffic classes; sizes KV transfer from bytes per token,
-> prompt length and request rate, and points out that per-request transfer time (spread over all NICs,
-> streamed layer by layer) matters more than average bandwidth; keeps prefill-to-decode transfers
-> rail-aligned and inside an SU; treats wide-EP all-to-all as a tail-latency problem with its own
-> traffic class and adaptive routing; maps KV cache tiers to the storage network; and makes routing
-> prefix-cache aware. Bonus: the prefill-to-decode ratio follows input and output token counts and
-> changes with the workload.
-
 ## Common pitfalls
 
 - **Sizing KV links for the average.** Symptom: plenty of idle bandwidth, yet TTFT is high under

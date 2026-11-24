@@ -220,15 +220,6 @@ During a large job, compare uplink and downlink utilization on each leaf from in
 downlinks run at 60 % mean traffic is not spread evenly (hashing) or a link is missing. Uneven
 utilization *between* uplinks of the same leaf is the signature of ECMP collisions.
 
-> [!INTERVIEW]
-> **"The finance team wants to cut back-end fabric cost by moving from 1:1 to 2:1 at the leaf. How do you
-> respond?"** A strong answer quantifies rather than refuses: at 2:1 every GPU gets half its line rate
-> for cross-leaf traffic during synchronized collectives, so communication phases can take up to twice
-> as long. Estimate the effect on step time using the job's communication share and overlap, multiply by
-> GPU cost per hour, and compare with the fabric savings, which are usually small relative to GPU spend.
-> Offer alternatives: rail-optimized placement and NVLink offload to keep traffic local, or tapering only
-> the upper tier if job sizes and scheduling keep most traffic within a pod.
-
 ## Common pitfalls
 
 - **Counting ports instead of bandwidth.** Symptom: a "1:1" leaf that is really 2:1. Cause: 32 down and

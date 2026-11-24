@@ -220,9 +220,6 @@ You rarely write verbs code yourself in AI infrastructure work. The usual stack 
 
 When NCCL logs `NET/IB` in its debug output it is using the verbs API, and that is true for both InfiniBand and RoCE. A log line saying it fell back to `NET/Socket` means it could not use RDMA and is pushing training traffic through kernel TCP — almost always a dramatic slowdown.
 
-> [!INTERVIEW]
-> *"Why can't we just use TCP for GPU-to-GPU traffic between servers?"* A strong answer covers: per-byte CPU cost (copies, protocol processing) at 400 Gb/s per NIC times eight NICs; latency and jitter from kernel scheduling and interrupts, which matter because collectives are synchronous and wait for the slowest rank; and the lack of direct placement into GPU memory. Then mention that RDMA moves the transport to the NIC and the data path out of the kernel, and that the price is a stricter network (lossless or carefully congestion-controlled) and more complex configuration.
-
 ## Common pitfalls
 
 - **Assuming RDMA makes the link faster.** Symptom: disappointment that `ib_write_bw` tops out at roughly the same number as a well-tuned TCP test with many streams. Cause: both are limited by the link rate. Fix: measure CPU cost and latency, not just bandwidth, when comparing.

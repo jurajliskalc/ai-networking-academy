@@ -232,9 +232,6 @@ $ traceroute -n -s 10.0.0.13 10.4.7.25
 - **Forgetting that the MAC changes per hop.** Symptom: confusion when a capture on the far side shows a different source MAC than the sender's. Cause: routers rewrite Ethernet headers. Fix: remember the IP header is end to end; the Ethernet header is per hop.
 - **Testing without specifying the source.** Symptom: "ping works" but the job fails. Cause: the test used the front-end or default route rather than the back-end NIC. Fix: always test from the specific back-end source address.
 
-> [!INTERVIEW]
-> "A server has eight 400G RoCE NICs, each on its own /31 to a rail leaf. Traffic from NIC 6 is arriving at peers via NIC 0. What happened and how do you fix it?" A strong answer: the main routing table has one best route to the remote space, so the kernel uses NIC 0 regardless of source; fix with per-NIC routing tables and `ip rule` entries keyed on source address, set ARP sysctls to avoid ARP flux, check `rp_filter`, and verify with `ip route get <dst> from <src>`. Mention that NCCL and RDMA bind to a specific device and GID, so the data path itself is pinned to the right NIC, but control traffic and anything using the kernel stack still follows the routing table.
-
 ## Key takeaways
 
 - An IPv4 address plus a prefix length (CIDR) defines a network; /31 is valid for point-to-point links (RFC 3021) and is common in fabrics.

@@ -240,12 +240,6 @@ The diagnostic loop:
 > Teach to learn. Explaining PFC, DCQCN or the busbw formula to a colleague (or to an empty room) is
 > one of the strongest forms of retrieval practice, and it doubles as interview preparation.
 
-> [!INTERVIEW]
-> "How do you keep up with this field?" A strong answer names concrete habits: reading release notes
-> for NCCL, NIC firmware and switch OS; following standards work such as the Ultra Ethernet
-> Consortium; reproducing interesting behaviour in a lab; and using certification blueprints as a
-> checklist for gaps, not as the goal itself.
-
 ## Common pitfalls
 
 - **Studying from a stale blueprint.** Symptom: unfamiliar topics on exam day. Cause: an old exam guide

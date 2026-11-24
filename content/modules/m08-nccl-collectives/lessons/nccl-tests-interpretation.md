@@ -239,14 +239,6 @@ rail-friendly) and still have a problem that only all-to-all exposes.
 > Save every nccl-tests run with its environment (NCCL version, driver, firmware, env vars, node
 > list). A bandwidth number without that context cannot be compared with anything later.
 
-> [!INTERVIEW]
-> "An nccl-tests all-reduce across 16 GPUs shows algbw 185 GB/s and busbw 346 GB/s at 8 GB. Is that
-> good, and why are the two numbers different?" A strong answer: busbw = algbw × 2(n-1)/n
-> = 185 × 1.875; it normalizes to the per-link load of a bandwidth-optimal ring so results compare
-> across rank counts and with hardware speeds. Then build the ceiling: 2 nodes with 8 × 400G NICs
-> each give about 400 GB/s network ceiling for ring busbw, so ~87 % is healthy. Mention that the
-> "Avg bus bandwidth" averages all sizes and that #wrong must be zero.
-
 ## Common pitfalls
 
 - **Quoting "Avg bus bandwidth" as peak.** Symptom: reports that look disappointing or inconsistent.

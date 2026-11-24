@@ -235,13 +235,6 @@ fabrics in the published RAs are 1:1.
 > onto one uplink while another sits idle, so a 1:1 fabric can still congest. Sizing gives you the
 > capacity; adaptive routing, packet spraying or careful flow placement (module m07) lets you use it.
 
-> [!INTERVIEW]
-> **"How many GPUs can a two-tier fabric of 64-port switches support, and what changes at 4,096?"**
-> Strong answer: *k*^2/2 = 2,048 at 1:1, with 64 leaves and 32 spines. At 4,096 you either add a tier
-> (*k*^3/4 = 65,536 max; a 4-pod partial build is 320 switches and 5 hops) or raise radix, for example
-> 51.2 Tb/s switches split to 128 x 400G (two tiers, 96 switches, 3 hops). Mention optics, failure
-> domain and transport support as the trade-offs.
-
 ## In practice
 
 ### A sizing helper you can trust

@@ -185,9 +185,6 @@ With 8 flows on 8 uplinks this prints a collision probability above 99 % and a m
 - **Treating rare drops as harmless.** Symptom: throughput falls sharply under load while drop counters show a tiny percentage. Cause: RDMA recovery multiplies the cost of each loss. Fix: make the RDMA class lossless or use a loss-tolerant transport; alert on any RDMA-class drops.
 - **Oversubscribing the back-end.** Symptom: fine in small tests, poor at full job size. Cause: synchronised bursts use all GPUs' bandwidth at once, so there is no statistical multiplexing to rely on. Fix: back-end fabrics are generally built non-blocking (`oversubscription-and-blocking`).
 
-> [!INTERVIEW]
-> "Why does static ECMP perform poorly for AI training even in a non-blocking fabric?" A strong answer: AI traffic consists of a small number of long-lived elephant flows with low header entropy (same GPU pairs, UDP port 4791), so the random-like hash places several elephants on some uplinks and none on others (with 8 flows on 8 uplinks, a perfectly even spread happens about 0.24 % of the time). Because collectives are synchronous, the most-loaded uplink sets the completion time for the whole step. Remedies: more entropy (multiple QPs, source-port variation), adaptive routing, packet spraying with receiver-side reordering, and rail-aligned placement that keeps traffic off the spines.
-
 ## Key takeaways
 
 - AI training traffic: few elephant flows, low entropy, synchronised line-rate bursts, and a job that waits for the slowest flow.

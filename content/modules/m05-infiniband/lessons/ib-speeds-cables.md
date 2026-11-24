@@ -176,9 +176,6 @@ For PHY-level detail (raw and effective BER, FEC mode, module temperature, recei
 > [!TIP]
 > In burn-in, compare every link's speed and width with the plan programmatically (iblinkinfo or UFM reports) before running any bandwidth test. A single 2X link explains a "mysterious" 50 % slow pair in perftest.
 
-> [!INTERVIEW]
-> *"Why does NDR need FEC when SDR did not, and what does that cost?"* Strong answer: NDR uses PAM4 at about 53 GBd per lane to reach 100G-class lanes; PAM4's four levels shrink the eye and raise the raw BER far above what a link can tolerate, so Reed-Solomon FEC corrects errors at the receiver. The cost is added latency per hop (tens to around a hundred nanoseconds, depending on the FEC) and some overhead in the signalling rate; the operational consequence is that you monitor pre-FEC BER as an early-warning signal and post-FEC errors as real problems.
-
 ## Common pitfalls
 
 - **Link trained at reduced width.** Symptom: `2X` or `1X` in iblinkinfo, half or quarter bandwidth in perftest. Cause: a lane failed to train (damaged or dirty cable, bad module). Fix: reseat, clean, replace the cable or module, then retrain.

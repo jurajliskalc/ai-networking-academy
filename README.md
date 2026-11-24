@@ -112,7 +112,7 @@ agents follow are in [CLAUDE.md](CLAUDE.md).
 
 | | |
 |---|---|
-| **76 lessons** in 13 modules, about 198,000 words | Four levels: Beginner → Practitioner → Engineer → Master. Every lesson follows the same structure: *Why this matters → Concepts → How it works → In practice → Common pitfalls → Key takeaways*, with callouts for network engineers (ANALOGY) and interview prep (INTERVIEW). |
+| **76 lessons** in 13 modules, about 190,000 words | Four levels: Beginner → Practitioner → Engineer → Master. Every lesson follows the same structure: *Why this matters → Concepts → How it works → In practice → Common pitfalls → Key takeaways*, with callouts that map each topic to classic enterprise and service-provider networking (ANALOGY). |
 | **568 quiz questions** | Each lesson ends with a quiz, mostly scenario questions ("given these counters, what is wrong?"). **Every option is explained**, including the wrong ones. |
 | **22 Fabric Simulator labs** | Incident tickets in a simulated rail-optimized RoCE cluster, plus an InfiniBand variant. You investigate with real tool syntax (`ethtool -S`, `mlnx_qos`, `show_gids`, `ib_write_bw`, `all_reduce_perf`, `ibstat`, `iblinkinfo`, `perfquery`, NVUE), commit a diagnosis, apply a fix, and the lab grades the fabric state. |
 | **22 hands-on labs** in four tiers | Tier 0 on one VM, Tier 1 on two RDMA hosts, Tier 2 with a lossless switch, Tier 3 with GPU nodes (see [Real hardware labs](#real-hardware-labs)). Every lab is personalised with your lab profile and graded by a `check.sh`. |

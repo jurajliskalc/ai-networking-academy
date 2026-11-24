@@ -410,9 +410,6 @@ perfquery <lid> <port>                                # port error counters, loo
 | `IBV_WC_REM_ACCESS_ERR` | Wrong rkey or address range | Application debug output | Application or library bug; check memory registration flags |
 | Intermittent retry exceeded under load only | Drops in the fabric: PFC/ECN misconfig, link BER | Receiver `out_of_sequence`; switch drop and PFC counters; link BER | Fix lossless config or the link (see the related lessons) |
 
-> [!INTERVIEW]
-> "NCCL dies with `error 12` after a 30-second hang on a freshly reconfigured cluster. What do you check?" A strong answer: error 12 is `IBV_WC_RETRY_EXC_ERR`, meaning the requester got no ACKs within timeout × retries. Since the cluster was just reconfigured, check the GID table first (did the index the job uses change, is it still RoCE v2 on the right subnet?), then MTU end to end with a perftest size sweep, then counters on both ends to tell "nothing arrives" from "some packets drop". Mention that raising `NCCL_IB_TIMEOUT` only delays the failure.
-
 ## Common pitfalls
 
 - **Hard-coded GID index.** Symptom: jobs fail cluster-wide after a netplan or IPv6 change. Cause: the index now points at a different address or a v1 entry. Fix: select by address/type (NCCL auto-selection where supported) and check in admission scripts.

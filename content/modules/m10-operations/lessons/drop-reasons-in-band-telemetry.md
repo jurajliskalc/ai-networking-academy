@@ -304,16 +304,6 @@ IPv4 route entries:    78110,  94% of maximum value  82720     <- close to the l
 counter-decoder
 ```
 
-> [!INTERVIEW]
-> "Your counters show discards on a leaf port in a RoCE fabric. How do you find out what is
-> happening?" A strong answer separates *what* from *why*: use drop-reason telemetry (WJH on
-> Spectrum, or the vendor equivalent) to get the reason and the dropped packets' headers; read the
-> priority and UDP port 4791 to see whether lossless RoCE traffic is being dropped (which is always
-> a PFC, headroom or classification fault) or lossy traffic (normal under congestion); for
-> congestion, use histograms for the shape and in-band telemetry to pin the congested hop on the
-> path; and rule out hardware table exhaustion for L3 drops. Mention the costs: SPAN resources for
-> buffer-drop capture and header bytes per hop for in-band telemetry.
-
 ## Common pitfalls
 
 - **Treating all buffer drops alike.** Symptom: "congestion, nothing to fix" while RoCE retransmits

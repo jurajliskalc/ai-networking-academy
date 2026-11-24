@@ -420,13 +420,6 @@ rail-local group with one GPU per server, like the data-parallel groups in Step 
 NIC's 50 GB/s instead. The illustrative ~360 GB/s figures above are the kind of number to baseline
 per SU and for the whole cluster, not a promise for every generation or NCCL version.
 
-> [!INTERVIEW]
-> "Your 1,024-GPU cluster's all-reduce busbw is 30% below the single-SU number. Walk me through it."
-> A strong answer separates the scopes (one SU uses only rail leaves; the full cluster crosses spines),
-> checks spine link counts and ECMP/adaptive routing first, then per-link errors and PFC pause counters
-> on spine-facing ports, then job placement and NCCL topology, and finishes with how to bisect by
-> running the test on two SUs at a time.
-
 ## Common pitfalls
 
 - **Counting switches before counting ports.** Symptom: the BOM is off by a third. Cause: the design

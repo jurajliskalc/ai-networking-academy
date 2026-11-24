@@ -241,14 +241,6 @@ NCCL_ALGO=Tree ./build/all_reduce_perf -b 1K -e 1G -f 2 -g 1
 Expected pattern (illustrative): Tree wins at small and medium sizes on many nodes, Ring catches up
 or wins at large sizes, and NVLS/CollNet (where available) can beat both for large all-reduce.
 
-> [!INTERVIEW]
-> "Derive the cost of ring all-reduce and explain why NCCL also uses trees." A strong answer splits
-> ring all-reduce into reduce-scatter and all-gather, each n-1 steps of S/n bytes, giving
-> 2(n-1)α + 2(n-1)/n·S·β; notes the bandwidth term is optimal but latency grows linearly with n;
-> then explains pipelined trees with log(n) latency and the double binary tree trick (interior in one
-> tree, leaf in the other) that recovers near-full bandwidth. Bonus: SHARP halves the network volume
-> by reducing in the switches; NVLS does the same inside the NVSwitch domain.
-
 ## Common pitfalls
 
 - **Using S instead of 2(n-1)/n · S for all-reduce volume.** Symptom: you predict all-reduce should

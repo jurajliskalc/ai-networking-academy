@@ -198,9 +198,6 @@ Back-of-the-envelope questions a network engineer should be able to answer for a
 - **Undersized storage for model loading.** Symptom: autoscaling takes minutes; capacity arrives too late for traffic spikes. Cause: hundreds of GB of weights over a thin storage path. Fix: size storage bandwidth for cold starts, cache weights locally, or transfer from peers.
 - **Assuming inference needs no back-end fabric.** Symptom: a large MoE model cannot meet latency targets on servers connected only by a front-end network. Cause: wide expert parallelism needs low-latency RDMA all-to-all. Fix: provide a proper scale-out (or rack-scale scale-up) fabric for multi-node model replicas.
 
-> [!INTERVIEW]
-> "How do the network requirements of LLM inference differ from training?" A strong answer: inference splits into compute-bound prefill and latency-bound decode; decode turns TP all-reduces into small, latency-bound messages on every token, so TP stays on NVLink; MoE serving adds latency-critical all-to-all; disaggregated serving adds GB-scale KV cache transfers between prefill and decode pools over RDMA (quantify: about 320 KiB per token for a 70B-class GQA model, so 2.7 GB for an 8k prompt, about 54 ms at 400 Gb/s); the front-end becomes critical, needing KV-aware routing; and storage matters for model loading and KV offload. Close with the metrics: TTFT, inter-token latency, and goodput under SLOs.
-
 ## Key takeaways
 
 - LLM inference has a compute-bound prefill phase and a memory- and latency-bound decode phase; judge them by TTFT, inter-token latency and goodput.

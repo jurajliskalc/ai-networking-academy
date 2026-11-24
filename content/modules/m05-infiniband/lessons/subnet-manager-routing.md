@@ -217,9 +217,6 @@ To ca {0xb83fd20300a1c7e0} portnum 1 lid 45-45 "node40 HCA-1"
 > [!TIP]
 > After any recabling or switch replacement, compare `dump_fts` output (or UFM's routing report) with the expected balance and run a fabric-wide check such as `ibdiagnet` (see `ib-tools-diagnostics`) before returning the fabric to production.
 
-> [!INTERVIEW]
-> *"Your IB fat tree shows hot spine links during all-reduce even though no link is down. What do you look at?"* Strong answer: confirm which SM is master and which routing engine it actually used (logs, `sminfo`, configuration) — a fallback to minhop or a rogue SM is common; check the topology for miscabling or missing links that break ftree's symmetry; dump the LFTs to see whether destinations are evenly spread across uplinks; then consider adaptive routing (with transport support for reordering) for residual collisions, and check that the job's rank placement matches the rail design.
-
 ## Common pitfalls
 
 - **Rogue or misconfigured SM becomes master.** Symptom: sudden fabric-wide performance change after someone's maintenance; `sminfo` shows an unexpected GUID. Cause: an extra SM with higher priority or lower GUID. Fix: control where SMs run, set priorities explicitly, alert on master changes.

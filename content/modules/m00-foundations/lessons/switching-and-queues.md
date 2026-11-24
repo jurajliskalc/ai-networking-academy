@@ -181,9 +181,6 @@ Quick estimate you should be able to do in your head: "a 3 MB queue on a 400G po
 - **Reading peak occupancy as average.** Symptom: alarm over a watermark at 90 % of buffer. Cause: watermarks record the peak since last clear, perhaps a single microburst. Fix: clear and resample, correlate with drops and pauses.
 - **Blaming the link when it is the queue.** Symptom: "the link is slow". Cause: links always run at line rate; latency comes from waiting. Fix: look at queue, ECN and pause counters, not just utilisation averages, which hide microsecond-scale bursts.
 
-> [!INTERVIEW]
-> "Eight GPUs each send 400 Gb/s to one GPU behind a single 400G leaf port. What happens in the switch, and what are the three possible outcomes for the excess traffic?" A strong answer: the egress queue grows at 2.8 Tb/s (350 MB/ms), so a few MB of buffer fills in microseconds; the switch can tail-drop (catastrophic for RDMA), ECN-mark so senders reduce rate (preferred first line of defence), or send PFC pauses upstream (lossless safety net with head-of-line blocking and congestion spreading as side effects). Good candidates add that the senders' combined rate must ultimately drop to 400 Gb/s, which is the job of end-to-end congestion control, and that in all-to-all collectives this pattern is normal, not exceptional.
-
 ## Key takeaways
 
 - L2 switches learn source MACs, forward known destinations, and flood unknown ones; AI fabrics are routed so that every link is active.

@@ -79,9 +79,6 @@ prerequisites but must still be self-contained enough to follow.
 > [!ANALOGY]
 > A comparison to classic enterprise/service-provider networking, including where it breaks down.
 
-> [!INTERVIEW]
-> A question an interviewer could ask about this topic, and the shape of a strong answer.
-
 > [!VERIFIED]
 > **What was observed, in one sentence.** Details: the exact message or counter, the stack and the
 > hardware, and how to work with it.

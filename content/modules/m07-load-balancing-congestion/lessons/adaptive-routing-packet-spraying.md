@@ -243,15 +243,6 @@ duplicate_request    0 -> 0
 If `out_of_sequence` or `packet_seq_err` climb quickly once AR is enabled, the receiving side is
 not handling reordering, and you should disable per-packet AR for that traffic until it is.
 
-> [!INTERVIEW]
-> "Why can't we just turn on packet spraying on our existing RoCE fabric?" A strong answer explains
-> that spraying sends packets of one QP over paths with different queueing delay, so they arrive out
-> of order; a traditional RC receiver interprets a PSN gap as loss and triggers go-back-N
-> retransmission, so goodput drops. Spraying needs NIC support for out-of-order placement and
-> completion (direct data placement, PSN tracking, selective retransmit), as in Spectrum-X SuperNICs,
-> InfiniBand AR-capable HCAs or UEC's unordered delivery modes. Bonus: mention flowlets as the
-> reorder-free middle ground and why RDMA flows have few flowlet gaps.
-
 ## Common pitfalls
 
 - **Enabling switch AR without NIC support.** Symptom: balanced uplinks but lower throughput and

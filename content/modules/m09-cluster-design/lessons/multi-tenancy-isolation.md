@@ -191,14 +191,6 @@ behaviour is implementation specific.
 | VXLAN VNIs | 24 bits (about 16.7 million) | Per-switch VNI and VRF scale, EVPN route scale |
 | VRFs | Implementation specific | Hardware VRF count on leaves |
 
-> [!INTERVIEW]
-> **"How do you isolate tenants on a shared AI training cluster?"** Strong answer: separate
-> reachability from performance. Reachability: PKeys on InfiniBand (full versus limited membership,
-> SM-managed, optionally switch-enforced) or VRF plus VXLAN/EVPN on Ethernet, ideally enforced on
-> DPUs so bare-metal tenants cannot bypass it. Performance: allocate whole servers and whole SUs where
-> possible, because rail-local traffic then never shares links; handle residual spine sharing with
-> adaptive routing and congestion control; and prove it with simultaneous multi-tenant benchmarks.
-
 ## In practice
 
 ### InfiniBand: partitions in the subnet manager

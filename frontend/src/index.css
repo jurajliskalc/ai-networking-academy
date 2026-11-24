@@ -19,7 +19,6 @@
   --warn: #a64b07;
   --danger: #b91c1c;
   --analogy: #6d28d9;
-  --interview: #be185d;
   --code-bg: #0b1220;
   --code-text: #dbe4f0;
 }
@@ -38,7 +37,6 @@
   --warn: #fbbf24;
   --danger: #f87171;
   --analogy: #a78bfa;
-  --interview: #f472b6;
   --code-bg: #060a11;
   --code-text: #d5deea;
 }
@@ -62,7 +60,6 @@
   --warn: #a64b07;
   --danger: #b91c1c;
   --analogy: #6d28d9;
-  --interview: #be185d;
   --code-bg: #0b1220;
   --code-text: #dbe4f0;
 }
@@ -81,7 +78,6 @@
   --warn: #fbbf24;
   --danger: #f87171;
   --analogy: #a78bfa;
-  --interview: #f472b6;
   --code-bg: #060a11;
   --code-text: #d5deea;
 }
@@ -100,7 +96,6 @@
   --warn: #8f4204;
   --danger: #a51f15;
   --analogy: #5e35b5;
-  --interview: #9e1452;
   --code-bg: #0a1626;
   --code-text: #d9e6f4;
 }
@@ -119,7 +114,6 @@
   --warn: #fcc54a;
   --danger: #ff8a80;
   --analogy: #c0aaff;
-  --interview: #ff8fc4;
   --code-bg: #04111f;
   --code-text: #d6e3f1;
 }
@@ -138,7 +132,6 @@
   --warn: #964104;
   --danger: #a8191a;
   --analogy: #0b6a62;
-  --interview: #a5124f;
   --code-bg: #140c26;
   --code-text: #e2dcf2;
 }
@@ -157,7 +150,6 @@
   --warn: #fcc54a;
   --danger: #ff8f87;
   --analogy: #6ff0da;
-  --interview: #ffaad8;
   --code-bg: #0d0820;
   --code-text: #ddd7ee;
 }
@@ -176,7 +168,6 @@
   --warn: #844407;
   --danger: #9d2219;
   --analogy: #5f3489;
-  --interview: #971a54;
   --code-bg: #1d170f;
   --code-text: #ece2cf;
 }
@@ -195,7 +186,6 @@
   --warn: #f4c75a;
   --danger: #f6968d;
   --analogy: #cfaff7;
-  --interview: #f7accb;
   --code-bg: #100c07;
   --code-text: #e8dfcd;
 }
@@ -214,7 +204,6 @@
   --warn: #643000;
   --danger: #8a0000;
   --analogy: #48188f;
-  --interview: #7d003b;
   --code-bg: #000000;
   --code-text: #ffffff;
 }
@@ -233,7 +222,6 @@
   --warn: #ffd24d;
   --danger: #ff9a9a;
   --analogy: #cdb8ff;
-  --interview: #ffa6d4;
   --code-bg: #000000;
   --code-text: #ffffff;
 }
@@ -310,7 +298,6 @@ body {
 .callout-tip { border-left-color: var(--accent); } .callout-tip .callout-title { color: var(--accent); }
 .callout-warning { border-left-color: var(--warn); } .callout-warning .callout-title { color: var(--warn); }
 .callout-analogy { border-left-color: var(--analogy); } .callout-analogy .callout-title { color: var(--analogy); }
-.callout-interview { border-left-color: var(--interview); } .callout-interview .callout-title { color: var(--interview); }
 /* Verified on real hardware: a filled badge, so it reads as evidence rather than advice. */
 .callout-verified { border-left-color: var(--accent); background: linear-gradient(90deg, var(--accent-soft), var(--panel) 60%); }
 .callout-verified .callout-title { justify-content: space-between; flex-wrap: wrap; }

@@ -285,15 +285,6 @@ All three available paths are installed (`*` on each line). If the BGP table sho
 route shows fewer next hops, look at `maximum-paths` and multipath-relax. If the BGP table itself shows
 fewer paths than spines, a session is down or a spine is filtering.
 
-> [!INTERVIEW]
-> **"Why do all spines share one ASN in an RFC 7938 fabric, while every leaf has its own?"** A strong
-> answer: shared spine ASN means any path that already crossed a spine is rejected by every other spine
-> through the AS_PATH loop check, so a withdrawn prefix cannot bounce between spines via leaves, which
-> eliminates path hunting and gives fast, deterministic convergence. Unique leaf ASNs let leaves accept
-> each other's routes without `allowas-in` and make AS_PATH show where a route originated. Bonus: mention
-> multipath-relax for paths with different ASNs, `maximum-paths` at least equal to the uplink count, and
-> BGP unnumbered for removing link addressing.
-
 ## Common pitfalls
 
 - **`maximum-paths` too small.** Symptom: some uplinks carry no traffic for remote prefixes; BGP shows

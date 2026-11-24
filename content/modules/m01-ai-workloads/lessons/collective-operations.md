@@ -217,9 +217,6 @@ Setting the real NCCL environment variable `NCCL_DEBUG=INFO` makes NCCL print wh
 - **Forgetting that one slow rank slows all.** Symptom: one test run is 30 % slow but most links look idle. Cause: a ring or tree waits for its slowest member. Fix: test subsets (pairs, single rails) to isolate the straggler (`slow-collectives-stragglers`).
 - **Treating all-to-all like all-reduce.** Symptom: all-reduce numbers look great, MoE training is slow. Cause: all-to-all creates simultaneous full-mesh traffic and incast. Fix: benchmark `alltoall_perf` too.
 
-> [!INTERVIEW]
-> "Explain ring all-reduce and why each GPU sends about twice the buffer size." A strong answer: split the buffer into N chunks; a reduce-scatter phase of N-1 steps leaves each rank with one fully reduced chunk; an all-gather phase of N-1 steps distributes them; each step sends S/N, so 2(N-1)/N x S in total, approaching 2S. Then add the alpha-beta model: the latency term grows with N, which is why NCCL uses trees and hierarchical algorithms at scale, and mention that in-network reduction (SHARP) can cut per-GPU traffic to about S. Finish with busbw = algbw x 2(N-1)/N as the hardware-comparable metric.
-
 ## Key takeaways
 
 - Collectives (broadcast, reduce, all-reduce, reduce-scatter, all-gather, all-to-all, send/recv) are the unit of work an AI network serves.

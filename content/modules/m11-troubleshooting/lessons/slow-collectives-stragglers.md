@@ -288,9 +288,6 @@ numastat -p <pid>                                       # where a process's memo
 | p99 step time spiky, p50 fine | Thermal throttling, intermittent BER bursts, congestion | DCGM throttle fields over time; switch/NIC error counters; ECN/PFC counters | Fix airflow, replace optic, tune congestion control |
 | Bandwidth low only with GPU buffers, fine with host buffers | ACS redirect or IOMMU translation on P2P path | `ACSCtl` flags; compare `ib_write_bw` with and without `--use_cuda` | Disable ACS on bare metal; follow platform IOMMU guidance |
 
-> [!INTERVIEW]
-> "Your 512-GPU job is 30% slower than last week, and nothing is alarming. Walk me through it." A strong answer: confirm with a reproducible benchmark (nccl-tests at the job's scale vs a recorded baseline), separate compute from communication, then run single-node tests everywhere in parallel and bisect the inter-node set until the slowdown follows one node or link. On the suspect, check PCIe LnkSta, NIC link speed, NCCL transport and GDR status, GPU throttle reasons, and error counters. Close with "drain the node, fix, re-baseline, and add an automated check so this is caught at node admission next time".
-
 ## Common pitfalls
 
 - **Trusting averages.** Symptom: fleet dashboard shows 99% healthy bandwidth while a job crawls. Cause: one node out of hundreds barely moves a mean. Fix: alert on per-node deviation from peers, and on min/p1 rather than averages.

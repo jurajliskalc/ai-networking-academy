@@ -287,9 +287,6 @@ Replay each case through the triage tree: choose the answers its evidence gives 
 troubleshooting-tree
 ```
 
-> [!INTERVIEW]
-> "Tell me about a difficult incident you debugged." Interviewers want structure, not drama: the symptom and impact, how you scoped it, the hypothesis you tested and *discarded*, the evidence that proved the root cause, and the prevention you shipped so it could not recur. Use one of these patterns from your own experience, and be specific about counters and commands. Saying "the first test missed it because it did not use the same nodes as the job" shows real depth.
-
 ## Common pitfalls
 
 - **Testing a convenient subset.** Symptom: "benchmarks are fine, so it is the job". Cause: the subset does not traverse the faulty component. Fix: reproduce with the same nodes and placement as the failing job.

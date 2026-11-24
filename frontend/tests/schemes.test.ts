@@ -7,8 +7,8 @@ import { SCHEMES, sanitize } from '../src/progress';
 
 const css = fs.readFileSync(path.resolve(__dirname, '../src/index.css'), 'utf8');
 const KEYS = ['bg', 'bg-soft', 'panel', 'panel-2', 'border', 'text', 'muted', 'accent', 'accent-soft', 'on-accent',
-  'data', 'warn', 'danger', 'analogy', 'interview', 'code-bg', 'code-text'];
-const TEXT = ['text', 'muted', 'accent', 'data', 'warn', 'danger', 'analogy', 'interview'];
+  'data', 'warn', 'danger', 'analogy', 'code-bg', 'code-text'];
+const TEXT = ['text', 'muted', 'accent', 'data', 'warn', 'danger', 'analogy'];
 const SURFACES = ['bg', 'bg-soft', 'panel', 'panel-2'];
 
 function block(selector: string): Record<string, string> {

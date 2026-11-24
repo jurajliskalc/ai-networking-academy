@@ -323,14 +323,6 @@ shows the IB/RoCE network plugin on the expected devices, not the socket transpo
 > a node joins the GPU pool only after its pods reach golden bandwidth on every rail
 > (`fabric-validation-burn-in`). It catches missing VFs, wrong MTU and broken GPUDirect before users do.
 
-> [!INTERVIEW]
-> "A PyTorch job on Kubernetes trains ten times slower than the same job on bare metal. Where do you
-> look?" A strong answer starts with the NCCL log: does it use `NET/IB` or `NET/Socket`? If sockets,
-> the pod has no RDMA devices or no secondary interface (check the resource request, the Multus
-> annotation and `network-status`). If IB is used, check one interface per rail, GPU-NIC locality
-> (NUMA alignment is not PCIe alignment), the GID index and MTU inside the pod, GPUDirect (DMA-BUF or
-> nvidia-peermem), and the `IPC_LOCK` capability. Close with the bottom-up verification sequence.
-
 ## Common pitfalls
 
 - **Silent socket fallback.** Symptom: training is several times slower in pods than on bare metal,

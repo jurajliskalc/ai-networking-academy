@@ -344,16 +344,6 @@ now encrypts.
 | How do we detect violations? | Constraint-error counters, SM/UFM security events, master-change alerts in the SIEM |
 | How is firmware trusted? | Signed images, secure boot on DPUs, one validated version fleet-wide |
 
-> [!INTERVIEW]
-> "A GPU cloud customer asks whether another tenant can read their training data over the InfiniBand
-> fabric. What do you say?" A strong answer separates layers: tenants are in separate partitions, with
-> P_Keys enforced on the switch ports facing their hosts, so their packets cannot reach each other's QPs;
-> the SM is protected by an M_Key, an SM_Key and an allowed-SM list, and hosts cannot send SMPs; keys are
-> randomized and rotated; violations show up as constraint errors and UFM security events. Then be
-> honest about the limit: these are access controls, not encryption. Data is not encrypted on the IB
-> wire, so the provider's physical security and switch integrity are part of the trust model. If the
-> customer needs cryptographic protection, discuss what is available on their hardware and its cost.
-
 ## Common pitfalls
 
 - **Trusting host firewalls for RDMA.** Symptom: a security audit says "host firewall blocks all

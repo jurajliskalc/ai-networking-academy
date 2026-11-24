@@ -339,9 +339,6 @@ What you might find, and what it means:
 - **Mistaking ICMP rate limiting for packet loss.** Symptom: mtr shows 30 % loss at hop 2, 0 % at the destination. Cause: switch control plane deprioritises ICMP. Fix: judge loss by the final hop and by data-plane counters.
 - **Forgetting the source address.** Symptom: tests pass, the job fails. Cause: tests left via the front-end or main routing table. Fix: always pass `-I`/`-B` with the back-end source address.
 
-> [!INTERVIEW]
-> "You SSH to a GPU node that a job owner says is slow. What do you run in the first five minutes?" A strong answer is structured bottom-up: map RDMA devices to netdevs (`rdma link show`), verify link state and speed on every back-end port (`ethtool`), check error and discard counters as deltas (`ethtool -S`), verify optics and cabling (`ethtool -m`, LLDP), verify MTU and routing with source-specific pings and `ip route get`, then move to RDMA-level tests. Mention that kernel counters miss RDMA traffic and that a single port at a lower speed or a single miscabled NIC can slow an entire synchronous job.
-
 ## Key takeaways
 
 - `ip` covers links, addresses, routes, policy rules and neighbours; `ip route get DST from SRC` shows the real routing decision.

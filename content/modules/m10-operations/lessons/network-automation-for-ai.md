@@ -248,9 +248,6 @@ Remember the other end of every link. Host NIC settings (trust mode, PFC priorit
 | Rollout stuck at canary | Post-check invariant failing | CI/post-check report | Fix the template or policy, not the device |
 | Host-switch QoS mismatch | Host config managed separately from switch policy | Host trust/PFC state vs policy | Drive both from one policy file |
 
-> [!INTERVIEW]
-> "How would you roll out an ECN threshold change across a 300-switch AI fabric?" A strong answer: change the value in the versioned policy, open a PR, CI renders all configs, shows the diff and runs invariant checks, test in a lab or digital twin with a representative traffic pattern, then roll out in waves (one leaf, then one rail, then the rest) with pre/post checks of ECN mark rates, PFC rates, drops and nccl-tests or job step time, an automatic stop on regression, and a change annotation in telemetry. Mention rollback by reverting the commit and redeploying, which idempotence makes safe.
-
 ## Common pitfalls
 
 - **Partial templates with full-replace deployment.** Symptom: a deployment wipes a setting someone added by hand (for example a telemetry subscription). Cause: the template does not model everything on the device. Fix: model it in the template, or use a merge model for that section deliberately.

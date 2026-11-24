@@ -407,9 +407,6 @@ Soft-RoCE implements RoCEv2 in the kernel. It is perfect for learning verbs, GID
 
 For a container to use RDMA it needs, at minimum: the `/dev/infiniband` device files for its assigned devices, rdma-core and the right provider library inside the image, a sufficient memlock limit (often granted with the `IPC_LOCK` capability and an unlimited `memlock` ulimit), and — on RoCE — a network interface in the container's namespace whose IPs populate the GID table. Kubernetes clusters typically use an RDMA device plugin or SR-IOV virtual functions to deliver these; follow your platform's documentation for the exact configuration.
 
-> [!INTERVIEW]
-> *"`ibv_devinfo` inside a training container says 'No IB devices found', but it works on the host. What do you check?"* Strong answer: whether `/dev/infiniband/uverbs*` are present in the container; whether the image has rdma-core and the vendor provider (for example libmlx5); whether the RDMA namespace mode is exclusive and the device was assigned to the pod's namespace; then memlock limits and, on RoCE, whether the pod interface has the expected IP so the GID table is populated.
-
 ## Common pitfalls
 
 - **Reading `transport: InfiniBand` as "this is an IB port".** Symptom: confusion on a RoCE host. Cause: the transport field describes the verbs transport. Fix: read `link_layer`.

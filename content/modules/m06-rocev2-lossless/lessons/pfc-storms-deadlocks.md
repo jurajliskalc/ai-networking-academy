@@ -282,17 +282,6 @@ platform, decide the policy ahead of time: action **drop** is the usual choice i
   legitimate heavy congestion. *Cause:* a detection time shorter than normal pause episodes.
   *Fix:* set detection well above observed healthy pause durations. Use your telemetry to choose it.
 
-> [!INTERVIEW]
-> **"Explain the difference between a PFC storm and a PFC deadlock, and how a watchdog helps with both."**
-> A storm has a *root*: a device, usually a stalled NIC, that keeps sending pauses. Back-pressure
-> spreads outward from it, stalling victims. A deadlock has *no* root. A cyclic buffer dependency,
-> created by down-up routing after a failure, a routing loop, or flooding, leaves every buffer on
-> the cycle full and waiting on the next, and it persists even with no new traffic. A watchdog
-> detects a queue that is paused and not transmitting for longer than the detection time, then drops
-> (or ignores pauses) on that queue. For a storm, that isolates the root. For a deadlock, it frees
-> buffer and unwinds the cycle. Prevention still matters: up-down routing, no lossless flooding,
-> ECN so that PFC is rare, and NIC-side storm prevention.
-
 ## Key takeaways
 
 - **PFC storm:** a faulty device pauses continuously, and back-pressure spreads hop by hop to

@@ -408,15 +408,6 @@ Any cell that differs from its neighbours is a bug.
   from the enterprise network, resets DSCP. *Fix:* mirror and inspect at hops along the path, and
   remove or fix the remarking policy.
 
-> [!INTERVIEW]
-> **"Your RoCE fabric uses PFC on priority 3, but a new tenant's training job shows drops and no
-> pauses. Where do you look?"** A strong answer starts at classification, not buffers. Check which
-> traffic class the job sets (`NCCL_IB_TC`; remember the ToS/DSCP ×4 relationship), check the host's
-> trust mode and DSCP-to-priority map, and check per-priority host counters to see whether the
-> bytes are in prio 3 or prio 0. Then check the leaf's trust mode and DSCP map, and confirm that the
-> CNP DSCP lands in a strict queue in both directions. Mention a hop-by-hop table and automation to
-> keep maps consistent.
-
 ## Key takeaways
 
 - Classification decides everything: DSCP or PCP → priority → ingress PG (PFC, headroom) and

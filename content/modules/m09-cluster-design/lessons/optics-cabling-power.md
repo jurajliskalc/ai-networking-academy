@@ -190,13 +190,6 @@ well. Treat the claimed ratios as vendor figures until independent data is avail
 | Interoperability | Broad (MSA standard) | Must be validated per host | Vendor-integrated system |
 | Maturity (as of 2025-2026) | Mature | Emerging | Early deployments |
 
-> [!INTERVIEW]
-> **"Your 8,000-GPU design has 20,000 transceivers. How would you reduce optics cost and power?"**
-> Strong answer: raise radix to remove a tier (port splitting or larger switches), use copper (DAC,
-> AEC) wherever layout allows by moving leaves closer to servers, consider LPO where validated,
-> evaluate CPO for spines where serviceability trade-offs are acceptable, and show the arithmetic
-> (modules x watts, AFR x modules) for each option.
-
 ## In practice
 
 ### Reading module health

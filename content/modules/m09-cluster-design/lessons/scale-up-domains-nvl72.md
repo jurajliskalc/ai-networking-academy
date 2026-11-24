@@ -183,14 +183,6 @@ performance should be validated rather than assumed. The architectural question 
 same one NVL72 answers: how big should the domain of memory-semantic, very high bandwidth
 connectivity be, and what does it cost?
 
-> [!INTERVIEW]
-> **"What does a 72-GPU NVLink domain change about scale-out network design?"** Strong answer:
-> convert bandwidth to the same basis (900 GB/s versus 50-100 GB/s per direction, so 9-18x), then
-> show that TP and most EP all-to-all move onto NVLink (for example a 64-way EP group goes from 87.5%
-> scale-out traffic to 0%), leaving DP/PP on a rail-optimized fabric. Then cover the costs: rack-level
-> power and liquid cooling, copper reach limits, a 72-GPU failure domain, and a still-large scale-out
-> requirement of 28.8-57.6 Tb/s per rack.
-
 ## In practice
 
 ### Inspecting NVLink on a server

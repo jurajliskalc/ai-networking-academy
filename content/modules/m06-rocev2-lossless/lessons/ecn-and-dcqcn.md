@@ -467,16 +467,6 @@ counter, the receiver's `np_ecn_marked_roce_packets` is a good proxy.
   congestion control is disabled for that priority. *Fix:* verify ECN capability per priority, and
   verify the actual ECN bits on the wire with a switch mirror.
 
-> [!INTERVIEW]
-> **"Walk me through DCQCN from switch to sender, and tell me how you would prove it works."**
-> The CP (switch egress) marks CE using Kmin/Kmax/Pmax. The NP (receiver NIC) turns CE marks into
-> CNPs (opcode 0x81), at most one per flow per interval, sent in a high-priority class. The RP
-> (sender NIC) cuts its rate by α/2 and updates α (an EWMA with gain g), then recovers through fast
-> recovery, additive increase and hyper increase, driven by a timer and a byte counter. To prove it:
-> run an incast and watch `np_ecn_marked_roce_packets` and `np_cnp_sent` on the receiver,
-> `rp_cnp_handled` on the senders, and PFC pause duration on the switch, which should stay low.
-> Mention that parameters are NIC- and firmware-specific.
-
 ## Key takeaways
 
 - ECN codepoints (RFC 3168): `00` Not-ECT, `10` ECT(0), `01` ECT(1), `11` CE. Switches set CE instead of dropping.

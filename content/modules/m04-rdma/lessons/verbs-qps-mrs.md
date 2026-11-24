@@ -240,9 +240,6 @@ $ ulimit -l
 
 *(Illustrative; 8192 KiB is, for example, Ubuntu's default.)* A small memlock limit (in KiB) causes `ibv_reg_mr` to fail with "Cannot allocate memory". Tools report it in their own words: a perftest sweep with `-a`, which registers buffers up to 8 MiB, fails with `Couldn't allocate MR` and ` Couldn't create IB resources`. RDMA hosts and containers normally set it to `unlimited` (for example in `/etc/security/limits.conf` or the container runtime's ulimit settings).
 
-> [!INTERVIEW]
-> *"A NCCL job fails with `transport retry counter exceeded`. Walk me through what that means."* Strong answer: it is `IBV_WC_RETRY_EXC_ERR` — an RC QP sent packets and got no acknowledgement within the ACK timeout (4.096 µs × 2^timeout) for retry_cnt + 1 attempts, so the QP went to ERR and subsequent WRs flushed. It means the path failed: link down or flapping, wrong address (GID index on RoCE), routing or partition problem, persistent loss on a lossy RoCE fabric, or the peer process/host died. Then explain how you would check link state, counters and the peer before blaming the application.
-
 ## Common pitfalls
 
 - **Chasing the flush errors.** Symptom: logs full of `IBV_WC_WR_FLUSH_ERR`. Cause: once a QP enters ERR every outstanding WR is flushed; the flush is a consequence. Fix: find the *first* non-flush error completion and debug that.

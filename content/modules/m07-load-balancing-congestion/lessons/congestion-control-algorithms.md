@@ -292,16 +292,6 @@ and the victim flow suffers. That is congestion control falling behind, not a br
 > Change one thing at a time and repeat each run several times. CC behaviour depends on firmware
 > versions, ECN thresholds, buffer settings and traffic phase; a single run proves little.
 
-> [!INTERVIEW]
-> "DCQCN versus HPCC versus Swift: when would you pick which?" A strong answer frames them by
-> signal and control variable: DCQCN is ECN plus rate, mature and everywhere but tuning-heavy;
-> Swift is delay plus window, needs nothing from switches, handles huge incast with sub-packet
-> windows but cannot locate the hot hop; HPCC is per-hop telemetry plus window, fast and precise
-> with few parameters but needs INT in every switch. Then add the 2026 picture: receiver credits
-> (UEC RCCC) for incast, NSCC for sprayed traffic, programmable CC on NICs, and vendor
-> telemetry-based schemes, and say you would validate any of them with an incast sweep and a
-> victim-flow test.
-
 ## Common pitfalls
 
 - **Expecting CC to replace PFC on day one.** Symptom: drops appear after PFC is disabled "because

@@ -220,13 +220,6 @@ the design unit:
 Because so much TP and EP traffic stays on NVLink inside the rack, the scale-out fabric carries
 mainly DP/PP traffic, which reinforces the rail-optimized design. The scale-up lesson explores this.
 
-> [!INTERVIEW]
-> **"Why is a SuperPOD scalable unit 32 nodes?"** Strong answer: a 64-port 400G leaf split 1:1 has 32
-> down-ports; with one leaf per rail and 8 rails per server, 32 servers is the largest group where
-> every same-index pair is one hop. Then show you can generalize: with 128-port effective radix (port
-> splitting) or 800G servers, the SU math changes, and the RA's number is a consequence of switch
-> radix, not a law.
-
 ## In practice
 
 ### Reading an RA like an architect

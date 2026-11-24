@@ -261,15 +261,6 @@ where the job is inexplicably 30-50 % slow.
 | Spine uplinks balanced but one spine-to-leaf link saturated | Possible polarization or destination hotspot |
 | All uplinks balanced and full, still slow | Not a hashing problem: look at oversubscription or incast |
 
-> [!INTERVIEW]
-> "Our 400G RoCE fabric is non-blocking, but all-reduce only gets about 60 % of expected bandwidth
-> and it varies between runs. What do you suspect?" A strong answer: low-entropy ECMP collisions.
-> Explain that RoCEv2 only varies the UDP source port, that a few elephant flows hash badly
-> (balls-into-bins: ~37 % of links idle with N flows on N links), and that run-to-run variance
-> points to per-QP hashing. Propose evidence (uplink imbalance counters), short-term fixes (more QPs
-> per connection, check hash fields and seeds, rail alignment) and structural fixes (adaptive
-> routing or packet spraying with NIC reordering support).
-
 ## Common pitfalls
 
 - **Judging the fabric by average utilization.** Symptom: "uplinks are only 60 % busy, so the network

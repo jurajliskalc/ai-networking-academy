@@ -221,15 +221,6 @@ Consistent with the host being one of several receivers that are hot spots durin
 > test (an `alltoall_perf` from nccl-tests across many nodes is a good generator) and track three
 > numbers together: throughput, PFC pause frames per second, and p99 latency of a small probe flow.
 
-> [!INTERVIEW]
-> "Adaptive routing is on, the fabric is non-blocking, but MoE training still shows PFC pauses and
-> slow all-to-all. Why?" A strong answer separates fabric congestion from endpoint congestion: many
-> experts' tokens go to one GPU, demand into that port exceeds its line rate, so no routing can help.
-> Explain buffer fill time (hundreds of KB per µs for 8-to-1 at 400G), that ECN-based CC needs at
-> least an RTT, and that PFC then propagates and creates victim flows. Mitigations: ECN thresholds
-> below XOFF, well-tuned CC, telemetry-based or receiver-driven CC, all-to-all scheduling and expert
-> load balancing.
-
 ## Common pitfalls
 
 - **Treating incast as a load-balancing problem.** Symptom: AR or spraying enabled, PFC pauses on
