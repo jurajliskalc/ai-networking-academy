@@ -26,7 +26,7 @@ RDMA · RoCEv2 · InfiniBand · NCCL · lossless Ethernet · AI-fabric design ·
 *A fault-injection lab from ticket to graded fix: the collective is slow although every point-to-point test
 passes, the counters show a NIC that ignores its leaf's pause frames, and the lab grades the state of the
 fabric. [Try it live](https://jurajliskalc.github.io/ai-networking-academy/#/labs/sim-03-pfc-priority-mismatch),
-or follow the [ten-command walkthrough](docs/PORTFOLIO_TOUR.md#the-five-minute-demo-a-pfc-incident).*
+or follow the [ten-command walkthrough](docs/PORTFOLIO_TOUR.md#break-a-cluster-then-fix-it).*
 
 </div>
 
@@ -48,8 +48,8 @@ lab is graded by code, and what the content says about host tools was compared w
 - **CI on every push**: content validation, unit tests that replay every simulator lab, browser tests,
   shell checks and toolkit tests
 
-New here? The [five-minute tour](docs/PORTFOLIO_TOUR.md) solves one incident end to end, then shows where
-the evidence lives.
+New here? The [five-minute tour](docs/PORTFOLIO_TOUR.md) shows the academy in pictures: an incident solved
+end to end, the visualizations, what real hardware taught, and the labs.
 
 ## Why this is different
 
@@ -153,7 +153,7 @@ subnet manager failures.
 
 Start with **[the PFC incident](https://jurajliskalc.github.io/ai-networking-academy/#/labs/sim-03-pfc-priority-mismatch)**:
 `ib_write_bw` runs at line rate on every rail while the collective runs at a third of normal speed. The
-[five-minute tour](docs/PORTFOLIO_TOUR.md#the-five-minute-demo-a-pfc-incident) walks through it in ten
+[five-minute tour](docs/PORTFOLIO_TOUR.md#break-a-cluster-then-fix-it) walks through it in ten
 commands.
 
 Every lab is checked by the test suite: it must fail its checks before the documented fix and pass all of

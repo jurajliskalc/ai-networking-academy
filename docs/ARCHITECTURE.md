@@ -14,6 +14,29 @@ flowchart LR
   D --> F["vite preview (local)"]
 ```
 
+## Design decisions
+
+- **Static site, no backend.** The same build runs from GitHub Pages or from a laptop, progress stays in the
+  browser, and there is no service to operate or to leak learner data.
+- **A deterministic teaching model, not an emulator.** The simulator reproduces which counters move, which
+  tests fail and roughly how much bandwidth each fault class costs. Performance comes from a fixed factor
+  per fault class; no packets or queues are simulated. Being deterministic is what lets a test replay every
+  lab and grade the state of the fabric ([SIMULATOR.md](SIMULATOR.md)).
+- **Verified versus illustrative is part of the data model.** Output blocks are tagged as real captures per
+  driver stack, hardware observations are `[!VERIFIED]` callouts collected onto one page, and a lab carries
+  `verified: false` until it has been run end to end. The validator rejects a capture tagged with the
+  wrong stack.
+- **Two driver stacks as first-class variants.** Device names, tools and behaviour differ between the
+  distribution's inbox RDMA stack and NVIDIA DOCA-OFED, so commands exist in both forms and the learner
+  picks the stack once.
+- **Lab checks as executable evidence.** A lab counts as verified only when its `check.sh` passed with
+  every required measurement made. A run whose main measurement was skipped is INCONCLUSIVE, not a pass.
+- **A local-only hardware agent.** The browser cannot reach a learner's servers, so `aina-hw serve` binds to
+  127.0.0.1 by default, answers only read requests, checks the Host header and an origin allow-list, and is
+  reached through an SSH tunnel. Importing JSON files works without it.
+- **Documentation that is tested.** The counts the docs advertise, the command walkthrough in the tour and
+  the images in the README are derived from the source tree or generated from the build (see Quality gates).
+
 ## Repository layout
 
 | Path | What |
@@ -147,9 +170,9 @@ Two tests guard the documentation itself. `tests/doc-stats.test.ts` compares eve
 (README badges, "76 lessons", the status tables) with `build-content.mjs --stats`, the same compiler that
 builds the site; `npm run stats` prints the counts and the phrases are listed in `scripts/doc-stats.mjs`.
 `tests/portfolio-tour.test.ts` replays the command walkthrough in [PORTFOLIO_TOUR.md](PORTFOLIO_TOUR.md)
-against the simulator. The README screenshots are generated from the build by `npm run screenshots`, and the
-animated walkthrough of the flagship incident by `npm run tour-gif` (Playwright frames, assembled with
-Python and Pillow).
+against the simulator. The screenshots in the README and the tour are generated from the build by
+`npm run screenshots`, and the animations (the flagship incident, the ECMP modes, the ring all-reduce, the
+driver-stack switch) by `npm run tour-gif` (Playwright frames, assembled with Python and Pillow).
 
 `npm run e2e` runs Playwright against `vite preview` of `dist/` (run `npm run build` first) on a free
 port. It drives the installed Google Chrome (`channel: 'chrome'`; set `CHROME_PATH` to use another

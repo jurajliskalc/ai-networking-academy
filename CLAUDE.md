@@ -42,10 +42,11 @@ Update `IMPLEMENTATION_STATUS.md`, `ROADMAP.md` and `CHANGELOG.md` when status c
 - Counts in `README.md` and the other docs listed in `frontend/scripts/doc-stats.mjs` must equal
   `npm run stats` (`build-content.mjs --stats`). Adding a lesson, lab, question, widget or command means
   updating those docs; `tests/doc-stats.test.ts` fails otherwise. Never type a count from memory.
-- `docs/PORTFOLIO_TOUR.md` holds a command walkthrough of `sim-03` that `tests/portfolio-tour.test.ts`
-  replays; change the lab and the page together.
-- README screenshots are generated: `npm run build && npm run screenshots`; the animated walkthrough with
-  `npm run tour-gif` (needs Python with Pillow). Regenerate both when the lab page or the dashboard changes.
+- `docs/PORTFOLIO_TOUR.md` is a picture-led highlights page: keep it short and non-technical. It holds a
+  command walkthrough of `sim-03` that `tests/portfolio-tour.test.ts` replays; change the lab and the page
+  together.
+- Images in the README and the tour are generated: `npm run build && npm run screenshots`; the animations
+  with `npm run tour-gif` (needs Python with Pillow). Regenerate both when a page they show changes.
 - A `further_reading` link on a new host must be classified in `frontend/scripts/source-kinds.mjs`.
 - Captures committed to the repository carry placeholder GUIDs and MACs and no serial numbers.
 - vitest 2 bundles its own vite; keep test config in `vitest.config.ts`, not `vite.config.ts`.
