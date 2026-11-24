@@ -1,4 +1,7 @@
-export interface Link { title: string; url: string }
+import type { SourceKind } from '../scripts/source-kinds.mjs';
+
+/** A further-reading reference; `kind` says what sort of source it is (scripts/source-kinds.mjs). */
+export interface Link { title: string; url: string; kind: SourceKind }
 export interface TocEntry { depth: number; text: string }
 
 export interface Module {

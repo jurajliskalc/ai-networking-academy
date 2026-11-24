@@ -4,6 +4,7 @@ import { ArrowLeft, ArrowRight, BookOpen, Check, Clock, ExternalLink, FlaskConic
 import { labPath, slug, useIndex, useLessonBody } from '../content';
 import { useProgress } from '../store';
 import { bump } from '../progress';
+import { SOURCE_KIND_HINTS, SOURCE_KINDS } from '../../scripts/source-kinds.mjs';
 import Markdown, { goToSection, useSectionParam } from '../components/Markdown';
 import { Button, Card, LevelBadge, Loading, Pill } from '../components/ui';
 import NotFound from './NotFound';
@@ -88,8 +89,16 @@ export default function LessonPage() {
             <section className="mt-12">
               <h2 className="mb-3 text-lg font-bold">Further reading</h2>
               <ul className="space-y-2 text-sm">
-                {meta.further_reading.map((r) => <li key={r.url}><a href={r.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-data hover:underline"><ExternalLink size={13} aria-hidden />{r.title}<span className="sr-only"> (opens in a new tab)</span></a></li>)}
+                {meta.further_reading.map((r) => (
+                  <li key={r.url} className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                    <span className="w-24 shrink-0 font-mono text-[11px] uppercase tracking-wide text-muted" title={`${SOURCE_KINDS[r.kind]}: ${SOURCE_KIND_HINTS[r.kind]}`}>{SOURCE_KINDS[r.kind]}</span>
+                    <a href={r.url} target="_blank" rel="noreferrer" className="inline-flex min-w-0 flex-1 basis-64 items-center gap-1.5 text-data hover:underline"><ExternalLink size={13} className="shrink-0" aria-hidden />{r.title}<span className="sr-only"> (opens in a new tab)</span></a>
+                  </li>
+                ))}
               </ul>
+              <p className="mt-3 text-xs text-muted">
+                Each reference is labelled by the kind of source it is: {(Object.keys(SOURCE_KINDS) as (keyof typeof SOURCE_KINDS)[]).filter((k) => meta.further_reading.some((r) => r.kind === k)).map((k) => `${SOURCE_KINDS[k]} (${SOURCE_KIND_HINTS[k]})`).join('; ')}.
+              </p>
             </section>
           )}
 

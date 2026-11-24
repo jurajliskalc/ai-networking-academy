@@ -10,6 +10,7 @@ import zlib from 'node:zlib';
 import yaml from 'js-yaml';
 import { buildSearchIndex, parseWidgetRegistry, slug } from './search-index.mjs';
 import { checkCommandStacks, extractVerified, scanStackFences } from './stack-variants.mjs';
+import { hostOf, SOURCE_KINDS, sourceKind } from './source-kinds.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const CONTENT = path.join(ROOT, 'content');
@@ -208,13 +209,21 @@ for (const dir of moduleDirs) {
     if (typeof meta.title !== 'string') err(lfile, 'title must be a string (quote it if it contains ": ")');
     for (const k of ['objectives', 'tags', 'prerequisites'])
       for (const v of meta[k] ?? []) if (typeof v !== 'string') err(lfile, `${k}: every item must be a string (quote items containing ": "): ${JSON.stringify(v)}`);
-    for (const r of meta.further_reading ?? []) if (typeof r?.title !== 'string' || typeof r?.url !== 'string') err(lfile, `further_reading entries need string title and url: ${JSON.stringify(r)}`);
+    // Every reference carries the kind of source it is (source-kinds.mjs), from its host or an explicit `kind:`.
+    const reading = [];
+    for (const r of meta.further_reading ?? []) {
+      if (typeof r?.title !== 'string' || typeof r?.url !== 'string') { err(lfile, `further_reading entries need string title and url: ${JSON.stringify(r)}`); continue; }
+      const kind = r.kind ?? sourceKind(r.url);
+      if (!kind) err(lfile, `further_reading: host "${hostOf(r.url)}" is not classified; add it to scripts/source-kinds.mjs or set kind: on the entry (${r.url})`);
+      else if (!(kind in SOURCE_KINDS)) err(lfile, `further_reading: kind must be one of ${Object.keys(SOURCE_KINDS).join(', ')}: ${JSON.stringify(r)}`);
+      reading.push({ title: r.title, url: r.url, kind });
+    }
     const toc = [...body.matchAll(/^(##|###) (.+)$/gm)].map((m) => ({ depth: m[1].length, text: m[2].trim() }));
     lessons.set(lid, {
       id: lid, module: mod.id, title: meta.title, level: meta.level, minutes: meta.estimated_minutes,
       objectives: meta.objectives ?? [], prerequisites: meta.prerequisites ?? [], quiz: meta.quiz,
       widgets: meta.widgets ?? [], labs: meta.labs ?? [], tags: meta.tags ?? [],
-      further_reading: meta.further_reading ?? [], words: words(body), toc,
+      further_reading: reading, words: words(body), toc,
     });
     lessonBodies.set(lid, body);
 
@@ -413,6 +422,8 @@ if (STATS_ONLY) {
   const handson = labs.filter((l) => l.kind === 'handson');
   const embeds = [...lessonBodies.values()].map((b) => (b.match(/```widget\n/g) ?? []).length);
   const examQuestions = exams.reduce((s, e) => s + e.count, 0);
+  const refs = [...lessons.values()].flatMap((l) => l.further_reading);
+  const refsOf = (kind) => refs.filter((r) => r.kind === kind).length;
   console.log(JSON.stringify({
     modules: modules.length,
     lessons: lessons.size,
@@ -437,6 +448,13 @@ if (STATS_ONLY) {
     stackVariantGroups: stackStats.groups,
     realCaptures: stackStats.real,
     verifiedNotes: verified.length,
+    references: refs.length,
+    referenceUrls: new Set(refs.map((r) => r.url)).size,
+    standardReferences: refsOf('standard'),
+    vendorReferences: refsOf('vendor'),
+    sourceReferences: refsOf('source'),
+    paperReferences: refsOf('paper'),
+    articleReferences: refsOf('article'),
   }, null, 2));
   process.exit(0);
 }

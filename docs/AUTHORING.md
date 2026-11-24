@@ -43,6 +43,13 @@ further_reading:                       # 2-5 authoritative links (standards, ven
 ---
 ```
 
+Every reference is shown with the kind of source it is: `standard`, `vendor`, `source` (an open-source
+project's documentation, manual pages or code), `paper` or `article`. The kind comes from the link's host
+(`frontend/scripts/source-kinds.mjs`). The validator rejects a host that is not listed there: add the host
+to that file, or set `kind:` on the entry when one link differs from the rest of its site. Prefer the
+primary source (the standard, the tool's own documentation or code, the original paper) over an article
+about it.
+
 The body is GitHub-flavoured Markdown with these sections, in this order:
 
 | Section | Content |
