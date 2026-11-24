@@ -23,7 +23,8 @@ RDMA · RoCEv2 · InfiniBand · NCCL · lossless Ethernet · AI-fabric design ·
 <a href="https://jurajliskalc.github.io/ai-networking-academy/#/labs/sim-03-pfc-priority-mismatch"><img src="docs/screenshots/incident.png" alt="Fault-injection lab: an incident ticket next to a simulated shell showing PFC pause counters on a NIC and on its leaf switch" width="900" /></a>
 
 *A fault-injection lab: the ticket on the left, real tool syntax on the right. Here the NIC only has pause
-counters for priority 4 while its leaf pauses priority 3 and drops.*
+counters for priority 4 while its leaf pauses priority 3 and drops. The
+[portfolio tour](docs/PORTFOLIO_TOUR.md#the-five-minute-demo-a-pfc-incident) solves it in ten commands.*
 
 </div>
 
