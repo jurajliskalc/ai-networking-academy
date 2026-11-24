@@ -5,17 +5,21 @@ Notable changes to AI Networking Academy. The format follows
 Lesson, quiz, lab and widget IDs are a compatibility promise: learner progress is keyed by them, so
 renaming or removing one is a breaking change.
 
-## [Unreleased]
+## [1.1.0] - 2026-11-24
+
+Full notes: [docs/releases/v1.1.0.md](docs/releases/v1.1.0.md).
 
 ### Changed
 - Figures are drawn by the academy's own compiler and renderer in place of Mermaid: laid out at build time
   (ELK, orthogonal routing), drawn in the colour scheme, with motion where a figure shows a flow and
   step-by-step playback for sequence diagrams. The content of the 84 figures is unchanged.
-- The "Interview angle" callouts are removed from the lessons.
-- The five-minute tour is a highlights page in pictures; every reference is labelled by kind of source.
+- The five-minute tour is a highlights page in pictures.
+- The lesson "Interview preparation" is titled "Technical interviews and design reviews" (same ID).
+- The README leads with the live academy and links the simulator labs and the visualizations.
 
 ### Fixed
 - With the OS "reduce motion" setting on, every flowchart was drawn collapsed and unreadable.
+- Long inline code made ten lesson pages scroll sideways on a phone; it now wraps.
 
 ## [1.0.0] - 2026-11-24
 
@@ -52,4 +56,5 @@ First public release. Full notes: [docs/releases/v1.0.0.md](docs/releases/v1.0.0
   source-backed and labelled illustrative, not verified on hardware.
 - The simulator is a teaching model, not a performance predictor.
 
+[1.1.0]: https://github.com/jurajliskalc/ai-networking-academy/releases/tag/v1.1.0
 [1.0.0]: https://github.com/jurajliskalc/ai-networking-academy/releases/tag/v1.0.0
