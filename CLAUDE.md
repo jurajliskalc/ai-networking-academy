@@ -44,7 +44,9 @@ Update `IMPLEMENTATION_STATUS.md`, `ROADMAP.md` and `CHANGELOG.md` when status c
   updating those docs; `tests/doc-stats.test.ts` fails otherwise. Never type a count from memory.
 - `docs/PORTFOLIO_TOUR.md` holds a command walkthrough of `sim-03` that `tests/portfolio-tour.test.ts`
   replays; change the lab and the page together.
-- README screenshots are generated: `npm run build && npm run screenshots`.
+- README screenshots are generated: `npm run build && npm run screenshots`; the animated walkthrough with
+  `npm run tour-gif` (needs Python with Pillow). Regenerate both when the lab page or the dashboard changes.
+- A `further_reading` link on a new host must be classified in `frontend/scripts/source-kinds.mjs`.
 - Captures committed to the repository carry placeholder GUIDs and MACs and no serial numbers.
 - vitest 2 bundles its own vite; keep test config in `vitest.config.ts`, not `vite.config.ts`.
 - Browser tests are Playwright (`frontend/e2e/*.spec.ts`, `playwright.config.ts`), not vitest. They use the

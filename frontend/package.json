@@ -13,7 +13,8 @@
     "test": "vitest run",
     "preview": "vite preview --port 8740",
     "e2e": "playwright test",
-    "screenshots": "node scripts/screenshots.mjs"
+    "screenshots": "node scripts/screenshots.mjs",
+    "tour-gif": "node scripts/screenshots.mjs --tour && python scripts/tour-gif.py"
   },
   "dependencies": {
     "lucide-react": "^0.460.0",

@@ -18,13 +18,14 @@ RDMA · RoCEv2 · InfiniBand · NCCL · lossless Ethernet · AI-fabric design ·
 **[Real hardware labs](https://jurajliskalc.github.io/ai-networking-academy/#/hw/labs)** ·
 **[Hardware verification](docs/HARDWARE_VERIFICATION.md)** ·
 **[Architecture](docs/ARCHITECTURE.md)** ·
-**[Portfolio tour](docs/PORTFOLIO_TOUR.md)**
+**[5-minute tour](docs/PORTFOLIO_TOUR.md)**
 
-<a href="https://jurajliskalc.github.io/ai-networking-academy/#/labs/sim-03-pfc-priority-mismatch"><img src="docs/screenshots/incident.png" alt="Fault-injection lab: an incident ticket next to a simulated shell showing PFC pause counters on a NIC and on its leaf switch" width="900" /></a>
+<a href="https://jurajliskalc.github.io/ai-networking-academy/#/labs/sim-03-pfc-priority-mismatch"><img src="docs/screenshots/incident-tour.gif" alt="A fault-injection lab solved in six steps: reproduce a slow all-reduce, read PFC pause counters on the leaf and on the NIC, find PFC enabled on the wrong priority, fix it, and have the lab grade the fabric" width="1000" /></a>
 
-*A fault-injection lab: the ticket on the left, real tool syntax on the right. Here the NIC only has pause
-counters for priority 4 while its leaf pauses priority 3 and drops. The
-[portfolio tour](docs/PORTFOLIO_TOUR.md#the-five-minute-demo-a-pfc-incident) solves it in ten commands.*
+*A fault-injection lab from ticket to graded fix: the collective is slow although every point-to-point test
+passes, the counters show a NIC that ignores its leaf's pause frames, and the lab grades the state of the
+fabric. [Try it live](https://jurajliskalc.github.io/ai-networking-academy/#/labs/sim-03-pfc-priority-mismatch),
+or follow the [ten-command walkthrough](docs/PORTFOLIO_TOUR.md#the-five-minute-demo-a-pfc-incident).*
 
 </div>
 
@@ -46,8 +47,8 @@ lab is graded by code, and what the content says about host tools was compared w
 - **CI on every push**: content validation, unit tests that replay every simulator lab, browser tests,
   shell checks and toolkit tests
 
-New here? The [portfolio tour](docs/PORTFOLIO_TOUR.md) is the five-minute route: one incident solved end to
-end, then where the evidence lives.
+New here? The [five-minute tour](docs/PORTFOLIO_TOUR.md) solves one incident end to end, then shows where
+the evidence lives.
 
 ## Why this is different
 
@@ -151,7 +152,7 @@ subnet manager failures.
 
 Start with **[the PFC incident](https://jurajliskalc.github.io/ai-networking-academy/#/labs/sim-03-pfc-priority-mismatch)**:
 `ib_write_bw` runs at line rate on every rail while the collective runs at a third of normal speed. The
-[portfolio tour](docs/PORTFOLIO_TOUR.md#the-five-minute-demo-a-pfc-incident) walks through it in ten
+[five-minute tour](docs/PORTFOLIO_TOUR.md#the-five-minute-demo-a-pfc-incident) walks through it in ten
 commands.
 
 Every lab is checked by the test suite: it must fail its checks before the documented fix and pass all of
@@ -231,7 +232,7 @@ Pages. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 content/      lessons, quizzes, labs, exams, commands, glossary (Markdown + YAML)
 frontend/     React app, content compiler, Fabric Simulator, tests
 labs/         lab files (topologies, scripts, check.sh) and hw-toolkit/ (aina-hw, lib.sh, setup-rdma-host.sh)
-docs/         architecture, authoring guide, simulator, curriculum plan, hardware verification, portfolio tour
+docs/         architecture, authoring guide, simulator, curriculum plan, hardware verification, five-minute tour
 ```
 
 The numbers on this page are derived from the source tree: `npm run stats` prints them, and a test fails
@@ -261,6 +262,8 @@ Content is written for engineers who will act on it, so accuracy comes first:
 * No invented CLI flags, counters, environment variables or APIs.
 * Vendor- and generation-specific facts are hedged and point to the authoritative documentation.
 * Sample command output is labelled illustrative unless it is a real capture.
+* Every lesson lists its sources: 312 references to 186 distinct documents, each labelled by kind
+  (standard, vendor documentation, open-source project, paper or article).
 * Every lesson, quiz and exam went through an AI review pass after it was written, then through a
   source-based fact-check (about 2,800 claims checked against RFCs, specifications, tool source code and
   vendor documentation, over 200 corrections), a blind re-answering of the questions with shuffled
@@ -280,12 +283,20 @@ Found an error? Please [open an issue](https://github.com/jurajliskalc/ai-networ
 with a source. See [CONTRIBUTING.md](CONTRIBUTING.md), [ROADMAP.md](ROADMAP.md) for what is open and
 [CHANGELOG.md](CHANGELOG.md) for what has shipped.
 
+## Author
+
+Built and maintained by Juraj Liska ([jurajliskalc](https://github.com/jurajliskalc)). Corrections with a
+source are the most useful contribution: see [CONTRIBUTING.md](CONTRIBUTING.md). Security reports go
+through [SECURITY.md](SECURITY.md).
+
 ## License
 
 Free for noncommercial use: personal study, teaching, research, and use by educational and other
 noncommercial organisations. Code: PolyForm Noncommercial 1.0.0. Learning content: CC BY-NC-SA 4.0.
 Commercial use (for example company training, hosting it as a service, or including it in a paid
-product or course) needs a separate license from the copyright holder. See [LICENSE](LICENSE).
+product or course) needs a separate license from the copyright holder. Evaluating the project is always
+allowed: anyone, including people at a company, may read, clone, build and run it to assess it. See
+[LICENSE](LICENSE).
 
 This is an independent educational project. It is not an official NVIDIA training product and is not
 endorsed by any vendor or certification body. Product and company names are trademarks of their

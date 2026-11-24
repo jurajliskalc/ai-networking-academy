@@ -59,6 +59,11 @@ entry's `stacks:` variants with `commandForStack`.
 Labs declare which lessons they practise; the compiler derives each lesson's lab list from that, so the
 relationship is maintained in one place.
 
+Each lesson's `further_reading` entries are labelled with the kind of source they point to (standard, vendor
+documentation, open-source project, paper, article). `scripts/source-kinds.mjs` derives the kind from the
+link's host and is shared by the compiler, which rejects an unclassified host, and by the lesson page, which
+shows the label next to each reference.
+
 ## Front end
 
 React 19, TypeScript (strict), Vite, Tailwind CSS v4, `react-markdown` with GFM and highlight.js,
@@ -142,7 +147,9 @@ Two tests guard the documentation itself. `tests/doc-stats.test.ts` compares eve
 (README badges, "76 lessons", the status tables) with `build-content.mjs --stats`, the same compiler that
 builds the site; `npm run stats` prints the counts and the phrases are listed in `scripts/doc-stats.mjs`.
 `tests/portfolio-tour.test.ts` replays the command walkthrough in [PORTFOLIO_TOUR.md](PORTFOLIO_TOUR.md)
-against the simulator. The README screenshots are generated from the build by `npm run screenshots`.
+against the simulator. The README screenshots are generated from the build by `npm run screenshots`, and the
+animated walkthrough of the flagship incident by `npm run tour-gif` (Playwright frames, assembled with
+Python and Pillow).
 
 `npm run e2e` runs Playwright against `vite preview` of `dist/` (run `npm run build` first) on a free
 port. It drives the installed Google Chrome (`channel: 'chrome'`; set `CHROME_PATH` to use another

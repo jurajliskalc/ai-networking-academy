@@ -15,6 +15,8 @@ course. It shows one fault-injection lab end to end, then where the evidence beh
 
 ## The five-minute demo: a PFC incident
 
+![The incident solved in six steps: symptom, leaf counters, NIC counters, root cause, fix, grading](screenshots/incident-tour.gif)
+
 Open the [flagship incident](https://jurajliskalc.github.io/ai-networking-academy/#/labs/sim-03-pfc-priority-mismatch).
 The left side is the ticket and the grading, the right side is a shell on the jump host of a simulated
 32-GPU rail-optimized RoCE cluster (4 nodes, 8 x 400G rails, 8 leaves, 2 spines).
@@ -146,7 +148,7 @@ survived a check that fits the kind of claim:
 
 | Kind of claim | What it must survive |
 |---|---|
-| A CLI flag, counter, environment variable or spec fact | A check against the primary source: the RFC or specification, the tool's source code, or vendor documentation |
+| A CLI flag, counter, environment variable or spec fact | A check against the primary source: the RFC or specification, the tool's source code, or vendor documentation. Every lesson lists its sources, labelled by kind |
 | A number in a lesson, quiz or lab | Recomputation in a separate pass |
 | A quiz or exam answer key | Blind re-answering with shuffled options by an AI solver that cannot see the key |
 | Host-tool output and behaviour | Comparison with captures from the reference hardware, then pinned by golden tests |

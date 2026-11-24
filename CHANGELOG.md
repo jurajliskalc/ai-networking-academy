@@ -13,6 +13,7 @@ First public release. Full notes: [docs/releases/v1.0.0.md](docs/releases/v1.0.0
 - 76 lessons in 13 modules (Beginner to Master), 568 quiz questions, 3 timed mock exams (156 questions).
 - 45 interactive visualizations, 165 annotated commands, a 241-term glossary with spaced-repetition
   flashcards, site-wide search, progress tracking that stays in the browser.
+- 312 references to 186 distinct documents, each labelled by kind of source.
 
 ### Fabric Simulator
 - A deterministic in-browser model of a 32-GPU rail-optimized RoCE cluster, with an InfiniBand variant
