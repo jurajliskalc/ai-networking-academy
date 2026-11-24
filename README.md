@@ -17,7 +17,7 @@ RDMA · RoCEv2 · InfiniBand · NCCL · lossless Ethernet · AI-fabric design ·
 
 **[Try the 5-minute PFC incident](https://jurajliskalc.github.io/ai-networking-academy/#/labs/sim-03-pfc-priority-mismatch)** ·
 **[Hardware labs](https://jurajliskalc.github.io/ai-networking-academy/#/hw/labs)** ·
-**[Hardware verification](docs/HARDWARE_VERIFICATION.md)** ·
+**[Simulator labs](https://jurajliskalc.github.io/ai-networking-academy/#/labs)** ·
 **[Visualizations](https://jurajliskalc.github.io/ai-networking-academy/#/visualize)** ·
 **[Tour](docs/PORTFOLIO_TOUR.md)**
 
