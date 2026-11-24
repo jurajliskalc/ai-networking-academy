@@ -1,5 +1,8 @@
 // Validates everything under content/ and compiles it into JSON under public/content/.
-// Usage: node scripts/build-content.mjs [--check]   (--check validates without writing)
+// Usage: node scripts/build-content.mjs [--check | --stats]
+//   --check  validates without writing
+//   --stats  validates, then prints the repository counts as JSON (the source for every number the docs
+//            advertise; scripts/doc-stats.mjs compares the docs with it)
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -12,6 +15,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.
 const CONTENT = path.join(ROOT, 'content');
 const OUT = path.join(ROOT, 'frontend', 'public', 'content');
 const CHECK_ONLY = process.argv.includes('--check');
+const STATS_ONLY = process.argv.includes('--stats');
 
 const WIDGETS = ['rocev2-packet', 'allreduce-sim', 'pfc-ecn-sim', 'ecmp-collision', 'fabric-sizer',
   'qp-state-machine', 'pcie-topo', 'parallelism-map', 'ib-credit-flow',
@@ -403,6 +407,38 @@ const summary = `${modules.length} modules, ${lessons.size} lessons (${totalWord
 if (errors.length) {
   console.error(`\n${errors.length} error(s). ${summary}`);
   process.exit(1);
+}
+if (STATS_ONLY) {
+  // Every count the public docs advertise comes from here, so a stale number is a test failure, not a typo.
+  const handson = labs.filter((l) => l.kind === 'handson');
+  const embeds = [...lessonBodies.values()].map((b) => (b.match(/```widget\n/g) ?? []).length);
+  const examQuestions = exams.reduce((s, e) => s + e.count, 0);
+  console.log(JSON.stringify({
+    modules: modules.length,
+    lessons: lessons.size,
+    lessonWords: totalWords,
+    quizQuestions: totalQuestions,
+    exams: exams.length,
+    examQuestions,
+    questions: totalQuestions + examQuestions,
+    simLabs: labs.length - handson.length,
+    handsOnLabs: handson.length,
+    vmLabs: handson.filter((l) => l.tier === 0).length,
+    hardwareLabs: handson.filter((l) => l.tier > 0).length,
+    labs: labs.length,
+    verifiedLabs: handson.filter((l) => l.verified).length,
+    verifiedHardwareLabs: handson.filter((l) => l.verified && l.tier > 0).length,
+    hardwareGuides: guides.length,
+    commands: commands.reduce((s, c) => s + (c.commands?.length ?? 0), 0),
+    glossaryTerms: glossary.length,
+    widgets: WIDGETS.length,
+    widgetEmbeds: embeds.reduce((s, n) => s + n, 0),
+    lessonsWithWidgets: embeds.filter((n) => n > 0).length,
+    stackVariantGroups: stackStats.groups,
+    realCaptures: stackStats.real,
+    verifiedNotes: verified.length,
+  }, null, 2));
+  process.exit(0);
 }
 console.log(`Content OK: ${summary}`);
 if (CHECK_ONLY) process.exit(0);
